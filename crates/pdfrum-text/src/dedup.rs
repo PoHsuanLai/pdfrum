@@ -13,7 +13,7 @@
 // preceding text objects**, and a non-text object between them does not
 // consume one of the five — so twenty images followed by five text objects
 // still puts all five in range. And the object's own kind is what matters,
-// not its distance. (`docs/design/pdfrum-text.md` §1.11.)
+// not its distance.
 
 use crate::charinfo::CharBox;
 use crate::object::{TextRun, ladder_char_width};

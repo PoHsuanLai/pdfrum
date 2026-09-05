@@ -321,7 +321,7 @@ fn string_data_add_does_not_carry_at_0xffff() {
     // The design brief describes a base-65536 increment in which 0xFFFF wraps
     // to 0 and carries. It does not: the C++'s `wchar_t` is 32 bits, so
     // 0xFFFF + 1 is 0x10000 and the carry test `ch < str[i-1]` is false.
-    // Confirmed by an oracle probe (docs/status/pdfrum-font.md).
+    // Confirmed by a probe run against the C++ oracle.
     assert_eq!(string_data_add(&[0xFFFF]), vec![0x10000]);
     assert_eq!(string_data_add(&[0x0041, 0xFFFF]), vec![0x0041, 0x10000]);
     assert_eq!(string_data_add(&[0xFFFF, 0xFFFF]), vec![0xFFFF, 0x10000]);

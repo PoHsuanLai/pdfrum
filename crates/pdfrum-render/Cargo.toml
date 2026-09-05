@@ -14,7 +14,7 @@ workspace = true
 
 # `profiling` turns on `walkprofile`'s thread-local accumulator: per-phase
 # timers and per-site allocation counters inside the walk, which is how
-# docs/status/M12b-P2.md separates allocation churn from colour conversion from
+# the internal working notes separates allocation churn from colour conversion from
 # interpretation on a machine where `perf_event_paranoid > 1` forbids a
 # sampler. Off by default and off in every published build; with it off the
 # whole module compiles to empty inline functions. See its docs for why the
@@ -47,7 +47,7 @@ pdfrum-parser.workspace = true
 
 # M12 benches. This crate owns the six render groups: three backends x cold and warm,
 # over the shared corpus in `benches/corpus`. See `benches/render.rs` for what
-# it measures and `docs/status/M12.md` §1.9 for why each crate owns its own.
+# it measures and the internal working notes for why each crate owns its own.
 #
 # `pdfrum` is a dev-dependency and a *cycle* — the facade depends on this crate.
 # Cargo permits that for dev-dependencies and it appears in no published normal

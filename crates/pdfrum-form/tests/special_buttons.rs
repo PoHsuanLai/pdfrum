@@ -115,7 +115,7 @@ fn a_control_with_no_on_state_stays_clear() {
 /// exactly what `state_for_control` turns back into a per-kid answer, and
 /// what `route.rs` passes as `LiveInput::appearance_state`.
 ///
-/// Recorded in `docs/status/M14.md`'s OWED table as item 8: the recording
+/// Recorded in the internal working notes's OWED table as item 8: the recording
 /// landed in M14 and the drawing could not, because the generator read `/AS`
 /// from the widget dictionary and took no override.
 #[test]

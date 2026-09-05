@@ -7,3 +7,27 @@ __pycache__/
 
 # Stray dump output from running pdfrum-tool in a crate directory.
 *.pdf.[0-9]*.txt
+
+# Working notes, kept on disk and out of the repository.
+#
+# `docs/status/` is a session diary — hypotheses, A/B runs, non-results and
+# withdrawn premises — written for whoever is mid-pass, not for a reader.
+# `docs/reviews/` is code-review transcripts. `PLAN.md` is the internal
+# milestone plan. The twelve `docs/design/pdfrum-*.md` briefs are porting
+# maps keyed to a read-only PDFium checkout: without that checkout they cite
+# files nobody can open. What survives in `docs/` is documentation.
+/PLAN.md
+/docs/status/
+/docs/reviews/
+/docs/design/pdfrum-cmap.md
+/docs/design/pdfrum-crypt.md
+/docs/design/pdfrum-doc.md
+/docs/design/pdfrum-edit.md
+/docs/design/pdfrum-filters.md
+/docs/design/pdfrum-font.md
+/docs/design/pdfrum-form.md
+/docs/design/pdfrum-object.md
+/docs/design/pdfrum-page.md
+/docs/design/pdfrum-parser.md
+/docs/design/pdfrum-render.md
+/docs/design/pdfrum-text.md

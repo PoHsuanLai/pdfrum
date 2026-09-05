@@ -551,7 +551,7 @@ in the same commit as the code:
 
 Also resolved by implementation, with the code as the record: **OQ-3** (both
 halves measured against the oracle, not reasoned about — see
-`docs/status/pdfrum-font.md`), **OQ-4** (always unhinted, no `tricky` list),
+the internal working notes), **OQ-4** (always unhinted, no `tricky` list),
 **OQ-6(a)** (`skip_font_enumeration` defaults to `false`, matching the oracle's
 enumeration build, with the knob public), **OQ-6(b)** (`SimilarityScore` and
 `FindFamilyNameMatch` are ported; `fontdb` is a face enumerator only), and
@@ -1216,9 +1216,9 @@ the script engine — `max_script_loop_iterations: u64 = 10_000_000`,
 `max_calculate_depth: u32 = 1` (upstream's `busy_` flag permits no nesting at
 all, `cjs_runtime.cpp`). The first three map onto boa's `RuntimeLimits`; what
 they do NOT bound — heap growth and regex backtracking — is recorded in
-`docs/status/M15.md` with the measurement. *Settled 2026-09-02 by
+the internal working notes with the measurement. *Settled 2026-09-02 by
 measurement against a V8-enabled PDFium (prebuilt `chromium/8021`, three
-days from our pinned oracle; `docs/status/data/v8probe/REPORT.md`): the
+days from our pinned oracle; a probe run against a V8-enabled build): the
 oracle bounds **none** of loop, heap or regex with any policy of its own —
 `while(true)` ran until an external SIGKILL at 600 s; heap growth ran to
 1.58 GB and then died in V8's own `Reached heap limit` abort **with a core
@@ -1819,7 +1819,7 @@ pub struct ButtonState { pub pressed: bool }
 **Not yet present on `ChoiceState`: `popup: Option<PopupState>` and
 `edit: Option<TextEdit>`.** The second is what an editable combo box's text
 half needs, and with it the four-item undo group every combo selection change
-pushes; both are named in `docs/status/M14.md`'s blocked list.
+pushes; both are named in the internal working notes's blocked list.
 
 ### 15.4 The undo model
 

@@ -86,7 +86,7 @@ separate workspace invites.
 ## Targets
 
 Each is named `<crate>_<entry point>`. The inventories come from the
-deferred-fuzz notes in `docs/status/pdfrum-{object,crypt,filters,cmap,parser}.md`.
+deferred-fuzz notes in the internal working notes.
 
 | Target | Entry point | What the input is |
 |---|---|---|
@@ -117,7 +117,7 @@ with everything left over as the bulk payload. It is thirty lines instead of
 an `arbitrary` dependency, and it keeps a crash file readable in a hex dump.
 
 Every target runs under `Limits` with `max_decoded_stream_len` at **1 MiB**
-(`pdfrum_fuzz::limits`), the figure `docs/status/pdfrum-filters.md` asks for.
+(`pdfrum_fuzz::limits`), the figure the internal working notes asks for.
 The production default is 1 GiB; a fuzzer allowed to allocate that finds
 libFuzzer's RSS killer, not bugs.
 

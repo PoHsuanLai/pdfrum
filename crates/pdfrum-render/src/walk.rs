@@ -1407,7 +1407,7 @@ fn render_text<B: RasterBackend>(
         // The oracle's small-text path: an alpha bitmap, blitted whole, rather
         // than an outline filled where it lands. It is the majority of the
         // text in the corpus, and reproducing it is what closes the coverage
-        // band `docs/status/pdfrum-render.md` has carried since wave 3. When
+        // band the render brief has carried since wave 3. When
         // it declines — an unhintable face is fine, but a glyph too large or
         // too degenerate to rasterize is not — the oracle skips the glyph
         // outright (`if (!glyph.glyph_) continue;`), and so does this.
@@ -2046,7 +2046,7 @@ fn render_image<B: RasterBackend>(
     let placement = reduction.transform();
     // `to_pixmap` and the reduction are pure in `(image, fill, transfer, size)`
     // and were the largest single cost in the corpus, re-run on every render of
-    // an image that had not changed (`docs/status/M12.md` §3.6). Cached
+    // an image that had not changed. Cached
     // together, because a caller of one always wants the other: caching the
     // unreduced pixmap alone would keep the box filter running per draw *and*
     // hold the larger of the two buffers.

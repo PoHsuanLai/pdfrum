@@ -1,0 +1,68 @@
+# The part of the gate a stock runner can run.
+#
+# `scripts/ci.nu` is the definition of done and it is wider than this file. Two
+# of its steps need things a hosted runner does not have and this workflow does
+# not attempt:
+#
+#   - The conformance board. Every tier of it is measured against a read-only
+#     PDFium checkout and a built `pdfium_test` binary, which is a multi-hour
+#     Chromium-style build. It stays local, and it is what a maintainer runs
+#     before landing a change that could move pixels or text.
+#   - The performance ratchet. `benches/baseline.json` holds medians taken on
+#     one reference machine; a shared runner's numbers mean nothing against
+#     them.
+#
+# Everything else runs here, including the C ABI test and the WebAssembly
+# tests, because their tools install in seconds. A contributor without those
+# tools still gets the rest of the gate locally — `scripts/ci.nu` prints a note
+# and continues, and this workflow installs them so the note never fires.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: fmt, clippy, tests, docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup toolchain install nightly --profile minimal
+          rustup target add wasm32-unknown-unknown
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install the tools the gate needs
+        run: |
+          cargo install cargo-nextest --locked
+          cargo install cargo-public-api --locked
+          cargo install cargo-deny --locked
+          cargo install cbindgen --locked
+          cargo install wasm-bindgen-cli --locked
+
+      - name: Install nushell
+        # The scripts are nushell. `--locked` so a transitive bump cannot
+        # break the run on a day nothing here changed.
+        run: cargo install nu --locked
+
+      - name: The gate
+        # Runs fmt, clippy, nextest, doctests, rustdoc, the public-API
+        # snapshot, cargo-deny, the pure-Rust dependency-tree check, the C
+        # header and C test, the WebAssembly tests, the no-wgpu and no-boa
+        # checks, and a cargo check of the fuzz workspace.
+        run: ./scripts/ci.nu

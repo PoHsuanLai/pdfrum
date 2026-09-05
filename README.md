@@ -96,7 +96,8 @@ pdfrum = { version = "0.1", features = ["javascript"] }
 What a script reaches: the `AF*` library, `util`, `app.alert`, the `event`
 object, and the `Doc`/`Field` object model with the `/AA` event path and
 timers; 37 of the oracle's 47 JavaScript fixtures reproduce byte-exactly and
-the rest are accounted for (`docs/status/M15.md`). Nothing a script asks for
+the rest are accounted for, each one against a stated divergence. Nothing a
+script asks for
 is performed by the library — `app.alert`, `Doc.submitForm` and
 `app.launchURL` come back as values the host decides about, and no socket,
 file or process is reachable from a script at all.
@@ -167,7 +168,7 @@ effort on antialiasing noise:
 ### Current scoreboard
 
 Generated `2026-08-29`, over 1675 files. Live numbers are in
-`conformance/scoreboard.json`; per-milestone narrative is in `docs/status/`.
+`conformance/scoreboard.json`.
 
 | | |
 |---|---:|
@@ -207,7 +208,7 @@ incremental-append discipline is 100%.
 
 Milestones M1–M3 and M5–M7 are complete; M8 (this API, docs and release
 polish) is in flight. The pixel tail is 62 files over 51 documents, shallow
-(43 of the 51 above 0.95) and inventoried in `docs/status/pdfrum-render.md`.
+(43 of the 51 above 0.95).
 
 ## Building and testing
 
@@ -329,12 +330,13 @@ worker its own font, image and glyph cache.
 
 | File | What it governs |
 |---|---|
-| [`PLAN.md`](PLAN.md) | The operative plan: milestones, exit criteria, agent orchestration. Read first. |
+| [`docs/roadmap.md`](docs/roadmap.md) | What is planned next, each item with its exit criteria, and the line this engine draws against typesetting. |
 | [`STYLE.md`](STYLE.md) | The binding Rust style constitution. Violations block review even when tests pass. |
 | [`SPEC.md`](SPEC.md) | Concrete per-crate type and API contracts, plus the `[spec]` change protocol. |
 | [`DEPS.md`](DEPS.md) | The closed dependency set, with rationale and rejections. |
-| `docs/design/` | Per-module design briefs: behaviour inventory, divergences, module plan, test plan. |
-| `docs/status/` | Live progress per crate and per milestone. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to build, how to run the gates, and what the conformance harness measures. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed, in Keep a Changelog form. |
+| [`docs/`](docs/README.md) | Architecture documents, published benchmarks, upstream bug drafts, and the open work list. Start at its index. |
 
 ## Licence
 

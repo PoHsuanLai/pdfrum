@@ -7,7 +7,6 @@
 // So the page's text is chopped into candidates at every generated character
 // and every space, each candidate is trimmed of trailing punctuation, and
 // what is left is tested for a scheme, a `www.` prefix, or an `@`.
-// (`docs/design/pdfrum-text.md` §1.15.)
 //
 // Two behaviours worth naming because they look wrong:
 //

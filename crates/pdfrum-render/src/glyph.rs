@@ -751,7 +751,7 @@ impl BitmapCache {
         // borrow.
         //
         // It was measured before being left: the pair costs about 85 ns of a
-        // 1000 ns per-glyph chain (`docs/status/M13-perf-baseline.md` §16.2),
+        // 1000 ns per-glyph chain,
         // and the second probe is at most half of that on a table that is
         // already in cache from the first.
         if !self.entries.contains_key(&key) {

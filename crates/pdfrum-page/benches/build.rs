@@ -7,7 +7,7 @@
 //!
 //! # What it isolates, and why that matters
 //!
-//! `docs/status/M12.md` §3.1 measured that the *engine* half of a render — the
+//! the internal working notes measured that the *engine* half of a render — the
 //! content-stream walk and its interpretation, which is this crate — is 54–85%
 //! of the elapsed time, and §3's whole P1 pass then optimized the rasterizer
 //! half. That was not a mistake at the time (the rasterizer is where the
@@ -19,7 +19,7 @@
 //! the operator interpreter and the graphics-state machine, resolves the
 //! resource dictionary's fonts and colour spaces and decodes its images, and
 //! produces the `PageObject` list — and then stops, without rasterizing a
-//! pixel. `docs/status/M12.md` §7's outstanding `bumpalo` question is a question
+//! pixel. the internal working notes's outstanding `bumpalo` question is a question
 //! about this number.
 //!
 //! # Fresh caches per iteration, deliberately
@@ -80,7 +80,7 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; docs/status/M12.md §2 has the
+        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

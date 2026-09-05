@@ -1,6 +1,6 @@
 # Image rows: the type-driven image pipeline
 
-Scoped 2026-09-05 from the side-by-side with PDFium (`docs/status/queue.md`
+Scoped 2026-09-05 from the side-by-side with PDFium (the open work list (`docs/issues-to-file.md`)
 §"Image pipeline pass"), approved by the user the same day. The pass that
 implements it lands stage by stage, each commit measured by `Ir` on the
 guide (`benches/corpus/text_quick_start.pdf`, all pages, 150 DPI) and gated
@@ -18,7 +18,7 @@ then the backend resamples the result a second time. Like for like on the
 guide: ~3.65 G `Ir` against PDFium's ~0.99 G for the same pixels.
 (mupdf measured on the same harness basis sits between the two; the
 three-engine table is under "Cold start, measured again" in
-`docs/status/queue.md`.)
+the open work list (`docs/issues-to-file.md`).)
 
 ## The shape
 
@@ -120,7 +120,7 @@ the board.
 ## Step 5 — lazy `unpack`
 
 *Landed 2026-09-06 in `048b0c7`, `4e30401` and `df77df2`; what it cost and
-what it moved is in `docs/status/image-rows.md` §"Step 5 — lazy unpack".
+what it moved is in the internal working notes §"Step 5 — lazy unpack".
 `ImageData::pixels` became `ImageData::samples: Samples`, a `Packed`/`Whole`
 enum rather than the "`ImageData` carries the still-packed bytes" this
 section describes, because three of the four families the ladder produces

@@ -317,7 +317,7 @@ pub fn composite_premultiplied(
     // *every* ordinary fill, stroke, glyph blit and image draw on a page with
     // no transparency group takes exactly this branch. Measured on the M12
     // corpus, it is 60% of `render-exact`'s `text` class and 78% of its
-    // `shading` class — see `docs/status/M12.md`.
+    // `shading` class.
     let (Some(&sr), Some(&sg), Some(&sb), Some(&sa)) =
         (src.first(), src.get(1), src.get(2), src.get(3))
     else {

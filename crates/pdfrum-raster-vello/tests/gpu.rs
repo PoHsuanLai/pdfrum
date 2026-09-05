@@ -8,7 +8,7 @@
 //! `cargo nextest run` shows the message; CI stays green.
 //!
 //! These are correctness assertions, not measurements. The numbers live in
-//! `docs/status/M12c.md` §8, where they can carry the adapter they were taken
+//! the internal working notes, where they can carry the adapter they were taken
 //! on.
 
 use kurbo::{Affine, BezPath, Rect};

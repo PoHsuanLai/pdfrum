@@ -14,7 +14,7 @@ Run from the workspace root with the oracle checkout present:
     python3 -c "import struct,sys;b=open(sys.argv[1],'rb').read();\\
       print([hex(x) for x in struct.unpack('<%dI'%(len(b)//4), b)])" /tmp/probes/*.0.txt
 
-The measured answers are recorded in docs/status/pdfrum-font.md and pinned as
+The measured answers are recorded in the internal working notes and pinned as
 tests in crates/pdfrum-font/src/tounicode_tests.rs.
 
 

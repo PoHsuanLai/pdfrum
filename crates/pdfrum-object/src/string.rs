@@ -383,9 +383,9 @@ mod tests {
         assert_eq!(decode_text(b"\xFE\xFF\x00\x1B\x00\x1B\x00\x20"), "\u{20}");
     }
 
-    // From fpdf_parser_decode_unittest.cpp:386-395, adjusted for divergence #5
-    // in docs/design/pdfrum-object.md: Rust `str` cannot hold a lone
-    // surrogate, so each becomes U+FFFD.
+    // From fpdf_parser_decode_unittest.cpp:386-395, adjusted for a stated
+    // divergence: Rust `str` cannot hold a lone surrogate, so each becomes
+    // U+FFFD where the oracle keeps the raw code unit.
     #[test]
     fn decode_text_replaces_unpaired_surrogates() {
         assert_eq!(decode_text(b"\xFE\xFF\xD8\x00"), "\u{FFFD}");

@@ -11,7 +11,6 @@
 // first and not the second, while normalization puts several entries in the
 // second for one in the first. So a caller holding a character index cannot
 // use it as a text offset, and vice versa.
-// (`docs/design/pdfrum-text.md` §1.13.)
 //
 // The bridge is a table of segments, each saying "text runs on from here for
 // this many characters". Building it is one pass; reading it is a walk.
