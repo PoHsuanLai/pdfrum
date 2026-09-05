@@ -1061,6 +1061,22 @@ not-achievable bucket. The two divergences are written up as A72 and A73 in
   `#collectFieldObjects`). `[oracle-bug]` marked, with a fixture whose first
   kid is a junk reference and whose second is a real field.
 
+## ~~`util_printd`'s timezone~~ — landed 2026-09-06 (`docs/status/M15.md`, addendum)
+
+- ~~**The engine's `Date` used a flat `GMT-0700`, so every winter date was an
+  hour early.**~~ — `js-transcript` 8 → 7; `util_printd.in#js-transcript`
+  fail → pass, the only row the board moved. `pdfium_test` hooks
+  `FXSYS_localtime` with `gmtime` (`pdfium_test.cc:2134`) but **not V8**, so
+  `util.printd`'s own shift really is the flat `GMT-0800`
+  `GOLDEN_PRINTD_OFFSET_SECS` records while `Date` resolves the real
+  `America/Los_Angeles` per instant. `ScriptConfig::timezone` is now a
+  `zone::Zone` (standard offset plus a daylight rule in eras, solar before
+  1883) rather than an `i32`. **Oracle bug #5 is gone** — upstream fixed the
+  `dddd`/`ddd` weekday (`cjs_util.cpp:275`), the fixture now asserts `Friday`,
+  and `util_printd` is byte-exact with no line left unmatchable. The committed
+  `conformance/scoreboard.json` still records the old `Sunday` mismatch for
+  this row and wants re-recording.
+
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 
 Four PDFium rendering issues, the `EnableStdConversion` dead-mechanism
