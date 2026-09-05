@@ -157,16 +157,7 @@ impl PageEdit {
         let Some(object) = self.page.object_mut(index) else {
             return Err(IndexOutOfRange { index, len });
         };
-        match object {
-            PageObject::Path(p) => p.object.matrix = transform * p.object.matrix,
-            PageObject::Text(t) => {
-                t.object.matrix = transform * t.object.matrix;
-                t.object.position = transform * t.object.position;
-            }
-            PageObject::Image(i) => i.object.matrix = transform * i.object.matrix,
-            PageObject::Shading(s) => s.object.matrix = transform * s.object.matrix,
-            PageObject::Form(f) => f.object.matrix = transform * f.object.matrix,
-        }
+        transform_object(object, transform);
         Ok(())
     }
 
@@ -195,6 +186,21 @@ impl PageEdit {
     /// changed.
     pub fn graph_mut(&mut self) -> &mut pdfrum_page::Page {
         &mut self.page
+    }
+}
+
+/// Move `object` by `transform`, composed before whatever it already had —
+/// the body of [`PageEdit::transform`], for an object not yet on a page.
+pub(crate) fn transform_object(object: &mut PageObject, transform: Affine) {
+    match object {
+        PageObject::Path(p) => p.object.matrix = transform * p.object.matrix,
+        PageObject::Text(t) => {
+            t.object.matrix = transform * t.object.matrix;
+            t.object.position = transform * t.object.position;
+        }
+        PageObject::Image(i) => i.object.matrix = transform * i.object.matrix,
+        PageObject::Shading(s) => s.object.matrix = transform * s.object.matrix,
+        PageObject::Form(f) => f.object.matrix = transform * f.object.matrix,
     }
 }
 

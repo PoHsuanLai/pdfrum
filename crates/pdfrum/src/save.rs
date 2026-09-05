@@ -407,7 +407,7 @@ impl DocEdit<'_> {
     /// page — a rotation, a stamp — is what a later content rewrite builds on.
     /// `None` for a page written inline in its parent's `/Kids`, which has no
     /// object to replace.
-    fn page_state(&self, index: PageIndex) -> Result<Option<(ObjRef, Dict, Dict)>> {
+    pub(crate) fn page_state(&self, index: PageIndex) -> Result<Option<(ObjRef, Dict, Dict)>> {
         let page = self.doc.inner.page(index)?;
         let Some(reference) = page.reference else {
             return Ok(None);
