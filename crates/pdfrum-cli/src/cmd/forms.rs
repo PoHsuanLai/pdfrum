@@ -111,6 +111,7 @@ pub fn fill(
     #[cfg(feature = "javascript")] scripts: bool,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let Some(mut form) = doc.form() else {
         bail!("{} has no interactive form", file.display());
@@ -130,36 +131,41 @@ pub fn fill(
         result.with_context(|| format!("no field named {name:?}"))?;
         set += 1;
     }
-    doc.save_form(output, &form, &save_options(deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
+    let mut bytes = Vec::new();
+    doc.write_form_to(&mut bytes, &form, &save_options(deterministic, doc.bytes()))?;
     let what = format!("{set} field{} set", if set == 1 { "" } else { "s" });
     #[cfg(feature = "javascript")]
     if scripts {
-        let by_scripts = apply_open_scripts(output, password, deterministic)?;
-        out::summary(
+        let (bytes, by_scripts) = apply_open_scripts(bytes, password, deterministic)?;
+        sink.finish(
             term,
-            output,
+            &bytes,
             &what,
             Some(&format!("{by_scripts} by scripts")),
-        );
+        )?;
         return Ok(ExitCode::SUCCESS);
     }
-    out::summary(term, output, &what, None);
+    sink.finish(term, &bytes, &what, None)?;
     Ok(ExitCode::SUCCESS)
 }
 
-/// Open the saved file the way a viewer would — the document's open
+/// Open the saved bytes the way a viewer would — the document's open
 /// scripts, then every page, whose formatters run on load — and write
 /// back whatever the scripts assigned to fields. Scripts that threw are
-/// reported on stderr. The count is how many fields the scripts changed.
+/// reported on stderr. The count is how many fields the scripts changed;
+/// the bytes come back untouched when it is zero.
 #[cfg(feature = "javascript")]
-fn apply_open_scripts(file: &Path, password: Option<&str>, deterministic: bool) -> Result<usize> {
-    let saved = out::open_quietly(file, password)?;
+fn apply_open_scripts(
+    bytes: Vec<u8>,
+    password: Option<&str>,
+    deterministic: bool,
+) -> Result<(Vec<u8>, usize)> {
+    let saved = out::open_bytes(bytes, password).context("cannot reopen the filled form")?;
     let Some(mut form) = saved.form() else {
-        return Ok(0);
+        return Ok((saved.bytes().to_vec(), 0));
     };
     let mut session = FormSession::with_scripts(&saved, &ScriptConfig::wall_clock())
-        .with_context(|| format!("cannot start the script engine for {}", file.display()))?;
+        .context("cannot start the script engine for the filled form")?;
     session.open_document();
     for page in 0..saved.page_count() {
         session.load_page(page);
@@ -185,12 +191,16 @@ fn apply_open_scripts(file: &Path, password: Option<&str>, deterministic: bool) 
             applied += 1;
         }
     }
-    if applied > 0 {
-        saved
-            .save_form(file, &form, &save_options(deterministic, saved.bytes()))
-            .with_context(|| format!("cannot write {}", file.display()))?;
+    if applied == 0 {
+        return Ok((saved.bytes().to_vec(), 0));
     }
-    Ok(applied)
+    let mut bytes = Vec::new();
+    saved.write_form_to(
+        &mut bytes,
+        &form,
+        &save_options(deterministic, saved.bytes()),
+    )?;
+    Ok((bytes, applied))
 }
 
 /// Bake every page's annotations into its content.
@@ -202,6 +212,7 @@ pub fn flatten(
     deterministic: bool,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let mode = if print {
         FlattenMode::Print
@@ -215,16 +226,16 @@ pub fn flatten(
             flattened += 1;
         }
     }
-    edit.save(output, &save_options(deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    sink.finish(
         term,
-        output,
+        &bytes,
         "flattened",
         Some(&format!(
             "{flattened} of {} pages had something to flatten",
             doc.page_count()
         )),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }

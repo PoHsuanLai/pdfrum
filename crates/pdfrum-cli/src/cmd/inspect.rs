@@ -279,6 +279,7 @@ pub fn revision(
     output: &Path,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let count = doc.revisions().len();
     if rev == 0 || rev > count {
@@ -294,13 +295,12 @@ pub fn revision(
     let bytes = doc
         .revision_bytes(rev - 1)
         .context("the revision's end could not be found")?;
-    std::fs::write(output, bytes).with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    sink.finish(
         term,
-        output,
+        bytes,
         &format!("revision {rev} of {count}"),
         Some(&out::bytes(bytes.len() as u64)),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 

@@ -268,7 +268,7 @@ enum Inspect {
         /// Which revision, 1-based, as `inspect revisions` numbers them.
         #[arg(long, value_name = "N")]
         rev: usize,
-        /// The file to write.
+        /// The file to write; `-` writes it to stdout.
         #[arg(short, long, value_name = "PATH")]
         output: PathBuf,
     },
@@ -464,7 +464,7 @@ enum Security {
 /// Where a writing command puts its result.
 #[derive(Args)]
 struct SaveArgs {
-    /// The file to write.
+    /// The file to write; `-` writes it to stdout (a pipe, not a terminal).
     #[arg(short, long, value_name = "PATH")]
     output: PathBuf,
     /// Reproducible output: the same input gives the same bytes.
