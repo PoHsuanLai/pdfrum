@@ -603,3 +603,59 @@ FFI surface. pdfrum's 4 are the word in doc comments — the crate
 (vello_cpu, skrifa, the RustCrypto crates, fontdb). `pdf_oxide` with its
 `rendering` feature is the largest tree here at 138 crates and the slowest
 clean build.
+
+### Coverage — one PDFium corpus file per feature
+
+`data/2026-09-05-114527a71d4c-coverage.json`, `compare run --spec
+benches/compare/coverage.json` over `<checkout>/testing`. The spec names
+the file, and for the five encryption revisions the user password PDFium's
+own `cpdf_security_handler_embeddertest.cpp` uses (R2 and R6 take "âge",
+passed as UTF-8). A cell is what the engine did with that file — every
+op, `ok` with its score against the oracle (SSIM for render, token F1 for
+text), or `err` / `panic` / `crash` / `timeout` / `-` for not supported —
+and nothing else. The password column of the spec is why `hayro`,
+`lopdf`, `pdf` and `pdf-extract` have rows on the encrypted files at all:
+each was given the password through its own API.
+
+Run `coverage` — commit 9139cd2f48f0 — 22 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T10:21:23Z
+Machine: frieren (32 CPUs, rustc 1.97.1 (8bab26f4f 2026-07-14)). Load before: `18:21:23 up 10 days, 19:35,  4 users,  load average: 37.83, 32.97, 35.52`; after: `18:21:47 up 10 days, 19:36,  4 users,  load average: 29.80, 31.42, 34.94`.
+
+### Coverage — one corpus file per feature; a cell is what the engine did with that file
+
+| feature | file | pdfrum | hayro | hayro-interpret | pdf-extract | lopdf | pdf | pdf_oxide | pdfium-render | mupdf |
+|---|---|---|---|---|---|---|---|---|---|---|
+| encryption R2 (RC4 40-bit) | resources/encrypted_hello_world_r2.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=err render=err text=- | open=- render=- text=err | open=ok render=- text=err | open=ok render=- text=ok(0.00) | open=err render=- text=- | open=err render=err text=err | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.986) text=ok(1.00) |
+| encryption R3 (RC4 128-bit) | resources/bug_1124998.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.987) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=err | open=ok render=- text=ok(0.57) | open=err render=- text=- | open=ok render=ok(0.974) text=ok(1.00) | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.986) text=ok(1.00) |
+| encryption R4 (AESV2) | resources/encrypted.pdf | open=ok render=ok(0.998) text=ok(1.00) | open=ok render=ok(0.999) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=err | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(0.998) text=ok(1.00) | open=ok render=ok(0.998) text=ok(1.00) | open=ok render=ok(0.998) text=ok(1.00) |
+| encryption R5 (AESV3, Adobe extension) | resources/bug_644.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) |
+| encryption R6 (AES-256, ISO 32000-2) | resources/encrypted_hello_world_r6.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.987) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=err | open=ok render=- text=ok(0.57) | open=ok render=- text=- | open=ok render=ok(0.974) text=ok(1.00) | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.986) text=ok(1.00) |
+| JBIG2 | corpus/pdfium/bug_880920.pdf | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.996) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(0.00) | open=err render=- text=- | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.996) text=ok(1.00) |
+| JPX (JPEG 2000) | corpus/fx/action/123.pdf | open=ok render=ok(0.987) text=ok(1.00) | open=ok render=ok(0.989) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=err text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.991) text=ok(1.00) |
+| CCITT fax | corpus/fx/other/3bigpreview.pdf | open=ok render=ok(0.880) text=ok(0.99) | open=ok render=ok(0.864) text=- | open=- render=- text=ok(0.74) | open=ok render=- text=panic | open=ok render=- text=err | open=ok render=- text=- | open=ok render=ok(0.837) text=ok(0.68) | open=ok render=ok(0.883) text=ok(1.00) | open=ok render=ok(0.867) text=ok(0.54) |
+| shading type 1 (function) | corpus/fx/shading/2_shading_type1.pdf | open=ok render=ok(0.999) text=ok(1.00) | open=ok render=ok(0.999) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=err text=err | open=ok render=ok(0.999) text=ok(1.00) | open=ok render=ok(0.545) text=ok(1.00) |
+| shading type 2 (axial) | resources/pixel/axial_shading_point_at_border_no_extend.pdf | open=ok render=ok(0.988) text=ok(1.00) | open=ok render=ok(1.000) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.988) text=ok(1.00) | open=ok render=ok(0.993) text=ok(1.00) |
+| shading type 3 (radial) | corpus/fx/shading/2_shading_type3.pdf | open=ok render=ok(0.989) text=ok(1.00) | open=ok render=ok(0.982) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=err text=err | open=ok render=ok(0.989) text=ok(1.00) | open=ok render=ok(0.931) text=ok(1.00) |
+| shading type 4 (free-form Gouraud) | corpus/fx/shading/2_shading_type4_h.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.372) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(0.972) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.372) text=ok(1.00) |
+| shading type 5 (lattice Gouraud) | corpus/fx/shading/2_shading_type5_h.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.998) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(0.742) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.999) text=ok(1.00) |
+| shading type 6 (Coons patch) | corpus/fx/shading/2_shading_type_6_00.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.957) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(0.645) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.961) text=ok(1.00) |
+| shading type 7 (tensor patch) | resources/pixel/shade-tensor.pdf | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.926) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(0.939) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(0.927) text=ok(1.00) |
+| Type3 font | resources/pixel/type3.pdf | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.997) text=- | open=- render=- text=ok(0.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(0.00) | open=ok render=- text=- | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(1.000) text=ok(0.40) | open=ok render=ok(0.997) text=ok(1.00) |
+| CID font (Type0) | corpus/fx/text/ch_1.pdf | open=ok render=ok(0.999) text=ok(1.00) | open=ok render=ok(0.766) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=panic | open=ok render=- text=err | open=ok render=- text=- | open=ok render=ok(0.703) text=ok(1.00) | open=ok render=ok(0.826) text=ok(1.00) | open=ok render=ok(0.750) text=ok(0.00) |
+| annotations with appearance streams | resources/annotation_highlight_square_with_ap.pdf | open=ok render=ok(0.998) text=ok(1.00) | open=ok render=ok(0.999) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(0.998) text=ok(1.00) | open=ok render=ok(0.999) text=ok(1.00) | open=ok render=ok(0.999) text=ok(1.00) |
+| AcroForm fields (widgets) | resources/text_form.pdf | open=ok render=ok(0.996) text=ok(1.00) | open=ok render=ok(0.995) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(0.993) text=ok(1.00) | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.994) text=ok(1.00) |
+| JavaScript (document-level /JavaScript) | resources/js.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) |
+| incremental update (/Prev chain) | resources/embedded_images.pdf | open=ok render=ok(0.995) text=ok(1.00) | open=ok render=ok(0.992) text=- | open=- render=- text=ok(1.00) | open=err render=- text=err | open=err render=- text=err | open=err render=- text=- | open=ok render=ok(0.990) text=ok(1.00) | open=ok render=ok(0.993) text=ok(1.00) | open=ok render=ok(0.993) text=ok(1.00) |
+| tagged PDF (/StructTreeRoot) | resources/tagged_expansion.pdf | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=- | open=- render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=ok(1.00) | open=ok render=- text=- | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) | open=ok render=ok(1.000) text=ok(1.00) |
+
+Cell grammar: `open`/`render`/`text` each as `ok` (with SSIM or token F1 against the oracle), `err`, `panic`, `crash`, `timeout`, `-` (not supported).
+
+pdfrum: every file opens, renders and extracts; 18 of the 22 renders are
+inside the conformance floor, and the four outside are the CCITT scan
+(0.880, where every engine is between 0.84 and 0.88), JPX (0.987) and the
+two axial/radial fixtures (0.988–0.989). The peers' cells are the
+informative ones: hayro cannot open the R2 file and draws the type-4
+Gouraud mesh at 0.372 (mupdf too); pdf_oxide errors on R2, on the JPX
+render, and on the function and radial shadings, and draws types 5 and 6
+at 0.742 / 0.645; pdf-extract panics on the CCITT and CID files and cannot
+open R5, the five `fx/shading` files, `js.pdf` or the incremental update;
+pdf-rs opens 12 of 22; lopdf's text is empty on R2, JBIG2 and Type3.
