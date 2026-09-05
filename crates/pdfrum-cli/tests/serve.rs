@@ -822,3 +822,66 @@ fn the_mcp_surface_lists_the_tools_and_calls_them() {
         "a plain method is not on the MCP surface"
     );
 }
+
+#[test]
+fn a_limit_is_code_32001_per_document_over_the_sessions_defaults() {
+    // The corpus guide: eleven pages, 1240 x 1753 px at 150 dpi.
+    let guide = "../../../benches/corpus/text_quick_start.pdf";
+    let (replies, code, stderr) = serve(
+        &["--stdio", "--max-pixels", "1000"],
+        &[
+            open(1, guide),
+            request(2, "render", &json!({"doc": 1, "page": 1})),
+            request(
+                3,
+                "open",
+                &json!({"file": guide, "limits": {"max_pixels": 100_000_000}}),
+            ),
+            request(4, "render", &json!({"doc": 2, "page": 1, "scale": 0.1})),
+            request(
+                5,
+                "open",
+                &json!({"file": guide, "limits": {"time_limit_ms": 1}}),
+            ),
+            request(6, "text", &json!({"doc": 3})),
+            request(7, "open", &json!({"file": guide, "limits": {"pixels": 1}})),
+            request(8, "info", &json!({"doc": 1})),
+        ],
+    )
+    .unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    // The session's cap, on a document opened without one of its own.
+    let (code, message) = error(&replies, 2).unwrap();
+    assert_eq!(code, -32001, "{message}");
+    assert!(
+        message.starts_with("pdfrum: render of 1240 x 1753 px (2.1 megapixels) is above the cap"),
+        "{message}"
+    );
+    // A document's own cap, over the session's.
+    let picture = result(&replies, 4).unwrap();
+    assert!(picture["png_base64"].as_str().unwrap().starts_with(PNG));
+    // A budget of 1 ms, armed at the open: spent by the open itself or by
+    // the first page load after it, whichever the machine reaches first.
+    let (code, message) = error(&replies, 5).or_else(|_| error(&replies, 6)).unwrap();
+    assert_eq!(code, -32001, "{message}");
+    assert!(message.contains("time limit of 1 ms exceeded"), "{message}");
+    // An unknown ceiling is a wrong request, not a limit.
+    assert_eq!(error(&replies, 7).unwrap().0, -32602);
+    // The cap is a render's; the document is otherwise fine.
+    assert_eq!(result(&replies, 8).unwrap()["pages"], 11);
+
+    let listing = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
+        .args(["schema", "serve"])
+        .output()
+        .unwrap();
+    let table: Vec<Value> = serde_json::from_slice(&listing.stdout).unwrap();
+    let limits =
+        &table.iter().find(|m| m["method"] == "open").unwrap()["params"]["properties"]["limits"];
+    assert_eq!(limits["type"], "object");
+    assert_eq!(limits["properties"]["max_pixels"]["type"], "integer");
+    assert_eq!(limits["properties"]["time_limit_ms"]["type"], "integer");
+    assert!(
+        limits["description"].as_str().unwrap().contains("-32001"),
+        "the code is named where a host reads the params"
+    );
+}
