@@ -1,0 +1,4 @@
+# The npm package `scripts/wasm-package.nu` builds. A build output, like
+# `target/`: what is under review is the script and the Rust that feeds it, not
+# the five-megabyte module they produce.
+/pkg/
