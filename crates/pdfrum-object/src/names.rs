@@ -191,6 +191,35 @@ names! {
     /// An XML metadata stream's subtype (`/XML`).
     XML = "XML";
 
+    // ---- Resource categories, form and image XObjects (tables 33, 89 and 95) ----
+
+    /// The font resource category, and a font dictionary's own `/Type`
+    /// value (`/Font`).
+    FONT = "Font";
+    /// The external-object resource category — images and forms alike —
+    /// and an external object's own `/Type` value (`/XObject`).
+    XOBJECT = "XObject";
+    /// The graphics-state parameter resource category (`/ExtGState`).
+    EXT_G_STATE = "ExtGState";
+    /// The marked-content property resource category (`/Properties`).
+    PROPERTIES = "Properties";
+    /// A form's, pattern's or shading's coordinate mapping (`/Matrix`).
+    MATRIX = "Matrix";
+    /// A form's or pattern's clipping rectangle (`/BBox`).
+    BBOX = "BBox";
+    /// Image width in samples (`/Width`).
+    WIDTH = "Width";
+    /// Image height in samples (`/Height`).
+    HEIGHT = "Height";
+    /// An image's or shading's colour space (`/ColorSpace`).
+    COLOR_SPACE = "ColorSpace";
+    /// Sample-value remapping (`/Decode`).
+    DECODE = "Decode";
+    /// Whether the image is a stencil mask (`/ImageMask`).
+    IMAGE_MASK = "ImageMask";
+    /// A soft mask, either an image's or an `/ExtGState`'s (`/SMask`).
+    SMASK = "SMask";
+
     // ---- Encryption (tables 20 through 27) ----
 
     /// Algorithm version, also a form field's value (`/V`).

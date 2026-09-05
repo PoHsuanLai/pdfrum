@@ -125,31 +125,22 @@ pub use type3::Type3Metrics;
 /// this crate reads.
 ///
 /// Declared here rather than in `pdfrum-object`'s shared table because they
-/// are page-content-specific and no other crate spells them.
+/// are page-content-specific and no other crate spells them. A key another
+/// crate also reads or writes — the resource categories, the form and image
+/// dictionary entries — lives in the shared table and is imported from it.
 pub(crate) mod names {
     pub(crate) use pdfrum_object::names::{
-        BITS_PER_COMPONENT, CROP_BOX, DECODE_PARMS, FILTER, MEDIA_BOX, OC, RESOURCES, ROTATE,
-        SUBTYPE, TR, TYPE,
+        BBOX, BITS_PER_COMPONENT, COLOR_SPACE, CROP_BOX, DECODE, DECODE_PARMS, EXT_G_STATE, FILTER,
+        FONT, HEIGHT, IMAGE_MASK, MATRIX, MEDIA_BOX, OC, PROPERTIES, RESOURCES, ROTATE, SMASK,
+        SUBTYPE, TR, TYPE, WIDTH, XOBJECT,
     };
     pdfrum_object::names! {
-        /// An image's or shading's colour space (`/ColorSpace`).
-        COLOR_SPACE = "ColorSpace";
         /// The colorspace resource category, also a shading's `/CS`.
         CS = "CS";
-        /// Image width in samples (`/Width`).
-        WIDTH = "Width";
-        /// Image height in samples (`/Height`).
-        HEIGHT = "Height";
-        /// Sample-value remapping (`/Decode`).
-        DECODE = "Decode";
-        /// Whether the image is a stencil mask (`/ImageMask`).
-        IMAGE_MASK = "ImageMask";
         /// Whether to smooth the image when scaling (`/Interpolate`).
         INTERPOLATE = "Interpolate";
         /// A stencil or colour-key mask (`/Mask`).
         MASK = "Mask";
-        /// A soft mask, either an image's or an `/ExtGState`'s (`/SMask`).
-        SMASK = "SMask";
         /// The pre-blended background colour behind a soft-masked image
         /// (`/Matte`).
         MATTE = "Matte";
@@ -157,28 +148,12 @@ pub(crate) mod names {
         SMASK_IN_DATA = "SMaskInData";
         /// A JBIG2 stream's shared segment dictionary (`/JBIG2Globals`).
         JBIG2_GLOBALS = "JBIG2Globals";
-        /// Whether a DCT stream's components were transformed
-        /// (`/ColorTransform`).
-        COLOR_TRANSFORM = "ColorTransform";
 
-        /// The named-resource categories (`/XObject`, `/Font`, …).
-        XOBJECT = "XObject";
-        /// The font resource category (`/Font`).
-        FONT = "Font";
-        /// The graphics-state parameter resource category (`/ExtGState`).
-        EXT_G_STATE = "ExtGState";
         /// The pattern resource category (`/Pattern`).
         PATTERN = "Pattern";
         /// The shading resource category (`/Shading`).
         SHADING = "Shading";
-        /// The marked-content property resource category (`/Properties`).
-        PROPERTIES = "Properties";
 
-        /// A form XObject's coordinate mapping, also a pattern's or a
-        /// shading's (`/Matrix`).
-        MATRIX = "Matrix";
-        /// A form XObject's or pattern's clipping rectangle (`/BBox`).
-        BBOX = "BBox";
         /// A form XObject's transparency group attributes (`/Group`).
         GROUP = "Group";
         /// A group's or soft mask's subtype (`/S`).
