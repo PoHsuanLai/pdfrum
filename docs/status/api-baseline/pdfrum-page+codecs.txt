@@ -51,6 +51,17 @@ pub fn pdfrum_page::ColorSpace::n_components(&self) -> usize
 pub fn pdfrum_page::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::Rgb
 pub fn pdfrum_page::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool)
 pub fn pdfrum_page::ColorSpace::try_to_rgb(&self, &[f32]) -> core::option::Option<pdfrum_page::Rgb>
+pub enum pdfrum_page::Depth
+pub pdfrum_page::Depth::Eight
+pub pdfrum_page::Depth::Four
+pub pdfrum_page::Depth::One
+pub pdfrum_page::Depth::Sixteen
+pub pdfrum_page::Depth::Two
+impl pdfrum_page::Depth
+pub const fn pdfrum_page::Depth::bits(self) -> u32
+pub const fn pdfrum_page::Depth::levels(self) -> usize
+pub const fn pdfrum_page::Depth::max_raw(self) -> u32
+pub const fn pdfrum_page::Depth::new(u32) -> core::option::Option<Self>
 #[non_exhaustive] pub enum pdfrum_page::Error
 pub pdfrum_page::Error::CodecRejected
 pub pdfrum_page::Error::CodecRejected::codec: &'static str
@@ -270,6 +281,15 @@ impl pdfrum_page::Rotation
 pub fn pdfrum_page::Rotation::display_matrix(self, kurbo::rect::Rect) -> kurbo::affine::Affine
 pub fn pdfrum_page::Rotation::from_degrees(i64) -> Self
 pub fn pdfrum_page::Rotation::quarters(self) -> u8
+#[non_exhaustive] pub enum pdfrum_page::Samples
+pub pdfrum_page::Samples::Packed(pdfrum_page::Packed)
+pub pdfrum_page::Samples::Whole(pdfrum_page::Pixels)
+impl pdfrum_page::Samples
+pub fn pdfrum_page::Samples::byte_size(&self) -> usize
+pub fn pdfrum_page::Samples::components(&self) -> usize
+pub const fn pdfrum_page::Samples::is_stencil(&self) -> bool
+pub fn pdfrum_page::Samples::palette(&self) -> core::option::Option<&[pdfrum_page::Rgb]>
+pub fn pdfrum_page::Samples::to_pixels(&self) -> pdfrum_page::Pixels
 pub enum pdfrum_page::SetComponentsError
 pub pdfrum_page::SetComponentsError::PatternSpace
 pub pdfrum_page::SetComponentsError::TooFew
@@ -460,7 +480,7 @@ pub pdfrum_page::ImageData::height: u32
 pub pdfrum_page::ImageData::interpolate: bool
 pub pdfrum_page::ImageData::mask: core::option::Option<pdfrum_page::ImageMask>
 pub pdfrum_page::ImageData::matte: core::option::Option<pdfrum_page::Rgb>
-pub pdfrum_page::ImageData::pixels: pdfrum_page::Pixels
+pub pdfrum_page::ImageData::samples: pdfrum_page::Samples
 pub pdfrum_page::ImageData::width: u32
 impl pdfrum_page::ImageData
 pub fn pdfrum_page::ImageData::byte_size(&self) -> usize
@@ -527,6 +547,12 @@ pub fn pdfrum_page::OcContext::group_visible<R: pdfrum_object::resolve::Resolve>
 pub fn pdfrum_page::OcContext::memoized(&self) -> usize
 pub fn pdfrum_page::OcContext::new(core::option::Option<pdfrum_object::dict::Dict>, pdfrum_page::UsageType) -> Self
 pub fn pdfrum_page::OcContext::permissive() -> Self
+pub struct pdfrum_page::Packed
+impl pdfrum_page::Packed
+pub fn pdfrum_page::Packed::byte_size(&self) -> usize
+pub const fn pdfrum_page::Packed::components(&self) -> usize
+pub fn pdfrum_page::Packed::new(alloc::boxed::Box<[u8]>, pdfrum_page::Depth, usize, usize, u32, u32, &pdfrum_page::ColorSpace, core::option::Option<&pdfrum_object::array::Array>) -> Self
+pub fn pdfrum_page::Packed::truncated(&self) -> bool
 pub struct pdfrum_page::Page
 pub pdfrum_page::Page::crop_box: kurbo::rect::Rect
 pub pdfrum_page::Page::dirty_streams: alloc::collections::btree::set::BTreeSet<core::option::Option<usize>>
@@ -650,7 +676,7 @@ pub fn pdfrum_page::SoftMask::apply_transfer(&self, u8) -> u8
 pub fn pdfrum_page::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
 pub struct pdfrum_page::Source<'a>
 impl<'a> pdfrum_page::Source<'a>
-pub fn pdfrum_page::Source<'a>::new(&'a pdfrum_page::Pixels, u32, u32) -> Self
+pub fn pdfrum_page::Source<'a>::new(&'a pdfrum_page::Samples, u32, u32) -> Self
 pub struct pdfrum_page::StateStack
 impl pdfrum_page::StateStack
 pub fn pdfrum_page::StateStack::depth(&self) -> usize
@@ -750,6 +776,11 @@ pub pdfrum_page::Type3Metrics::colored: bool
 pub pdfrum_page::Type3Metrics::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::Type3Metrics::painted: kurbo::rect::Rect
 pub pdfrum_page::Type3Metrics::width: f32
+pub struct pdfrum_page::Unpacked<'a>
+impl<'a> pdfrum_page::Unpacked<'a>
+pub fn pdfrum_page::Unpacked<'a>::collect_all(self) -> alloc::boxed::Box<[u8]>
+pub fn pdfrum_page::Unpacked<'a>::new(&'a pdfrum_page::Packed) -> Self
+pub fn pdfrum_page::Unpacked<'a>::next_row(&mut self) -> core::option::Option<&[u8]>
 pub struct pdfrum_page::Vertex
 pub pdfrum_page::Vertex::color: pdfrum_page::Rgb
 pub pdfrum_page::Vertex::point: kurbo::point::Point
