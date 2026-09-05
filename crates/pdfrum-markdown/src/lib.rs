@@ -23,6 +23,24 @@
 //! facade's `Page::markdown` is one call into here. The graph must carry
 //! its image objects — a build that asked for no samples has none — for a
 //! figure to know which image it drew.
+//!
+//! ```
+//! use pdfrum::Document;
+//! use pdfrum_common::Limits;
+//! use pdfrum_markdown::{Options, page_markdown};
+//!
+//! let doc = Document::open("../../benches/corpus/text_quick_start.pdf")?;
+//! let page = doc.page(0)?;
+//! let markdown = page_markdown(
+//!     &page.objects(),
+//!     page.structure().as_ref(),
+//!     &doc,
+//!     Options::default(),
+//!     &Limits::default(),
+//! );
+//! assert!(!markdown.is_empty());
+//! # Ok::<(), pdfrum::Error>(())
+//! ```
 
 pub mod ast;
 pub mod heuristics;
