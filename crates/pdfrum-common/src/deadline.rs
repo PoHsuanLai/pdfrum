@@ -20,7 +20,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
 use crate::{LimitExceeded, PageIndex};
@@ -57,16 +56,14 @@ use crate::{LimitExceeded, PageIndex};
 pub struct Deadline {
     /// Raised by [`Deadline::stop`]. Shared by every clone.
     stop: Arc<AtomicBool>,
-    /// The budget, on targets with a monotonic clock. Never set on `wasm32`,
-    /// whose constructors do not exist, so no code path there reads a clock.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// The budget, where one was set. Always `None` on `wasm32`, whose
+    /// clock constructors do not exist, so no code path there reads a clock.
     clock: Option<Clock>,
 }
 
 /// A budget counted from the moment it was made. Stored as a start and a
 /// budget rather than as one `Instant`, so the message can say how much
 /// time was allowed and so no arithmetic on `Instant` can overflow.
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Copy)]
 struct Clock {
     start: Instant,
@@ -79,7 +76,6 @@ impl Deadline {
     pub fn manual() -> Deadline {
         Deadline {
             stop: Arc::new(AtomicBool::new(false)),
-            #[cfg(not(target_arch = "wasm32"))]
             clock: None,
         }
     }
@@ -127,14 +123,7 @@ impl Deadline {
     /// How much time was allowed, for a deadline made with a budget.
     #[must_use]
     pub fn budget(&self) -> Option<Duration> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.clock.map(|clock| clock.budget)
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            None
-        }
+        self.clock.map(|clock| clock.budget)
     }
 
     /// Whether the flag is raised or the budget spent. One atomic load, and
@@ -166,18 +155,12 @@ impl Deadline {
         }
     }
 
-    /// The budget, if there is one and it is spent.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// The budget, if there is one and it is spent. On `wasm32` there is
+    /// never one, so only the flag can pass a deadline there.
     fn spent_budget(&self) -> Option<Duration> {
         self.clock
             .filter(|clock| clock.start.elapsed() >= clock.budget)
             .map(|clock| clock.budget)
-    }
-
-    /// No clock, no budget: only the flag can pass a `wasm32` deadline.
-    #[cfg(target_arch = "wasm32")]
-    fn spent_budget(&self) -> Option<Duration> {
-        None
     }
 }
 
