@@ -1401,7 +1401,7 @@ kept at R6.
 
 
 
-## M20 — The CLI as a Unix citizen and an agent tool  *(after M19; scoped 2026-09-05 from the user's first sessions with the tool)*  — IN PROGRESS from 2026-09-05
+## M20 — The CLI as a Unix citizen and an agent tool  *(after M19; scoped 2026-09-05 from the user's first sessions with the tool)*  — **MET 2026-09-05** (`docs/status/M20.md`: five phases, one day; the three-command chain runs; `serve --stdio --mcp` for agents; limits with exit 4)
 
 M19 made `pdfrum` complete; M20 makes it compose. Two readers were held
 in mind while scoping: a person at a shell, chaining it with `grep`,

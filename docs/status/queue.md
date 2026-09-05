@@ -101,7 +101,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   (`SOURCE_DATE_EPOCH` dropped), luminance inversion (`--color-scheme` is
   what exists).
 
-## M20 — the CLI as a Unix citizen and an agent tool (scoped 2026-09-05, PLAN.md M20) — IN PROGRESS
+## ~~M20 — the CLI as a Unix citizen and an agent tool~~ — MET 2026-09-05 (`docs/status/M20.md`); rows below are the record
 
 - ~~Phase 1 — composition~~ — landed 2026-09-05 (699700e, `docs/status/M20.md`):
   `-` input everywhere, `-o -` on writers, several files for
@@ -116,6 +116,8 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `after`/`at` native-only so wasm32 keeps building), `LimitExceeded`,
   `Error::Limit`, checks at the parser's rebuild scan, page load, every
   256 operators, per render object, text extraction and each script eval;
+  CLI half landed the same day: `--max-pixels`, `--time-limit`, exit 4,
+  `-32001` and per-document `limits` in the session;
   `Ir` on `vector_en_tem` +0.48%, all of it heap layout from a larger
   `Limits` (control: a padded struct alone is +0.62%); board 0 rows moved.
   The CLI flags `--max-pixels`/`--time-limit` are in flight.
