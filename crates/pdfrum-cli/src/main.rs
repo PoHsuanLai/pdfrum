@@ -492,6 +492,19 @@ enum Extract {
         #[arg(long)]
         json: bool,
     },
+    /// Every word with its box, font and size, in reading order.
+    Words {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to scan, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// `--json`: an array of `{page, text, x0, y0, x1, y1, font, size,
+        /// start, end}`, the box in points and `start..end` the word's
+        /// character range in the page's text; `--jsonl`: one per line.
+        #[command(flatten)]
+        json: JsonArgs,
+    },
     /// Each page as Markdown: the structure tree where there is one,
     /// typography where there is not.
     Markdown {
@@ -774,6 +787,9 @@ fn run_extract(
             layout,
             json,
         } => cmd::extract::text(&input.file, password, pages.as_deref(), layout, json),
+        Extract::Words { input, pages, json } => {
+            cmd::extract::words(&input.file, password, pages.as_deref(), json.mode(), term)
+        }
         Extract::Markdown { input, pages, json } => {
             cmd::extract::markdown(&input.file, password, pages.as_deref(), json)
         }
