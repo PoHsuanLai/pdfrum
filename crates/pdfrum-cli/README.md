@@ -33,11 +33,11 @@ pdfrum repair damaged.pdf -o fixed.pdf
 pdfrum optimize big.pdf --deterministic -o small.pdf
 pdfrum security decrypt locked.pdf --password secret -o open.pdf
 pdfrum security encrypt open.pdf --user-password read --owner-password admin --allow print -o locked.pdf
-pdfrum extract images brochure.pdf -o images/   # JPEGs as they are, the rest as PNG
+pdfrum extract images brochure.pdf -o images/   # one row per picture, repeats counted, spacers left out; --all for every draw
 pdfrum extract fonts brochure.pdf -o fonts/     # the embedded programs, .ttf/.cff/.otf/.pfb
-pdfrum inspect object report.pdf 12             # one object in PDF syntax
+pdfrum inspect object report.pdf 12             # one object, highlighted, each reference told what it is
 pdfrum inspect object report.pdf 12 --decode > content.txt
-pdfrum inspect xref report.pdf                  # where every object lives, and the trailer
+pdfrum inspect xref report.pdf                  # where every object lives and what it is, and the trailer
 pdfrum inspect revisions edited.pdf             # the incremental-update history
 pdfrum inspect revision edited.pdf --rev 1 -o original.pdf
 pdfrum inspect structure tagged.pdf             # the structure tree, indented

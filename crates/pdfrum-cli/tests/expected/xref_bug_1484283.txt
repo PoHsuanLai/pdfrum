@@ -3,13 +3,13 @@ objects  6
 xref     as written
 trailer
   <<
-    /Root 1 0 R
+    /Root 1 0 R  % Catalog
     /Size 7
   >>
-OBJ  GEN  PLACE
-  1    0  @15
-  2    0  in 5 0 R [0]
-  3    0  @157
-  4    0  @633
-  5    0  @873
-  6    0  @1036
+OBJ  GEN  PLACE         WHAT
+  1    0  @15           Catalog
+  2    0  in 5 0 R [0]  Pages
+  3    0  @157          Page
+  4    0  @633          stream raw 188 B
+  5    0  @873          ObjStm, stream raw 78 B
+  6    0  @1036         XRef, stream /ASCIIHexDecode 48 B
