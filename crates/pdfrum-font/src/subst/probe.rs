@@ -220,7 +220,15 @@ impl TableDirectory {
 fn assemble(sfnt_version: [u8; 4], tables: &[(TableRecord, Vec<u8>)]) -> Vec<u8> {
     let count = u16::try_from(tables.len()).unwrap_or(u16::MAX);
     let entry_selector = if count == 0 { 0 } else { count.ilog2() };
-    let search_range = (1u32 << entry_selector) * 16;
+    // `search_range` is defined as the largest power of two not exceeding
+    // `count`, times sixteen — so it never exceeds `count * 16` and the shift
+    // below cannot go negative. A face carrying neither wanted table assembles
+    // an empty directory, where all three fields are zero.
+    let search_range = if count == 0 {
+        0
+    } else {
+        (1u32 << entry_selector) * 16
+    };
     let range_shift = u32::from(count) * 16 - search_range;
 
     let mut out = Vec::new();
