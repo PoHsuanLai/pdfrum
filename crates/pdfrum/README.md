@@ -55,7 +55,7 @@ public type is `Send + Sync`, so rendering pages in parallel needs nothing
 beyond adding `rayon` to your own manifest.
 
 Full documentation, the crate map, the conformance scoreboard and the project
-documents are in the [workspace README](https://github.com/pdfrum/pdfrum).
+documents are in the [workspace README](https://github.com/PoHsuanLai/pdfrum).
 
 ## License
 
