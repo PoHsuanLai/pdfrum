@@ -184,9 +184,14 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
      48.3 → 47.1 / 82.9 → 93.5 / 87.3 → 98.1 pages/s (+12.8% at 4, +12.4%
      at 8). Board byte-identical, 1759 rows, 0 changed. Still open: the gap
      to hayro and mupdf is not closed, and the glyph caches are still
-     per-session. Found, not fixed: `tounicode::parse` expands an identity
-     CMap into 65,536 map entries (~19 M `Ir` per font) — a `ToUnicode`
-     storage pass, keeping `Range::Consecutive` as a range. mupdf's row was re-measured threaded on
+     per-session. ~~`tounicode::parse` expanded an identity CMap into
+     65,536 map entries~~ — landed 2026-09-06 (6fdf2cf; `font-cache.md`
+     "ToUnicode storage"): contiguous bfranges stored as runs, lookup a
+     binary search over a 256-code window (the linear-scan version was
+     measured slower than the baseline and rejected), the oracle's
+     lowest-value-wins rule for both directions pinned order-independent
+     by test; `parse` on `text_tcpdf_063` 75.9 M → 0.27 M, whole text run
+     −27.7%, board byte-identical. mupdf's row was re-measured threaded on
      2026-09-05 (214c597) in MuPDF's own model — display lists recorded on
      one thread, rasterized on N cloned contexts, 17.7% serial share — after
      the user pointed out the "single-thread-only" label was wrong; only
