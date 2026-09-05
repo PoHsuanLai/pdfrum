@@ -1,0 +1,52 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 6 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 7 0 R >> >> >> /OpenAction 8 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R /Annots [5 0 R 6 0 R] >>
+endobj
+4 0 obj
+<< /Length 25 >>
+stream
+0 0 1 rg 10 10 20 20 re f
+endstream
+endobj
+5 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (source) /V () /Rect [10 60 190 90] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (echo) /V () /Rect [10 20 190 50] /F 4 /DA (/Helv 12 Tf 0 g) /P 3 0 R >>
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+8 0 obj
+<< /Type /Action /S /JavaScript /JS 9 0 R >>
+endobj
+9 0 obj
+<< /Length 66 >>
+stream
+this.getField('echo').value = this.getField('source').value + '!';
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000015 00000 n 
+0000000175 00000 n 
+0000000232 00000 n 
+0000000341 00000 n 
+0000000416 00000 n 
+0000000550 00000 n 
+0000000682 00000 n 
+0000000752 00000 n 
+0000000812 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+928
+%%EOF
