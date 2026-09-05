@@ -31,6 +31,12 @@ members = [
     "crates/pdfrum-tool",
     "crates/pdfrum-markdown",
     "crates/pdfrum-cli",
+    # M22 phase 2. The C ABI: `libpdfrum.so`, `libpdfrum.a` and `pdfrum.h`.
+    # The one member that overrides the workspace's `unsafe_code = "forbid"`,
+    # under the rule in docs/design/capi.md — unsafe only in the `extern "C"`
+    # boundary, every one with a `# Safety` section, nothing unsafe below the
+    # facade. It adds no external dependency: `pdfrum` is all it needs.
+    "crates/pdfrum-capi",
     "conformance",
     "benches",
     "benches/corpus-list",

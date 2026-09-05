@@ -1864,6 +1864,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-capi"
+version = "0.1.0"
+dependencies = [
+ "pdfrum",
+]
+
+[[package]]
 name = "pdfrum-cli"
 version = "0.1.0"
 dependencies = [
