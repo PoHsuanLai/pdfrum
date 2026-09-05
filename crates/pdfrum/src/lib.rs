@@ -115,7 +115,7 @@ pub use pdfrum_form::AnnotId;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 #[cfg(feature = "markdown")]
 pub use pdfrum_markdown::Block;
-/// Rendering Markdown [`Block`]s: [`markdown::render`] as
+/// Rendering Markdown [`Block`]s: [`markdown::render`](markdown::render()) as
 /// [`Page::markdown`] does it, and [`markdown::render_with_images`] with
 /// each [`Block::Image`] linked to a file the caller wrote — the pair a
 /// caller of [`Page::markdown_blocks`] or [`Document::markdown_blocks`]

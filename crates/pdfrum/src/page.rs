@@ -404,7 +404,7 @@ impl<'a> Page<'a> {
 
     /// The page's content as Markdown blocks, in reading order — what
     /// [`Page::markdown`] renders, for a caller who wants to walk them or to
-    /// link each [`Block::Image`] to a file through
+    /// link each [`Block::Image`](crate::Block::Image) to a file through
     /// [`markdown::render_with_images`](crate::markdown::render_with_images).
     /// An image block's index is into [`Page::images`].
     #[cfg(feature = "markdown")]
