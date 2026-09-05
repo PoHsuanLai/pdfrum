@@ -153,6 +153,28 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   code: registered as item 6 of `docs/status/unwired-oracle-ports.md`
   with the oracle lines; wiring it is three changes in the form pipeline.
 
+## Cold start, measured again (user question, 2026-09-05)
+
+- The user asked whether the font layer makes cold start slow. Measured
+  with callgrind on today's tree (`profile --op render --iterations 1`,
+  vello-cpu): the guide's page 1 (images and text) is 3.86 G `Ir`, of
+  which font loading is 50 M (1.3%); the product sheet (embedded Calibri,
+  text only) is 770 M, of which the font layer is about 10% — per-character
+  decoding (`Decoder::next` 3.9%, `Type0Font::char_item` 3.3%) and the
+  glyph cache (3%), not loading. `open` of the guide is 5.5 M. Wall: `info`
+  under 10 ms, `render` of the hello fixture 30 ms including process start
+  and the standard-14 substitution (the system font scan M18 fixed is no
+  longer visible). The font layer is not the cold-start cost.
+- Where the cold render goes instead, on the guide: the image path — decode
+  a 1240x1753 JPEG then downscale it (`image::to_pixmap` 34%,
+  `stretch::reduce_to` 22%, `unpack`/`sample_bytes` 15%, JPEG 15%) — and
+  the rasterizer (19%). Two candidates, each measurable with `Ir` and the
+  board: decode JPEGs at the reduced size the page needs (the zune-jpeg
+  request we drafted upstream would do it inside the decoder; until then,
+  a 1/2, 1/4, 1/8 nearest reduce straight after decode, before the
+  general resample), and a fast path in `unpack` for 8-bit 1/3-component
+  images that skips the bit reader.
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
