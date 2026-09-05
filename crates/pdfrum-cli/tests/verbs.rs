@@ -587,3 +587,278 @@ fn the_oracle_saves_what_we_attached_and_not_what_we_removed() {
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+// ---- stamp text, stamp image -------------------------------------------------
+
+#[test]
+fn stamp_text_marks_every_page_in_the_face_and_size_asked_for() {
+    let dir = scratch("stamp-text").unwrap();
+    let stamped = dir.join("stamped.pdf");
+    let line = stdout(&[
+        "stamp",
+        "text",
+        HELLO,
+        "DRAFT",
+        "--position",
+        "bottom-right",
+        "--opacity",
+        "0.5",
+        "--angle",
+        "30",
+        "--size",
+        "24",
+        "--rgb",
+        "#ff0000",
+        "--font",
+        "Helvetica-Bold",
+        "-o",
+        stamped.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(line, format!("{}: stamped 2 pages\n", stamped.display()));
+    let pages = json(&["extract", "text", stamped.to_str().unwrap(), "--json"]).unwrap();
+    let pages = pages.as_array().unwrap();
+    assert_eq!(pages.len(), 2);
+    for page in pages {
+        let text = page["text"].as_str().unwrap();
+        assert!(text.contains("DRAFT"), "{text}");
+        assert!(
+            text.contains("Hello, world!"),
+            "the page's own text: {text}"
+        );
+    }
+    let words = json(&["extract", "words", stamped.to_str().unwrap(), "--json"]).unwrap();
+    let draft = words
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["text"] == "DRAFT")
+        .unwrap();
+    assert_eq!(draft["font"], "Helvetica-Bold");
+    assert!(
+        (draft["size"].as_f64().unwrap() - 24.0).abs() < 0.01,
+        "{draft}"
+    );
+    // Turned 30 degrees, the word's box is wider than the word; its centre
+    // is in the bottom-right quarter of the 200 by 200 page.
+    let mid =
+        |a: &str, b: &str| f64::midpoint(draft[a].as_f64().unwrap(), draft[b].as_f64().unwrap());
+    assert!(
+        mid("x0", "x1") > 100.0 && mid("y0", "y1") < 100.0,
+        "bottom right: {draft}"
+    );
+
+    let no = dir.join("no.pdf");
+    for (args, reason) in [
+        (["--opacity", "2"], "--opacity is 0"),
+        (["--font", "Arial"], "standard 14"),
+        (["--rgb", "red"], "not a colour"),
+        (["--size", "0"], "--size must be"),
+    ] {
+        let err = refused(&[
+            "stamp",
+            "text",
+            HELLO,
+            "DRAFT",
+            args[0],
+            args[1],
+            "-o",
+            no.to_str().unwrap(),
+        ])
+        .unwrap();
+        assert!(err.contains(reason), "{args:?}: {err}");
+    }
+    let usage = run(&["stamp", "text", HELLO, "DRAFT", "--position", "middle"]).unwrap();
+    assert_eq!(usage.status.code(), Some(2), "clap's refusal");
+    assert!(!no.exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn stamp_image_draws_the_picture_on_every_page_at_the_width_asked_for() {
+    let dir = scratch("stamp-image").unwrap();
+    let stamped = dir.join("stamped.pdf");
+    let line = stdout(&[
+        "stamp",
+        "image",
+        HELLO,
+        "fixtures/mona_lisa.jpg",
+        "--width",
+        "50",
+        "--position",
+        "top-left",
+        "--opacity",
+        "0.8",
+        "--deterministic",
+        "-o",
+        stamped.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(line, format!("{}: stamped 2 pages\n", stamped.display()));
+    let once = std::fs::read(&stamped).unwrap();
+    // One object drawn on both pages: one row with two uses, and with
+    // --all one row per page.
+    let images = json(&["extract", "images", stamped.to_str().unwrap(), "--json"]).unwrap();
+    let images = images.as_array().unwrap();
+    assert_eq!(images.len(), 1, "{images:?}");
+    assert_eq!(images[0]["uses"], 2);
+    assert_eq!(images[0]["format"], "jpg", "the JPEG is kept as it is");
+    assert_eq!(
+        (&images[0]["width"], &images[0]["height"]),
+        (&serde_json::json!(120), &serde_json::json!(120))
+    );
+    let draws = json(&[
+        "extract",
+        "images",
+        stamped.to_str().unwrap(),
+        "--all",
+        "--json",
+    ])
+    .unwrap();
+    let draws = draws.as_array().unwrap();
+    assert_eq!(draws.len(), 2, "{draws:?}");
+    assert_eq!(draws[0]["page"], 1);
+    assert_eq!(draws[1]["page"], 2);
+    assert_eq!(
+        draws[0]["object"], draws[1]["object"],
+        "one object serves every page"
+    );
+    stdout(&[
+        "stamp",
+        "image",
+        HELLO,
+        "fixtures/mona_lisa.jpg",
+        "--width",
+        "50",
+        "--position",
+        "top-left",
+        "--opacity",
+        "0.8",
+        "--deterministic",
+        "-o",
+        stamped.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(once, std::fs::read(&stamped).unwrap(), "reproducible");
+
+    let no = dir.join("no.pdf");
+    let err = refused(&[
+        "stamp",
+        "image",
+        HELLO,
+        "fixtures/bug_740166_expected.txt",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("not a JPEG or PNG file"), "{err}");
+    let err = refused(&[
+        "stamp",
+        "image",
+        HELLO,
+        "fixtures/mona_lisa.jpg",
+        "--width",
+        "0",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("--width must be"), "{err}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The page-0 text `pdfium_test --txt` wrote beside `name`: UTF-32LE.
+fn oracle_text(dir: &Path, name: &str) -> std::io::Result<String> {
+    let raw = std::fs::read(dir.join(format!("{name}.0.txt")))?;
+    Ok(raw
+        .chunks_exact(4)
+        .map(|unit| u32::from_le_bytes([unit[0], unit[1], unit[2], unit[3]]))
+        .map(|cp| char::from_u32(cp).unwrap_or('\u{FFFD}'))
+        .collect())
+}
+
+/// The `MD5:` line of a `pdfium_test --md5` run.
+fn md5_of(log: &str) -> Option<String> {
+    log.lines()
+        .find(|line| line.contains("MD5:"))
+        .and_then(|line| line.rsplit(':').next())
+        .map(|hash| hash.trim().to_owned())
+}
+
+#[test]
+fn the_oracle_extracts_the_text_stamp_and_renders_the_image_stamp() {
+    let Some(bin) = oracle_bin() else {
+        return;
+    };
+    let dir = scratch("stamp-oracle").unwrap();
+    std::fs::copy(fixture("hello_world_2_pages.pdf"), dir.join("plain.pdf")).unwrap();
+    stdout(&[
+        "stamp",
+        "text",
+        HELLO,
+        "CONFIDENTIAL",
+        "--angle",
+        "30",
+        "--opacity",
+        "0.4",
+        "--size",
+        "20",
+        "-o",
+        dir.join("text.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    stdout(&[
+        "stamp",
+        "image",
+        HELLO,
+        "fixtures/mona_lisa.jpg",
+        "--width",
+        "100",
+        "-o",
+        dir.join("image.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    let (ok, log) = oracle(&bin, &dir, &["--txt", "--pages=0"], "text.pdf").unwrap();
+    assert!(ok, "{log}");
+    let text = oracle_text(&dir, "text.pdf").unwrap();
+    assert!(text.contains("CONFIDENTIAL"), "{text}");
+    assert!(text.contains("Hello, world!"), "{text}");
+    let (ok, plain) = oracle(&bin, &dir, &["--md5", "--png", "--pages=0"], "plain.pdf").unwrap();
+    assert!(ok, "{plain}");
+    let (ok, image) = oracle(&bin, &dir, &["--md5", "--png", "--pages=0"], "image.pdf").unwrap();
+    assert!(ok, "{image}");
+    assert!(md5_of(&plain).is_some());
+    assert_ne!(
+        md5_of(&plain),
+        md5_of(&image),
+        "the picture changed the page"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+// ---- every verb takes -o - ----------------------------------------------------
+
+#[test]
+fn every_new_verb_writes_to_stdout_on_a_dash() {
+    let dir = scratch("dash").unwrap();
+    let notes = dir.join("notes.txt");
+    std::fs::write(&notes, "Read me").unwrap();
+    let commands: Vec<Vec<&str>> = vec![
+        vec!["metadata", "set", HELLO, "--title", "T"],
+        vec!["pages", "delete", HELLO, "--pages", "1"],
+        vec!["pages", "rotate", HELLO, "--by", "90"],
+        vec!["attach", "add", HELLO, notes.to_str().unwrap()],
+        vec!["attach", "remove", WITH_FOUR, "1.txt"],
+        vec!["stamp", "text", HELLO, "DRAFT"],
+        vec!["stamp", "image", HELLO, "fixtures/mona_lisa.jpg"],
+    ];
+    for mut args in commands {
+        args.extend(["-o", "-"]);
+        let out = run(&args).unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        assert!(out.stdout.starts_with(b"%PDF-"), "{args:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("pdfrum: -: "), "{args:?}: {err}");
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}

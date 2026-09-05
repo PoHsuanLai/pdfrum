@@ -16,4 +16,5 @@ pub mod render;
 pub mod scripts;
 pub mod serve;
 pub mod shell;
+pub mod stamp;
 pub mod terminal;

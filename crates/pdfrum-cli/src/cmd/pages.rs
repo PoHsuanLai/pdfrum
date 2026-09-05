@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{Document, IdSource, PageBox, Rect, Rotation, SaveOptions};
+use pdfrum::{DocEdit, Document, EmbeddedImage, IdSource, PageBox, Rect, Rotation, SaveOptions};
 
 use crate::out::outln;
 use crate::term::{Style, Term};
@@ -536,10 +536,7 @@ pub fn create(
     let mut edit = doc.edit();
     let mut page_edits = Vec::with_capacity(decoded.len());
     for (i, d) in decoded.iter().enumerate() {
-        let embedded = match &d.pixels {
-            Pixels::Jpeg(bytes) => edit.embed_jpeg(bytes)?,
-            Pixels::Raw { data, format } => edit.embed_image(data, d.width, d.height, *format)?,
-        };
+        let embedded = embed(&mut edit, d)?;
         let (w, h) = size(d);
         let page = doc.page(u32::try_from(i).unwrap_or(u32::MAX))?;
         let mut page_edit = page.edit();
@@ -566,27 +563,49 @@ pub fn create(
     Ok(ExitCode::SUCCESS)
 }
 
+/// An image's samples as the file will hold them.
 enum Pixels {
+    /// A JPEG, embedded as it is.
     Jpeg(Vec<u8>),
+    /// Decoded samples, flate-compressed by the save.
     Raw {
         data: Vec<u8>,
         format: pdfrum::PixelFormat,
     },
 }
 
-struct Decoded {
-    width: u32,
-    height: u32,
+/// A JPEG or PNG file read and, for a PNG, decoded: what `pages create`
+/// puts on a page and `stamp image` draws over one.
+pub struct Decoded {
+    pub width: u32,
+    pub height: u32,
     pixels: Pixels,
     /// The file's bytes, for the deterministic seed.
     source: Vec<u8>,
 }
 
-fn decode(path: &Path) -> Result<Decoded> {
+/// `image` as a new image object of `edit`.
+pub fn embed(edit: &mut DocEdit<'_>, image: &Decoded) -> Result<EmbeddedImage> {
+    Ok(match &image.pixels {
+        Pixels::Jpeg(bytes) => edit.embed_jpeg(bytes)?,
+        Pixels::Raw { data, format } => {
+            edit.embed_image(data, image.width, image.height, *format)?
+        }
+    })
+}
+
+/// The image file at `path`.
+pub fn decode(path: &Path) -> Result<Decoded> {
     let source = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+    decode_bytes(source, &path.display().to_string())
+}
+
+/// The image `source` holds — a JPEG kept as it is, a PNG decoded —
+/// `what` naming it in an error.
+pub fn decode_bytes(source: Vec<u8>, what: &str) -> Result<Decoded> {
     if source.starts_with(&[0xFF, 0xD8]) {
         let (width, height) = jpeg_size(&source)
-            .with_context(|| format!("{}: cannot find the JPEG frame size", path.display()))?;
+            .with_context(|| format!("{what}: cannot find the JPEG frame size"))?;
         return Ok(Decoded {
             width,
             height,
@@ -599,17 +618,16 @@ fn decode(path: &Path) -> Result<Decoded> {
         decoder.set_transformations(png::Transformations::normalize_to_color8());
         let mut reader = decoder
             .read_info()
-            .with_context(|| format!("{}: not a readable PNG", path.display()))?;
+            .with_context(|| format!("{what}: not a readable PNG"))?;
         let mut data = vec![
             0;
-            reader.output_buffer_size().with_context(|| format!(
-                "{}: too large to decode",
-                path.display()
-            ))?
+            reader
+                .output_buffer_size()
+                .with_context(|| format!("{what}: too large to decode"))?
         ];
         let info = reader
             .next_frame(&mut data)
-            .with_context(|| format!("{}: cannot decode", path.display()))?;
+            .with_context(|| format!("{what}: cannot decode"))?;
         data.truncate(info.buffer_size());
         let format = match info.color_type {
             png::ColorType::Grayscale => pdfrum::PixelFormat::Gray8,
@@ -621,7 +639,7 @@ fn decode(path: &Path) -> Result<Decoded> {
                 pdfrum::PixelFormat::Gray8
             }
             png::ColorType::Indexed => {
-                bail!("{}: indexed PNG survived normalization", path.display())
+                bail!("{what}: indexed PNG survived normalization")
             }
         };
         return Ok(Decoded {
@@ -631,7 +649,7 @@ fn decode(path: &Path) -> Result<Decoded> {
             source,
         });
     }
-    bail!("{}: not a JPEG or PNG file", path.display())
+    bail!("{what}: not a JPEG or PNG file")
 }
 
 /// The width and height from a JPEG's first frame header (SOF0–SOF15,
