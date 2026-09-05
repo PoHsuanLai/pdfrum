@@ -27,6 +27,7 @@ pub mod model;
 mod submit;
 mod timer;
 pub mod transcript;
+pub mod zone;
 
 use std::rc::Rc;
 
@@ -53,13 +54,20 @@ pub use transcript::TranscriptLine;
 pub const GOLDEN_CLOCK_SECS: u64 = 1_399_672_130;
 
 /// The timezone the **engine's `Date`** saw when the goldens were recorded:
-/// `TZ=America/Los_Angeles` as V8 resolves it for the fixtures' July dates,
-/// which is `GMT-0700`.
+/// `TZ=America/Los_Angeles`, as V8 resolves it — which is `GMT-0700` for the
+/// fixtures' July dates and `GMT-0800` for their December ones.
 ///
-/// This is `Date`'s offset only. `util.printd` uses a *different* one — see
+/// **A rule, not a number**, and that is the whole point: V8 is the one part
+/// of the oracle's date plumbing `pdfium_test` does *not* hook, so it reads
+/// the real zone database per instant. A flat `GMT-0700` here is an hour
+/// wrong on every winter date, and one of those winter dates
+/// (`new Date(2525, 11, 31)`) is midnight, so the hour prints as a day —
+/// `12/30/2525` for an expected `12/31/2525`. See [`zone`].
+///
+/// This is `Date`'s zone only. `util.printd` uses a *different* offset — see
 /// [`GOLDEN_PRINTD_OFFSET_SECS`], and read that doc before assuming the two
 /// should agree.
-pub const GOLDEN_TIMEZONE_OFFSET_SECS: i32 = -7 * 3600;
+pub const GOLDEN_TIMEZONE: zone::Zone = zone::Zone::LOS_ANGELES;
 
 /// The offset **`util.printd` applies** when the goldens were recorded, which
 /// is not the one `Date` uses: a flat `GMT-0800`, with no daylight saving,
@@ -67,11 +75,14 @@ pub const GOLDEN_TIMEZONE_OFFSET_SECS: i32 = -7 * 3600;
 ///
 /// # Why the two differ, which is not a bug in either
 ///
-/// The golden harness replaces `localtime` with `gmtime`, so the daylight
-/// term contributes nothing while the standard-offset term still reads the
-/// zone's own — PST, −8 hours. The engine's `Date` never goes through those
-/// hooks and keeps the real −7. The two are one hour apart, all summer, by
-/// construction.
+/// The golden harness replaces `localtime` with `gmtime`
+/// (`testing/pdfium_test/pdfium_test.cc:2134`), so `GetDaylightSavingTA`'s
+/// `tm_isdst` is always zero (`fxjs/fx_date_helpers.cpp:54-67`) while
+/// `GetLocalTZA`'s standard-offset term still reads the zone's own — PST, −8
+/// hours. The engine's `Date` never goes through those hooks and keeps the
+/// real rule, [`GOLDEN_TIMEZONE`]. The two are one hour apart all summer and
+/// **agree all winter**, by construction — and getting the winter half wrong
+/// is exactly the regression [`zone`] documents.
 pub const GOLDEN_PRINTD_OFFSET_SECS: i32 = -8 * 3600;
 
 /// The file path **the goldens were recorded with**, which is the test
@@ -95,13 +106,16 @@ pub struct ScriptConfig {
     /// oracle's too. `Some` freezes it, which is what a golden run needs — see
     /// [`ScriptConfig::frozen_at`].
     pub clock_ms: Option<i64>,
-    /// The local timezone offset scripts see, in seconds east of UTC.
+    /// The local timezone scripts see through `Date`.
     ///
     /// Configuration rather than something read from the machine, because it
     /// is in the expected bytes: every `util.printd` golden line is shifted to
-    /// PDFium's Los Angeles offset, and a golden run in another zone must
+    /// PDFium's Los Angeles zone, and a golden run in another zone must
     /// still produce them.
-    pub timezone_offset_secs: i32,
+    ///
+    /// A [`zone::Zone`] rather than an offset because the answer depends on
+    /// the instant — [`Default`] gives UTC, which has no daylight term.
+    pub timezone: zone::Zone,
     /// The offset `util.printd` applies before reading a date's components —
     /// `FX_LocalTime`'s, which is **not** the one `Date` uses. See
     /// [`GOLDEN_PRINTD_OFFSET_SECS`] for why they differ.
@@ -115,7 +129,7 @@ impl ScriptConfig {
     /// **The seed is the caller's**: a conformance run passes
     /// [`GOLDEN_CLOCK_SECS`], an embedder its own instant.
     ///
-    /// The two timezone offsets come with it rather than being separately
+    /// The zone and printd's offset come with it rather than being separately
     /// configurable, because the clock and the zone are frozen together —
     /// freezing the instant without freezing the zone reproduces neither.
     ///
@@ -128,7 +142,7 @@ impl ScriptConfig {
         ScriptConfig {
             limits: Limits::default(),
             clock_ms: Some(millis),
-            timezone_offset_secs: GOLDEN_TIMEZONE_OFFSET_SECS,
+            timezone: GOLDEN_TIMEZONE,
             printd_offset_secs: GOLDEN_PRINTD_OFFSET_SECS,
         }
     }
@@ -325,8 +339,8 @@ impl ScriptCascade {
         if let Some(millis) = config.clock_ms {
             let millis = u64::try_from(millis).unwrap_or(0);
             builder = builder
-                .host_hooks(Rc::new(host::FixedZone {
-                    offset_secs: config.timezone_offset_secs,
+                .host_hooks(Rc::new(host::ConfiguredZone {
+                    zone: config.timezone,
                 }))
                 .clock(Rc::new(boa_engine::context::time::FixedClock::from_millis(
                     millis,
