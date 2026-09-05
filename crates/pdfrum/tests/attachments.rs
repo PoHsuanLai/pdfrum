@@ -80,21 +80,256 @@ fn a_description_is_its_text_and_anything_else_is_empty() {
 // ---- the writers: the oracle's add, set, describe and delete assertions,
 // read back through a save and a reopen.
 
-use pdfrum::SaveOptions;
+use pdfrum::{AttachmentOptions, SaveOptions};
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 
 fn saved(edit: &pdfrum::DocEdit<'_>) -> pdfrum::Result<Document> {
+    Document::from_bytes(Arc::from(bytes_of(edit)?))
+}
+
+fn bytes_of(edit: &pdfrum::DocEdit<'_>) -> pdfrum::Result<Vec<u8>> {
     let mut out = Vec::new();
     edit.write_to(&mut out, &SaveOptions::default())?;
-    Document::from_bytes(Arc::from(out))
+    Ok(out)
+}
+
+/// No description, MIME type or date: the oracle's own `FPDFDoc_AddAttachment`.
+fn plain() -> AttachmentOptions {
+    AttachmentOptions::default()
+}
+
+fn described() -> AttachmentOptions {
+    AttachmentOptions {
+        description: Some("The notes".into()),
+        mime_type: Some("text/plain".into()),
+        modified: Some("D:20260905120000Z00'00'".into()),
+    }
+}
+
+#[test]
+fn an_attachments_options_are_written_and_read_back() {
+    let doc = open("hello_world").unwrap();
+    let mut edit = doc.edit();
+    assert_eq!(
+        edit.add_attachment("notes.txt", b"Read me", &described())
+            .unwrap(),
+        0
+    );
+    let doc = saved(&edit).unwrap();
+    let attachment = &doc.attachments()[0];
+    assert_eq!(attachment.file_name(), "notes.txt");
+    assert_eq!(attachment.data().unwrap(), b"Read me");
+    assert_eq!(attachment.description(), "The notes");
+    assert_eq!(attachment.subtype().as_deref(), Some("text/plain"));
+    assert_eq!(
+        attachment.param("ModDate").as_deref(),
+        Some("D:20260905120000Z00'00'")
+    );
+    assert!(attachment.has_param("Size"));
+    let checksum = attachment.param("CheckSum").unwrap();
+    assert!(
+        checksum.starts_with('<') && checksum.len() == 34,
+        "an MD5 as hex: {checksum}"
+    );
+}
+
+#[test]
+fn a_plain_attachment_has_no_description_subtype_or_date() {
+    let doc = open("hello_world").unwrap();
+    let mut edit = doc.edit();
+    edit.add_attachment("a.bin", b"\x00\x01", &plain()).unwrap();
+    let doc = saved(&edit).unwrap();
+    let attachment = &doc.attachments()[0];
+    assert_eq!(attachment.description(), "");
+    assert_eq!(
+        attachment.subtype().as_deref(),
+        Some(""),
+        "the stream names none"
+    );
+    assert!(!attachment.has_param("ModDate"));
+}
+
+#[test]
+fn the_embedded_file_is_typed_and_flate_encoded() {
+    let doc = open("hello_world").unwrap();
+    let mut edit = doc.edit();
+    let payload = vec![b'a'; 4096];
+    edit.add_attachment("big.txt", &payload, &described())
+        .unwrap();
+    let bytes = bytes_of(&edit).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("/EmbeddedFile"), "typed");
+    assert!(
+        text.contains("/Subtype/text#2Fplain"),
+        "the MIME type as a name"
+    );
+    assert!(text.contains("/FlateDecode"), "compressed");
+    assert!(
+        !bytes.windows(payload.len()).any(|w| w == payload),
+        "the payload is not stored raw"
+    );
+    let doc = Document::from_bytes(Arc::from(bytes)).unwrap();
+    assert_eq!(doc.attachments()[0].data().unwrap(), payload);
+}
+
+#[test]
+fn removing_by_name_takes_the_entry_and_leaves_the_others_sorted() {
+    let doc = open("embedded_attachments").unwrap();
+    let mut edit = doc.edit();
+    edit.add_attachment("0.txt", b"first", &plain()).unwrap();
+    edit.add_attachment("z.txt", b"last", &plain()).unwrap();
+    assert!(edit.remove_attachment("1.txt").unwrap());
+    assert!(!edit.remove_attachment("1.txt").unwrap(), "already gone");
+    assert!(!edit.remove_attachment("nope").unwrap());
+    let doc = saved(&edit).unwrap();
+    let names: Vec<String> = doc
+        .attachments()
+        .iter()
+        .map(pdfrum::Attachment::file_name)
+        .collect();
+    assert_eq!(names, ["0.txt", "attached.pdf", "z.txt"]);
+}
+
+#[test]
+fn removing_every_attachment_leaves_an_empty_tree_that_reads_as_none() {
+    let doc = open("embedded_attachments").unwrap();
+    let mut edit = doc.edit();
+    assert!(edit.remove_attachment("1.txt").unwrap());
+    assert!(edit.remove_attachment("attached.pdf").unwrap());
+    assert!(saved(&edit).unwrap().attachments().is_empty());
+}
+
+#[test]
+fn a_non_ascii_name_and_description_round_trip() {
+    let doc = open("hello_world").unwrap();
+    let mut edit = doc.edit();
+    edit.add_attachment(
+        "\u{7f51}\u{9875}.txt",
+        b"x",
+        &AttachmentOptions {
+            description: Some("\u{fc}ber \u{1F3A8}".into()),
+            ..plain()
+        },
+    )
+    .unwrap();
+    let doc = saved(&edit).unwrap();
+    let attachment = &doc.attachments()[0];
+    assert_eq!(attachment.file_name(), "\u{7f51}\u{9875}.txt");
+    assert_eq!(attachment.description(), "\u{fc}ber \u{1F3A8}");
+}
+
+// ---- the oracle
+
+/// The oracle's `pdfium_test`, when this machine has one: `$PDFRUM_ORACLE_BIN`,
+/// else `$PDFRUM_ORACLE_CHECKOUT/out/Release/pdfium_test`, else the sibling
+/// `../pdfium-c++` checkout. The same six lines as `embed_image.rs`, for the
+/// same reason.
+fn oracle_bin() -> Option<PathBuf> {
+    let bin = std::env::var_os("PDFRUM_ORACLE_BIN").map_or_else(
+        || {
+            let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+                || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+                PathBuf::from,
+            );
+            checkout.join("out/Release/pdfium_test")
+        },
+        PathBuf::from,
+    );
+    bin.is_file().then_some(bin)
+}
+
+/// `pdfium_test --save-attachments` writes `<file>.attachment.<name>` beside
+/// the file; the oracle's reading of what we wrote, byte for byte.
+#[test]
+fn the_oracle_saves_the_attachments_we_added() {
+    let Some(bin) = oracle_bin() else {
+        eprintln!("pdfium_test is absent; skipping the oracle round trip");
+        return;
+    };
+    let dir = std::env::temp_dir().join("pdfrum-attachments-oracle");
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::create_dir_all(&dir).unwrap();
+    let every_byte: Vec<u8> = (0..=255u8).collect::<Vec<u8>>().repeat(16);
+
+    // A tree created from nothing, and one grown from the fixture's own.
+    for (fixture, file, expected) in [
+        (
+            "hello_world",
+            "grown.pdf",
+            vec![
+                ("bytes.bin", every_byte.clone()),
+                ("notes.txt", b"Read me".to_vec()),
+            ],
+        ),
+        (
+            "embedded_attachments",
+            "added.pdf",
+            vec![
+                ("1.txt", b"test".to_vec()),
+                ("bytes.bin", every_byte.clone()),
+            ],
+        ),
+    ] {
+        let doc = open(fixture).unwrap();
+        let mut edit = doc.edit();
+        edit.add_attachment(
+            "bytes.bin",
+            &every_byte,
+            &AttachmentOptions {
+                mime_type: Some("application/octet-stream".into()),
+                ..described()
+            },
+        )
+        .unwrap();
+        if fixture == "hello_world" {
+            edit.add_attachment("notes.txt", b"Read me", &described())
+                .unwrap();
+        } else {
+            assert!(edit.remove_attachment("attached.pdf").unwrap());
+        }
+        std::fs::write(dir.join(file), bytes_of(&edit).unwrap()).unwrap();
+
+        let out = Command::new(&bin)
+            .arg("--save-attachments")
+            .arg(file)
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        // The exit status is not the verdict: `pdfium_test` reports the
+        // attachment feature itself as unsupported and exits non-zero on the
+        // fixture too, having written every file. The files are.
+        let log = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        for (name, bytes) in expected {
+            assert!(
+                log.contains(&format!(
+                    "Successfully wrote attachment {file}.attachment.{name}"
+                )),
+                "{log}"
+            );
+            let written = std::fs::read(dir.join(format!("{file}.attachment.{name}"))).unwrap();
+            assert_eq!(written, bytes, "{file}: {name}");
+        }
+    }
 }
 
 #[test]
 fn an_added_attachment_is_sorted_by_name_and_carries_its_bytes() {
     let doc = open("embedded_attachments").unwrap();
     let mut edit = doc.edit();
-    assert_eq!(edit.add_attachment("0.txt", b"Hello!").unwrap(), 0);
-    assert_eq!(edit.add_attachment("z.txt", b"World!").unwrap(), 3);
+    assert_eq!(
+        edit.add_attachment("0.txt", b"Hello!", &plain()).unwrap(),
+        0
+    );
+    assert_eq!(
+        edit.add_attachment("z.txt", b"World!", &plain()).unwrap(),
+        3
+    );
     let doc = saved(&edit).unwrap();
     let attachments = doc.attachments();
     assert_eq!(attachments.len(), 4);
@@ -108,7 +343,9 @@ fn an_added_attachment_is_sorted_by_name_and_carries_its_bytes() {
 fn an_added_attachment_takes_a_date_a_checksum_and_an_empty_file() {
     let doc = open("embedded_attachments").unwrap();
     let mut edit = doc.edit();
-    let index = edit.add_attachment("5.txt", b"Hello World!").unwrap();
+    let index = edit
+        .add_attachment("5.txt", b"Hello World!", &plain())
+        .unwrap();
     assert_eq!(index, 1);
     assert!(
         edit.set_attachment_param(index, "CreationDate", "D:20170720161527-04'00'")
@@ -147,8 +384,14 @@ fn an_added_attachment_takes_a_date_a_checksum_and_an_empty_file() {
 fn a_document_without_attachments_grows_a_tree() {
     let doc = open("hello_world").unwrap();
     let mut edit = doc.edit();
-    assert_eq!(edit.add_attachment("0.txt", b"Hello!").unwrap(), 0);
-    assert_eq!(edit.add_attachment("z.txt", b"World!").unwrap(), 1);
+    assert_eq!(
+        edit.add_attachment("0.txt", b"Hello!", &plain()).unwrap(),
+        0
+    );
+    assert_eq!(
+        edit.add_attachment("z.txt", b"World!", &plain()).unwrap(),
+        1
+    );
     let doc = saved(&edit).unwrap();
     let attachments = doc.attachments();
     assert_eq!(attachments.len(), 2);
@@ -163,7 +406,7 @@ fn a_non_ascii_param_round_trips() {
     let doc = open("hello_world").unwrap();
     let mut edit = doc.edit();
     let index = edit
-        .add_attachment("attachment.txt", b"Test Contents")
+        .add_attachment("attachment.txt", b"Test Contents", &plain())
         .unwrap();
     assert!(
         edit.set_attachment_param(index, "test", "\u{f6}\u{e4}")
