@@ -186,6 +186,42 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   images near 1:1. The gap that matters is our own stretch and unpack
   path, about 2× PDFium's for the same pixels — that is the pass to make.
 
+## Image pipeline pass (scoped 2026-09-05 from the side-by-side with PDFium) — NOT STARTED
+
+- Read side by side with the two callgrind profiles (ours 3.86 G, PDFium's
+  1.96 G on the guide at 150 DPI). PDFium's image path is one fused loop:
+  `CStretchEngine::Continue` pulls `CPDF_DIB::GetScanline` per source row
+  (`cstretchengine.cpp:346`), so decode, unpack, colour conversion and the
+  horizontal stretch happen per scanline and the only full-height buffer is
+  `dest_w × src_h`. Ours materializes the whole source as RGBA in
+  `to_pixmap` (`image.rs:213`), then `reduce_to` allocates two more
+  full-height buffers (`stretch.rs:338`, `:379`), and vello resamples the
+  result a second time (`FilteredImagePainter::paint_f32`, 311 M). Like for
+  like: our decode + unpack/convert + stretch is ~3.65 G against PDFium's
+  ~0.99 G for the same pixels.
+- Where ours goes: `sample_bytes` spends 122 M of its 576 M in per-pixel
+  bounds checks and `Option` (`slice/index.rs`, `option.rs`); `to_pixmap`
+  spends 147 M in `ptr` writes and 86 M in the pixmap for a buffer that is
+  then discarded; memset 172 M and calloc 119 M for three zeroed pixmaps;
+  `axis_taps` builds its weights in `f64` with `floor` (54 M) where
+  PDFium's `CalculateWeights` is 4 M.
+- The pass, in order, each measured by `Ir` and the board:
+  1. Fuse `to_pixmap` + `reduce_to` into a scanline-driven reduce that
+     converts each source row on demand into the `dest_w × src_h`
+     intermediate (pixel-identical if the horizontal pass keeps running
+     before the vertical and both `>> 16` roundings stay): ~500–700 M.
+  2. Hoist the row slice in `sample_bytes` and index a known-length
+     slice, keeping the fallbacks (absent index → 0, absent palette entry
+     → black): ~120 M, pixel-identical.
+  3. Hand the backend the reduced pixmap with a nearest sampler when
+     `reduction_for` landed on the exact device size, so nothing is
+     resampled twice: up to ~250 M, **changes pixels** — gate on the board.
+  4. Weights in fixed point from the start (`axis_taps`): ~50 M,
+     pixel-identical only if the tap positions come out the same; verify.
+  Later: a DCT-scaled JPEG decode (`cpdf_dib.cpp:531`) once zune-jpeg has
+  it (zune-image #434), which cuts `decode_dct`'s 293 M on downscaled
+  JPEGs and changes pixels.
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
