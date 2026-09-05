@@ -3910,3 +3910,115 @@ rest. Geomean new/old per group against the committed baseline: text
 **0.205**, build **0.815**, render-cold 0.957–0.983, render-warm
 0.986–0.989, save 0.988, open 1.024 (band 8%). What moved, and why, is in
 `docs/status/M18.md`.
+
+## 25. The bench machine moves to `himmel`, 2026-09-06 — 368 improvements recorded, 8 rows raised by hand
+
+Every re-baseline before this one fought the same enemy: the numbers were
+taken on a box shared with other agents' builds, so a "regression" was
+usually the neighbours. §23 set 16 rows by hand and §24 another 29, each
+needing interleaved old-versus-new rounds to tell code from contention.
+That work is now unnecessary, because the benchmarks have their own box.
+
+**The machine.** `himmel` — 32 CPUs, `rustc 1.98.1 (48a229cea 2026-09-01)`,
+idle: load average `0.21 1.70 1.69` when the chain started and under 0.1 on
+the follow-up rounds. Not a development box; nothing else runs on it.
+
+**The rule, from here on.** *Every `ratchet check` that decides anything runs
+on `himmel`.* A check on the shared box is not evidence: at load 30–40 its
+scatter is several times the ±3–8% bands in `baseline.json`, which is how
+§23 and §24 each produced dozens of false regressions. Run it there, or do
+not quote it. `benches/baseline.json` is now a `himmel` artefact, and a
+number in it means what that box measures.
+
+**The run.** Commit `8a02d57b1fa7`, `cargo bench --workspace` inside the
+one-sitting chain that also produced run 3 of `docs/benchmarks/README.md`
+(`~/himmel-chain.sh`, quoted there). Against the baseline recorded on the
+shared box, `check` read:
+
+```
+ratchet: 440 benchmarks measured, 440 in the baseline
+  61 unchanged, 367 improved, 12 regressed, 0 new, 0 not run
+```
+
+367 improvements over 440 rows is not 367 optimizations; it is mostly the
+machine, on top of the real work M18–M21 landed. The interesting half is the
+12.
+
+### 25.1 The 12 regressions, each one accounted for
+
+Each row was re-measured — on `himmel` at load < 0.1, and for the three
+largest also A/B against the commit that caused them, back to back on one
+box. Eight were the chain's own transients: the workspace bench ran for 68
+minutes and a row measured while a later crate compiled reads high. They
+re-measure at or below their committed numbers and were left alone.
+
+| Row | chain read | re-measured | verdict |
+|---|---|---|---|
+| `text/vector_vector_paths_1751` | 4.288 ms (+20.9%) | **3.515 ms** | transient; baseline 3.545 stands |
+| `save/mixed_mixed_formfield` | 5.750 ms (+7.2%) | **5.016 ms** | transient; baseline 5.364 stands |
+| `build/shading_shading_type4_5` | 6.024 us (+4.5%) | **5.642 us** | transient; baseline 5.765 stands |
+| `text/image_image_bug_718762` | 4.194 us (+4.8%) | **3.929 us** | transient; baseline 4.001 stands |
+| `render-warm-agg/image_image_bug_583804` | 198.032 ms (+95.0%) | **198 ms, reproduced** | real — see §25.2 |
+| `render-warm-tinyskia/image_image_bug_583804` | 219.793 ms (+56.9%) | reproduced | real — see §25.2 |
+| `render-warm-vello-cpu/image_image_bug_583804` | 294.543 ms (+36.2%) | reproduced | real — see §25.2 |
+| `open/image_image_bug_898443` | 1.672 ms (+655.1%) | **1.873 ms** | the old 221 us was a mis-measurement |
+| `render-warm-agg/image_image_bug_898443` | 1.924 ms (+5.0%) | **1.911 ms** | real, small; raised |
+| `build/image_image_bug_718762` | 110.090 ms (+7.5%) | **115.70 ms** | real, small; raised |
+| `build/mixed_mixed_formfield` | 3.943 us (+13.6%) | **4.033 us** | real, small; raised |
+| `text/mixed_mixed_formfield` | 4.296 us (+17.3%) | **4.181 us** | real, small; raised |
+
+`open/image_image_bug_898443`'s 221 us baseline was already known bad:
+`8a02d57`'s own message records that the baseline commit benches this row at
+2.11 ms today against `main`'s 2.30 ms on the same box back to back, so the
+nine-fold "regression" every ratchet since has printed was never one. The
+row is set to `himmel`'s 1.873 ms, which is the first honest number it has
+had.
+
+The four small ones (`mixed_formfield` on build and text, `build/
+image_bug_718762`, `render-warm-agg/image_bug_898443`) reproduce within a
+percent on repeat and sit 4–14% over bands of 4%. They are the cost side of
+the image and text passes on those particular files, they are dwarfed by the
+same files' improvements elsewhere in the same run — `open/mixed_formfield`
+−17.3%, `render-cold-*/mixed_formfield` −25%, `render-cold-*/image_bug_718762`
+−8 to −14% — and they are raised rather than chased.
+
+### 25.2 The one that is a real regression, and is left standing as one
+
+`image_bug_583804` — the corpus's single pathological image — got **twice as
+slow to render warm**, on all three backends, while getting *faster* cold.
+That shape is not noise and not a machine difference. Measured A/B, same
+box, back to back, `048b0c7` ("image rows step 5: the unpack is lazy")
+against its parent `036b675`:
+
+| Row | `036b675` | `048b0c7`..`main` |
+|---|---|---|
+| `render-cold-agg/image_image_bug_583804` | 398.7 ms | **384.0 ms** (−3.7%) |
+| `render-warm-agg/image_image_bug_583804` | 110.6 ms | **223.9 ms** (+102%) |
+
+The pass did what it set out to do — `build/image_bug_583804` −51.3% and
+every `render-cold-*` row on this file −18 to −23% in the same check — by
+deleting the full-size widened intermediate `unpack` used to build. The
+warm path pays for it: the eager buffer was work done once that the warm
+iterations reused, and pulling rows on demand redoes it per render on the
+one file whose rendered pixmap is too large for the session's 64 MiB
+`RENDERED_CACHE_BUDGET` to hold alongside anything else
+(`crates/pdfrum-render/src/imagecache.rs`, the `!is_empty` single-entry
+case). Cold-render latency and build time bought steady-state throughput on
+this file, and on this file the trade is bad.
+
+The three rows are raised to what `himmel` measures, per the ratchet's own
+instruction that a deliberate trade is recorded rather than left to drift —
+without that the baseline could not move at all and the 368 improvements
+would stay unrecorded. **Raised is not resolved.** Fixing it is an engine
+change with a conformance board behind it, out of scope for a commit that
+lands a benchmark run, and it is the reason `image_bug_583804` also carries
+this milestone's memory loss (1.5 GiB peak, `docs/benchmarks/README.md` run
+3a). It belongs with the queued work on decoding at the reduced size.
+
+### 25.3 What was written
+
+With the 8 rows set by hand, `check` on `himmel` read `72 unchanged, 368
+improved, 0 regressed, 0 new, 0 not run` and `ratchet update` wrote the
+improvements: 440 entries, 368 lowered, 64 unchanged, 8 raised. The bands
+were not touched — they are measured, not chosen, and moving the machine is
+not a reason to widen them. The next check on `himmel` is green.

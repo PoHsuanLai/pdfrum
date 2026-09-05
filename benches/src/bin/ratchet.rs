@@ -13,6 +13,15 @@
 //! cargo run --release -p pdfrum-bench --bin ratchet -- update
 //! ```
 //!
+//! # The machine
+//!
+//! **Run all three on `himmel`.** `baseline.json` has been a `himmel` artefact
+//! since 2026-09-06 (`docs/status/M13-perf-baseline.md` §25): 32 idle CPUs,
+//! nothing else on the box. A check on the shared development machine is not
+//! evidence — at load 30–40 its scatter is several times the ±3–8% bands
+//! below, which is how §23 and §24 each spent a day telling false regressions
+//! from real ones. Run it there, or do not quote it.
+//!
 //! # Where the benchmarks live, and why this still works
 //!
 //! Since M12's per-crate split there is no single bench crate: `pdfrum-parser`
@@ -75,7 +84,9 @@
 //! percent between runs on an idle machine, where a render is milliseconds and
 //! sits inside two. `docs/status/M12.md` §"The noise band" has the measured
 //! distribution each number comes from — they are empirical, not chosen to be
-//! round.
+//! round. They describe an idle box and were not widened when the baseline
+//! moved to `himmel`: moving to a quieter machine is a reason to trust the
+//! bands, not to loosen them.
 //!
 //! # Why the median and not the mean or criterion's own slope
 //!
@@ -248,10 +259,12 @@ fn check(
         }
         println!();
         println!(
-            "The ratchet only tightens. If a regression is a deliberate trade — a\n\
-             correctness fix that costs time — say so in docs/status/M12.md and\n\
-             raise the number in benches/baseline.json in the same commit, so the\n\
-             next reader sees a decision rather than a drift."
+            "The ratchet only tightens. First check this is `himmel` — on the shared\n\
+             box these bands are noise. If a regression is a deliberate trade — a\n\
+             correctness fix that costs time — say so in the last section of\n\
+             docs/status/M13-perf-baseline.md and raise the number in\n\
+             benches/baseline.json in the same commit, so the next reader sees a\n\
+             decision rather than a drift."
         );
         std::process::exit(1);
     }
@@ -486,13 +499,16 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, Entry>, bands: &BTreeM
     out.push_str(
         "{\n  \"_\": [\n\
          \x20   \"The M12 performance ratchet. Medians in nanoseconds, taken\",\n\
-         \x20   \"from criterion's own estimates.json. Regenerate with:\",\n\
+         \x20   \"from criterion's own estimates.json. Regenerate on `himmel`,\",\n\
+         \x20   \"the idle bench box these numbers describe -- a run on the\",\n\
+         \x20   \"shared machine is noise against the bands below:\",\n\
          \x20   \"\",\n\
          \x20   \"  cargo bench --workspace\",\n\
          \x20   \"  cargo run --release -p pdfrum-bench --bin ratchet -- update\",\n\
          \x20   \"\",\n\
          \x20   \"Edit a number by hand only to record a deliberate trade, and\",\n\
-         \x20   \"say so in docs/status/M12.md in the same commit. The bands\",\n\
+         \x20   \"say so in docs/status/M13-perf-baseline.md in the same\",\n\
+         \x20   \"commit -- its last section is the current record. The bands\",\n\
          \x20   \"below are measured, not chosen; see that document's section\",\n\
          \x20   \"on the noise band before widening one.\"\n\
          \x20 ],\n",
