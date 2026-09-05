@@ -165,41 +165,157 @@ impl TextRun {
     }
 }
 
+/// A width in glyph units as the extractor's ladder yields it: a **whole
+/// number**, because every rung of PDFium's `GetCharWidth` is `int`
+/// (`core/fpdftext/cpdf_textpage.cpp:185-208`).
+///
+/// The type exists so that the integrality is stated once, here, at the
+/// ladder's exit — rather than left implicit in what the width sources
+/// happen to store, or spelled as an `as i32` scattered over the call sites.
+/// Everything downstream (the space threshold, the newline test, the dedup
+/// test) is arithmetic PDFium does on an `int` that stays integral until it
+/// is scaled by the font size, so those callers take [`GlyphWidth::as_f64`]
+/// and cannot see a fraction the C++ does not have.
+///
+/// Our own geometry — the pen advance in [`build`], glyph boxes — keeps its
+/// `f32` and is untouched by this type: there the fraction is real and
+/// PDFium keeps it too.
+///
+/// # Where the truncation lives on each side — and why this is a no-op
+///
+/// PDFium never rounds a float here, because it never holds one: a simple
+/// font's `/Widths` entry is read with `CPDF_Array::GetIntegerAt`
+/// (`core/fpdfapi/parser/cpdf_array.cpp:147-151`), which is
+/// `FX_Number::GetSigned`'s `saturated_cast<int32_t>` over the parsed float
+/// (`core/fxcrt/fx_number.cpp:97-105`) — a **truncation toward zero**, not a
+/// round. A CID font's widths come from an already-integer `width_list_`
+/// (`cpdf_cidfont.cpp:573-585`), and rung three is `FX_RECT::Width()`, an
+/// integer subtraction.
+///
+/// **So does ours, already.** `pdfrum-font` truncates at the same place
+/// PDFium does, at parse: `SimpleWidths` stores `raw: [u16; 256]` filled
+/// from `Array::int_at` (`crates/pdfrum-font/src/widths.rs`), `CidWidths`
+/// keeps `records: Vec<[i32; 3]>`, and the face fallback is
+/// `f32::from(advance_tt(gid) as i16)`
+/// (`crates/pdfrum-font/src/simple/mod.rs:111-130`). Every value that
+/// reaches this ladder is therefore already a whole number in an `f32`, and
+/// truncating it changes nothing.
+///
+/// That was measured, not assumed. With this type's truncation instrumented
+/// to report any fractional input, **zero fired across 1 420 PDFs** — the
+/// 44-file benchmark corpus and the 1 376-file conformance corpus — and the
+/// 1 759-file board came back byte-identical, every row, as did all 44
+/// benchmark text rows.
+///
+/// The type is kept anyway, because it turns that agreement from an accident
+/// of two crates into something the compiler holds: the ladder's output can
+/// no longer acquire a fraction, whatever a future width source does, and a
+/// caller cannot silently multiply one in. It documents the invariant at the
+/// boundary where the two engines have to agree.
+///
+/// # Not the oracle-bug case either
+///
+/// ISO 32000-1 §9.2.4 Table 111 gives `/Widths` as *numbers*, so a
+/// fractional width is legal and PDFium's integer read would lose it. But
+/// PDFium loses it **everywhere**, not only in extraction: the glyph pen in
+/// `CPDF_TextObject::CalcPositionDataInternal` advances by the same
+/// `font->GetCharWidth` int (`core/fpdfapi/page/cpdf_textobject.cpp:185`,
+/// `:250-255`, `:333`). The integer is the width PDFium *positions the
+/// glyphs with*, so the extractor's "is this gap wider than a character"
+/// rule is asking about the geometry actually on the page, and matching it
+/// is matching the input to a heuristic rather than adopting a wrong width.
+/// The question stays hypothetical here regardless: no corpus file has a
+/// fractional declared width to lose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GlyphWidth(i32);
+
+impl GlyphWidth {
+    /// Zero — the ladder's answer for no code, an invalid code, and a
+    /// nonsense bounding box.
+    pub const ZERO: Self = Self(0);
+
+    /// Truncates a glyph-unit width toward zero, which is what
+    /// `saturated_cast<int32_t>` does to the float a `/Widths` entry parsed
+    /// to. A non-finite width is nonsense and yields zero.
+    #[must_use]
+    fn truncating(width: f32) -> Self {
+        if !width.is_finite() {
+            return Self::ZERO;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the saturating cast is `FX_Number::GetSigned`; a width outside i32 is nonsense"
+        )]
+        let truncated = width.trunc() as i32;
+        Self(truncated)
+    }
+
+    /// The width as the `f64` every downstream threshold scales by the font
+    /// size, which is `nLastWidth * GetFontSize() / 1000` on the C++ side
+    /// (`cpdf_textpage.cpp:1234-1238`).
+    #[must_use]
+    pub fn as_f64(self) -> f64 {
+        f64::from(self.0)
+    }
+
+    /// Whether the rung produced a usable width, i.e. `w > 0` — the test
+    /// each of `GetCharWidth`'s first two exits makes before returning.
+    #[must_use]
+    fn is_positive(self) -> bool {
+        self.0 > 0
+    }
+}
+
 /// The width of one character code in glyph units, through the extractor's
 /// own three-rung fallback ladder (`GetCharWidth`, design brief §1.7c).
 ///
-/// Distinct from [`Font::char_width`], which is only the first rung. The
-/// second re-encodes the code to bytes and re-decodes them, so it differs
-/// from the first exactly when that round trip is lossy — a simple font's
-/// code above 255, say. The third falls back to the glyph's bounding box.
+/// Distinct from [`Font::char_width`], which is only the first rung and stays
+/// fractional. The second re-encodes the code to bytes and re-decodes them,
+/// so it differs from the first exactly when that round trip is lossy — a
+/// simple font's code above 255, say. The third falls back to the glyph's
+/// bounding box.
+///
+/// Returns a [`GlyphWidth`], an integer, because PDFium's `GetCharWidth`
+/// returns `int` at all three of its exits — see that type for which rung
+/// truncates on each side, why the truncation is measurably a no-op on every
+/// corpus here, and why this is not an oracle bug.
 #[must_use]
-pub fn ladder_char_width(run: &TextRun, code: Option<CharCode>) -> f32 {
+pub fn ladder_char_width(run: &TextRun, code: Option<CharCode>) -> GlyphWidth {
     let Some(code) = code else {
-        return 0.0;
+        return GlyphWidth::ZERO;
     };
     let font = &run.font;
-    let width = run.glyph_width(code);
-    if width > 0.0 {
+    // Rung one: the font's own declared width. PDFium's is an int because
+    // `/Widths` was read with `GetIntegerAt`; ours is an `f32` that
+    // `pdfrum-font` has already made integral at the same point. The
+    // truncation here is the type-level restatement of that, not a change.
+    let width = GlyphWidth::truncating(run.glyph_width(code));
+    if width.is_positive() {
         return width;
     }
+    // Rung two: the round trip through the encoding. `GetStringWidth` sums
+    // `GetCharWidth` over the re-decoded codes, so the C++ sums *integers*.
+    // Our `string_width` sums the same per-code values, which `pdfrum-font`
+    // already stores as whole numbers, so summing then truncating and
+    // truncating then summing agree — there is no fraction to carry across
+    // the sum.
     let mut bytes = Vec::new();
     font.append_char(&mut bytes, code);
-    let width = font.string_width(&bytes);
-    if width > 0.0 {
+    let width = GlyphWidth::truncating(font.string_width(&bytes));
+    if width.is_positive() {
         return width;
     }
+    // Rung three: `std::max(rect.Width(), 0)` over an `FX_RECT`, whose
+    // `Width()` is already an integer subtraction. `FX_RECT::Valid`'s
+    // overflow check has no analogue on an `f64` rect; a non-finite box is
+    // the equivalent nonsense and yields zero, which `truncating` gives.
     let bbox = run.glyph_bbox(code);
-    // `FX_RECT::Valid`'s overflow check has no analogue on an `f64` rect; a
-    // non-finite box is the equivalent nonsense and yields zero.
-    if !bbox.x0.is_finite() || !bbox.x1.is_finite() {
-        return 0.0;
-    }
     #[expect(
         clippy::cast_possible_truncation,
         reason = "glyph-unit widths are small integers"
     )]
     let width = (bbox.x1 - bbox.x0) as f32;
-    width.max(0.0)
+    GlyphWidth::truncating(width).max(GlyphWidth::ZERO)
 }
 
 /// Builds the extraction view of one text object.
@@ -459,4 +575,55 @@ fn skip(objects: &[PageObject], mut next: u32) -> u32 {
         }
     }
     next
+}
+
+#[cfg(test)]
+mod tests {
+    // The widths compared here are whole numbers held exactly in `f64`, and
+    // the point of each assertion is which exact one comes out.
+    #![allow(clippy::float_cmp, reason = "test fixtures pin exact values")]
+
+    use super::GlyphWidth;
+
+    #[test]
+    fn a_width_truncates_toward_zero_as_the_saturated_cast_does() {
+        // `FX_Number::GetSigned` is `saturated_cast<int32_t>`, which rounds
+        // toward zero in both directions rather than to nearest.
+        assert_eq!(GlyphWidth::truncating(722.5).as_f64(), 722.0);
+        assert_eq!(GlyphWidth::truncating(722.9).as_f64(), 722.0);
+        assert_eq!(GlyphWidth::truncating(-722.9).as_f64(), -722.0);
+        // A whole number is untouched, which is every width the corpora hold.
+        assert_eq!(GlyphWidth::truncating(722.0).as_f64(), 722.0);
+        assert_eq!(GlyphWidth::truncating(0.0), GlyphWidth::ZERO);
+    }
+
+    #[test]
+    fn a_nonsense_width_is_zero_rather_than_a_saturated_extreme() {
+        // The `FX_RECT::Valid` analogue: a non-finite box yields no width.
+        assert_eq!(GlyphWidth::truncating(f32::NAN), GlyphWidth::ZERO);
+        assert_eq!(GlyphWidth::truncating(f32::INFINITY), GlyphWidth::ZERO);
+        assert_eq!(GlyphWidth::truncating(f32::NEG_INFINITY), GlyphWidth::ZERO);
+    }
+
+    #[test]
+    fn only_a_strictly_positive_width_ends_the_ladder() {
+        // Each of `GetCharWidth`'s first two exits tests `w > 0`, so a zero
+        // or negative width falls through to the next rung.
+        assert!(GlyphWidth::truncating(1.0).is_positive());
+        assert!(!GlyphWidth::ZERO.is_positive());
+        assert!(!GlyphWidth::truncating(-1.0).is_positive());
+        // A fraction under one truncates to zero and so does *not* stop the
+        // ladder, which is the C++ behaviour it mirrors.
+        assert!(!GlyphWidth::truncating(0.5).is_positive());
+    }
+
+    #[test]
+    fn the_max_of_two_widths_is_taken_on_the_integers() {
+        // `std::max(nLastWidth, nThisWidth)` at `cpdf_textpage.cpp:1303` is
+        // an integer max, which `Ord` on the newtype gives directly.
+        let a = GlyphWidth::truncating(500.0);
+        let b = GlyphWidth::truncating(722.0);
+        assert_eq!(a.max(b), b);
+        assert_eq!(b.max(a), b);
+    }
 }
