@@ -141,6 +141,12 @@ impl pdfrum::Rotation
 pub fn pdfrum::Rotation::degrees(self) -> u32
 impl core::convert::From<pdfrum_page::page::Rotation> for pdfrum::Rotation
 pub fn pdfrum::Rotation::from(pdfrum_page::page::Rotation) -> pdfrum::Rotation
+pub enum pdfrum::StampPosition
+pub pdfrum::StampPosition::BottomLeft
+pub pdfrum::StampPosition::BottomRight
+pub pdfrum::StampPosition::Center
+pub pdfrum::StampPosition::TopLeft
+pub pdfrum::StampPosition::TopRight
 pub enum pdfrum::Update
 pub pdfrum::Update::Incremental
 pub pdfrum::Update::Rewrite
@@ -207,6 +213,9 @@ pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write:
 pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::flatten(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum::FlattenMode) -> pdfrum::Result<pdfrum::Flattened>
+impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::stamp_image(&mut self, &pdfrum_edit::image::EmbeddedImage, f64, &pdfrum::StampOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::stamp_text(&mut self, &str, &pdfrum::StampOptions) -> pdfrum::Result<()>
 pub struct pdfrum::Document
 impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
@@ -468,6 +477,16 @@ pub fn pdfrum::Signature<'_>::doc_mdp_permission(&self) -> u32
 pub fn pdfrum::Signature<'_>::reason(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Signature<'_>::sub_filter(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Signature<'_>::time(&self) -> core::option::Option<alloc::string::String>
+pub struct pdfrum::StampOptions
+pub pdfrum::StampOptions::angle: f64
+pub pdfrum::StampOptions::color: peniko::Color
+pub pdfrum::StampOptions::font: pdfrum_font::subst::standard::StandardFont
+pub pdfrum::StampOptions::font_size: f32
+pub pdfrum::StampOptions::margin: f64
+pub pdfrum::StampOptions::opacity: f32
+pub pdfrum::StampOptions::position: pdfrum::StampPosition
+impl core::default::Default for pdfrum::StampOptions
+pub fn pdfrum::StampOptions::default() -> Self
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color

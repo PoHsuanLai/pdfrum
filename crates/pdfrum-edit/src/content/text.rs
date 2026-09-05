@@ -10,13 +10,15 @@
 //! this emitter rather than a requirement (see the module docs of
 //! [`crate::content`]).
 //!
-//! # The matrix is transposed
+//! # The matrix is written as the object holds it
 //!
-//! `TextObject::matrix` stores the glyph matrix with translation excluded,
-//! and the operand order `Tm` wants is `a b c d e f` where `b` and `c` are
-//! **swapped** relative to how the object holds them. Getting this backwards
-//! mirrors slanted text about its own baseline, which renders as something
-//! almost right — the worst kind of wrong.
+//! `TextObject::matrix` stores the glyph matrix with translation excluded, in
+//! kurbo's `[a b c d]` layout — the same layout `Tm`'s operands take, and the
+//! one the parser reads them into. It is written straight through, with the
+//! object's position as the translation. Swapping `b` and `c` here — which
+//! the C++ does only to undo its own transposed *storage* — mirrors slanted
+//! text about its baseline and turns a rotation the other way, which renders
+//! as something almost right: the worst kind of wrong.
 //!
 //! # A font we cannot classify drops the whole object
 //!
@@ -134,23 +136,22 @@ fn matrix_font_size(matrix: Affine) -> f32 {
 
 /// The `Tm` operand list.
 ///
-/// `b` and `c` are transposed relative to the stored matrix, and the
-/// translation comes from the object's position rather than the matrix — the
-/// matrix carries orientation and scale only. `divide_out` is the font size
-/// to take out of the linear part for a constructed object, whose matrix
-/// *is* that size.
+/// The linear part is the stored matrix's, in the order it is stored, and
+/// the translation comes from the object's position rather than the matrix —
+/// the matrix carries orientation and scale only. `divide_out` is the font
+/// size to take out of the linear part for a constructed object, whose
+/// matrix *is* that size.
 fn text_matrix(text: &TextObject, divide_out: Option<f32>) -> Affine {
-    // The swap is `cpdf_textobject.cpp:198-202`.
-    let coeffs = text.matrix.as_coeffs();
+    let [a, b, c, d, _, _] = text.matrix.as_coeffs();
     let scale = divide_out
         .map(f64::from)
         .filter(|factor| factor.abs() > f64::EPSILON);
     let divide = |value: f64| scale.map_or(value, |factor| value / factor);
     Affine::new([
-        divide(coeffs.first().copied().unwrap_or(1.0)),
-        divide(coeffs.get(2).copied().unwrap_or(0.0)),
-        divide(coeffs.get(1).copied().unwrap_or(0.0)),
-        divide(coeffs.get(3).copied().unwrap_or(1.0)),
+        divide(a),
+        divide(b),
+        divide(c),
+        divide(d),
         text.position.x,
         text.position.y,
     ])
@@ -271,9 +272,10 @@ mod tests {
         }
     }
 
-    // The transposition: b and c swap on the way out.
+    // The stored layout is `Tm`'s: no swap on the way out, and the position
+    // is the translation. A quarter turn stays a quarter turn the same way.
     #[test]
-    fn the_text_matrix_transposes_b_and_c() {
+    fn the_text_matrix_is_written_as_stored() {
         let t = text(
             Some(helvetica()),
             // stored a, b, c, d
@@ -281,8 +283,17 @@ mod tests {
             Point::new(7.0, 8.0),
         );
         let out = emit(&t).expect("emits");
-        // written a, c, b, d, then the position
-        assert!(out.contains("2 4 3 5 7 8 Tm"), "got {out}");
+        assert!(out.contains("2 3 4 5 7 8 Tm"), "got {out}");
+
+        // A quarter turn counter-clockwise, as `Affine::rotate` would build
+        // it but with exact zeros.
+        let turned = text(
+            Some(helvetica()),
+            Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]),
+            Point::ZERO,
+        );
+        let out = emit(&turned).expect("emits");
+        assert!(out.contains("0 1 -1 0 0 0 Tm"), "got {out}");
     }
 
     // An identity matrix at the origin needs no `Tm` at all.

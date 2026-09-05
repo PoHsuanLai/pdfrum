@@ -81,6 +81,8 @@ mod render;
 mod save;
 mod session;
 mod signature;
+#[cfg(feature = "edit")]
+mod stamp;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
@@ -179,6 +181,10 @@ pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
+/// A mark on every page: what [`DocEdit::stamp_text`] and
+/// [`DocEdit::stamp_image`] draw, and where.
+#[cfg(feature = "edit")]
+pub use stamp::{StampOptions, StampPosition};
 
 /// The things a page draws, as the interpreter produced them.
 ///
