@@ -19,7 +19,7 @@ use skrifa::outline::{
 };
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// A charmap's `(platform, encoding)` identity, as the `cmap` table declares
 /// it.
@@ -157,6 +157,25 @@ pub struct Face {
     /// lookup. A simple font with `/Differences` looks up hundreds of names
     /// against one face; scanning the `post` table per name was quadratic.
     names: Arc<OnceLock<HashMap<Box<[u8]>, u16>>>,
+    /// Glyph id → the advance [`advance`](Self::advance) reported for it.
+    ///
+    /// The second measured exception, and for the same reason as
+    /// [`hinting`](Self::hinting): a **bare CFF** carries no `hmtx`, so the
+    /// only place an advance exists is inside the charstring, and reading it
+    /// means running the Type 2 interpreter over the glyph's whole outline
+    /// and discarding the path. Text extraction asks for a width once per
+    /// shown character — `Font::char_width` for every glyph the page draws,
+    /// then again through the extractor's own fallback ladder — so the same
+    /// handful of glyphs are drawn hundreds of times each. On
+    /// `text_tcpdf_063` that interpreter was **84% of the whole text run**.
+    ///
+    /// A map rather than a `num_glyphs`-long table because a CID font has
+    /// tens of thousands of glyphs and a page shows tens of them; a
+    /// `RwLock` rather than a `Mutex` because after the first few characters
+    /// every access is a read, and `TextPage` is `Send + Sync` precisely so
+    /// that pages extract in parallel. The `Arc` shares the cache across
+    /// clones, so two fonts substituted onto one face pay once between them.
+    advances: Arc<RwLock<HashMap<u16, Option<f32>>>>,
 }
 
 impl fmt::Debug for Face {
@@ -171,6 +190,10 @@ impl fmt::Debug for Face {
             .field("charmaps", &self.charmaps)
             .field("hinting", &self.hinting.get().map(Option::is_some))
             .field("names", &self.names.get().map(HashMap::len))
+            .field(
+                "advances",
+                &self.advances.read().map(|cache| cache.len()).ok(),
+            )
             .finish()
     }
 }
@@ -225,6 +248,7 @@ impl Face {
             charmaps,
             hinting: Arc::default(),
             names: Arc::default(),
+            advances: Arc::default(),
         }))
     }
 
@@ -251,6 +275,7 @@ impl Face {
             charmaps: vec![CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM],
             hinting: Arc::default(),
             names: Arc::default(),
+            advances: Arc::default(),
         }))
     }
 
@@ -628,6 +653,21 @@ impl Face {
     /// itself, which is why drawing is how it is read.
     #[must_use]
     pub(crate) fn advance(&self, gid: Gid) -> Option<f32> {
+        if let Ok(cache) = self.advances.read()
+            && let Some(hit) = cache.get(&gid.0)
+        {
+            return *hit;
+        }
+        let computed = self.advance_uncached(gid);
+        if let Ok(mut cache) = self.advances.write() {
+            cache.insert(gid.0, computed);
+        }
+        computed
+    }
+
+    /// [`advance`](Self::advance) with the cache bypassed.
+    #[must_use]
+    fn advance_uncached(&self, gid: Gid) -> Option<f32> {
         if let Some(cff) = self.cff() {
             let id = Self::cff_glyph_id(&cff, gid);
             let subfont_index = cff.subfont_index(id)?;
