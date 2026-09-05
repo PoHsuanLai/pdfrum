@@ -212,6 +212,10 @@ name = "prepared_page"
 required-features = ["vello-cpu", "edit", "forms"]
 
 [[test]]
+name = "owned"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
 name = "subset"
 required-features = ["vello-cpu", "edit", "forms"]
 
