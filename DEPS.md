@@ -18,12 +18,19 @@ Enforced mechanically in CI, not by trust: `cargo-deny` bans `cc`,
 `pkg-config`, `cmake`, `bindgen`, and every `*-sys` crate in the workspace
 graph — a transitive dep growing a C build script fails the build.
 
-Two footnotes outside the library tree:
+Three footnotes outside the library tree:
 - `libfuzzer-sys` (fuzz targets only, never in any published crate's tree)
   links LLVM's C++ libFuzzer runtime. It is the industry-standard fuzzing
   engine and worth keeping; if even dev-ring C++ is unwanted, the pure-Rust
   alternative is `fuzzcheck` (weaker ecosystem) — decision deferred, fuzz/
   is a separate non-published workspace either way.
+- `minicov` (M22 phase 4) build-depends on `cc`, and reaches the graph only as
+  a dependency of `wasm-bindgen-test` — `crates/pdfrum-wasm`'s **dev**-
+  dependency, the Node test harness. Measured 2026-09-05: `cargo tree
+  --workspace --target all -e normal,build` finds no `cc` at all, so nothing
+  that ships has a C compiler in its tree. `deny.toml` narrows the ban with
+  `wrappers = ["minicov"]` rather than lifting it, so a second crate reaching
+  for `cc` still fails. See "The web binding" below.
 - GPU `vello` speaks to OS graphics drivers via `wgpu` (system API calls, not
   vendored C). No longer a post-M8 decision: promoted into M12c and **landed**
   as `pdfrum-raster-vello`. It is the single scoped exemption from the
@@ -338,6 +345,66 @@ compiling it in CI is that no Rust test can prove a header matches a library.
 It found a real defect on its first run: `pdfrum_page` had been both a type and
 a function, which C has one namespace for, and the accessor is now
 `pdfrum_document_page`.
+
+## The web binding (M22 phase 4)
+
+`crates/pdfrum-wasm` builds the WebAssembly module and the JavaScript that
+loads it (docs/design/wasm.md). It adds **three crates** to the workspace, all
+from the `wasm-bindgen` project, all `MIT OR Apache-2.0`, and none of which
+reaches any other crate's tree: nothing depends on `pdfrum-wasm`.
+
+| Crate | Version | Ring | Why |
+|---|---|---|---|
+| `wasm-bindgen` | 0.2.128 | lib (`pdfrum-wasm` only) | The binding itself: the `#[wasm_bindgen]` attribute that makes a Rust type an exported JavaScript class, `JsValue`, `Clamped`, and the generator for the `.d.ts` that PLAN.md §M22.4 asks for. There is no alternative — it is the de-facto and effectively only Rust-to-JavaScript boundary, and the `wasm32-unknown-unknown` ABI it implements is what every wasm toolchain expects. Pure Rust; the "glue" it generates is JavaScript source, not compiled C. |
+| `js-sys` | 0.3.105 | lib (`pdfrum-wasm` only) | Bindings to the JavaScript *standard library* — `Error` and `Reflect`, which the crate's one error conversion uses to build a thrown `Error` with a `.code` on it. wasm-bindgen's own companion crate, from the same repository and released in lockstep; it adds nothing to the tree that `wasm-bindgen` had not already put there. **Not a `-sys` crate in the usual sense** despite the name: the "foreign" side is the host JavaScript engine reached through wasm-bindgen's imports, there is no native library to bind, and the published crate has no `build.rs` at all. `scripts/ci.nu`'s pure-Rust check exempts it by name for that reason, beside `linux-raw-sys`. |
+| `wasm-bindgen-test` | 0.3.78 | **dev** (`pdfrum-wasm` only) | The test harness. A `#[wasm_bindgen]` export does not exist until a JavaScript runtime instantiates the module, so no host-target test can see one; this is what lets `cargo test --target wasm32-unknown-unknown` run the binding under Node, and it is the only such harness. See the `cc` note below. |
+
+### `cc`, and why the ban is scoped rather than lifted
+
+`wasm-bindgen-test` depends unconditionally on **`minicov`** — a coverage
+helper, with no feature that turns it off in 0.3.78 — which build-depends on
+`cc`. `deny.toml` bans `cc` outright, as the pure-Rust guarantee requires.
+
+Measured 2026-09-05, before the exception was written:
+
+- `cargo tree --workspace --target all -e normal,build` finds **no `cc` at
+  all**;
+- `cargo tree -p pdfrum-wasm --target wasm32-unknown-unknown -e normal,build`
+  finds none either.
+
+It is reachable only through `-e dev`. So nothing that ships — no library, not
+`libpdfrum`, and not the `.wasm` module a browser downloads — has a C compiler
+anywhere in its tree, and the guarantee at the top of this file, which is about
+what the **library** compiles and links, is untouched. This is the same shape
+as the `libfuzzer-sys` footnote above: dev-ring only, outside every published
+crate.
+
+The ban is therefore **narrowed, not removed**: `deny.toml` carries
+`{ crate = "cc", wrappers = ["minicov"], … }`, the mechanism M12c's
+`pkg-config` exception already established, so a second crate reaching for `cc`
+still fails the build — which is the point.
+
+The alternative was to have no test harness for the WebAssembly binding at all.
+An untested binding is the worse trade.
+
+## The web binding's tools — tools, not dependencies
+
+Three `~/.cargo/bin` binaries and a JavaScript runtime. None appears in a
+`Cargo.toml`, none is in the lock file, and none is compiled into anything
+shipped. `scripts/ci.nu` skips its WebAssembly stage with a printed note when
+any is absent, exactly as it does for `cargo-deny` and the C compiler.
+
+| Tool | Version | Install | Why, and what it is not |
+|---|---|---|---|
+| `wasm-bindgen-cli` | 0.2.128 | `cargo install wasm-bindgen-cli --locked` | Post-processes the `.wasm` cargo produces into the loadable module, the ES-module loader and `pdfrum.d.ts`. Its version **must match** the `wasm-bindgen` dependency above; a mismatch is a runtime error with a clear message. It also provides `wasm-bindgen-test-runner`, the harness `cargo test --target wasm32-unknown-unknown` invokes — named in `crates/pdfrum-wasm/.cargo/config.toml`. |
+| `wasm-opt` | 0.116.1 | `cargo install wasm-opt --locked` | Binaryen's optimizer, `-Oz`, worth ~270 kB (5%) on the shipped module. The crate is a Rust wrapper around Binaryen's C++, which is why it is installed as a **binary and never depended on**: nothing in this repository's build or test path links it, and `cargo tree` never sees it. Optional — `scripts/wasm-package.nu --skip-opt` checks the budget against the unoptimized module, which is strictly harder to pass. |
+| Node | 22.19 | the platform's | Runs the WebAssembly tests. A **test-time** runtime, on the same footing as the C compiler that builds `ctest/test.c`: it executes a consumer of the shipped module, and is no part of what the module is built from. |
+| `wasm-pack` | — | — | **Tried and rejected.** It runs `wasm-opt` itself with a hardcoded `-O` and no feature flags, and that invocation *fails* on this module: rustc's `wasm32-unknown-unknown` emits bulk-memory and non-trapping float-to-int, which `wasm-opt`'s validator rejects unless told they are allowed. The flags cannot be supplied either — wasm-pack reads `[package.metadata.wasm-pack.profile.<name>]` only for `dev`, `release` and `profiling`, and this crate builds under the workspace's own `wasm` profile, under which it consults no metadata at all. `scripts/wasm-package.nu` calls the three underlying tools directly instead, which also lets it measure the module before and after the optimizer and enforce the size budget. Recorded here so the next person does not spend the afternoon rediscovering it. |
+
+The `wasm32-unknown-unknown` **target** (`rustup target add
+wasm32-unknown-unknown`) is a rustup component rather than a tool, and is the
+one thing on this list that the facade already needed: `scripts/ci.nu` has
+checked the facade against it since M22 phase 1.
 
 ## Benchmark peers (M21) — never in any tree of ours
 
