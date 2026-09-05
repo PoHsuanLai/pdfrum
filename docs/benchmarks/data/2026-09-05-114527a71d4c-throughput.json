@@ -115,30 +115,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 2,
-    "secs": 0.01015448,
-    "pages_per_sec": 196.95740205308394,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012133012,
+    "pages_per_sec": 164.8395303655844,
+    "status": "display-lists"
   },
   {
     "file": "forms_combo_box.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 2,
-    "secs": 0.01007011,
-    "pages_per_sec": 198.60756238015276,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.010715159,
+    "pages_per_sec": 186.65145332887735,
+    "status": "display-lists"
   },
   {
     "file": "forms_combo_box.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 2,
-    "secs": 0.01014018,
-    "pages_per_sec": 197.2351575613056,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012405515,
+    "pages_per_sec": 161.2186192995615,
+    "status": "display-lists"
   },
   {
     "file": "forms_list_box.pdf",
@@ -256,30 +253,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 4,
-    "secs": 0.019068311,
-    "pages_per_sec": 209.7721187786375,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.0173422,
+    "pages_per_sec": 230.65124378683214,
+    "status": "display-lists"
   },
   {
     "file": "forms_list_box.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 4,
-    "secs": 0.019469761,
-    "pages_per_sec": 205.44679516096784,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.013714737,
+    "pages_per_sec": 291.6570693262292,
+    "status": "display-lists"
   },
   {
     "file": "forms_list_box.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 4,
-    "secs": 0.01909685,
-    "pages_per_sec": 209.458627993622,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.013629516,
+    "pages_per_sec": 293.4807076054645,
+    "status": "display-lists"
   },
   {
     "file": "forms_number.pdf",
@@ -400,30 +394,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.00201503,
-    "pages_per_sec": 496.2705269896726,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.002057919,
+    "pages_per_sec": 485.92777461114844,
+    "status": "display-lists"
   },
   {
     "file": "forms_number.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.00197558,
-    "pages_per_sec": 506.1804634588324,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.00214536,
+    "pages_per_sec": 466.12223589514116,
+    "status": "display-lists"
   },
   {
     "file": "forms_number.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.002012911,
-    "pages_per_sec": 496.79295309131896,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.002385262,
+    "pages_per_sec": 419.2411567366604,
+    "status": "display-lists"
   },
   {
     "file": "forms_push_button.pdf",
@@ -541,30 +532,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 4,
-    "secs": 0.020896571,
-    "pages_per_sec": 191.41896534125144,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.021773751,
+    "pages_per_sec": 183.7074374553103,
+    "status": "display-lists"
   },
   {
     "file": "forms_push_button.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 4,
-    "secs": 0.022542251,
-    "pages_per_sec": 177.4445684239786,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.015833916,
+    "pages_per_sec": 252.62228244737435,
+    "status": "display-lists"
   },
   {
     "file": "forms_push_button.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 4,
-    "secs": 0.02097506,
-    "pages_per_sec": 190.7026726026052,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.01296956,
+    "pages_per_sec": 308.41447204068606,
+    "status": "display-lists"
   },
   {
     "file": "forms_signature.pdf",
@@ -682,30 +670,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 2,
-    "secs": 0.00449695,
-    "pages_per_sec": 444.74588332091747,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.004494822,
+    "pages_per_sec": 444.9564409892094,
+    "status": "display-lists"
   },
   {
     "file": "forms_signature.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 2,
-    "secs": 0.004492741,
-    "pages_per_sec": 445.1625410857203,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005312209,
+    "pages_per_sec": 376.4912110950454,
+    "status": "display-lists"
   },
   {
     "file": "forms_signature.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 2,
-    "secs": 0.00447472,
-    "pages_per_sec": 446.955340222405,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005062797,
+    "pages_per_sec": 395.0385527999641,
+    "status": "display-lists"
   },
   {
     "file": "forms_text_field.pdf",
@@ -823,30 +808,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 3,
-    "secs": 0.016209551,
-    "pages_per_sec": 185.0760702748645,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012115142,
+    "pages_per_sec": 247.62400638803902,
+    "status": "display-lists"
   },
   {
     "file": "forms_text_field.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 3,
-    "secs": 0.016297701,
-    "pages_per_sec": 184.0750422406203,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.013108951,
+    "pages_per_sec": 228.85126353741043,
+    "status": "display-lists"
   },
   {
     "file": "forms_text_field.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 3,
-    "secs": 0.016214771,
-    "pages_per_sec": 185.01648897785853,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012203913,
+    "pages_per_sec": 245.82279470527197,
+    "status": "display-lists"
   },
   {
     "file": "forms_widgets_407.pdf",
@@ -964,30 +946,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 5,
-    "secs": 0.012208011,
-    "pages_per_sec": 409.56712768361695,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.008908152,
+    "pages_per_sec": 561.2836422189473,
+    "status": "display-lists"
   },
   {
     "file": "forms_widgets_407.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 5,
-    "secs": 0.012073541,
-    "pages_per_sec": 414.12871335758086,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.006664931,
+    "pages_per_sec": 750.1953133498306,
+    "status": "display-lists"
   },
   {
     "file": "forms_widgets_407.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 5,
-    "secs": 0.011664941,
-    "pages_per_sec": 428.63482978610864,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.006432139,
+    "pages_per_sec": 777.3463850827851,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_583804.pdf",
@@ -1105,30 +1084,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.415235479,
-    "pages_per_sec": 2.4082720542287763,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.415273594,
+    "pages_per_sec": 2.4080510161211937,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_583804.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.956501121,
-    "pages_per_sec": 1.0454770810456793,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.43499101,
+    "pages_per_sec": 2.2988980852730725,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_583804.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.516407637,
-    "pages_per_sec": 1.9364547081630397,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.400084674,
+    "pages_per_sec": 2.499470899502639,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_718762.pdf",
@@ -1246,30 +1222,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.008881382,
-    "pages_per_sec": 112.59508936784837,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.007829442,
+    "pages_per_sec": 127.72302291785289,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_718762.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.008776063,
-    "pages_per_sec": 113.94631054950266,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.007738831,
+    "pages_per_sec": 129.218482739835,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_718762.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.008817343,
-    "pages_per_sec": 113.41285010688594,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.007760922,
+    "pages_per_sec": 128.85067006213953,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_898443.pdf",
@@ -1387,30 +1360,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.236868822,
-    "pages_per_sec": 4.221745992387297,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.260835818,
+    "pages_per_sec": 3.833829294104079,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_898443.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.229676469,
-    "pages_per_sec": 4.35395059996329,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.232753,
+    "pages_per_sec": 4.2964000464011205,
+    "status": "display-lists"
   },
   {
     "file": "image_bug_898443.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.22813955,
-    "pages_per_sec": 4.383282074502207,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.254527077,
+    "pages_per_sec": 3.928855082086218,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_3bigpreview.pdf",
@@ -1528,30 +1498,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.067736145,
-    "pages_per_sec": 14.763166696303724,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.030290769,
+    "pages_per_sec": 33.01335796393944,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_3bigpreview.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.059729751,
-    "pages_per_sec": 16.742075485966783,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.030007076,
+    "pages_per_sec": 33.32547296510996,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_3bigpreview.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.045699936,
-    "pages_per_sec": 21.881868718590766,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.033559019,
+    "pages_per_sec": 29.798248870147244,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_transfer.pdf",
@@ -1669,30 +1636,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 2,
-    "secs": 0.008923764,
-    "pages_per_sec": 224.12067374260457,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.010093793,
+    "pages_per_sec": 198.14157076532084,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_transfer.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 2,
-    "secs": 0.008904594,
-    "pages_per_sec": 224.60316551209408,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.015320461,
+    "pages_per_sec": 130.54437461118172,
+    "status": "display-lists"
   },
   {
     "file": "image_ccitt_transfer.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 2,
-    "secs": 0.008787024,
-    "pages_per_sec": 227.6083461249224,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.009400886,
+    "pages_per_sec": 212.7459050136338,
+    "status": "display-lists"
   },
   {
     "file": "image_en_fqa.pdf",
@@ -1810,30 +1774,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 4,
-    "secs": 0.068329128,
-    "pages_per_sec": 58.540188014692646,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.07616799,
+    "pages_per_sec": 52.51549896485387,
+    "status": "display-lists"
   },
   {
     "file": "image_en_fqa.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 4,
-    "secs": 0.065092007,
-    "pages_per_sec": 61.45147744484204,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.040165229,
+    "pages_per_sec": 99.5886267696868,
+    "status": "display-lists"
   },
   {
     "file": "image_en_fqa.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 4,
-    "secs": 0.064633766,
-    "pages_per_sec": 61.8871566295549,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.03696464,
+    "pages_per_sec": 108.21152322868558,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_1478366.pdf",
@@ -1951,30 +1912,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.012788965,
-    "pages_per_sec": 78.19241041006838,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.014070989,
+    "pages_per_sec": 71.0682099175829,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_1478366.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.010664434,
-    "pages_per_sec": 93.7696271550839,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012032011,
+    "pages_per_sec": 83.1116261446237,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_1478366.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.010691685,
-    "pages_per_sec": 93.53062683758453,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012794338,
+    "pages_per_sec": 78.15957339879562,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_880920.pdf",
@@ -2092,30 +2050,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.037441407,
-    "pages_per_sec": 26.70839800438055,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.035369255,
+    "pages_per_sec": 28.273142875076108,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_880920.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.034394075,
-    "pages_per_sec": 29.074775233815707,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.035008941,
+    "pages_per_sec": 28.56413165996652,
+    "status": "display-lists"
   },
   {
     "file": "image_jbig2_880920.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.034657875,
-    "pages_per_sec": 28.853471252925925,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.03598339,
+    "pages_per_sec": 27.79060005185726,
+    "status": "display-lists"
   },
   {
     "file": "image_jpx_123.pdf",
@@ -2236,30 +2191,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.17811979,
-    "pages_per_sec": 5.614199298124032,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.070049573,
+    "pages_per_sec": 14.27560450653996,
+    "status": "display-lists"
   },
   {
     "file": "image_jpx_123.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.085169198,
-    "pages_per_sec": 11.741333997297943,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.072795618,
+    "pages_per_sec": 13.737090603448134,
+    "status": "display-lists"
   },
   {
     "file": "image_jpx_123.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.165651954,
-    "pages_per_sec": 6.036753420970815,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.059946379,
+    "pages_per_sec": 16.6815747119605,
+    "status": "display-lists"
   },
   {
     "file": "mixed_en_uicase.pdf",
@@ -2377,30 +2329,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 12,
-    "secs": 0.033813045,
-    "pages_per_sec": 354.89261614859,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.044041884,
+    "pages_per_sec": 272.46790804862025,
+    "status": "display-lists"
   },
   {
     "file": "mixed_en_uicase.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 12,
-    "secs": 0.033562326,
-    "pages_per_sec": 357.54375307599355,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.018028876,
+    "pages_per_sec": 665.5988981232108,
+    "status": "display-lists"
   },
   {
     "file": "mixed_en_uicase.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 12,
-    "secs": 0.033311975,
-    "pages_per_sec": 360.2308178965672,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.016515242,
+    "pages_per_sec": 726.6015236107348,
+    "status": "display-lists"
   },
   {
     "file": "mixed_formfield.pdf",
@@ -2521,30 +2470,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.033750146,
-    "pages_per_sec": 29.62950145460111,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.039444642,
+    "pages_per_sec": 25.351985701885695,
+    "status": "display-lists"
   },
   {
     "file": "mixed_formfield.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.036351336,
-    "pages_per_sec": 27.50930529760997,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.065616562,
+    "pages_per_sec": 15.240054789825775,
+    "status": "display-lists"
   },
   {
     "file": "mixed_formfield.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.036542877,
-    "pages_per_sec": 27.365114137017727,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.044048384,
+    "pages_per_sec": 22.70230844336991,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_006.pdf",
@@ -2662,30 +2608,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 6,
-    "secs": 0.030230284,
-    "pages_per_sec": 198.47646816682237,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.034637277,
+    "pages_per_sec": 173.22377853201334,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_006.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 6,
-    "secs": 0.030255655,
-    "pages_per_sec": 198.31003493396526,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.028819994,
+    "pages_per_sec": 208.1888011496463,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_006.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 6,
-    "secs": 0.030581465,
-    "pages_per_sec": 196.1972717788373,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.029360809,
+    "pages_per_sec": 204.3540421519039,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_045.pdf",
@@ -2803,30 +2746,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 16,
-    "secs": 0.035492757,
-    "pages_per_sec": 450.7962004754942,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.036308223,
+    "pages_per_sec": 440.671525015146,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_045.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 16,
-    "secs": 0.032056745,
-    "pages_per_sec": 499.11492885506624,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.01746575,
+    "pages_per_sec": 916.0786109958061,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_045.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 16,
-    "secs": 0.033624907,
-    "pages_per_sec": 475.83774729845345,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.017494071,
+    "pages_per_sec": 914.5955792679703,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_059.pdf",
@@ -2944,30 +2884,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 16,
-    "secs": 0.029076274,
-    "pages_per_sec": 550.2768339574734,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.029629821,
+    "pages_per_sec": 539.9965122975262,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_059.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 16,
-    "secs": 0.030291534,
-    "pages_per_sec": 528.2003876066494,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.014546293,
+    "pages_per_sec": 1099.9365955298715,
+    "status": "display-lists"
   },
   {
     "file": "mixed_tcpdf_059.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 16,
-    "secs": 0.029525194,
-    "pages_per_sec": 541.910071784795,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.01314348,
+    "pages_per_sec": 1217.3336133200644,
+    "status": "display-lists"
   },
   {
     "file": "shading_axial_radial.pdf",
@@ -3085,30 +3022,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.054572787,
-    "pages_per_sec": 18.324151192791383,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.039323,
+    "pages_per_sec": 25.43040968390001,
+    "status": "display-lists"
   },
   {
     "file": "shading_axial_radial.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.037291178,
-    "pages_per_sec": 26.81599385248704,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.053302388,
+    "pages_per_sec": 18.760885534809436,
+    "status": "display-lists"
   },
   {
     "file": "shading_axial_radial.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.043185081,
-    "pages_per_sec": 23.156145058521485,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.047085591,
+    "pages_per_sec": 21.237919685451118,
+    "status": "display-lists"
   },
   {
     "file": "shading_coons.pdf",
@@ -3229,30 +3163,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 0,
-    "secs": 0.00006847,
+    "secs": 0.000133851,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_coons.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 0,
-    "secs": 0.00006411,
+    "secs": 0.000120461,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_coons.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 0,
-    "secs": 0.00006373,
+    "secs": 0.000120591,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_gouraud.pdf",
@@ -3373,30 +3304,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 0,
-    "secs": 0.00006781,
+    "secs": 0.000120911,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_gouraud.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 0,
-    "secs": 0.00006453,
+    "secs": 0.000112941,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_gouraud.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 0,
-    "secs": 0.00006419,
+    "secs": 0.000121142,
     "pages_per_sec": 0.0,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_030.pdf",
@@ -3514,30 +3442,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 2,
-    "secs": 0.018099049,
-    "pages_per_sec": 110.50304355770295,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.014583683,
+    "pages_per_sec": 137.13956892782159,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_030.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 2,
-    "secs": 0.013569827,
-    "pages_per_sec": 147.38581413012855,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.008328597,
+    "pages_per_sec": 240.13648397203033,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_030.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 2,
-    "secs": 0.013488987,
-    "pages_per_sec": 148.2691027873331,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.008600969,
+    "pages_per_sec": 232.5319391338348,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_056.pdf",
@@ -3655,30 +3580,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.005430213,
-    "pages_per_sec": 184.1548388617537,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005828534,
+    "pages_per_sec": 171.56972919777084,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_056.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.005467662,
-    "pages_per_sec": 182.89352926351336,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005605372,
+    "pages_per_sec": 178.400291720157,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_056.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.005546833,
-    "pages_per_sec": 180.28305521366877,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005699152,
+    "pages_per_sec": 175.4647007133693,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_058.pdf",
@@ -3796,30 +3718,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.013584577,
-    "pages_per_sec": 73.61289203189764,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.014646984,
+    "pages_per_sec": 68.27344113982782,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_058.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.013457817,
-    "pages_per_sec": 74.30625635643581,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.015119018,
+    "pages_per_sec": 66.14186185901757,
+    "status": "display-lists"
   },
   {
     "file": "shading_tcpdf_058.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.013790007,
-    "pages_per_sec": 72.51627936084441,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.0140979,
+    "pages_per_sec": 70.9325502379787,
+    "status": "display-lists"
   },
   {
     "file": "shading_tensor.pdf",
@@ -3937,30 +3856,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.001063771,
-    "pages_per_sec": 940.0519472706061,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001446753,
+    "pages_per_sec": 691.2029904206178,
+    "status": "display-lists"
   },
   {
     "file": "shading_tensor.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.001039951,
-    "pages_per_sec": 961.5837669274804,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001413493,
+    "pages_per_sec": 707.4672460351767,
+    "status": "display-lists"
   },
   {
     "file": "shading_tensor.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.00104923,
-    "pages_per_sec": 953.0798776245438,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001405653,
+    "pages_per_sec": 711.4131296984391,
+    "status": "display-lists"
   },
   {
     "file": "shading_type4_5.pdf",
@@ -4078,30 +3994,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.000640091,
-    "pages_per_sec": 1562.277863616267,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.000761567,
+    "pages_per_sec": 1313.0821057109881,
+    "status": "display-lists"
   },
   {
     "file": "shading_type4_5.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.00062821,
-    "pages_per_sec": 1591.8243899333024,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.000825228,
+    "pages_per_sec": 1211.78631844775,
+    "status": "display-lists"
   },
   {
     "file": "shading_type4_5.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.00063708,
-    "pages_per_sec": 1569.6615809631442,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.000742167,
+    "pages_per_sec": 1347.4056378146697,
+    "status": "display-lists"
   },
   {
     "file": "text_bug_1029.pdf",
@@ -4219,30 +4132,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.001507611,
-    "pages_per_sec": 663.3010770019587,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001969198,
+    "pages_per_sec": 507.82095045800367,
+    "status": "display-lists"
   },
   {
     "file": "text_bug_1029.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.001506391,
-    "pages_per_sec": 663.8382730645629,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001934868,
+    "pages_per_sec": 516.831122329792,
+    "status": "display-lists"
   },
   {
     "file": "text_bug_1029.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.001486351,
-    "pages_per_sec": 672.7885943495178,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.001885728,
+    "pages_per_sec": 530.299173581768,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_functions.pdf",
@@ -4360,30 +4270,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 4,
-    "secs": 0.023049583,
-    "pages_per_sec": 173.53893126830104,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.022891559,
+    "pages_per_sec": 174.73689756123645,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_functions.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 4,
-    "secs": 0.023112803,
-    "pages_per_sec": 173.06425360870335,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.025779296,
+    "pages_per_sec": 155.1632752112393,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_functions.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 4,
-    "secs": 0.020680552,
-    "pages_per_sec": 193.41843486576178,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.021366055,
+    "pages_per_sec": 187.21284766888414,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_page.pdf",
@@ -4501,30 +4408,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 7,
-    "secs": 0.022319032,
-    "pages_per_sec": 313.63367371846596,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.026258111,
+    "pages_per_sec": 266.5842946585152,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_page.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 7,
-    "secs": 0.022108992,
-    "pages_per_sec": 316.6132585329987,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.031153945,
+    "pages_per_sec": 224.69064511733586,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_page.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 7,
-    "secs": 0.022822283,
-    "pages_per_sec": 306.7177810388207,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.02628629,
+    "pages_per_sec": 266.2985153096919,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_structure.pdf",
@@ -4642,30 +4546,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 7,
-    "secs": 0.024175913,
-    "pages_per_sec": 289.54439073304076,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.026137109,
+    "pages_per_sec": 267.81844924012063,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_structure.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 7,
-    "secs": 0.024207333,
-    "pages_per_sec": 289.16857548908837,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.023509325,
+    "pages_per_sec": 297.7541890292469,
+    "status": "display-lists"
   },
   {
     "file": "text_cjk_structure.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 7,
-    "secs": 0.024150934,
-    "pages_per_sec": 289.84386276737786,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.02522407,
+    "pages_per_sec": 277.51270909095956,
+    "status": "display-lists"
   },
   {
     "file": "text_foxit_products.pdf",
@@ -4783,30 +4684,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 11,
-    "secs": 0.01898144,
-    "pages_per_sec": 579.5134615708819,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.016920205,
+    "pages_per_sec": 650.1103266774841,
+    "status": "display-lists"
   },
   {
     "file": "text_foxit_products.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 11,
-    "secs": 0.01710751,
-    "pages_per_sec": 642.9924635437886,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.016904125,
+    "pages_per_sec": 650.7287422448663,
+    "status": "display-lists"
   },
   {
     "file": "text_foxit_products.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 11,
-    "secs": 0.019347301,
-    "pages_per_sec": 568.5547560354801,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.02619344,
+    "pages_per_sec": 419.9524766506423,
+    "status": "display-lists"
   },
   {
     "file": "text_foxittext.pdf",
@@ -4924,30 +4822,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.006508694,
-    "pages_per_sec": 153.64065356275776,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.006919674,
+    "pages_per_sec": 144.51547861936848,
+    "status": "display-lists"
   },
   {
     "file": "text_foxittext.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.003999383,
-    "pages_per_sec": 250.03856844918332,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.005807323,
+    "pages_per_sec": 172.19638032876767,
+    "status": "display-lists"
   },
   {
     "file": "text_foxittext.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.003971522,
-    "pages_per_sec": 251.7926376839912,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.004842145,
+    "pages_per_sec": 206.5200443192015,
+    "status": "display-lists"
   },
   {
     "file": "text_quick_start.pdf",
@@ -5065,30 +4960,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 11,
-    "secs": 0.201940249,
-    "pages_per_sec": 54.471558069634746,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.200773366,
+    "pages_per_sec": 54.78814356282695,
+    "status": "display-lists"
   },
   {
     "file": "text_quick_start.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 11,
-    "secs": 0.190495692,
-    "pages_per_sec": 57.74408798703963,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.067891861,
+    "pages_per_sec": 162.0223667163874,
+    "status": "display-lists"
   },
   {
     "file": "text_quick_start.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 11,
-    "secs": 0.197694986,
-    "pages_per_sec": 55.64126952617807,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.056013651,
+    "pages_per_sec": 196.3807001261175,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_055.pdf",
@@ -5206,30 +5098,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 14,
-    "secs": 0.13365065,
-    "pages_per_sec": 104.75070641257636,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.133697642,
+    "pages_per_sec": 104.71388867127514,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_055.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 14,
-    "secs": 0.128102187,
-    "pages_per_sec": 109.28775166032098,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.069492915,
+    "pages_per_sec": 201.4593861834692,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_055.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 14,
-    "secs": 0.119104091,
-    "pages_per_sec": 117.54424119655135,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.070692796,
+    "pages_per_sec": 198.0399813299222,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_063.pdf",
@@ -5347,30 +5236,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 10,
-    "secs": 0.064137829,
-    "pages_per_sec": 155.9142265323636,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.07223975,
+    "pages_per_sec": 138.427943064587,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_063.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 10,
-    "secs": 0.063911479,
-    "pages_per_sec": 156.46641505511084,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.033839989,
+    "pages_per_sec": 295.5083702893639,
+    "status": "display-lists"
   },
   {
     "file": "text_tcpdf_063.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 10,
-    "secs": 0.070759083,
-    "pages_per_sec": 141.3246127002522,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.036761085,
+    "pages_per_sec": 272.0267913746289,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_system.pdf",
@@ -5488,30 +5374,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.259069141,
-    "pages_per_sec": 3.859973426939336,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.178013635,
+    "pages_per_sec": 5.617547217661164,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_system.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.255065798,
-    "pages_per_sec": 3.920557000746921,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.183411333,
+    "pages_per_sec": 5.452225790213301,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_system.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.245119083,
-    "pages_per_sec": 4.079649726822779,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.183023878,
+    "pages_per_sec": 5.463767957096833,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_tem.pdf",
@@ -5629,30 +5512,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 6,
-    "secs": 0.023892325,
-    "pages_per_sec": 251.12666933837542,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.024959407,
+    "pages_per_sec": 240.39032658107624,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_tem.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 6,
-    "secs": 0.025860176,
-    "pages_per_sec": 232.0169824056882,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.020623648,
+    "pages_per_sec": 290.92816169088997,
+    "status": "display-lists"
   },
   {
     "file": "vector_en_tem.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 6,
-    "secs": 0.025971277,
-    "pages_per_sec": 231.02445058824023,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.01861787,
+    "pages_per_sec": 322.27102241018974,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_feature.pdf",
@@ -5770,30 +5650,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 10,
-    "secs": 0.137289027,
-    "pages_per_sec": 72.83903323169447,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.145164243,
+    "pages_per_sec": 68.88748767146465,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_feature.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 10,
-    "secs": 0.124747859,
-    "pages_per_sec": 80.16169640234065,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.139310369,
+    "pages_per_sec": 71.78216576254995,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_feature.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 10,
-    "secs": 0.126728421,
-    "pages_per_sec": 78.90889763394117,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.136919506,
+    "pages_per_sec": 73.0356126175331,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_size14.pdf",
@@ -5911,30 +5788,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 9,
-    "secs": 0.183364377,
-    "pages_per_sec": 49.082597979213816,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.110222143,
+    "pages_per_sec": 81.65328449474984,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_size14.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 9,
-    "secs": 0.145481254,
-    "pages_per_sec": 61.86364052099798,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.12532578,
+    "pages_per_sec": 71.81283850776752,
+    "status": "display-lists"
   },
   {
     "file": "vector_font_size14.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 9,
-    "secs": 0.103592647,
-    "pages_per_sec": 86.87875308370101,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.116393619,
+    "pages_per_sec": 77.323826489148,
+    "status": "display-lists"
   },
   {
     "file": "vector_paths_1751.pdf",
@@ -6052,30 +5926,27 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.010256497,
-    "pages_per_sec": 97.49917540072406,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.015883265,
+    "pages_per_sec": 62.95934746413914,
+    "status": "display-lists"
   },
   {
     "file": "vector_paths_1751.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.012877678,
-    "pages_per_sec": 77.65375093242741,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.012816827,
+    "pages_per_sec": 78.02243098077238,
+    "status": "display-lists"
   },
   {
     "file": "vector_paths_1751.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.012071698,
-    "pages_per_sec": 82.83838777278888,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.011188922,
+    "pages_per_sec": 89.37411486110994,
+    "status": "display-lists"
   },
   {
     "file": "vector_tcpdf_009.pdf",
@@ -6193,29 +6064,26 @@
     "engine": "mupdf",
     "threads": 1,
     "pages": 1,
-    "secs": 0.040333906,
-    "pages_per_sec": 24.793036409615272,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.04621242,
+    "pages_per_sec": 21.639204352423008,
+    "status": "display-lists"
   },
   {
     "file": "vector_tcpdf_009.pdf",
     "engine": "mupdf",
     "threads": 4,
     "pages": 1,
-    "secs": 0.041467837,
-    "pages_per_sec": 24.11507501584903,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.041580458,
+    "pages_per_sec": 24.04975914406715,
+    "status": "display-lists"
   },
   {
     "file": "vector_tcpdf_009.pdf",
     "engine": "mupdf",
     "threads": 8,
     "pages": 1,
-    "secs": 0.043231258,
-    "pages_per_sec": 23.13141107297872,
-    "status": "single-thread-only",
-    "detail": "mupdf-rs holds one context; single-threaded by its rules"
+    "secs": 0.045669055,
+    "pages_per_sec": 21.89666503937951,
+    "status": "display-lists"
   }
 ]
