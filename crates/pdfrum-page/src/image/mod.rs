@@ -31,6 +31,7 @@ mod jbig2;
 #[cfg(feature = "jpx")]
 mod jpx;
 mod mask;
+mod rows;
 mod scanline;
 
 pub use bitimage::BitImage;
@@ -46,6 +47,7 @@ pub(crate) use jpx::SpaceOverride;
 pub use jpx::{JpxImage, decode_jpx};
 pub use mask::ImageMask;
 pub(crate) use mask::{ColorKey, matte_color};
+pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Samples, Source};
 
 use crate::color::{ColorSpace, Rgb};
 use crate::error::Error;
@@ -103,119 +105,6 @@ impl Pixels {
             Self::Indexed { indices, palette } => {
                 indices.len() + palette.len() * std::mem::size_of::<Rgb>()
             }
-        }
-    }
-
-    /// The colour at `(x, y)` in an image `width` samples across.
-    #[must_use]
-    pub fn color_at(&self, x: u32, y: u32, width: u32) -> Rgb {
-        let Some(index) = usize::try_from(y)
-            .ok()
-            .and_then(|row| row.checked_mul(usize::try_from(width).ok()?))
-            .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
-        else {
-            return Rgb::BLACK;
-        };
-        let byte = |i: usize, data: &[u8]| f32::from(data.get(i).copied().unwrap_or(0)) / 255.0;
-        match self {
-            Self::Stencil(b) => {
-                let v = if b.pixel(x, y) { 0.0 } else { 1.0 };
-                Rgb { r: v, g: v, b: v }
-            }
-            Self::Gray8(d) => {
-                let v = byte(index, d);
-                Rgb { r: v, g: v, b: v }
-            }
-            Self::Rgb8(d) => Rgb {
-                r: byte(index * 3, d),
-                g: byte(index * 3 + 1, d),
-                b: byte(index * 3 + 2, d),
-            },
-            Self::Cmyk8(d) => crate::color::ColorSpace::DeviceCmyk.to_rgb(&[
-                byte(index * 4, d),
-                byte(index * 4 + 1, d),
-                byte(index * 4 + 2, d),
-                byte(index * 4 + 3, d),
-            ]),
-            Self::Indexed { indices, palette } => {
-                let i = indices.get(index).copied().unwrap_or(0);
-                palette.get(usize::from(i)).copied().unwrap_or(Rgb::BLACK)
-            }
-        }
-    }
-
-    /// The colour at `(x, y)` as the three bytes a device buffer wants, with
-    /// the float round trip of [`color_at`](Self::color_at) taken out.
-    ///
-    /// Same answer as `color_at` followed by [`Rgb::to_bytes`], not merely a
-    /// close one. A pixel outside the image reads as black rather than
-    /// panicking. An `Indexed` image still pays its palette conversion per
-    /// pixel; a caller walking the whole image should hoist it with
-    /// [`Self::byte_palette`] instead.
-    // Every arm of `color_at` reaches `Rgb` from a byte through
-    // `f32::from(b) / 255.0`, and `Rgb::to_bytes` returns from `Rgb` to a byte
-    // through `(v.clamp(0.0, 1.0) * 255.0).round()`. That pair is exactly the
-    // identity on all 256 byte values — verified exhaustively, and pinned by
-    // `the_byte_path_is_exactly_the_float_path`. So for `Gray8` and `Rgb8` the
-    // float trip is a no-op the compiler cannot elide (it cannot know `round`
-    // is exact here), and for `Cmyk8` it wraps `adobe_cmyk_to_srgb`, which is
-    // byte-in, byte-out already: that wrapper's own encode uses
-    // `v * 255.0 + 0.5` truncated, likewise the identity on all 256.
-    //
-    // This matters because `pdfrum_render::image::to_pixmap` runs it once per
-    // source pixel — twenty-five million times on `image_bug_718762` — and
-    // measured at ~34 ns each it is 90% of that document's render. Nothing
-    // about the colour changes; only how many float instructions run on the
-    // way to it.
-    #[must_use]
-    pub fn sample_bytes(&self, x: u32, y: u32, width: u32) -> [u8; 3] {
-        let Some(index) = usize::try_from(y)
-            .ok()
-            .and_then(|row| row.checked_mul(usize::try_from(width).ok()?))
-            .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
-        else {
-            return [0, 0, 0];
-        };
-        let at = |i: usize, data: &[u8]| data.get(i).copied().unwrap_or(0);
-        match self {
-            Self::Stencil(b) => {
-                let v = if b.pixel(x, y) { 0 } else { 255 };
-                [v, v, v]
-            }
-            Self::Gray8(d) => {
-                let v = at(index, d);
-                [v, v, v]
-            }
-            Self::Rgb8(d) => [at(index * 3, d), at(index * 3 + 1, d), at(index * 3 + 2, d)],
-            Self::Cmyk8(d) => crate::color::adobe_cmyk_to_srgb(
-                at(index * 4, d),
-                at(index * 4 + 1, d),
-                at(index * 4 + 2, d),
-                at(index * 4 + 3, d),
-            ),
-            Self::Indexed { indices, palette } => {
-                let i = indices.get(index).copied().unwrap_or(0);
-                palette
-                    .get(usize::from(i))
-                    .copied()
-                    .unwrap_or(Rgb::BLACK)
-                    .to_bytes()
-            }
-        }
-    }
-
-    /// An `Indexed` image's palette with every entry already encoded as the
-    /// three bytes a device buffer wants.
-    ///
-    /// A palette has at most 256 entries and an image has as many pixels as it
-    /// has; converting the palette once and indexing it is the same answer as
-    /// converting per pixel, and the caller that walks a whole image should do
-    /// it once. `None` for every other kind of image, which has no palette.
-    #[must_use]
-    pub fn byte_palette(&self) -> Option<Vec<[u8; 3]>> {
-        match self {
-            Self::Indexed { palette, .. } => Some(palette.iter().map(|c| c.to_bytes()).collect()),
-            _ => None,
         }
     }
 }
@@ -1291,25 +1180,19 @@ fn load_mask_image<R: Resolve>(
 /// [`ImageMask::Alpha`] carries.
 ///
 /// A soft mask's alpha is its luminosity and a stencil's is its coverage;
-/// both are the **first byte of the sample**, so this is
-/// [`Pixels::sample_bytes`] over the image — the byte path
-/// `the_byte_path_is_exactly_the_float_path` proves equal to
-/// `color_at(..).to_bytes()` over the whole domain — rather than the float
-/// round trip through [`Rgb`](crate::color::Rgb), which cost -35% on the image
-/// class where `pdfrum_render::image::to_pixmap` dropped it.
+/// both are the **first byte of the converted sample**, so this is one walk
+/// of the [`Converted`] row pipeline keeping the red channel.
 ///
-/// **That change reached the render path only.** This is the one call site in
-/// the *build* that walks a whole image the same way, and on a document of
-/// soft-masked thumbnails it is the larger of the two: `image_en_fqa` builds
-/// 29.8 million mask samples per page and never converts more than four of the
-/// base image's.
+/// This is the one call site in the *build* that walks a whole image, and on
+/// a document of soft-masked thumbnails it is the larger of the two:
+/// `image_en_fqa` builds 29.8 million mask samples per page and never
+/// converts more than four of the base image's.
 ///
-/// Two arms then take the index out of the loop as well. `sample_bytes`
-/// derives it from `(x, y, width)` with a `checked_mul` and a `checked_add`
-/// per sample, and a row-major walk already knows it; an `Indexed` mask's
-/// palette is encoded once rather than per sample, which is what
-/// [`Pixels::byte_palette`] exists for. Both are pinned against the general
-/// arm by `the_mask_planes_fast_arms_are_the_general_one`.
+/// `Gray8` keeps a direct arm because it is the shape every `/SMask` in the
+/// corpus takes and its sample already *is* the alpha — the row pipeline
+/// would widen each byte to RGBA only for this to take the first channel
+/// back. Every other kind goes through the rows, which is the same answer:
+/// `the_mask_planes_fast_arms_are_the_general_one` pins the equality.
 ///
 /// `None` only when the dimensions do not multiply inside a `usize`.
 fn mask_plane(pixels: &Pixels, width: u32, height: u32) -> Option<Box<[u8]>> {
@@ -1317,22 +1200,16 @@ fn mask_plane(pixels: &Pixels, width: u32, height: u32) -> Option<Box<[u8]>> {
         .ok()?
         .checked_mul(usize::try_from(height).ok()?)?;
     let mut alpha = Vec::with_capacity(len);
-    match (pixels, pixels.byte_palette()) {
-        // The overwhelmingly common shape, and the one every `/SMask` in the
-        // corpus takes: a one-component plane whose sample *is* the alpha.
-        (Pixels::Gray8(data), _) => alpha.extend(data.iter().take(len).copied()),
-        (Pixels::Indexed { indices, .. }, Some(palette)) => alpha.extend(
-            indices
-                .iter()
-                .take(len)
-                .map(|&i| palette.get(usize::from(i)).map_or(0, |entry| entry[0])),
-        ),
-        _ => {
-            for y in 0..height {
-                for x in 0..width {
-                    alpha.push(pixels.sample_bytes(x, y, width)[0]);
-                }
-            }
+    if let Pixels::Gray8(data) = pixels {
+        alpha.extend(data.iter().take(len).copied());
+    } else {
+        let palette = match pixels {
+            Pixels::Indexed { palette, .. } => Some(rows::Palette::new(palette)),
+            _ => None,
+        };
+        let mut converted = rows::Converted::new(rows::Source::new(pixels, width, height), palette);
+        while let Some(row) = rows::Rows::next(&mut converted) {
+            alpha.extend(row.pixels().iter().map(|px| px.0[0]));
         }
     }
     // A source plane shorter than the image it describes reads as fully
@@ -1381,6 +1258,43 @@ mod tests {
             &Limits::default(),
             &mut diags,
         )
+    }
+
+    /// One pixel's converted colour, through the row pipeline.
+    ///
+    /// The pipeline is row-at-a-time by design, so a test that wants a single
+    /// pixel walks to its row and indexes it. Tests are the only caller that
+    /// ever wants one pixel — the render path wants all of them, in order.
+    fn converted_row(pixels: &Pixels, width: u32, y: u32) -> Vec<[u8; 3]> {
+        let palette = match pixels {
+            Pixels::Indexed { palette, .. } => Some(super::rows::Palette::new(palette)),
+            _ => None,
+        };
+        // Only the wanted row is converted. Walking down to row `y` from the
+        // top would be quadratic in `y`, and these tests reach for row 9999 to
+        // check the out-of-range fallback.
+        let mut converted =
+            super::rows::Converted::new(super::rows::Source::at_row(pixels, width, y), palette);
+        super::rows::Rows::next(&mut converted)
+            .map(|row| {
+                row.pixels()
+                    .iter()
+                    .map(|px| [px.0[0], px.0[1], px.0[2]])
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// One pixel's converted colour, for a test that wants a single one.
+    ///
+    /// A caller comparing a whole row should take [`converted_row`] once
+    /// instead: this rebuilds the row buffer on every call, which is the right
+    /// trade for a handful of pixels and the wrong one for thousands.
+    fn sample_at(pixels: &Pixels, x: u32, y: u32, width: u32) -> [u8; 3] {
+        converted_row(pixels, width, y)
+            .get(x as usize)
+            .copied()
+            .unwrap_or([0, 0, 0])
     }
 
     #[test]
@@ -1779,10 +1693,9 @@ mod tests {
     #[test]
     fn pixel_lookup_is_bounds_checked() {
         let pixels = Pixels::Rgb8(Box::from(&[255u8, 0, 0, 0, 255, 0][..]));
-        let red = pixels.color_at(0, 0, 2);
-        assert!((red.r - 1.0).abs() < 1e-6);
+        assert_eq!(sample_at(&pixels, 0, 0, 2), [255, 0, 0]);
         // Out of range reads as black rather than panicking.
-        assert_eq!(pixels.color_at(99, 99, 2), Rgb::BLACK);
+        assert_eq!(sample_at(&pixels, 99, 99, 2), [0, 0, 0]);
         assert_eq!(pixels.components(), 3);
     }
 
@@ -1843,13 +1756,21 @@ mod tests {
         assert_eq!(data, original);
     }
 
+    /// The row conversion is the colour space's own answer, over every input.
+    ///
+    /// [`super::rows::Converted`] replaced a per-pixel `sample_bytes`, which
+    /// had in turn replaced a float round trip through [`Rgb`]. Both
+    /// replacements were justified by being *exactly* the thing they replaced,
+    /// so the claim is checked over every input each variant can take rather
+    /// than over a sample of them — the float path is written out here as the
+    /// reference, because it is the one nobody would accuse of being an
+    /// optimisation.
     #[test]
-    fn the_byte_path_is_exactly_the_float_path() {
-        // `sample_bytes` exists only to be `color_at(..).to_bytes()` without the
-        // floats. "Only to be" is a strong claim, so it is checked over every
-        // input each variant can take rather than over a sample of them.
-
-        // The round trip the whole argument rests on, both directions, all 256.
+    fn the_row_conversion_is_exactly_the_float_path() {
+        // The round trip the whole argument rests on, both directions, all
+        // 256: a byte through `f32 / 255.0` and back through
+        // `(v.clamp(0, 1) * 255).round()` is the identity, so a conversion
+        // that skips the floats cannot differ from one that does not.
         for b in 0..=255u8 {
             let there = f32::from(b) / 255.0;
             let back = Rgb {
@@ -1861,22 +1782,18 @@ mod tests {
             assert_eq!(back, [b, b, b], "byte {b} does not survive the float trip");
         }
 
-        // Grey: every byte.
+        // Grey: every byte, widened to three equal channels.
         let gray = Pixels::Gray8((0..=255u8).collect());
         for x in 0..256u32 {
-            assert_eq!(
-                gray.sample_bytes(x, 0, 256),
-                gray.color_at(x, 0, 256).to_bytes()
-            );
+            let v = u8::try_from(x).expect("x < 256");
+            assert_eq!(sample_at(&gray, x, 0, 256), [v, v, v], "gray {x}");
         }
 
         // RGB: a walk that puts every byte in every channel position.
         let rgb = Pixels::Rgb8((0..=255u8).flat_map(|v| [v, 255 - v, v / 2]).collect());
         for x in 0..256u32 {
-            assert_eq!(
-                rgb.sample_bytes(x, 0, 256),
-                rgb.color_at(x, 0, 256).to_bytes()
-            );
+            let v = u8::try_from(x).expect("x < 256");
+            assert_eq!(sample_at(&rgb, x, 0, 256), [v, 255 - v, v / 2], "rgb {x}");
         }
 
         // CMYK is the one with real arithmetic in it. The full domain is 2^32,
@@ -1893,17 +1810,28 @@ mod tests {
                 }
             }
         }
-        let pixels = cmyk.len() / 4;
+        let count = cmyk.len() / 4;
+        let raw = cmyk.clone();
         let cmyk = Pixels::Cmyk8(cmyk.into());
-        for x in 0..pixels as u32 {
-            assert_eq!(
-                cmyk.sample_bytes(x, 0, pixels as u32),
-                cmyk.color_at(x, 0, pixels as u32).to_bytes(),
-                "cmyk lattice point {x}"
-            );
+        // The whole lattice is one row, converted once — which is how the
+        // pipeline is meant to be used. Calling `sample_at` per point would
+        // rebuild the row buffer for each of the 65 536 of them.
+        let row = converted_row(&cmyk, count as u32, 0);
+        for (x, got) in row.iter().enumerate() {
+            let at = x * 4;
+            let want = crate::color::ColorSpace::DeviceCmyk
+                .to_rgb(&[
+                    f32::from(raw[at]) / 255.0,
+                    f32::from(raw[at + 1]) / 255.0,
+                    f32::from(raw[at + 2]) / 255.0,
+                    f32::from(raw[at + 3]) / 255.0,
+                ])
+                .to_bytes();
+            assert_eq!(*got, want, "cmyk lattice point {x}");
         }
 
-        // Indexed, and the byte palette that replaces the per-pixel encode.
+        // Indexed, whose palette the row pipeline encodes once rather than per
+        // pixel — the same answer, which is the whole point of `Palette`.
         let palette: Box<[Rgb]> = (0..=255u8)
             .map(|v| Rgb {
                 r: f32::from(v) / 255.0,
@@ -1913,17 +1841,16 @@ mod tests {
             .collect();
         let indexed = Pixels::Indexed {
             indices: (0..=255u8).collect(),
-            palette,
+            palette: palette.clone(),
         };
-        let byte_palette = indexed.byte_palette().expect("an indexed image has one");
         for x in 0..256u32 {
-            let expected = indexed.color_at(x, 0, 256).to_bytes();
-            assert_eq!(indexed.sample_bytes(x, 0, 256), expected);
-            assert_eq!(byte_palette[x as usize], expected, "the palette agrees too");
+            let want = palette[x as usize].to_bytes();
+            assert_eq!(sample_at(&indexed, x, 0, 256), want, "indexed {x}");
         }
-        assert!(gray.byte_palette().is_none(), "only indexed has a palette");
 
-        // A stencil, both phases, and an out-of-range read on every variant.
+        // A stencil, both phases: a set bit is ink and reads 0, a clear one
+        // reads 255. The stencil's own colour is applied later, by the render
+        // path, so the conversion only has to preserve that convention.
         let bits = BitImage {
             width: 2,
             height: 1,
@@ -1931,23 +1858,26 @@ mod tests {
             bits: vec![0b1000_0000],
         };
         let stencil = Pixels::Stencil(bits);
-        for x in 0..2u32 {
-            assert_eq!(
-                stencil.sample_bytes(x, 0, 2),
-                stencil.color_at(x, 0, 2).to_bytes()
-            );
-        }
+        assert_eq!(sample_at(&stencil, 0, 0, 2), [0, 0, 0], "a set bit is ink");
+        assert_eq!(
+            sample_at(&stencil, 1, 0, 2),
+            [255, 255, 255],
+            "a clear bit is paper"
+        );
+
+        // And an out-of-range read is black on every variant rather than a
+        // panic, which is the fallback the per-pixel path carried.
         for p in [&gray, &rgb, &cmyk, &indexed, &stencil] {
             assert_eq!(
-                p.sample_bytes(9999, 9999, 256),
-                p.color_at(9999, 9999, 256).to_bytes(),
-                "an out-of-range read agrees too"
+                sample_at(p, 9999, 9999, 256),
+                [0, 0, 0],
+                "an out-of-range read is black"
             );
         }
     }
 
-    /// [`super::mask_plane`]'s two fast arms must be its general arm, which is
-    /// `sample_bytes` per pixel, which is in turn the float path by the test
+    /// [`super::mask_plane`]'s grey fast arm must be its general arm, which
+    /// is the row pipeline, which is in turn the float path by the test
     /// above. Asserted here rather than argued in the comment, because the
     /// conformance gate can only see the mask shapes the corpus happens to
     /// carry and an `Indexed` `/SMask` is not one of them.
@@ -1956,7 +1886,7 @@ mod tests {
         let general = |pixels: &Pixels, w: u32, h: u32| -> Vec<u8> {
             (0..h)
                 .flat_map(|y| (0..w).map(move |x| (x, y)))
-                .map(|(x, y)| pixels.sample_bytes(x, y, w)[0])
+                .map(|(x, y)| sample_at(pixels, x, y, w)[0])
                 .collect()
         };
 
@@ -2145,12 +2075,8 @@ mod tests {
         for y in 0..3 {
             for x in 0..20 {
                 assert_eq!(
-                    image.pixels.color_at(x, y, 20),
-                    Rgb {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0
-                    },
+                    sample_at(&image.pixels, x, y, 20),
+                    [255, 255, 255],
                     "({x},{y}) should be white"
                 );
             }
@@ -2173,21 +2099,13 @@ mod tests {
         // pixels rather than at its start.
         let s = ccitt_stream(20, 3, false, &black_then_white_g4(3));
         let image = decode(&s).expect("should decode");
-        let black = Rgb {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        };
-        let white = Rgb {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-        };
+        let black = [0_u8, 0, 0];
+        let white = [255_u8, 255, 255];
         for y in 0..3 {
             for x in 0..20 {
                 let want = if y < 2 && x < 8 { black } else { white };
                 assert_eq!(
-                    image.pixels.color_at(x, y, 20),
+                    sample_at(&image.pixels, x, y, 20),
                     want,
                     "({x},{y}) — a shear puts the black run somewhere else"
                 );
@@ -2201,14 +2119,7 @@ mod tests {
         // repack keeps that, so damage is blank rather than black or an error.
         let s = ccitt_stream(20, 3, false, &[0x00, 0x00]);
         let image = decode(&s).expect("damage is not a failure");
-        assert_eq!(
-            image.pixels.color_at(0, 0, 20),
-            Rgb {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0
-            }
-        );
+        assert_eq!(sample_at(&image.pixels, 0, 0, 20), [255, 255, 255]);
     }
 
     /// Build a `[/Separation /Name /DeviceCMYK <tint transform>]` array whose
@@ -2272,7 +2183,7 @@ mod tests {
         );
         let image = decode(&s).expect("should decode");
         assert_eq!(
-            image.pixels.sample_bytes(0, 0, 1),
+            sample_at(&image.pixels, 0, 0, 1),
             [0, 182, 162],
             "the tint must reach the alternate space, not the page as grey"
         );
@@ -2313,7 +2224,7 @@ mod tests {
             &[0xC6],
         );
         let image = decode(&s).expect("should decode");
-        let inverted = image.pixels.sample_bytes(0, 0, 1);
+        let inverted = sample_at(&image.pixels, 0, 0, 1);
         let s_plain = stream(
             vec![
                 (Name::from("Width"), Object::Int(1)),
@@ -2329,7 +2240,7 @@ mod tests {
         let plain = decode(&s_plain).expect("should decode");
         assert_eq!(
             inverted,
-            plain.pixels.sample_bytes(0, 0, 1),
+            sample_at(&plain.pixels, 0, 0, 1),
             "`/Decode [1 0]` on a tint is the complement of the sample"
         );
     }
@@ -2394,8 +2305,8 @@ mod tests {
         // A zero tint vector is `C0` — CMYK all-zero, paper white — and a
         // full one is `C1`, pure red in the alternate. Neither is the raw
         // sample pair, which is the whole point.
-        assert_eq!(image.pixels.sample_bytes(0, 0, 2), [255, 255, 255]);
-        let full = image.pixels.sample_bytes(1, 0, 2);
+        assert_eq!(sample_at(&image.pixels, 0, 0, 2), [255, 255, 255]);
+        let full = sample_at(&image.pixels, 1, 0, 2);
         assert!(
             full[0] > 200 && full[1] < 80 && full[2] < 80,
             "a full tint must reach the alternate space's red, got {full:?}"
