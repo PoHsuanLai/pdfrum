@@ -5,10 +5,11 @@
 
 #[allow(unused_imports)]
 pub(crate) use pdfrum_object::names::{
-    AA, ACRO_FORM, ANNOTS, AP, AS, BC, BG, BORDER, C, CA, CONTENTS, COUNT, CROP_BOX, DA, DESTS, DV,
-    EMBEDDED_FILES, F, FF, FIRST, FT, I, ID, INK_LIST, IX, JAVA_SCRIPT, K, KIDS, L, LENGTH,
-    MEDIA_BOX, METADATA, NAMES, NORMAL, OUTLINES, P, PAGE, PAGE_LABELS, PARENT, Q, R, RECT,
-    RESOURCES, RI, ROTATE, S, SUBTYPE, T, TITLE, TU, TYPE, V, VIEWER_PREFERENCES, W, XML,
+    AA, ACRO_FORM, ANNOTS, AP, AS, BBOX, BC, BG, BORDER, C, CA, CONTENTS, COUNT, CROP_BOX, DA,
+    DESTS, DV, EMBEDDED_FILES, EXT_G_STATE, F, FF, FIRST, FONT, FT, I, ID, INK_LIST, IX,
+    JAVA_SCRIPT, K, KIDS, L, LENGTH, MATRIX, MEDIA_BOX, METADATA, NAMES, NORMAL, OUTLINES, P, PAGE,
+    PAGE_LABELS, PARENT, Q, R, RECT, RESOURCES, RI, ROTATE, S, SUBTYPE, T, TITLE, TU, TYPE, V,
+    VIEWER_PREFERENCES, W, XML, XOBJECT,
 };
 
 pdfrum_object::names! {
@@ -156,18 +157,10 @@ pdfrum_object::names! {
 
     // ---- Appearance streams and their resources ----
 
-    /// A form XObject's bounding box (`/BBox`).
-    BBOX = "BBox";
-    /// A form XObject's transformation matrix (`/Matrix`).
-    MATRIX = "Matrix";
-    /// A form XObject's type (`/XObject`).
-    XOBJECT = "XObject";
     /// The form XObject subtype (`/Form`).
     FORM = "Form";
     /// The form XObject generation number (`/FormType`).
     FORM_TYPE = "FormType";
-    /// A graphics state parameter dictionary (`/ExtGState`).
-    EXT_GSTATE = "ExtGState";
     /// The single graphics state entry every generated appearance uses
     /// (`/GS`).
     GS = "GS";
@@ -182,8 +175,6 @@ pdfrum_object::names! {
     /// (`/Multiply`), used by the highlight generator so the text below shows
     /// through.
     MULTIPLY_BLEND = "Multiply";
-    /// A font resource dictionary (`/Font`).
-    FONT = "Font";
     /// A Type 1 font subtype (`/Type1`).
     TYPE1 = "Type1";
     /// A TrueType font subtype (`/TrueType`), which is what a face added for

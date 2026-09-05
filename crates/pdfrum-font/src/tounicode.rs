@@ -10,7 +10,7 @@
 //! directions.
 
 use pdfrum_cmap::{CharCode, CidSet, Words};
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity, hex_digit};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
 
@@ -288,7 +288,7 @@ fn string_to_code(word: &[u8]) -> Option<u32> {
         if is_pdf_whitespace(c) {
             continue;
         }
-        let digit = hex_value(c)?;
+        let digit = hex_digit(c)?;
         code = code.checked_mul(16)?.checked_add(u32::from(digit))?;
     }
     Some(code)
@@ -314,7 +314,7 @@ fn string_to_units(word: &[u8]) -> Vec<u32> {
         if is_pdf_whitespace(c) {
             continue;
         }
-        let Some(digit) = hex_value(c) else {
+        let Some(digit) = hex_digit(c) else {
             break;
         };
         ch = ch * 16 + u32::from(digit);
@@ -333,15 +333,6 @@ fn string_to_units(word: &[u8]) -> Vec<u32> {
 /// separators.
 fn is_pdf_whitespace(c: u8) -> bool {
     matches!(c, 0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20)
-}
-
-fn hex_value(c: u8) -> Option<u8> {
-    match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    }
 }
 
 /// The declared count, and whether it is usable at all.

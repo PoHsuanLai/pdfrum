@@ -814,12 +814,10 @@ fn wants_chinese_cid_rescue(dict: &Dict, r: &impl Resolve) -> bool {
 /// Declared here rather than in `pdfrum-object`'s shared table because they
 /// are font-specific and no other crate spells them.
 pub(crate) mod names {
-    pub(crate) use pdfrum_object::names::{RESOURCES, SUBTYPE, TYPE, W, WIN_ANSI_ENCODING};
+    pub(crate) use pdfrum_object::names::{FONT, RESOURCES, SUBTYPE, TYPE, W, WIN_ANSI_ENCODING};
     pdfrum_object::names! {
         /// The character encoding, a name or a dictionary (`/Encoding`).
         ENCODING = "Encoding";
-        /// The `/Type` value of a font dictionary (`/Font`).
-        FONT = "Font";
         /// The font's PostScript name (`/BaseFont`).
         BASE_FONT = "BaseFont";
         /// The font's metrics and program (`/FontDescriptor`).

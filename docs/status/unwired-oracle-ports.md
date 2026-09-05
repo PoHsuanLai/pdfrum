@@ -1,6 +1,7 @@
 # Unwired oracle ports
 
-**Opened:** 2026-09-03 · **State:** three items open, all one blocked feature
+**Opened:** 2026-09-03 · **State:** four items open — three are one blocked
+feature, the fourth (added 2026-09-05) a facade wire nobody has built
 
 The no-dead-code pass (`chore/no-dead-code`) went through every
 `#[allow(dead_code)]` the idiomatic-API curation left behind. Most were test
@@ -20,8 +21,10 @@ decided entries are kept in full below: an entry that only says "resolved"
 teaches nobody why.
 
 They stay in the tree with `#[allow(dead_code, reason = "unwired — see
-docs/status/unwired-oracle-ports.md")]` until each is either wired or
-consciously declined. This file is the "see" they point at.
+docs/status/unwired-oracle-ports.md")]` — `#[expect]` from item 6 on, so
+wiring one without deleting the attribute is itself a red build — until each
+is either wired or consciously declined. This file is the "see" they point
+at.
 
 ## The rule that put them here
 
@@ -192,6 +195,47 @@ the buffer is 100 MB instead of 1.5 MB.
 the knob or we file and land the request. Wiring them would be a `[spec]`
 DEPS.md bump and a re-measure of the `image_*` fixtures; neither is possible
 today.
+
+## 6. `script::ScriptCascade::take_calculate_request` — the sweep `Doc.calculateNow()` asks for
+
+**Opened 2026-09-05, from the dead-code audit.**
+
+| | |
+|---|---|
+| Item | `crates/pdfrum-form/src/script/mod.rs`, `ScriptCascade::take_calculate_request` (now `pub(crate)`, `#[expect(dead_code)]`) — drains the flag `Doc.calculateNow()` sets in `script/doc.rs` (`calculate_now`) |
+| Oracle | `CJS_Document::calculateNow` (`fxjs/cjs_document.cpp:1290-1306`) checks the fill permissions and calls `CPDFSDK_InteractiveForm::OnCalculate(nullptr)`; `OnCalculate` (`fpdfsdk/cpdfsdk_interactiveform.cpp:254-311`) is the `busy_`-guarded walk of `CountFieldsInCalculationOrder`, running each text or combo field's `/AA /C` and writing `SetValue(sValue, kNotify)` when the script did not throw, `bRC` held and the value moved |
+| Oracle production? | **Yes** — `OnCalculate` is what every value change reaches (`:587, :610, :623`), and `calculateNow` is the one script-side entry to it |
+| pdfrum's live path | The sweep itself is live: `ScriptCascade::calculate` (`script/mod.rs`) is the same walk and `route.rs`'s `commit_field` applies its writes. What is missing is the entry `calculateNow` needs — a sweep **outside a commit** |
+| Board effect | none: the corpus's only `calculateNow` is `testing/resources/javascript/document_methods.in:122`, whose form has no `/CO` and no `/AA /C`, so both sides print `PASS: this.calculateNow() = undefined` |
+
+Wiring it is three changes, not one, which is why it is here rather than in
+`FormSession`:
+
+1. **The sweep only sees fields whose pages have been read.** `calculate`
+   walks `/CO` and looks each index up in `actions`, which
+   `FormSession::install_page_scripts` fills per page as pages are read. The
+   oracle reads `/AA /C` off `CPDF_InteractiveForm`'s document-wide field
+   list, so a `calculateNow()` from `/OpenAction` — where the corpus makes
+   the call, before any page loads — sweeps every field there; here it would
+   sweep an empty table. `install_calculation_order` would have to install
+   every `/CO` field's `/AA /C` document-wide.
+2. **A write outside a commit has nowhere to land.** `commit_field` applies
+   `CommitOutcome::writes` to the page's widgets — `set_field_text`, the
+   dirty set, the field's own format script, the display string — inside a
+   page `Context`. That loop would have to become a `pub` `pdfrum-form` entry
+   point (the shape `focus_field` has), and the facade would route each write
+   to the page carrying the field (`page_of_field`, as
+   `honour_focus_requests` does).
+3. **Reading a page overwrites the model.** `install_page_scripts` calls
+   `set_field` with the document's stored value, which clobbers a value an
+   earlier sweep computed. `Field.value` writes already live with the same
+   wrinkle — the CLI spends them through `drain_field_writes` before it
+   loads pages — and a `calculateNow` sweep would need the same record or
+   the fix.
+
+Until then the flag is set and never read. It stays because the request
+side is a checked port (`calculate_now`) and the object model advertises
+the method; deleting the drain would leave a write-only flag.
 
 ## Checked and *not* a gap
 

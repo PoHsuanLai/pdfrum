@@ -73,7 +73,7 @@ warns. No public item becomes undocumented.
   or `pdfrum-tool`.
 - Do not hide public items with `#[doc(hidden)]` just to shorten rustdoc.
   Hidden is for sibling-crate plumbing that was never a host API
-  (`debug_runs`, the fuzz-only link checkers). The hygiene pass that decided
+  (the fuzz-only link checkers). The hygiene pass that decided
   what is hidden (idiomatic-api.md WP11, landed 2026-09-03) is done; this
   pass inherits its answers and adds none.
 
