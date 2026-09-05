@@ -29,6 +29,11 @@ pdfrum.workspace = true
 
 [features]
 default = []
+# cargo-c turns this on for its own builds and expects it to exist. It gates
+# nothing: `cargo cbuild`/`cargo cinstall` pass `--features capi`, and a
+# manifest without the name fails before it starts. Empty on purpose — the C
+# ABI is what this crate *is*, not something a feature adds to it.
+capi = []
 # `pdfrum_page_markdown`, forwarded from the facade's own feature. Off by
 # default, as it is there.
 markdown = ["pdfrum/markdown"]
