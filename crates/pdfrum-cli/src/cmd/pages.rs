@@ -100,6 +100,24 @@ pub fn parse_rect(text: &str) -> Result<Rect> {
 
 // ---- merge ----------------------------------------------------------------
 
+/// `base` with every page of `others` appended, in order, as the bytes of
+/// a saved file, and how many pages it has.
+pub fn merge_bytes(
+    base: &Document,
+    others: &[&Document],
+    deterministic: bool,
+) -> Result<(Vec<u8>, u32)> {
+    let mut edit = base.edit();
+    let mut at = base.page_count();
+    for doc in others {
+        edit.import_pages(doc, 0..doc.page_count(), at)?;
+        at += doc.page_count();
+    }
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, base.bytes()))?;
+    Ok((bytes, at))
+}
+
 pub fn merge(
     files: &[PathBuf],
     password: Option<&str>,
@@ -116,14 +134,7 @@ pub fn merge(
         .iter()
         .map(|f| out::open(f, password))
         .collect::<Result<_>>()?;
-    let mut edit = base.edit();
-    let mut at = base.page_count();
-    for doc in &others {
-        edit.import_pages(doc, 0..doc.page_count(), at)?;
-        at += doc.page_count();
-    }
-    let mut bytes = Vec::new();
-    edit.write_to(&mut bytes, &save_options(deterministic, base.bytes()))?;
+    let (bytes, at) = merge_bytes(&base, &others.iter().collect::<Vec<_>>(), deterministic)?;
     sink.finish(
         term,
         &bytes,
@@ -175,27 +186,40 @@ pub struct Slice<'a> {
     pub deterministic: bool,
 }
 
-/// Keep the selected pages in document order, rotated or cropped as asked.
-pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
-    let sink = out::Sink::new(req.output, "PDF")?;
-    let doc = out::open(req.file, req.password)?;
+/// The selected pages of `doc` in document order, rotated or cropped as
+/// asked, as the bytes of a saved file, and how many pages were kept.
+pub fn slice_bytes(
+    doc: &Document,
+    spec: Option<&str>,
+    rotate: Option<i32>,
+    crop: Option<Rect>,
+    deterministic: bool,
+) -> Result<(Vec<u8>, usize)> {
     let count = doc.page_count();
-    let mut keep = pages::select(req.spec, count)?;
+    let mut keep = pages::select(spec, count)?;
     keep.sort_unstable();
     keep.dedup();
     let mut edit = doc.edit();
     edit.delete_pages((0..count).filter(|i| !keep.contains(i)))?;
     for &index in &keep {
-        if let Some(degrees) = req.rotate {
+        if let Some(degrees) = rotate {
             edit.set_rotation(index, degrees)?;
         }
-        if let Some(rect) = req.crop {
+        if let Some(rect) = crop {
             edit.set_page_box(index, PageBox::Crop, rect)?;
         }
     }
     let mut bytes = Vec::new();
-    edit.write_to(&mut bytes, &save_options(req.deterministic, doc.bytes()))?;
-    sink.finish(term, &bytes, &format!("{} pages", keep.len()), None)?;
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    Ok((bytes, keep.len()))
+}
+
+/// Keep the selected pages in document order, rotated or cropped as asked.
+pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
+    let sink = out::Sink::new(req.output, "PDF")?;
+    let doc = out::open(req.file, req.password)?;
+    let (bytes, kept) = slice_bytes(&doc, req.spec, req.rotate, req.crop, req.deterministic)?;
+    sink.finish(term, &bytes, &format!("{kept} pages"), None)?;
     Ok(ExitCode::SUCCESS)
 }
 

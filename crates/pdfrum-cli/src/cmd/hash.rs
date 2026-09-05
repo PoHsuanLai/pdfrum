@@ -21,7 +21,7 @@ use crate::term::Term;
 use crate::{out, syntax};
 
 #[derive(Serialize)]
-struct Report {
+pub struct Report {
     file: String,
     sha256: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,7 +48,8 @@ pub fn run(files: &[PathBuf], password: Option<&str>, json: bool, term: Term) ->
     Ok(out::exit(failed, ExitCode::SUCCESS))
 }
 
-fn report(doc: &pdfrum::Document, file: &Path) -> Report {
+/// The three fingerprints of `doc`, named `file` in the report.
+pub fn report(doc: &pdfrum::Document, file: &Path) -> Report {
     // The document keeps the file's bytes whole, so the file hash is over
     // them — which is also what makes `-` work.
     let sha256 = hex(&Sha256::digest(doc.bytes()));

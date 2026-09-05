@@ -12,5 +12,6 @@ pub mod pages;
 pub mod render;
 #[cfg(feature = "javascript")]
 pub mod scripts;
+pub mod serve;
 pub mod shell;
 pub mod terminal;

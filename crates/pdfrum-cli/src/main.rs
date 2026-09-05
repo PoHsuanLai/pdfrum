@@ -14,6 +14,7 @@
 mod cmd;
 mod out;
 mod pages;
+mod rpc;
 mod schema;
 mod syntax;
 mod term;
@@ -222,8 +223,26 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// A session for agents: JSON-RPC 2.0 over stdin and stdout, the
+    /// commands as methods with the same JSON shapes, each document parsed
+    /// once. `pdfrum schema serve` lists the methods.
+    Serve {
+        /// Speak over stdin and stdout, one JSON object per line. The only
+        /// transport; named so a host's configuration reads as it does for
+        /// any language server.
+        #[arg(long, required = true)]
+        stdio: bool,
+        /// The Model Context Protocol's methods (`initialize`, `tools/list`,
+        /// `tools/call`) instead of the plain ones, for an agent host.
+        #[arg(long)]
+        mcp: bool,
+        /// How many documents may be open at once; `open` refuses beyond it.
+        #[arg(long, default_value_t = 16, value_name = "N")]
+        max_docs: usize,
+    },
     /// The JSON shape a command's `--json` prints: an example with every
-    /// key. Without a command, the list of commands that have one.
+    /// key. Without a command, the list of commands that have one; `serve`
+    /// for the session's methods.
     Schema {
         /// The command as words: `extract words`, `inspect object`.
         #[arg(value_name = "COMMAND")]
@@ -768,6 +787,11 @@ fn main() -> ExitCode {
             term,
         }),
         Command::Hash { inputs, json } => cmd::hash::run(&inputs.files, password, json, term),
+        Command::Serve {
+            stdio: _,
+            mcp,
+            max_docs,
+        } => cmd::serve::run(&cmd::serve::Options { mcp, max_docs }, password),
         Command::Schema { command } => schema::run(&command, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
         Command::Manpage { output } => cmd::shell::manpage(&output, term),

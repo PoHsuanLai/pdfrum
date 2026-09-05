@@ -49,7 +49,7 @@ struct PixelDiff {
 }
 
 #[derive(Serialize)]
-struct Report {
+pub struct Report {
     left: String,
     right: String,
     left_pages: u32,
@@ -57,29 +57,45 @@ struct Report {
     pages: Vec<PageDiff>,
 }
 
-pub fn run(req: &Request<'_>) -> Result<ExitCode> {
-    let left = out::open(req.left, req.password)?;
-    let right = out::open(req.right, req.password)?;
-    let count = left.page_count().max(right.page_count());
+impl Report {
+    /// Whether any page differs in text or, when compared, in pixels.
+    pub fn differs(&self) -> bool {
+        self.pages.iter().any(|p| {
+            !p.removed.is_empty()
+                || !p.added.is_empty()
+                || p.pixels.as_ref().is_some_and(|x| x.differing > 0)
+        })
+    }
+}
+
+/// Two open documents to compare, and how.
+pub struct Compare<'a> {
+    pub left: &'a Document,
+    pub right: &'a Document,
+    /// What the report calls each side.
+    pub left_name: &'a str,
+    pub right_name: &'a str,
+    pub visual: bool,
+    /// Where `visual` writes its difference pictures, if anywhere.
+    pub out_dir: Option<&'a Path>,
+    pub dpi: f64,
+}
+
+/// What changed between the two documents, page by page.
+pub fn report(cmp: &Compare<'_>) -> Result<Report> {
+    let count = cmp.left.page_count().max(cmp.right.page_count());
     let mut pages = Vec::new();
     let backend = VelloCpuBackend::new();
     let mut session = RenderSession::new();
-    if let Some(dir) = req.out_dir {
+    if let Some(dir) = cmp.out_dir {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     }
     for index in 0..count {
-        let a = page_lines(&left, index);
-        let b = page_lines(&right, index);
+        let a = page_lines(cmp.left, index);
+        let b = page_lines(cmp.right, index);
         let (removed, added) = line_diff(&a, &b);
-        let pixels = if req.visual {
-            Some(pixel_diff(
-                &left,
-                &right,
-                index,
-                req,
-                backend,
-                &mut session,
-            )?)
+        let pixels = if cmp.visual {
+            Some(pixel_diff(cmp, index, backend, &mut session)?)
         } else {
             None
         };
@@ -90,24 +106,33 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
             pixels,
         });
     }
-    let report = Report {
-        left: req.left.display().to_string(),
-        right: req.right.display().to_string(),
-        left_pages: left.page_count(),
-        right_pages: right.page_count(),
+    Ok(Report {
+        left: cmp.left_name.to_owned(),
+        right: cmp.right_name.to_owned(),
+        left_pages: cmp.left.page_count(),
+        right_pages: cmp.right.page_count(),
         pages,
-    };
-    let differs = report.pages.iter().any(|p| {
-        !p.removed.is_empty()
-            || !p.added.is_empty()
-            || p.pixels.as_ref().is_some_and(|x| x.differing > 0)
-    });
+    })
+}
+
+pub fn run(req: &Request<'_>) -> Result<ExitCode> {
+    let left = out::open(req.left, req.password)?;
+    let right = out::open(req.right, req.password)?;
+    let report = report(&Compare {
+        left: &left,
+        right: &right,
+        left_name: &req.left.display().to_string(),
+        right_name: &req.right.display().to_string(),
+        visual: req.visual,
+        out_dir: req.out_dir,
+        dpi: req.dpi,
+    })?;
     if req.json {
         out::json(&report)?;
     } else {
         print(&report, req.term);
     }
-    Ok(if differs {
+    Ok(if report.differs() {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
@@ -178,16 +203,14 @@ fn render(
 }
 
 fn pixel_diff(
-    left: &Document,
-    right: &Document,
+    cmp: &Compare<'_>,
     index: u32,
-    req: &Request<'_>,
     backend: VelloCpuBackend,
     session: &mut RenderSession,
 ) -> Result<PixelDiff> {
-    let scale = req.dpi / 72.0;
-    let before = render(left, index, scale, backend, session)?;
-    let after = render(right, index, scale, backend, session)?;
+    let scale = cmp.dpi / 72.0;
+    let before = render(cmp.left, index, scale, backend, session)?;
+    let after = render(cmp.right, index, scale, backend, session)?;
     // A page only one side has is compared against a blank one of the same
     // size, so what it carried shows as the change.
     let blank = |like: &Pixmap| Pixmap::filled(like.width(), like.height(), pdfrum::Color::WHITE);
@@ -214,7 +237,7 @@ fn pixel_diff(
     let height = before.height().max(after.height());
     let mut differing = 0u64;
     let mut bbox: Option<[u32; 4]> = None;
-    let mut picture = req
+    let mut picture = cmp
         .out_dir
         .map(|_| Pixmap::filled(width, height, pdfrum::Color::WHITE));
     for row in 0..height {
@@ -240,7 +263,7 @@ fn pixel_diff(
             }
         }
     }
-    let written = match (picture, req.out_dir) {
+    let written = match (picture, cmp.out_dir) {
         (Some(canvas), Some(dir)) if differing > 0 => {
             let path = dir.join(format!("diff-{}.png", index + 1));
             canvas

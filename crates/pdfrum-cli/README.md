@@ -47,6 +47,8 @@ pdfrum diff v1.pdf v2.pdf                       # text per page; exit 1 if they 
 pdfrum diff v1.pdf v2.pdf --visual -o diffs/    # pixels too, changes in red
 pdfrum hash report.pdf                          # sha256, /ID, and a semantic hash
 pdfrum schema extract words                     # the JSON shape a command's --json prints; no argument lists them
+pdfrum serve --stdio                            # a session: the commands as JSON-RPC methods, documents parsed once
+pdfrum serve --stdio --mcp                      # the same as a Model Context Protocol tool set
 pdfrum completions zsh > ~/.zfunc/_pdfrum
 pdfrum manpage -o man/
 
@@ -81,6 +83,44 @@ record of key/value lines, a table with an uppercase header row, sections
 per page, or a one-line summary for a written file), a fixed palette of
 colour roles that is off in a pipe and under `NO_COLOR`, sizes in human
 units, `no <things>` for an empty answer, and never an emoji.
+
+## A session for agents
+
+`pdfrum serve --stdio` keeps documents open between requests and answers
+the commands as JSON-RPC 2.0 methods over stdin and stdout, one request
+and one response per line, each result the command's `--json` document:
+
+```sh
+$ pdfrum serve --stdio
+{"jsonrpc":"2.0","id":1,"method":"open","params":{"file":"report.pdf"}}
+{"jsonrpc":"2.0","id":1,"result":{"doc":1,"file":"report.pdf","pages":12,…}}
+{"jsonrpc":"2.0","id":2,"method":"words","params":{"doc":1,"pages":"3"}}
+{"jsonrpc":"2.0","id":2,"result":[{"page":3,"text":"Total","x0":72.0,…}]}
+{"jsonrpc":"2.0","id":3,"method":"render","params":{"doc":1,"page":3,"dpi":100}}
+{"jsonrpc":"2.0","id":3,"result":{"page":3,"width":850,"height":1100,"png_base64":"iVBOR…"}}
+{"jsonrpc":"2.0","id":4,"method":"close","params":{"doc":1}}
+{"jsonrpc":"2.0","id":4,"result":{"doc":1}}
+```
+
+`open` takes a path or `bytes_base64`; the writers (`pages.slice`,
+`pages.merge`, `forms.fill`) hand the file back as `bytes_base64` and
+write nothing; `--max-docs` caps what is open at once; `shutdown` or
+closing stdin ends the session. Errors are the CLI's messages under
+JSON-RPC codes (`-32601` no such method, `-32602` the request is wrong,
+`-32000` the work failed). `pdfrum schema serve` prints every method with
+its params as JSON Schema and its result shape.
+
+With `--mcp` the same process speaks the Model Context Protocol, so an
+agent host lists the methods as tools and calls them; this is the
+configuration such a host wants:
+
+```json
+{"mcpServers": {"pdfrum": {"command": "pdfrum", "args": ["serve", "--stdio", "--mcp"]}}}
+```
+
+Tool names are the method names with `_` for `.` (`forms_dump`);
+`render` and `image` return the picture as an image block beside the
+JSON.
 
 ## JavaScript
 

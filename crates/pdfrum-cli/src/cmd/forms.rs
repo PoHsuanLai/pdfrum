@@ -4,7 +4,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{FlattenMode, Flattened};
+use pdfrum::{Document, FlattenMode, Flattened};
 use serde::Serialize;
 
 use crate::cmd::pages::save_options;
@@ -15,7 +15,7 @@ use crate::term::{Style, Term};
 use pdfrum::{Diagnostics, FormSession, ScriptConfig};
 
 #[derive(Serialize)]
-struct FieldRow {
+pub struct FieldRow {
     name: String,
     kind: String,
     value: String,
@@ -30,18 +30,13 @@ struct FieldRow {
     widgets: usize,
 }
 
-pub fn dump(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// The form's fields with their kinds and values; none when the document
+/// has no interactive form.
+pub fn field_rows(doc: &Document) -> Vec<FieldRow> {
     let Some(form) = doc.form() else {
-        if json.is_on() {
-            out::items(&Vec::<FieldRow>::new(), json)?;
-        } else {
-            out::none("form fields");
-        }
-        return Ok(ExitCode::SUCCESS);
+        return Vec::new();
     };
-    let rows: Vec<FieldRow> = form
-        .fields()
+    form.fields()
         .iter()
         .map(|f| {
             let kind = format!("{:?}", f.kind()).to_ascii_lowercase();
@@ -61,7 +56,12 @@ pub fn dump(file: &Path, password: Option<&str>, json: out::Json, term: Term) ->
                 widgets: f.widget_count(),
             }
         })
-        .collect();
+        .collect()
+}
+
+pub fn dump(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = field_rows(&doc);
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -113,26 +113,11 @@ pub fn fill(
 ) -> Result<ExitCode> {
     let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
-    let Some(mut form) = doc.form() else {
-        bail!("{} has no interactive form", file.display());
-    };
     let text =
         std::fs::read_to_string(data).with_context(|| format!("cannot read {}", data.display()))?;
     let values: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text)
         .with_context(|| format!("{} is not a JSON object of field values", data.display()))?;
-    let mut set = 0;
-    for (name, value) in &values {
-        let result = match value {
-            serde_json::Value::Bool(checked) => form.set_checked(name, *checked),
-            serde_json::Value::String(s) => form.set(name, s.clone()),
-            serde_json::Value::Null => form.set(name, ""),
-            other => form.set(name, other.to_string()),
-        };
-        result.with_context(|| format!("no field named {name:?}"))?;
-        set += 1;
-    }
-    let mut bytes = Vec::new();
-    doc.write_form_to(&mut bytes, &form, &save_options(deterministic, doc.bytes()))?;
+    let (bytes, set) = fill_values(&doc, &file.display().to_string(), &values, deterministic)?;
     let what = format!("{set} field{} set", if set == 1 { "" } else { "s" });
     #[cfg(feature = "javascript")]
     if scripts {
@@ -147,6 +132,36 @@ pub fn fill(
     }
     sink.finish(term, &bytes, &what, None)?;
     Ok(ExitCode::SUCCESS)
+}
+
+/// The document with `values` set on its fields, as the bytes of a saved
+/// file, and how many fields were set. A boolean checks or clears; a
+/// string is the field's text; `null` clears it; anything else is set as
+/// its JSON text. `name` is what the document is called in the error when
+/// it has no form.
+pub fn fill_values(
+    doc: &Document,
+    name: &str,
+    values: &serde_json::Map<String, serde_json::Value>,
+    deterministic: bool,
+) -> Result<(Vec<u8>, usize)> {
+    let Some(mut form) = doc.form() else {
+        bail!("{name} has no interactive form");
+    };
+    let mut set = 0;
+    for (field, value) in values {
+        let result = match value {
+            serde_json::Value::Bool(checked) => form.set_checked(field, *checked),
+            serde_json::Value::String(s) => form.set(field, s.clone()),
+            serde_json::Value::Null => form.set(field, ""),
+            other => form.set(field, other.to_string()),
+        };
+        result.with_context(|| format!("no field named {field:?}"))?;
+        set += 1;
+    }
+    let mut bytes = Vec::new();
+    doc.write_form_to(&mut bytes, &form, &save_options(deterministic, doc.bytes()))?;
+    Ok((bytes, set))
 }
 
 /// Open the saved bytes the way a viewer would — the document's open

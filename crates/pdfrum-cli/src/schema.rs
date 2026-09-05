@@ -229,6 +229,35 @@ fn whole_file() -> Vec<Entry> {
     .collect()
 }
 
+/// The example of one command's `--json` document, by the command's words;
+/// `null` for a command that has none.
+pub fn example(command: &str) -> Value {
+    entries()
+        .iter()
+        .find(|e| e.command == command)
+        .map_or(Value::Null, |e| (e.example)())
+}
+
+/// `pdfrum schema serve`: the session's methods, one object each —
+/// `{method, tool, description, params, result}` — with `params` the JSON
+/// Schema `tools/list` sends and `result` the example, which for a method
+/// that mirrors a command is the command's own.
+fn serve() -> Value {
+    let methods: Vec<Value> = crate::rpc::methods()
+        .iter()
+        .map(|m| {
+            json!({
+                "method": m.name,
+                "tool": m.tool.then(|| m.tool_name()),
+                "description": m.description,
+                "params": m.input_schema(),
+                "result": m.result,
+            })
+        })
+        .collect();
+    Value::Array(methods)
+}
+
 /// `pdfrum schema [COMMAND…]`: the example for one command, or the list of
 /// commands that have one.
 pub fn run(command: &[String], term: Term) -> Result<ExitCode> {
@@ -241,10 +270,18 @@ pub fn run(command: &[String], term: Term) -> Result<ExitCode> {
                 e.description.to_owned(),
             ]);
         }
+        table.row(vec![
+            term.paint(Style::Ident, "serve"),
+            "the session's methods, each with its params and result".to_owned(),
+        ]);
         table.print(term, 0);
         return Ok(ExitCode::SUCCESS);
     }
     let name = command.join(" ");
+    if name == "serve" {
+        out::json(&serve())?;
+        return Ok(ExitCode::SUCCESS);
+    }
     let Some(entry) = entries.iter().find(|e| e.command == name) else {
         bail!("`{name}` has no --json output; `pdfrum schema` lists the commands that do");
     };
