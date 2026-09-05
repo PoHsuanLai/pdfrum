@@ -686,6 +686,92 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
     dest
 }
 
+/// How a reduced pixmap reaches the device.
+///
+/// The reduction lands on whole pixels, so for a great many images the
+/// reduced pixmap **is** the device pixels and the backend has nothing left
+/// to resample. Saying so in the type is what stops it being resampled a
+/// second time: [`Placement::Exact`] carries only where to put the pixmap,
+/// and the filtered path needs the `remaining` transform that variant does
+/// not have, so an exact placement cannot be filtered by construction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Placement {
+    /// The reduced pixmap is the device pixels: blit it at this whole-pixel
+    /// offset with the nearest sampler.
+    Exact {
+        /// Device x of the pixmap's top-left corner, a whole number.
+        x: f64,
+        /// Device y of the pixmap's top-left corner, a whole number.
+        y: f64,
+    },
+    /// The reduced pixmap still needs the backend's sampler, through this
+    /// transform.
+    Filtered(kurbo::Affine),
+}
+
+impl Placement {
+    /// The transform a backend draws with, exact or filtered.
+    #[must_use]
+    pub fn transform(self) -> kurbo::Affine {
+        match self {
+            Self::Exact { x, y } => kurbo::Affine::translate((x, y)),
+            Self::Filtered(t) => t,
+        }
+    }
+
+    /// The sampler quality this placement admits.
+    ///
+    /// An exact placement is nearest whatever the caller wanted: there is
+    /// nothing between the texels and the pixels for a filter to do, and
+    /// filtering anyway is the second resample this exists to remove.
+    #[must_use]
+    pub fn quality(self, wanted: crate::device::ImageQuality) -> crate::device::ImageQuality {
+        match self {
+            Self::Exact { .. } => crate::device::ImageQuality::Nearest,
+            Self::Filtered(_) => wanted,
+        }
+    }
+}
+
+/// How close to a whole number a coefficient must be to count as one.
+///
+/// The transform reaches here through the page matrix, the image's unit
+/// square and the reduction ratio, so an axis-aligned placement that is
+/// mathematically integral arrives a few ulps off. This is well below half a
+/// pixel — the point at which the nearest sampler would pick a different
+/// texel — and well above the accumulated error of those three products.
+const EXACTNESS: f64 = 1e-9;
+
+/// Classify a reduced image's device transform.
+///
+/// `Exact` needs three things at once: no rotation or shear, a scale of
+/// exactly one in each axis (the reduction already absorbed the rest), and a
+/// translation on whole pixels. Anything else keeps the backend's sampler.
+///
+/// The scale test is against **one** rather than against the reduction ratio
+/// because `to_device` here is already the post-reduction transform: the
+/// reduced pixmap covers the device rectangle one texel per pixel, or it does
+/// not and is filtered.
+#[must_use]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..f are the six affine matrix coefficients, named as in the PDF `cm` operands"
+)]
+pub fn placement_for(to_device: kurbo::Affine) -> Placement {
+    let [a, b, c, d, e, f] = to_device.as_coeffs();
+    let integral = |v: f64| v.is_finite() && (v - v.round()).abs() <= EXACTNESS;
+    let unit = |v: f64| (v - 1.0).abs() <= EXACTNESS;
+    let zero = |v: f64| v.abs() <= EXACTNESS;
+    if unit(a) && zero(b) && zero(c) && unit(d) && integral(e) && integral(f) {
+        Placement::Exact {
+            x: e.round(),
+            y: f.round(),
+        }
+    } else {
+        Placement::Filtered(to_device)
+    }
+}
+
 /// The largest source axis this pre-pass will process.
 ///
 /// A reduction is `O(source pixels)`, which is the same order as decoding the
@@ -1141,6 +1227,58 @@ mod tests {
             let fused = convert_and_reduce(&image, fill, None, dw, dh);
             assert_eq!(fused.data(), two_call.data(), "stencil -> {dw}x{dh}");
         }
+    }
+
+    /// Only a whole-pixel, unit-scale, unrotated placement is exact.
+    ///
+    /// Every clause is load-bearing: a residual scale means the backend still
+    /// has to resample, a rotation or shear likewise, and a fractional
+    /// translation means the texels do not line up with the pixels. Getting
+    /// any of them wrong draws a filtered image with the nearest sampler,
+    /// which is visible.
+    #[test]
+    fn only_a_whole_pixel_unit_placement_is_exact() {
+        use crate::device::ImageQuality;
+
+        let exact = |t: Affine| matches!(placement_for(t), Placement::Exact { .. });
+
+        assert!(exact(Affine::IDENTITY));
+        assert!(exact(Affine::translate((13.0, -7.0))));
+        // A translation that is integral to within the tolerance, which is
+        // what an axis-aligned placement actually arrives as.
+        assert!(exact(Affine::translate((13.0 + 1e-12, 4.0 - 1e-12))));
+
+        // A residual scale in either axis, however small, is still a resample.
+        assert!(!exact(Affine::scale_non_uniform(1.001, 1.0)));
+        assert!(!exact(Affine::scale_non_uniform(1.0, 0.999)));
+        assert!(!exact(Affine::scale(2.0)));
+        // A flip is a unit scale in magnitude and is *not* exact: the sampler
+        // would read the rows in the other order.
+        assert!(!exact(Affine::scale_non_uniform(1.0, -1.0)));
+        // Rotation and shear.
+        assert!(!exact(Affine::rotate(0.5)));
+        assert!(!exact(Affine::new([1.0, 0.0, 0.3, 1.0, 0.0, 0.0])));
+        // Half a pixel is exactly where the nearest sampler would change its
+        // mind, so it must not be called exact.
+        assert!(!exact(Affine::translate((0.5, 0.0))));
+        assert!(!exact(Affine::translate((0.0, 0.25))));
+        // A non-finite coefficient is never exact.
+        assert!(!exact(Affine::translate((f64::NAN, 0.0))));
+
+        // An exact placement forces nearest; a filtered one keeps what the
+        // caller asked for and its own transform.
+        let t = Affine::translate((3.0, 4.0));
+        assert_eq!(
+            placement_for(t).quality(ImageQuality::Bilinear),
+            ImageQuality::Nearest
+        );
+        assert_eq!(placement_for(t).transform(), t);
+        let f = Affine::scale(0.5);
+        assert_eq!(
+            placement_for(f).quality(ImageQuality::Bilinear),
+            ImageQuality::Bilinear
+        );
+        assert_eq!(placement_for(f).transform(), f);
     }
 
     /// The single-channel reducer is the four-channel one, byte for byte, on
