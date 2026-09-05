@@ -4,10 +4,30 @@ use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use pdfrum::{
-    Document, RenderOptions, RenderSession, SubstitutionOptions, VelloCpuBackend,
+    CharIndex, Document, RenderOptions, RenderSession, SubstitutionOptions, TextPage,
+    VelloCpuBackend,
 };
 
 use crate::model::{Ctx, Op, Output, Raster, Timed};
+
+/// The `chars` stream as text, which is the stream `pdfium_test --txt`
+/// writes: `FPDFText_GetUnicode` for every `i` in `FPDFText_CountChars`
+/// (`testing/pdfium_test/write.cc:364-370`), unfiltered.
+///
+/// Deliberately **not** `TextPage`'s `Display`, which is the search text and
+/// drops the control characters and hyphen sentinels the oracle keeps
+/// (`crates/pdfrum-text/src/lib.rs:417-419`). It is the same construction the
+/// conformance runner's tier-A `--txt` dump uses
+/// (`crates/pdfrum-tool/src/text.rs::to_utf32le`), so the harness and the
+/// board compare the same bytes. A code point the oracle writes that is not a
+/// scalar value — a lone surrogate — is dropped rather than replaced, since
+/// `String` cannot hold one.
+fn chars_stream(page: &TextPage) -> String {
+    (0..page.char_count())
+        .filter_map(|i| page.char(CharIndex::new(i)).ok())
+        .filter_map(|info| char::from_u32(info.unicode))
+        .collect()
+}
 
 fn open(path: &Path, ctx: &Ctx<'_>) -> Result<Document> {
     Ok(match ctx.password {
@@ -106,7 +126,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             let doc = open(path, ctx)?;
             let page = doc.page(0)?;
             let mut session = session(&doc, ctx);
-            let (times_ms, text) = ctx.measure(|| Ok(page.text_on(&mut session).to_string()))?;
+            let (times_ms, text) = ctx.measure(|| Ok(chars_stream(&page.text_on(&mut session))))?;
             Ok(Timed {
                 times_ms,
                 output: Output::Text(text),

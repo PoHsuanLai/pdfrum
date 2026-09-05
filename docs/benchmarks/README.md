@@ -343,6 +343,45 @@ Oracle: `/home/r13921098/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 wit
 | pdfium-render | 44/44 (100%) | 42/44 (95%) | 42/44 (95%) | 42/44 (95%) | 1.000 | 0 | 0 | 0 | 0 |
 | mupdf | 42/44 (95%) | 11/42 (26%) | 28/42 (67%) | 33/42 (79%) | 1.000 | 2 | 0 | 0 | 0 |
 
+###### Run 3, text column corrected
+
+The `pdfrum` row above was measured through the wrong stream.
+`pdfium_test --txt` writes PDFium's unfiltered character list
+(`testing/pdfium_test/write.cc:364-370`), while our adapter wrote the
+`Display` impl — the search text, documented at
+`crates/pdfrum-text/src/lib.rs:417-419` as explicitly **not** the `chars`
+stream. The adapter now writes the `chars` stream, by the same construction
+the conformance runner's tier-A `--txt` dump uses
+(`crates/pdfrum-tool/src/text.rs::to_utf32le`), so the harness and the board
+compare the same bytes.
+
+**Only the `pdfrum` row is affected.** Every other engine's adapter was
+written against whatever that engine calls its text output and none was
+touched, so their rows above stand unchanged. Re-measured on `frieren` (not
+`himmel`), `pdfrum` only, at the harness fix:
+
+| pdfrum text | extracted | exact | whitespace-normalized | token F1 >= 0.9 | median token F1 |
+|---|---|---|---|---|---|
+| run 3a, `Display` stream | 44/44 (100%) | 21/44 (48%) | 39/44 (89%) | 43/44 (98%) | 1.000 |
+| corrected, `chars` stream | 44/44 (100%) | 22/44 (50%) | 41/44 (93%) | 43/44 (98%) | 1.000 |
+
+Per file, over the five text rows `docs/benchmarks/losses-explained.md`
+names:
+
+| file | `Display` F1 | `chars` F1 |
+|---|---|---|
+| `mixed_en_uicase.pdf` | 0.991 | **1.000** (byte-exact) |
+| `text_bug_1029.pdf` | 0.957 | **1.000** |
+| `image_ccitt_3bigpreview.pdf` | 0.994 | 0.999 |
+| `text_tcpdf_055.pdf` | 0.953 | 0.948 |
+| `text_quick_start.pdf` | 0.641 | 0.641 |
+
+`text_tcpdf_055` moves *down* by 0.005: the C0 run the search text dropped is
+in the char list, and the oracle's own row there is empty — the "not
+determined" residual of that document's row, now visible rather than hidden.
+`text_quick_start` is unmoved, which localises its whole 0.641 to the
+generated-space bug and not to the stream.
+
 ##### Robustness — open
 
 | engine | opened | error | panic | crash | timeout |
