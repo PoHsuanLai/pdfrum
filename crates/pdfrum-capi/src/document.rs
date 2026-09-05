@@ -315,6 +315,11 @@ pub unsafe extern "C" fn pdfrum_page_count(document: *const pdfrum_document) -> 
 
 /// One page of the document, as a handle that keeps the document alive.
 ///
+/// Named `pdfrum_document_page` and not `pdfrum_page`, which is the *type*: C
+/// has one namespace for both, so a function of that name would shadow the
+/// typedef and no caller could declare a `pdfrum_page *` afterwards. The C
+/// test caught exactly that.
+///
 /// `index` is zero-based; one past the end fails with `PDFRUM_CODE_DOC`.
 ///
 /// **Threads.** The returned page is single-threaded: use it from one thread
@@ -328,7 +333,7 @@ pub unsafe extern "C" fn pdfrum_page_count(document: *const pdfrum_document) -> 
 /// `document` is null or a live, unclosed document handle. `error` is null or
 /// points to a writable `pdfrum_error`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn pdfrum_page(
+pub unsafe extern "C" fn pdfrum_document_page(
     document: *const pdfrum_document,
     index: u32,
     error: *mut pdfrum_error,
