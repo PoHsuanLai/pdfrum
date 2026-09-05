@@ -9,12 +9,20 @@ use pdf_extract::{Document, PlainTextOutput, output_doc_page};
 use crate::engines::unsupported;
 use crate::model::{Ctx, Op, Output, Timed};
 
+fn load(bytes: &[u8], ctx: &Ctx<'_>) -> Result<Document> {
+    let mut doc = Document::load_mem(bytes)?;
+    if let Some(password) = ctx.password {
+        doc.decrypt(password)?;
+    }
+    Ok(doc)
+}
+
 pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     let bytes = std::fs::read(path)?;
     match op {
         Op::Open => {
             let (times_ms, pages) = ctx.measure(|| {
-                let doc = Document::load_mem(&bytes)?;
+                let doc = load(&bytes, ctx)?;
                 Ok(doc.get_pages().len())
             })?;
             Ok(Timed {
@@ -26,7 +34,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             })
         }
         Op::Text => {
-            let doc = Document::load_mem(&bytes)?;
+            let doc = load(&bytes, ctx)?;
             let (times_ms, text) = ctx.measure(|| {
                 let mut text = String::new();
                 {

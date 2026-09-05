@@ -141,6 +141,9 @@ pub struct RunConfig {
     pub warm_runs: usize,
     pub features: Vec<FeatureSpec>,
     pub repo_root: PathBuf,
+    /// Keep the rows an existing `out` already holds and run only the files
+    /// it lacks, so a run can be resumed after an interruption.
+    pub resume: bool,
 }
 
 impl RunConfig {
@@ -235,16 +238,80 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
         bail!("no files to run");
     }
 
-    let uptime_before = command_line("uptime", &[], None);
-    let loadavg_before = loadavg();
-    let mut rows = Vec::new();
-    let total = config.files.len();
-    for (index, file) in config.files.iter().enumerate() {
-        let relative = file
-            .strip_prefix(&config.corpus_root)
+    let relative_of = |file: &Path| -> String {
+        file.strip_prefix(&config.corpus_root)
             .unwrap_or(file)
             .to_string_lossy()
-            .into_owned();
+            .into_owned()
+    };
+    let wanted: std::collections::BTreeSet<String> =
+        config.files.iter().map(|f| relative_of(f)).collect();
+    let previous: Option<RunJson> = if config.resume {
+        std::fs::read_to_string(&config.out)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+    } else {
+        None
+    };
+    let mut json = RunJson {
+        schema: 1,
+        generated_at: command_line("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"], None),
+        commit: command_line(
+            "git",
+            &["rev-parse", "--short=12", "HEAD"],
+            Some(&config.repo_root),
+        ),
+        label: config.label.clone(),
+        machine: Machine {
+            hostname: command_line("hostname", &[], None),
+            cpus: std::thread::available_parallelism().map_or(0, std::num::NonZero::get),
+            rustc: command_line("rustc", &["--version"], None),
+            uptime_before: previous.as_ref().map_or_else(
+                || command_line("uptime", &[], None),
+                |p| p.machine.uptime_before.clone(),
+            ),
+            uptime_after: String::new(),
+            loadavg_before: previous
+                .as_ref()
+                .map_or_else(loadavg, |p| p.machine.loadavg_before.clone()),
+            loadavg_after: String::new(),
+        },
+        corpus: Corpus {
+            root: config.corpus_root.display().to_string(),
+            rule: config.rule.clone(),
+            files: config.files.len(),
+        },
+        oracle: OracleRecord {
+            binary: config.oracle.binary.display().to_string(),
+            font_dir: config.oracle.font_dir.display().to_string(),
+            checkout_commit: config.checkout.as_deref().and_then(Oracle::checkout_commit),
+        },
+        dpi: config.oracle.dpi,
+        timeout_secs: config.timeout.as_secs_f64(),
+        warm_runs: config.warm_runs,
+        engines: engine_records.clone(),
+        features: config.features.clone(),
+        rows: previous
+            .map(|p| {
+                p.rows
+                    .into_iter()
+                    .filter(|row| wanted.contains(&row.file))
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    let done: std::collections::BTreeSet<String> =
+        json.rows.iter().map(|row| row.file.clone()).collect();
+    if let Some(parent) = config.out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let total = config.files.len();
+    let mut rows = Vec::new();
+    for (index, file) in config.files.iter().enumerate() {
+        let relative = relative_of(file);
+        if done.contains(&relative) {
+            continue;
+        }
         let key = file_key(&relative);
         eprintln!("[{}/{total}] {relative}", index + 1);
         let password = config.password_for(&relative);
@@ -353,48 +420,26 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
                 rows.push(row);
             }
         }
+        // Rows are kept in corpus order whatever order the runs happened in.
+        json.rows.append(&mut rows);
+        json.machine.uptime_after = command_line("uptime", &[], None);
+        json.machine.loadavg_after = loadavg();
+        std::fs::write(&config.out, serde_json::to_string_pretty(&json)?)?;
     }
-    let uptime_after = command_line("uptime", &[], None);
-    let loadavg_after = loadavg();
-
-    let json = RunJson {
-        schema: 1,
-        generated_at: command_line("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"], None),
-        commit: command_line(
-            "git",
-            &["rev-parse", "--short=12", "HEAD"],
-            Some(&config.repo_root),
-        ),
-        label: config.label.clone(),
-        machine: Machine {
-            hostname: command_line("hostname", &[], None),
-            cpus: std::thread::available_parallelism().map_or(0, std::num::NonZero::get),
-            rustc: command_line("rustc", &["--version"], None),
-            uptime_before,
-            uptime_after,
-            loadavg_before,
-            loadavg_after,
-        },
-        corpus: Corpus {
-            root: config.corpus_root.display().to_string(),
-            rule: config.rule.clone(),
-            files: config.files.len(),
-        },
-        oracle: OracleRecord {
-            binary: config.oracle.binary.display().to_string(),
-            font_dir: config.oracle.font_dir.display().to_string(),
-            checkout_commit: config.checkout.as_deref().and_then(Oracle::checkout_commit),
-        },
-        dpi: config.oracle.dpi,
-        timeout_secs: config.timeout.as_secs_f64(),
-        warm_runs: config.warm_runs,
-        engines: engine_records,
-        features: config.features.clone(),
-        rows,
-    };
-    if let Some(parent) = config.out.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    json.machine.uptime_after = command_line("uptime", &[], None);
+    json.machine.loadavg_after = loadavg();
+    sort_rows(&mut json, &config.files, &relative_of);
     std::fs::write(&config.out, serde_json::to_string_pretty(&json)?)?;
     Ok(json)
+}
+
+/// Puts rows back into corpus order after a resumed run appended to them.
+fn sort_rows(json: &mut RunJson, files: &[PathBuf], relative_of: &dyn Fn(&Path) -> String) {
+    let order: std::collections::HashMap<String, usize> = files
+        .iter()
+        .enumerate()
+        .map(|(i, f)| (relative_of(f), i))
+        .collect();
+    json.rows
+        .sort_by_key(|row| order.get(&row.file).copied().unwrap_or(usize::MAX));
 }

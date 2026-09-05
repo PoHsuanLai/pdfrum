@@ -13,7 +13,9 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     match op {
         Op::Open => {
             let (times_ms, (pages, objects)) = ctx.measure(|| {
+                let password = ctx.password.map_or(&b""[..], str::as_bytes);
                 let file = FileOptions::cached()
+                    .password(password)
                     .open(path)
                     .map_err(|err| anyhow!("pdf: {err}"))?;
                 let mut objects = 0;

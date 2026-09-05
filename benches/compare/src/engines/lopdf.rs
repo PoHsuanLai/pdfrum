@@ -3,10 +3,23 @@
 use std::path::Path;
 
 use anyhow::Result;
-use lopdf::{Document, Object};
+use lopdf::{Document, LoadOptions, Object};
 
 use crate::engines::unsupported;
 use crate::model::{Ctx, Op, Output, Timed};
+
+fn load(bytes: &[u8], ctx: &Ctx<'_>) -> Result<Document> {
+    Ok(match ctx.password {
+        Some(password) => Document::load_mem_with_options(
+            bytes,
+            LoadOptions {
+                password: Some(password.to_owned()),
+                ..LoadOptions::default()
+            },
+        )?,
+        None => Document::load_mem(bytes)?,
+    })
+}
 
 /// Touches every object once, so "open" means the whole file was parsed
 /// rather than only its trailer.
@@ -28,7 +41,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     match op {
         Op::Open => {
             let (times_ms, (pages, objects)) = ctx.measure(|| {
-                let doc = Document::load_mem(&bytes)?;
+                let doc = load(&bytes, ctx)?;
                 let objects = walk(&doc);
                 Ok((doc.get_pages().len(), objects))
             })?;
@@ -41,7 +54,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             })
         }
         Op::Text => {
-            let doc = Document::load_mem(&bytes)?;
+            let doc = load(&bytes, ctx)?;
             let (times_ms, text) = ctx.measure(|| Ok(doc.extract_text(&[1])?))?;
             Ok(Timed {
                 times_ms,

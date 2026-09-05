@@ -156,6 +156,33 @@ pub fn run(name: &str, op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     }
 }
 
+/// Why an engine is measured on one thread whatever the thread count asked
+/// for, or `None` when its document can be shared across threads.
+pub fn single_threaded(name: &str) -> Option<&'static str> {
+    match name {
+        "pdfium-render" => Some("PDFium requires every call on one thread"),
+        "mupdf" => Some("mupdf-rs holds one context; single-threaded by its rules"),
+        _ => None,
+    }
+}
+
+/// Renders every page of `path` at the run's DPI on `threads` threads
+/// sharing one opened document; returns the page count.
+pub fn render_all(name: &str, path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
+    match name {
+        "pdfrum" => pdfrum::render_all(path, ctx, threads),
+        #[cfg(feature = "hayro")]
+        "hayro" => hayro::render_all(path, ctx, threads),
+        #[cfg(feature = "pdf_oxide")]
+        "pdf_oxide" => pdf_oxide::render_all(path, ctx, threads),
+        #[cfg(feature = "pdfium-render")]
+        "pdfium-render" => pdfium_render::render_all(path, ctx),
+        #[cfg(feature = "mupdf")]
+        "mupdf" => mupdf::render_all(path, ctx),
+        other => bail!("engine {other} does not render, or is not compiled in"),
+    }
+}
+
 /// The error every engine returns for an operation its API does not offer.
 pub fn unsupported(engine: &str, op: Op) -> anyhow::Error {
     anyhow::anyhow!("{engine} does not support {}", op.name())

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use pdfrum::{
     BuildContext, Document, RenderOptions, RenderSession, SubstitutionOptions, VelloCpuBackend,
 };
@@ -12,7 +12,7 @@ use crate::model::{Ctx, Op, Output, Raster, Timed};
 fn open(path: &Path, ctx: &Ctx<'_>) -> Result<Document> {
     Ok(match ctx.password {
         Some(password) => Document::open_with_password(path, password.as_bytes())?,
-        None => open(path, ctx)?,
+        None => Document::open(path)?,
     })
 }
 
@@ -32,6 +32,39 @@ fn session(ctx: &Ctx<'_>) -> RenderSession {
         },
         None => RenderSession::new(),
     }
+}
+
+/// Every page on `threads` threads sharing one `Document` (`Sync`), each
+/// thread with its own backend and `RenderSession`, pages dealt round-robin.
+pub fn render_all(path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
+    let doc = open(path, ctx)?;
+    let pages = doc.page_count() as usize;
+    let threads = threads.clamp(1, pages.max(1));
+    let options = RenderOptions::scaled(ctx.scale());
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|first| {
+                let doc = &doc;
+                let options = &options;
+                scope.spawn(move || -> Result<()> {
+                    let backend = VelloCpuBackend::new();
+                    let mut session = session(ctx);
+                    for index in (first..pages).step_by(threads) {
+                        doc.page(index as u32)?
+                            .render_on(&backend, options, &mut session)?;
+                    }
+                    Ok(())
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle
+                .join()
+                .map_err(|_| anyhow!("pdfrum: render thread panicked"))??;
+        }
+        Ok::<(), anyhow::Error>(())
+    })?;
+    Ok(pages)
 }
 
 pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {

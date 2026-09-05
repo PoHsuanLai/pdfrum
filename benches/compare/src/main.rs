@@ -24,6 +24,7 @@ mod pixels;
 mod report;
 mod run;
 mod text;
+mod throughput;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -57,6 +58,8 @@ enum Cmd {
     },
     /// Measure the cost of adopting each engine.
     Adoption(AdoptionArgs),
+    /// Pages per second rendering every page of every file on N threads.
+    Throughput(ThroughputArgs),
     /// One engine, one file, one operation, in this process (spawned by `run`).
     #[command(hide = true)]
     Child(ChildCli),
@@ -110,6 +113,9 @@ struct RunArgs {
     /// Render resolution.
     #[arg(long, default_value_t = 150.0)]
     dpi: f64,
+    /// Keep the rows `--out` already holds and run only the files it lacks.
+    #[arg(long)]
+    resume: bool,
 }
 
 #[derive(clap::Args)]
@@ -122,6 +128,34 @@ struct AdoptionArgs {
     scratch: PathBuf,
     #[arg(long, env = "PDFIUM_DYNAMIC_LIB_PATH")]
     pdfium_lib: Option<PathBuf>,
+    /// Keep the engines `--out` already holds and measure only the rest.
+    #[arg(long)]
+    resume: bool,
+}
+
+#[derive(clap::Args)]
+struct ThroughputArgs {
+    /// Directory of PDFs, walked recursively.
+    #[arg(long)]
+    corpus: PathBuf,
+    #[arg(long, value_delimiter = ',')]
+    engines: Vec<String>,
+    /// Thread counts to measure.
+    #[arg(long, value_delimiter = ',', default_values_t = [1, 4, 8])]
+    threads: Vec<usize>,
+    #[arg(long)]
+    out: PathBuf,
+    #[arg(long, env = "PDFRUM_ORACLE_CHECKOUT")]
+    checkout: Option<PathBuf>,
+    #[arg(long)]
+    font_dir: Option<PathBuf>,
+    #[arg(long, env = "PDFIUM_DYNAMIC_LIB_PATH")]
+    pdfium_lib: Option<PathBuf>,
+    #[arg(long, default_value_t = 150.0)]
+    dpi: f64,
+    /// Keep the rows `--out` already holds and run only the files it lacks.
+    #[arg(long)]
+    resume: bool,
 }
 
 #[derive(clap::Args)]
@@ -189,7 +223,7 @@ fn main() -> Result<()> {
         }
         Cmd::Adoption(args) => {
             let engines = if args.engines.is_empty() {
-                default_engines()
+                adoption::ENGINES.iter().map(|e| (*e).to_owned()).collect()
             } else {
                 args.engines
             };
@@ -198,12 +232,52 @@ fn main() -> Result<()> {
                 &args.scratch,
                 &repo_root(),
                 args.pdfium_lib.as_deref(),
+                &args.out,
+                args.resume,
             )?;
-            if let Some(parent) = args.out.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(&args.out, serde_json::to_string_pretty(&rows)?)?;
             print!("{}", adoption::render(&rows));
+            Ok(())
+        }
+        Cmd::Throughput(args) => {
+            let checkout = args
+                .checkout
+                .clone()
+                .or_else(|| Some(repo_root().join("../pdfium-c++")).filter(|p| p.is_dir()));
+            let font_dir = args
+                .font_dir
+                .or_else(|| checkout.map(|c| c.join("third_party/test_fonts")))
+                .filter(|d| d.is_dir());
+            let corpus_root = args
+                .corpus
+                .canonicalize()
+                .with_context(|| format!("corpus {}", args.corpus.display()))?;
+            let files = run::list_corpus(&corpus_root, 1, 0)?;
+            let engines = if args.engines.is_empty() {
+                throughput::ENGINES
+                    .iter()
+                    .map(|e| (*e).to_owned())
+                    .collect()
+            } else {
+                args.engines
+            };
+            let ctx = Ctx {
+                dpi: args.dpi,
+                font_dir: font_dir.as_deref(),
+                pdfium_lib: args.pdfium_lib.as_deref(),
+                password: None,
+                warm_runs: 0,
+                budget: Duration::ZERO,
+            };
+            let rows = throughput::run(
+                &corpus_root,
+                &files,
+                &engines,
+                &args.threads,
+                &ctx,
+                &args.out,
+                args.resume,
+            )?;
+            print!("{}", throughput::render(&rows, &args.threads));
             Ok(())
         }
         Cmd::Run(args) => {
@@ -286,6 +360,7 @@ fn main() -> Result<()> {
                 warm_runs: args.warm,
                 features,
                 repo_root: repo_root(),
+                resume: args.resume,
             };
             let json = run::run(&config)?;
             print!("{}", report::render(&json));

@@ -21,7 +21,7 @@ pub struct Adoption {
     pub license: String,
     /// Unique crates in `cargo tree -e normal`, the consumer itself included.
     pub crates: usize,
-    /// Crates in `cargo tree -e build` named `cc`, `cmake`, `bindgen`,
+    /// Crates in `cargo tree -e normal,build` named `cc`, `cmake`, `bindgen`,
     /// `pkg-config` or `*-sys`.
     pub native_build_crates: Vec<String>,
     /// Wall seconds of `cargo build --release` from an empty target dir.
@@ -35,6 +35,20 @@ pub struct Adoption {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
+
+/// The engines a consumer crate can be written for, in table order.
+/// `hayro-interpret` is not one: it is `hayro`'s own dependency, and a
+/// consumer of it alone would measure the same tree minus the rasterizer.
+pub const ENGINES: &[&str] = &[
+    "pdfrum",
+    "hayro",
+    "pdf-extract",
+    "lopdf",
+    "pdf",
+    "pdf_oxide",
+    "pdfium-render",
+    "mupdf",
+];
 
 struct Consumer {
     engine: &'static str,
@@ -218,7 +232,14 @@ fn measure(consumer: &Consumer, scratch: &Path, repo_root: &Path) -> Result<Adop
     std::fs::write(dir.join("src/main.rs"), consumer.main)?;
 
     let normal = cargo(&dir, &target, &["tree", "-e", "normal", "--prefix", "none"])?;
-    let build = cargo(&dir, &target, &["tree", "-e", "build", "--prefix", "none"])?;
+    // `-e build` alone would follow only build edges from the consumer, which
+    // has none; the C build machinery sits behind a normal edge (`mupdf` ->
+    // `mupdf-sys` -> build `cc`), so both kinds are walked.
+    let build = cargo(
+        &dir,
+        &target,
+        &["tree", "-e", "normal,build", "--prefix", "none"],
+    )?;
     let normal_crates = tree_crates(&normal);
     let native: Vec<String> = tree_crates(&build)
         .into_iter()
@@ -292,10 +313,28 @@ pub fn run(
     scratch: &Path,
     repo_root: &Path,
     pdfium_lib: Option<&Path>,
+    out_path: &Path,
+    resume: bool,
 ) -> Result<Vec<Adoption>> {
     let consumers = consumers(repo_root, pdfium_lib);
-    let mut out = Vec::new();
+    let mut out: Vec<Adoption> = if resume {
+        std::fs::read_to_string(out_path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<Adoption>>(&text).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|row| row.error.is_none() && engines.contains(&row.engine))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     for name in engines {
+        if out.iter().any(|row| &row.engine == name) {
+            continue;
+        }
         let Some(consumer) = consumers.iter().find(|c| c.engine == name) else {
             return Err(anyhow!("no consumer template for engine {name}"));
         };
@@ -316,6 +355,7 @@ pub fn run(
                 error: Some(format!("{err:#}")),
             }),
         }
+        std::fs::write(out_path, serde_json::to_string_pretty(&out)?)?;
     }
     Ok(out)
 }

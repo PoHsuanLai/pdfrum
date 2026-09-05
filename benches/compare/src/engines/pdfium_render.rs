@@ -17,11 +17,60 @@ fn bind(ctx: &Ctx<'_>) -> Result<Pdfium> {
     Ok(Pdfium::new(bindings))
 }
 
+thread_local! {
+    // The crate binds a library once per process (`bind_to_library` refuses
+    // a second call), and PDFium wants every call on one thread — so one
+    // binding, on the thread that made it.
+    static PDFIUM: std::cell::OnceCell<Pdfium> = const { std::cell::OnceCell::new() };
+}
+
+fn with_pdfium<T>(ctx: &Ctx<'_>, f: impl FnOnce(&Pdfium) -> Result<T>) -> Result<T> {
+    PDFIUM.with(|cell| {
+        if cell.get().is_none() {
+            let pdfium = bind(ctx)?;
+            let _ = cell.set(pdfium);
+        }
+        f(cell
+            .get()
+            .ok_or_else(|| anyhow!("pdfium-render: binding unavailable"))?)
+    })
+}
+
+/// Every page, one thread: PDFium requires every call on the thread that
+/// initialised it.
+pub fn render_all(path: &Path, ctx: &Ctx<'_>) -> Result<usize> {
+    with_pdfium(ctx, |pdfium| render_all_with(pdfium, path, ctx))
+}
+
+fn render_all_with(pdfium: &Pdfium, path: &Path, ctx: &Ctx<'_>) -> Result<usize> {
+    let doc = pdfium
+        .load_pdf_from_file(path, ctx.password)
+        .map_err(|err| anyhow!("pdfium-render: {err:?}"))?;
+    let count = doc.pages().len();
+    for index in 0..count {
+        let page = doc
+            .pages()
+            .get(index)
+            .map_err(|err| anyhow!("pdfium-render: {err:?}"))?;
+        let (width, height) = ctx.oracle_size(
+            f64::from(page.width().value),
+            f64::from(page.height().value),
+        );
+        let config = PdfRenderConfig::new().set_target_size(width as i32, height as i32);
+        page.render_with_config(&config)
+            .map_err(|err| anyhow!("pdfium-render: {err:?}"))?;
+    }
+    Ok(count as usize)
+}
+
 pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
-    let pdfium = bind(ctx)?;
+    with_pdfium(ctx, |pdfium| run_with(pdfium, op, path, ctx))
+}
+
+fn run_with(pdfium: &Pdfium, op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     let open = || {
         pdfium
-            .load_pdf_from_file(path, None)
+            .load_pdf_from_file(path, ctx.password)
             .map_err(|err| anyhow!("pdfium-render: {err:?}"))
     };
     match op {
