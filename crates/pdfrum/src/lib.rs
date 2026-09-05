@@ -147,6 +147,13 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 
+/// What [`DocEdit::add_attachment`] writes beside the name and the bytes.
+#[cfg(feature = "edit")]
+pub use attach::AttachmentOptions;
+/// A `SystemTime` as the PDF date string [`AttachmentOptions::modified`] and
+/// [`Metadata`]'s two dates carry.
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::pdf_date;
 /// An image this save is adding: [`EmbeddedImage`] from
 /// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
 /// naming the layout of raw samples handed to the latter.
