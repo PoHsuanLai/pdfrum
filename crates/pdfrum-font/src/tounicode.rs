@@ -24,6 +24,14 @@ const CID_LIMIT: u32 = 0xffff;
 /// (`kOutOfSpecBFLimit`). Ported verbatim: it is a rejection files depend on.
 const OUT_OF_SPEC_BF_LIMIT: i64 = 160_000;
 
+/// The widest a committed `bfrange` can be, in codes.
+///
+/// Not a limit we impose: the high-code mask in [`handle_bfrange`] takes the
+/// high code's low byte and the rest of the low code, which pins both ends of
+/// a range inside one 256-code block. [`ToUnicode::window`] relies on it to
+/// bound how far back a search must look.
+const MAX_RUN_SPAN: u32 = 256;
+
 /// A `/ToUnicode` map: character code → Unicode, and back.
 ///
 /// The stored value is *either* a single UTF-16 code unit *or* a packed index
@@ -33,11 +41,30 @@ const OUT_OF_SPEC_BF_LIMIT: i64 = 160_000;
 /// read back as one, usually yielding nothing at all.
 #[derive(Debug, Clone, Default)]
 pub struct ToUnicode {
-    /// charcode → packed value, ordered so iteration is deterministic.
-    map: BTreeMap<u32, u32>,
-    /// packed value → charcode. Keyed on the *packed* value, so a multi-char
-    /// entry's reverse key is its indicator rather than any real character.
-    reverse_map: BTreeMap<u32, u32>,
+    /// The one-code-at-a-time entries: charcode → packed value, ordered so
+    /// iteration is deterministic.
+    ///
+    /// A contiguous `bfrange` does *not* land here; it is kept whole in
+    /// [`runs`](Self::runs). Every read folds the two stores together under
+    /// the same lowest-value-wins rule the C++ applies at insertion time.
+    singles: BTreeMap<u32, u32>,
+    /// packed value → charcode, for the [`singles`](Self::singles) only.
+    /// Keyed on the *packed* value, so a multi-char entry's reverse key is its
+    /// indicator rather than any real character.
+    reverse_singles: BTreeMap<u32, u32>,
+    /// The contiguous `bfrange` runs, kept as runs rather than expanded,
+    /// **sorted by `low`** — [`seal`](Self::seal) puts them in that order once
+    /// the program is fully parsed.
+    ///
+    /// An identity `/ToUnicode` is 256 of these covering 65,536 codes;
+    /// expanding them cost 65,536 `BTreeMap` insertions in each direction per
+    /// font load. Reordering them is safe because the collision rule is `min`,
+    /// which is commutative and associative: folding the runs in any order
+    /// yields exactly the value the C++'s sequential inserts leave behind.
+    runs: Vec<Run>,
+    /// The same runs sorted by `start`, the index the reverse direction
+    /// searches. Also built by [`seal`](Self::seal).
+    runs_by_start: Vec<Run>,
     /// The destination strings of multi-character entries.
     ///
     /// Stored as `u32`, not `u16`: the scanner emits UTF-16 code units, but
@@ -50,7 +77,123 @@ pub struct ToUnicode {
     base_set: CidSet,
 }
 
+/// One committed contiguous `bfrange`: codes `low..=high` map to consecutive
+/// values starting at `start`.
+///
+/// This is the `<lo> <hi> <start>` form, and the only one worth keeping whole:
+/// the array and incrementing forms carry a destination *string* per code and
+/// have nothing to compress. `high` is always within `low`'s 256-code block —
+/// the high-code mask in [`handle_bfrange`] guarantees it — so `len` fits a
+/// `u16` with room to spare and no arithmetic here can overflow.
+#[derive(Debug, Clone, Copy)]
+struct Run {
+    low: u32,
+    high: u32,
+    start: u32,
+}
+
+impl Run {
+    /// The value this run assigns to `code`, or `None` when `code` is outside
+    /// it.
+    ///
+    /// `wrapping_add` mirrors the C++'s `value++` on a `uint32_t`. It cannot
+    /// actually wrap: [`string_to_units`] caps a unit at `0xFFFF` and the mask
+    /// caps the span at 256, so the largest value a run reaches is `0x100FE`.
+    const fn value_at(self, code: u32) -> Option<u32> {
+        if code < self.low || code > self.high {
+            return None;
+        }
+        Some(self.start.wrapping_add(code - self.low))
+    }
+
+    /// The code this run assigns `value` to, or `None` when no code in it
+    /// does. The inverse of [`value_at`](Self::value_at).
+    const fn code_at(self, value: u32) -> Option<u32> {
+        let offset = value.wrapping_sub(self.start);
+        if offset > self.high - self.low {
+            return None;
+        }
+        Some(self.low + offset)
+    }
+
+    /// Every `(code, value)` pair the run stands for, in ascending code order.
+    fn pairs(self) -> impl Iterator<Item = (u32, u32)> {
+        (self.low..=self.high).map(move |code| (code, self.start.wrapping_add(code - self.low)))
+    }
+}
+
 impl ToUnicode {
+    /// The stored value for `code`: the smallest any store offers, or `None`
+    /// when nothing maps it.
+    ///
+    /// **The collision rule, once.** `InsertIntoMaps` keeps
+    /// `min(existing, destcode)` for the forward direction
+    /// (`cpdf_tounicodemap.cpp`, `map_.insert` then
+    /// `it->second = std::min(it->second, destcode)`), so a code mapped twice
+    /// reads back as the numerically smaller value regardless of which entry
+    /// came first. Taking the minimum across the singles and every covering
+    /// run reproduces that exactly, because `min` does not care about order.
+    fn forward(&self, code: u32) -> Option<u32> {
+        let from_runs =
+            Self::window(&self.runs, |run| run.low, code).filter_map(|run| run.value_at(code));
+        self.singles
+            .get(&code)
+            .copied()
+            .into_iter()
+            .chain(from_runs)
+            .min()
+    }
+
+    /// The slice of a `key`-sorted run list that can possibly contain `target`.
+    ///
+    /// A run's span is at most [`MAX_RUN_SPAN`] codes wide — the high-code mask
+    /// in [`handle_bfrange`] forces `low` and `high` into one 256-code block —
+    /// so a run containing `target` must have `key(run)` in
+    /// `target - 255 ..= target`. Binary-searching to the start of that window
+    /// and walking it is what keeps a 256-run identity CMap at a couple of
+    /// comparisons per lookup instead of 256.
+    fn window<K: Fn(&Run) -> u32>(runs: &[Run], key: K, target: u32) -> impl Iterator<Item = &Run> {
+        let first = target.saturating_sub(MAX_RUN_SPAN - 1);
+        let start = runs.partition_point(|run| key(run) < first);
+        runs.get(start..)
+            .unwrap_or_default()
+            .iter()
+            .take_while(move |run| key(run) <= target)
+    }
+
+    /// The charcode `value` reverses to: the smallest any store offers, or
+    /// `None`.
+    ///
+    /// The mirror rule, from the same function:
+    /// `reverse_map_.insert({destcode, code})` then
+    /// `reverse_it->second = std::min(reverse_it->second, code)` — the
+    /// *smallest code* wins for one value, again order-independently.
+    fn reverse_code(&self, value: u32) -> Option<u32> {
+        let from_runs = Self::window(&self.runs_by_start, |run| run.start, value)
+            .filter_map(|run| run.code_at(value));
+        self.reverse_singles
+            .get(&value)
+            .copied()
+            .into_iter()
+            .chain(from_runs)
+            .min()
+    }
+
+    /// Every `(value, charcode)` the reverse map holds, ascending by value and
+    /// with the lowest-code rule already applied.
+    fn reverse_entries(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
+        let mut merged: BTreeMap<u32, u32> = self.reverse_singles.clone();
+        for run in &self.runs {
+            for (code, value) in run.pairs() {
+                merged
+                    .entry(value)
+                    .and_modify(|c| *c = (*c).min(code))
+                    .or_insert(code);
+            }
+        }
+        merged.into_iter()
+    }
+
     /// The Unicode sequence a character code maps to, empty when unmapped.
     ///
     /// Two divergences from the C++ live here, both forced by `char` being a
@@ -64,7 +207,7 @@ impl ToUnicode {
     /// against the oracle, not inferred.
     #[must_use]
     pub fn lookup(&self, code: CharCode) -> SmallVec<[char; 2]> {
-        let Some(&value) = self.map.get(&code.0) else {
+        let Some(value) = self.forward(code.0) else {
             // A miss consults the registry table, which yields a character
             // even for an unmapped CID — PDFium returns a one-element string
             // holding NUL in that case, and callers read non-empty as success.
@@ -94,12 +237,7 @@ impl ToUnicode {
     /// returns it correctly.
     #[must_use]
     pub fn reverse(&self, unicode: char) -> CharCode {
-        CharCode(
-            self.reverse_map
-                .get(&(unicode as u32))
-                .copied()
-                .unwrap_or(0),
-        )
+        CharCode(self.reverse_code(unicode as u32).unwrap_or(0))
     }
 
     /// Every `(unicode, charcode)` the reverse map holds, in ascending
@@ -112,23 +250,31 @@ impl ToUnicode {
     /// `wchar_t` map holds and Rust's `char` cannot) are skipped for the same
     /// reason a lookup would yield U+FFFD for them (divergence D3).
     pub fn reverse_pairs(&self) -> impl Iterator<Item = (char, u32)> + '_ {
-        self.reverse_map
-            .iter()
-            .filter_map(|(&unicode, &code)| Some((char::from_u32(unicode)?, code)))
+        self.reverse_entries()
+            .filter_map(|(unicode, code)| Some((char::from_u32(unicode)?, code)))
     }
 
     /// Whether the map holds nothing at all — neither entries nor a registry
     /// fallback.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.map.is_empty() && self.base_set == CidSet::Unknown
+        self.singles.is_empty() && self.runs.is_empty() && self.base_set == CidSet::Unknown
     }
 
     /// The number of committed code→Unicode entries.
+    ///
+    /// A run counts as the codes it covers, not as one entry: the tests state
+    /// their expectations in the C++'s expanded terms and must keep reading
+    /// the same numbers. Codes covered by both a run and a single are counted
+    /// once.
     #[cfg(test)]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.map.len()
+        let mut codes: std::collections::BTreeSet<u32> = self.singles.keys().copied().collect();
+        for run in &self.runs {
+            codes.extend(run.low..=run.high);
+        }
+        codes.len()
     }
 
     /// The registry whose CID→Unicode table answers a lookup miss.
@@ -145,23 +291,43 @@ impl ToUnicode {
     /// exposes the reverse map's multiplicity.
     #[cfg(test)]
     fn unicode_count(&self, charcode: u32) -> usize {
-        self.reverse_map
-            .values()
-            .filter(|&&c| c == charcode)
+        self.reverse_entries()
+            .filter(|&(_, c)| c == charcode)
             .count()
     }
 
-    /// Insert with the **lowest-value-wins** collision policy, in both
-    /// directions (`InsertIntoMaps`, §1.6.1).
+    /// Insert one code with the **lowest-value-wins** collision policy, in
+    /// both directions (`InsertIntoMaps`, §1.6.1).
+    ///
+    /// Only the *forward* half is recorded eagerly here; the cross-store
+    /// minimum against the runs is taken on read, which is the same value
+    /// because `min` is order-independent.
     fn insert(&mut self, code: u32, destcode: u32) {
-        self.map
+        self.singles
             .entry(code)
             .and_modify(|v| *v = (*v).min(destcode))
             .or_insert(destcode);
-        self.reverse_map
+        self.reverse_singles
             .entry(destcode)
             .and_modify(|c| *c = (*c).min(code))
             .or_insert(code);
+    }
+
+    /// Commit a contiguous `bfrange` whole, without expanding it.
+    ///
+    /// Equivalent to `insert(code, start + (code - low))` for every code in
+    /// the run — which is what the C++ does — because both directions resolve
+    /// by `min` on read.
+    fn insert_run(&mut self, run: Run) {
+        self.runs.push(run);
+    }
+
+    /// Put the runs into the two sorted orders the searches need. Called once,
+    /// by [`parse`], when the program has been read to the end.
+    fn seal(&mut self) {
+        self.runs.sort_unstable_by_key(|run| run.low);
+        self.runs_by_start.clone_from(&self.runs);
+        self.runs_by_start.sort_unstable_by_key(|run| run.start);
     }
 
     /// The packed indicator the *next* multi-character entry would use.
@@ -271,6 +437,7 @@ pub fn parse(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) -> ToUnicod
         previous = next.unwrap_or(word);
         pending = words.next().map(<[u8]>::to_vec);
     }
+    map.seal();
     map
 }
 
@@ -544,14 +711,15 @@ fn commit_range(range: &Range, map: &mut ToUnicode) {
             }
         }
         Range::Consecutive { low, high, start } => {
-            // Plain `u32` arithmetic with no clamping: a start near 0xFFFF
-            // walks straight through the multi-character indicator and out the
-            // far side, where `lookup`'s low-16-bit mask takes over.
-            let mut value = *start;
-            for code in *low..=*high {
-                map.insert(code, value);
-                value = value.wrapping_add(1);
-            }
+            // Stored whole. Plain `u32` arithmetic with no clamping: a start
+            // near 0xFFFF walks straight through the multi-character
+            // indicator and out the far side, where `lookup`'s low-16-bit
+            // mask takes over.
+            map.insert_run(Run {
+                low: *low,
+                high: *high,
+                start: *start,
+            });
         }
         Range::Incremented { low, dests } => {
             for (i, dest) in dests.iter().enumerate() {
