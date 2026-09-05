@@ -137,6 +137,68 @@ component through `get(..).unwrap_or(0)`, so a truncated stream painted the
 bytes it had and black past them. Dropping a partial row instead moves that
 boundary on every damaged image in the corpus.
 
+## The ratchet
+
+`cargo run --release -p pdfrum-bench --bin ratchet -- check`, over all eleven
+groups × 44 documents:
+
+```
+ratchet: 440 benchmarks measured, 440 in the baseline
+  252 unchanged, 37 improved, 151 regressed, 0 new, 0 not run
+```
+
+**Every image row that moved, improved. No image row regressed** — the
+regression list contains no `image_` entry at all. The largest movements:
+
+| Row | Before | After | |
+|---|---:|---:|---:|
+| `save/image_image_bug_898443` | 2.763 ms | 563.560 us | −79.6% |
+| `render-cold-vello-cpu/image_image_jbig2_1478366` | 163.944 ms | 129.038 ms | −21.3% |
+| `render-cold-agg/image_image_bug_898443` | 527.062 ms | 423.454 ms | −19.7% |
+| `render-cold-agg/image_image_jbig2_1478366` | 157.712 ms | 127.054 ms | −19.4% |
+| `render-cold-tinyskia/image_image_jbig2_880920` | 119.011 ms | 97.913 ms | −17.7% |
+| `render-cold-agg/image_image_jbig2_880920` | 118.402 ms | 97.563 ms | −17.6% |
+| `render-cold-tinyskia/image_image_jbig2_1478366` | 153.705 ms | 128.237 ms | −16.6% |
+| `render-cold-vello-cpu/image_image_bug_898443` | 518.582 ms | 434.259 ms | −16.3% |
+| `render-cold-tinyskia/image_image_bug_898443` | 497.041 ms | 422.492 ms | −15.0% |
+| `render-cold-vello-cpu/image_image_jbig2_880920` | 118.382 ms | 100.737 ms | −14.9% |
+| `render-cold-agg/image_image_jpx_123` | 77.259 ms | 71.109 ms | −8.0% |
+| `render-cold-agg/image_image_bug_718762` | 488.437 ms | 450.827 ms | −7.7% |
+| `render-cold-tinyskia/image_image_jpx_123` | 67.120 ms | 62.361 ms | −7.1% |
+| `render-cold-agg/image_image_bug_583804` | 433.333 ms | 402.813 ms | −7.0% |
+
+The guide's own cold render improved on all three backends —
+`render-cold-tinyskia/text_text_quick_start` −15.2%,
+`render-cold-vello-cpu/text_text_quick_start` −14.4%,
+`render-cold-agg/text_text_quick_start` −11.2% — which is the wall-clock
+confirmation of the −26.3% `Ir`.
+
+### The 151 regressed rows are not this change
+
+**They were measured on a loaded box**, with other agents' builds and
+benchmarks running concurrently, and they are noise. The evidence is that the
+worst of them are in code this pass never touched:
+
+| Row | | |
+|---|---|---:|
+| `open/image_image_bug_898443` | 221.437 us → 2.177 ms | **+883.3%** |
+| `open/text_text_quick_start` | 459.779 us → 1.822 ms | +296.4% |
+| `open/forms_forms_widgets_407` | 1.220 ms → 3.735 ms | +206.2% |
+
+The `open` group is `pdfrum-parser`'s, and this pass changed six files, none
+of them in that crate: `pdfrum-page/src/{lib.rs, image/mod.rs, image/rows.rs}`
+and `pdfrum-render/src/{image.rs, stretch.rs, walk.rs}`. There is no path by
+which a row-based image pipeline makes opening a file nine times slower, and
+the remaining regressions are the same shape at smaller magnitudes — spread
+evenly across groups, sizes and backends, with no relation to whether a
+document contains an image.
+
+`Ir` is the evidence for this pass and it is machine-independent: it says
+−1,016 M on the guide, and the ratchet's image and cold-render rows agree in
+direction and rough magnitude. **The ratchet should be re-run on a quiet box
+before anything is concluded from the regression list, and `ratchet update`
+was deliberately not run.**
+
 ## Gates
 
 Every commit: `cargo fmt --all --check`; `cargo clippy --workspace
