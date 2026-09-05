@@ -1335,6 +1335,297 @@ fn extract_images_folds_repeated_draws_and_leaves_spacers_out_unless_asked() {
 }
 
 #[test]
+fn extract_words_lists_every_word_with_its_box_font_and_size() {
+    assert_eq!(
+        stdout(&["extract", "words", fx("fixtures/hello_world_2_pages.pdf")]).unwrap(),
+        expected("words_hello_world_2_pages.txt").unwrap()
+    );
+    let v = json(&[
+        "extract",
+        "words",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "--pages",
+        "2",
+        "--json",
+    ])
+    .unwrap();
+    let rows = v.as_array().unwrap();
+    assert_eq!(rows.len(), 4, "{v}");
+    let texts: Vec<&str> = rows.iter().map(|r| r["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, ["Hello,", "world!", "Goodbye,", "world!"]);
+    assert!(rows.iter().all(|r| r["page"] == 2));
+    assert_eq!(rows[0]["font"], "Times-Roman");
+    assert_eq!(rows[0]["size"], 12.0);
+    assert_eq!(rows[2]["font"], "Helvetica");
+    assert_eq!(rows[2]["size"], 16.0);
+    // The range slices the word back out of the page's text.
+    assert_eq!(rows[0]["start"], 0);
+    assert_eq!(rows[0]["end"], 6);
+    assert_eq!(rows[1]["start"], 7);
+    for r in rows {
+        for key in ["x0", "y0", "x1", "y1"] {
+            assert!(r[key].is_number(), "{r}");
+        }
+        assert!(r["x0"].as_f64() < r["x1"].as_f64(), "{r}");
+    }
+    // Left to right on a line, and the second line above the first in
+    // y-up page space.
+    assert!(rows[0]["x1"].as_f64() <= rows[1]["x0"].as_f64());
+    assert!(rows[2]["y0"].as_f64() > rows[0]["y1"].as_f64());
+    // The corpus guide's first page has 45 words.
+    let guide = json(&[
+        "extract",
+        "words",
+        "../../../benches/corpus/text_quick_start.pdf",
+        "--pages",
+        "1",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(guide.as_array().unwrap().len(), 45);
+    assert!(
+        stdout(&["extract", "words", fx("fixtures/bug_674771.pdf")])
+            .unwrap()
+            .contains("no words")
+    );
+}
+
+/// A small PDF written by hand with a correct cross-reference table: one
+/// indirect object per entry of `objects`, numbered from 1, object 1 the
+/// catalog.
+fn pdf_of(objects: &[&str]) -> Vec<u8> {
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for offset in offsets {
+        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+#[test]
+fn inspect_object_json_encodes_every_kind_and_hints_at_references() {
+    use serde_json::json as j;
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "1",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v["object"], 1);
+    assert_eq!(v["generation"], 0);
+    assert_eq!(v["value"]["Type"], j!({"name": "Catalog"}));
+    assert_eq!(v["value"]["Pages"], j!({"ref": [2, 0]}));
+    assert_eq!(v["hints"], j!({"Pages": "Pages"}), "{v}");
+    // A stream is its dictionary and a summary; the data is `--decode`'s.
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "7",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v["value"]["dict"]["Length"], 83);
+    assert_eq!(v["value"]["stream"], j!({"length": 83, "filters": []}));
+    assert_eq!(v["hints"], j!({}));
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/rotated_image.pdf"),
+        "5",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(
+        v["value"]["stream"]["filters"],
+        j!(["ASCIIHexDecode", "FlateDecode"])
+    );
+    assert_eq!(v["value"]["dict"]["Subtype"], j!({"name": "Image"}));
+    // Strings: text when they decode to text, the bytes as hex when not.
+    let dir = scratch("object_json").unwrap();
+    let file = dir.join("strings.pdf");
+    std::fs::write(
+        &file,
+        pdf_of(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+            "<< /Text (Hello) /Bin <01FF03> /Uni <FEFF00E9> /Real 1.5 /On true /Nothing null /List [1 (a) /N] /Text (again) >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+        ]),
+    )
+    .unwrap();
+    let v = json(&["inspect", "object", file.to_str().unwrap(), "3", "--json"]).unwrap();
+    assert_eq!(
+        v["value"],
+        j!({
+            "Text": {"string": "again"},
+            "Bin": {"hex": "01ff03"},
+            "Uni": {"string": "\u{e9}"},
+            "Real": 1.5,
+            "On": true,
+            "Nothing": null,
+            "List": [1, {"string": "a"}, {"name": "N"}],
+        }),
+        "{v}"
+    );
+    let v = json(&["inspect", "object", file.to_str().unwrap(), "4", "--json"]).unwrap();
+    assert_eq!(v["hints"], j!({"Parent": "Pages"}));
+    assert_eq!(v["value"]["MediaBox"], j!([0, 0, 10, 10]));
+    let both = run(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "7",
+        "--json",
+        "--decode",
+    ])
+    .unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
+}
+
+/// The keys of a JSON document's first object: the object itself, or the
+/// first element of an array.
+fn keys_of(v: &serde_json::Value) -> Result<Vec<String>, String> {
+    let object = v.as_array().map_or(v, |a| &a[0]);
+    let mut keys: Vec<String> = object
+        .as_object()
+        .ok_or_else(|| format!("not an object: {object}"))?
+        .keys()
+        .cloned()
+        .collect();
+    keys.sort();
+    Ok(keys)
+}
+
+/// Each `--json` command with a fixture run that prints every key it has a
+/// value for; the schema's example must carry all of them.
+fn schema_runs() -> Vec<(Vec<&'static str>, Vec<&'static str>)> {
+    let hello = "fixtures/hello_world_2_pages.pdf";
+    vec![
+        (vec!["extract", "words"], vec!["extract", "words", hello]),
+        (vec!["info"], vec!["info", "fixtures/two_signatures.pdf"]),
+        (
+            vec!["doctor"],
+            vec!["doctor", "fixtures/parser_rebuildxref_correct.pdf"],
+        ),
+        (vec!["search"], vec!["search", "world", hello]),
+        (vec!["hash"], vec!["hash", hello]),
+        (vec!["diff"], vec!["diff", hello, "fixtures/bookmarks.pdf"]),
+        (vec!["extract", "text"], vec!["extract", "text", hello]),
+        (
+            vec!["extract", "links"],
+            vec!["extract", "links", "fixtures/annots_action_handling.pdf"],
+        ),
+        (
+            vec!["extract", "toc"],
+            vec!["extract", "toc", "fixtures/bookmarks.pdf"],
+        ),
+        (
+            vec!["extract", "attachments"],
+            vec![
+                "extract",
+                "attachments",
+                "fixtures/embedded_attachments_with_desc.pdf",
+            ],
+        ),
+        (
+            vec!["extract", "annotations"],
+            vec!["extract", "annotations", "fixtures/annotiter.pdf"],
+        ),
+        (
+            vec!["extract", "signatures"],
+            vec!["extract", "signatures", "fixtures/two_signatures.pdf"],
+        ),
+        (
+            vec!["extract", "images"],
+            vec!["extract", "images", "fixtures/rotated_image.pdf"],
+        ),
+        (
+            vec!["extract", "fonts"],
+            vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        ),
+        (
+            vec!["forms", "dump"],
+            vec!["forms", "dump", "fixtures/text_form.pdf"],
+        ),
+        (
+            vec!["inspect", "object"],
+            vec!["inspect", "object", hello, "1"],
+        ),
+        (
+            vec!["inspect", "xref"],
+            vec!["inspect", "xref", "fixtures/bug_1484283.pdf"],
+        ),
+        (
+            vec!["inspect", "revisions"],
+            vec!["inspect", "revisions", "fixtures/bug_1484283.pdf"],
+        ),
+        (
+            vec!["inspect", "structure"],
+            vec!["inspect", "structure", "fixtures/tagged_alt_text.pdf"],
+        ),
+    ]
+}
+
+#[test]
+fn schema_lists_the_json_commands_and_its_examples_carry_every_real_key() {
+    let listing = stdout(&["schema"]).unwrap();
+    let header = listing.lines().next().unwrap_or_default();
+    assert!(
+        header.starts_with("COMMAND") && header.ends_with("DESCRIPTION"),
+        "{listing}"
+    );
+    for command in ["info", "extract words", "inspect object", "hash", "diff"] {
+        assert!(
+            listing
+                .lines()
+                .any(|l| l.starts_with(&format!("{command}  "))),
+            "{command} is not listed:\n{listing}"
+        );
+    }
+    // Each example has every key the command printed on a fixture (an
+    // optional key the fixture lacks is still in the example).
+    for (schema, real) in schema_runs() {
+        let mut args = vec!["schema"];
+        args.extend(&schema);
+        let example = json(&args).unwrap();
+        let mut args = real.clone();
+        args.push("--json");
+        let out = run(&args).unwrap();
+        let printed: serde_json::Value =
+            serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{real:?}: {e}"));
+        assert_eq!(example.is_array(), printed.is_array(), "{schema:?}");
+        let expected = keys_of(&example).unwrap();
+        for key in keys_of(&printed).unwrap() {
+            assert!(
+                expected.contains(&key),
+                "{schema:?}: `{key}` is not in the schema"
+            );
+        }
+    }
+    let unknown = run(&["schema", "extract", "nothing"]).unwrap();
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no --json output"));
+}
+
+#[test]
 fn inspect_object_hints_at_what_a_reference_is() {
     let text = stdout(&[
         "inspect",
@@ -1982,6 +2273,7 @@ fn jsonl_prints_one_object_per_line_on_every_list_command() {
         vec!["extract", "annotations", "fixtures/annotiter.pdf"],
         vec!["extract", "images", "fixtures/rotated_image.pdf"],
         vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        vec!["extract", "words", "fixtures/hello_world_2_pages.pdf"],
         vec![
             "extract",
             "attachments",

@@ -1,5 +1,5 @@
-//! `pdfrum extract …`: text, links, the outline, attachments, annotations,
-//! signatures.
+//! `pdfrum extract …`: text, words, links, the outline, attachments,
+//! annotations, signatures, images, fonts.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -57,6 +57,82 @@ pub fn text(
                 outln!();
             }
         }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+// ---- words ----------------------------------------------------------------
+
+#[derive(Serialize)]
+struct WordRow {
+    page: u32,
+    text: String,
+    /// The word's box in page space, points, y-up.
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    /// The base font name, when the font has one; a Type 3 font does not.
+    font: Option<String>,
+    /// The font size in page points.
+    size: f64,
+    /// The word's character range in the page's text, as `extract text`
+    /// and `search` count it.
+    start: usize,
+    end: usize,
+}
+
+/// Every word on the selected pages in reading order, with its box, font
+/// and size: the shape an extraction or citation pipeline wants.
+pub fn words(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let mut rows = Vec::new();
+    for index in pages::select(spec, doc.page_count())? {
+        let page = doc.page(index)?;
+        let number = out::page_number(page.index());
+        for word in page.words() {
+            rows.push(WordRow {
+                page: number,
+                text: word.text,
+                x0: word.rect.x0,
+                y0: word.rect.y0,
+                x1: word.rect.x1,
+                y1: word.rect.y1,
+                font: word.font,
+                size: word.size,
+                start: word.range.start.get(),
+                end: word.range.end.get(),
+            });
+        }
+    }
+    if json.is_on() {
+        out::items(&rows, json)?;
+    } else if rows.is_empty() {
+        out::none("words");
+    } else {
+        let mut table = Table::new(&[
+            ("PAGE", Align::Right),
+            ("WORD", Align::Left),
+            ("AREA", Align::Left),
+            ("FONT", Align::Left),
+            ("SIZE", Align::Right),
+        ]);
+        for r in &rows {
+            table.row(vec![
+                out::page(term, r.page),
+                r.text.clone(),
+                out::rect(pdfrum::Rect::new(r.x0, r.y0, r.x1, r.y1)),
+                r.font.clone().unwrap_or_default(),
+                format!("{:.2}", r.size),
+            ]);
+        }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }

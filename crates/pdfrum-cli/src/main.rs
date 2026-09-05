@@ -14,6 +14,7 @@
 mod cmd;
 mod out;
 mod pages;
+mod schema;
 mod syntax;
 mod term;
 
@@ -221,6 +222,13 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// The JSON shape a command's `--json` prints: an example with every
+    /// key. Without a command, the list of commands that have one.
+    Schema {
+        /// The command as words: `extract words`, `inspect object`.
+        #[arg(value_name = "COMMAND")]
+        command: Vec<String>,
+    },
     /// Shell completions, generated from this command tree.
     Completions {
         /// The shell to generate for.
@@ -250,6 +258,21 @@ enum Inspect {
         /// For a stream: write its decoded data to stdout instead.
         #[arg(long)]
         decode: bool,
+        /// One JSON document, `{object, generation, value, hints}`, so a
+        /// script can walk the file without parsing PDF syntax.
+        ///
+        /// `value` encodes the object: null, booleans and numbers as
+        /// themselves; a name as `{"name": "Type"}`; a string as
+        /// `{"string": "…"}` after PDF text decoding when it is text, else
+        /// `{"hex": "…"}` with its bytes; an array as an array; a
+        /// dictionary as an object keyed by the name, a repeated key keeping
+        /// its last value; a reference as `{"ref": [num, gen]}`; a stream as
+        /// `{"dict": {…}, "stream": {"length": N, "filters": […]}}` with no
+        /// data — `--decode` gives that. `hints` names what each top-level
+        /// reference points at, keyed by the dictionary key: the `% …`
+        /// the text form prints.
+        #[arg(long, conflicts_with = "decode")]
+        json: bool,
     },
     /// The cross-reference table as the parser holds it: every object's
     /// place, and the trailer.
@@ -492,6 +515,19 @@ enum Extract {
         #[arg(long)]
         json: bool,
     },
+    /// Every word with its box, font and size, in reading order.
+    Words {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to scan, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// `--json`: an array of `{page, text, x0, y0, x1, y1, font, size,
+        /// start, end}`, the box in points and `start..end` the word's
+        /// character range in the page's text; `--jsonl`: one per line.
+        #[command(flatten)]
+        json: JsonArgs,
+    },
     /// Each page as Markdown: the structure tree where there is one,
     /// typography where there is not.
     Markdown {
@@ -725,6 +761,7 @@ fn main() -> ExitCode {
             term,
         }),
         Command::Hash { inputs, json } => cmd::hash::run(&inputs.files, password, json, term),
+        Command::Schema { command } => schema::run(&command, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
         Command::Manpage { output } => cmd::shell::manpage(&output, term),
     };
@@ -774,6 +811,9 @@ fn run_extract(
             layout,
             json,
         } => cmd::extract::text(&input.file, password, pages.as_deref(), layout, json),
+        Extract::Words { input, pages, json } => {
+            cmd::extract::words(&input.file, password, pages.as_deref(), json.mode(), term)
+        }
         Extract::Markdown { input, pages, json } => {
             cmd::extract::markdown(&input.file, password, pages.as_deref(), json)
         }
@@ -862,7 +902,17 @@ fn run_inspect(
             num,
             generation,
             decode,
-        } => cmd::inspect::object(&input.file, password, num, generation, decode, term),
+            json,
+        } => {
+            let form = if decode {
+                cmd::inspect::ObjectForm::Decode
+            } else if json {
+                cmd::inspect::ObjectForm::Json
+            } else {
+                cmd::inspect::ObjectForm::Syntax
+            };
+            cmd::inspect::object(&input.file, password, num, generation, form, term)
+        }
         Inspect::Xref { input, json } => {
             cmd::inspect::xref(&input.file, password, json.mode(), term)
         }

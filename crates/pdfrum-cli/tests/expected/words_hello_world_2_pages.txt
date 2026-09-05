@@ -1,0 +1,9 @@
+PAGE  WORD      AREA                       FONT          SIZE
+   1  Hello,    20.23 48.32 49.00 58.20    Times-Roman  12.00
+   1  world!    52.92 49.84 83.52 58.20    Times-Roman  12.00
+   1  Goodbye,  20.77 96.59 87.97 111.79   Helvetica    16.00
+   1  world!    94.05 99.78 135.04 111.49  Helvetica    16.00
+   2  Hello,    20.23 48.32 49.00 58.20    Times-Roman  12.00
+   2  world!    52.92 49.84 83.52 58.20    Times-Roman  12.00
+   2  Goodbye,  20.77 96.59 87.97 111.79   Helvetica    16.00
+   2  world!    94.05 99.78 135.04 111.49  Helvetica    16.00
