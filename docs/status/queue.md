@@ -277,7 +277,34 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   and PDFium's; the 2× that the image-rows pass targets holds against both
   C engines.
 
-## Image pipeline pass (scoped 2026-09-05 from the side-by-side with PDFium; design `docs/design/image-rows.md`, approved by the user) — NOT STARTED
+## ~~Image pipeline pass~~ — landed 2026-09-06 (c02e2b2; `docs/status/image-rows.md`; design `docs/design/image-rows.md`)
+
+- Four steps and a sweep, each measured: fixed-point `Weight`/`Taps`
+  (−36 M), `Row`/`Rows`/`Source`/`Converted` with `to_pixmap` pulling rows
+  and the per-pixel samplers deleted (−645 M), `Narrowed`/`Shortened` with
+  `convert_and_reduce` fusing conversion and reduction (−335 M),
+  `Placement::{Exact, Filtered}` so nothing is resampled twice (flat in
+  `Ir`, one row improved). Guide 3.86 G → 2.85 G `Ir` (−26.3%);
+  `vector_en_tem` −3.0%. Ratchet: no image row regressed, image rows
+  improved up to −79.6% (`save/image_bug_898443`), cold renders of the
+  guide −11 to −15% on all three CPU backends; the 151 non-image
+  "regressions" were measured on a loaded box (the worst, `open` +883%, is
+  in `pdfrum-parser`, untouched) — `ratchet update` not run, a quiet-box
+  rerun owed.
+- Board on the merged main, tool rebuilt: 1759 rows, 29 changed, 0
+  pass↔fail, 1537 pass. 28 from step 1's exact tap table (the old `f64`
+  path drifted; ±1e-6 SSIM, `bug_880920`/`bug_898443` maxdiff 0 → 1), one
+  from step 4 (`bug_86459` 0.999967 → 0.999999, maxdiff 2 → 1, an
+  improvement). Ruled under the correctness-over-bit-matching rule.
+- What the design did not say: `Weight(u32)` not `u16` (`ONE` is a real
+  single-tap value); backends' `draw_image` keeps no `Placement` (it also
+  serves glyphs, masks, patterns); a pull pipeline must hold back the
+  boundary row two destination rows share (`Shortened` does; the bug was
+  alpha 223 on every row but the first, caught by a unit test); a short
+  buffer keeps its partial row.
+- Still to do — **step 5, lazy `unpack`** (292 M): a public `ImageData`/
+  `Pixels` change with four consumers listed by file:line in the design
+  doc, now that the facade and CLI are free.
 
 - Read side by side with the two callgrind profiles (ours 3.86 G, PDFium's
   1.96 G on the guide at 150 DPI). PDFium's image path is one fused loop:
