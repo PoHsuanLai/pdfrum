@@ -1390,6 +1390,116 @@ fn extract_words_lists_every_word_with_its_box_font_and_size() {
     );
 }
 
+/// A small PDF written by hand with a correct cross-reference table: one
+/// indirect object per entry of `objects`, numbered from 1, object 1 the
+/// catalog.
+fn pdf_of(objects: &[&str]) -> Vec<u8> {
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(
+        format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes(),
+    );
+    for offset in offsets {
+        out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!(
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
+            objects.len() + 1
+        )
+        .as_bytes(),
+    );
+    out
+}
+
+#[test]
+fn inspect_object_json_encodes_every_kind_and_hints_at_references() {
+    use serde_json::json as j;
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "1",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v["object"], 1);
+    assert_eq!(v["generation"], 0);
+    assert_eq!(v["value"]["Type"], j!({"name": "Catalog"}));
+    assert_eq!(v["value"]["Pages"], j!({"ref": [2, 0]}));
+    assert_eq!(v["hints"], j!({"Pages": "Pages"}), "{v}");
+    // A stream is its dictionary and a summary; the data is `--decode`'s.
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "7",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v["value"]["dict"]["Length"], 83);
+    assert_eq!(v["value"]["stream"], j!({"length": 83, "filters": []}));
+    assert_eq!(v["hints"], j!({}));
+    let v = json(&[
+        "inspect",
+        "object",
+        fx("fixtures/rotated_image.pdf"),
+        "5",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(
+        v["value"]["stream"]["filters"],
+        j!(["ASCIIHexDecode", "FlateDecode"])
+    );
+    assert_eq!(v["value"]["dict"]["Subtype"], j!({"name": "Image"}));
+    // Strings: text when they decode to text, the bytes as hex when not.
+    let dir = scratch("object_json").unwrap();
+    let file = dir.join("strings.pdf");
+    std::fs::write(
+        &file,
+        pdf_of(&[
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+            "<< /Text (Hello) /Bin <01FF03> /Uni <FEFF00E9> /Real 1.5 /On true /Nothing null /List [1 (a) /N] /Text (again) >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+        ]),
+    )
+    .unwrap();
+    let v = json(&["inspect", "object", file.to_str().unwrap(), "3", "--json"]).unwrap();
+    assert_eq!(
+        v["value"],
+        j!({
+            "Text": {"string": "again"},
+            "Bin": {"hex": "01ff03"},
+            "Uni": {"string": "\u{e9}"},
+            "Real": 1.5,
+            "On": true,
+            "Nothing": null,
+            "List": [1, {"string": "a"}, {"name": "N"}],
+        }),
+        "{v}"
+    );
+    let v = json(&["inspect", "object", file.to_str().unwrap(), "4", "--json"]).unwrap();
+    assert_eq!(v["hints"], j!({"Parent": "Pages"}));
+    assert_eq!(v["value"]["MediaBox"], j!([0, 0, 10, 10]));
+    let both = run(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "7",
+        "--json",
+        "--decode",
+    ])
+    .unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
+}
+
 #[test]
 fn inspect_object_hints_at_what_a_reference_is() {
     let text = stdout(&[
