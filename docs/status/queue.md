@@ -201,28 +201,36 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
      vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
      plus the scaled JPEG decode once zune-jpeg has it).
-  5. Render losses by file — **diagnosed 2026-09-06, none fixed yet**
-     (`docs/status/pdfrum-render.md` "M21 losses"; every SSIM below
-     reproduced from `benches/compare` and unchanged by this pass):
-     - `fx/path/transparent1.pdf` 0.984 — **ours, fix identified.** The
-       fill+stroke knockout buffer does not knock out:
-       `draw_fill_stroke_knockout` (`paint.rs:296+`) fills then strokes
-       into a plain transparent target with source-over, where PDFium
-       seeds a backdrop copy and sets group knockout
-       (`cfx_renderdevice.cpp:806`, `:873-875`), so our translucent
-       stroke composites over its own fill. The oracle has 27 586 pink
-       and zero `#930000` pixels; we have 13 182 and 12 567, and
-       `0x93 = round(0.58 x 255)`. Needs a knockout-capable target on
-       `RasterBackend`, so it is a design change. A second defect at the
-       closepath seam (join versus cap in stroke expansion) is separate.
-     - `fx/image/1_image.pdf` 0.986 — **ours, fix identified.** A single
-       140x140 `/Interpolate false` image magnified 2.5x/4x, so the
-       oracle takes the `fabs(scale) < 1.0f` branch at
-       `cstretchengine.cpp:106` — nearest-neighbour at phase
-       `dest_pixel * scale + scale / 2` — where we produce filtered
-       greys. The 833x1250 vs 833x1249 size gap is a harness artifact
-       (`oracle.rs` passes a truncated `--scale=2.0833333333`) and
-       contributes nothing.
+  5. Render losses by file — diagnosed 2026-09-06; **two fixed
+     2026-09-06** (`docs/status/pdfrum-render.md` "M21 losses"; every
+     SSIM below reproduced from `benches/compare`):
+     - `fx/path/transparent1.pdf` 0.984 -> **0.992, fixed** (`5ba19cd`).
+       The knockout buffer now draws fill and stroke into separate
+       targets and combines them with `Pixmap::knockout_replace`, so the
+       stroke leaves the buffer carrying its own alpha and composites
+       against the page exactly once, as
+       `DrawFillStrokePath`'s backdrop copy plus `group_knockout=true`
+       does (`cfx_renderdevice.cpp:806`, `:864-871`, `:873-875`).
+       `#930000` went 12 567 -> 0 against the oracle's 0, and `#ff6c6c`
+       13 200 -> 27 335 against 27 586. No new `RasterBackend` seam was
+       needed — `knockout_over`'s sibling in `pixmap.rs` was 12 lines
+       against ~120 for a trait method and three backends. The
+       remaining 0.41 % is the separate closepath-seam defect (join
+       versus cap in stroke expansion), still open.
+     - `fx/image/1_image.pdf` 0.986 -> **0.9999, fixed** (`322ab67`).
+       The diagnosis's premise was wrong and is corrected in the status
+       doc: we already chose nearest at every layer, and all three
+       backends' nearest samplers already reproduce
+       `floor(dest * scale + scale / 2)`. The defect was the *grid* —
+       upstream stretches onto the outer integer rect of the footprint
+       (`cpdf_imagerenderer.cpp:658-664`, `:667-698`) and derives its
+       scale from that whole-pixel width, where we sampled through the
+       fractional device transform and drifted up to half a source pixel
+       across the image. `Placement::Snapped` carries upstream's integer
+       rect; restricted to magnification and to draws outside a type-3
+       char proc, each restriction measured. The 833x1250 vs 833x1249
+       size gap is a harness artifact (`oracle.rs` passes a truncated
+       `--scale=2.0833333333`) and contributes nothing.
      - `vector_en_system.pdf` 0.960 — **ours, undiagnosed.** 31
        overlapping black `/SMask` images; we paint 21 801 fully-covered
        pixels against 6 485, at both stack depths. Ruled out by

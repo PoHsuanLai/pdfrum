@@ -3263,6 +3263,12 @@ the published ones exactly.
 verified oracle line, and no engine change was landed, so every "after" equals
 its "before". The two fixes that are ready to write are called out as such.
 
+> **Superseded in part, 2026-09-06.** Both files marked "ours — fix
+> identified" are now fixed; see "The two fixes, landed" at the end of this
+> section. One diagnosis below is **corrected** there rather than merely
+> extended: `fx/image/1_image.pdf` was not a filter-selection defect at all.
+> The table's SSIMs are the pre-fix numbers and are kept as the baseline.
+
 | file | SSIM | cause | oracle line | ruling |
 |---|---|---|---|---|
 | `fx/path/transparent1.pdf` | 0.984 | the fill+stroke knockout buffer does not knock out | `cfx_renderdevice.cpp:806`, `:873-875` | ours — fix identified |
@@ -3436,3 +3442,80 @@ upstream is the box-filter loop from `cstretchengine.cpp:136` and **not** the
 correct answer — but no oracle line is claimed for it, because the comparison
 against PDFium's mask path was not completed. The two files should be
 re-measured together once either is fixed.
+
+### The two fixes, landed 2026-09-06
+
+Both files the diagnosis marked "ours — fix identified" are fixed. The
+numbers are `benches/compare` at 150 DPI, the same basis as the table above.
+
+| file | before | after | commit |
+|---|---|---|---|
+| `fx/image/1_image.pdf` | 0.985688 | **0.999858** | `322ab67` |
+| `fx/path/transparent1.pdf` | 0.984401 | **0.991918** | `5ba19cd` |
+
+#### `1_image.pdf` — the diagnosis's premise was wrong
+
+The section above says magnification without `/Interpolate` is
+nearest-neighbour upstream "and filtered here", and flags as unconfirmed
+which of our quality paths runs. Confirmed first, and the second half does
+not hold. Instrumenting the draw gives `src=140x140`, `dest=356.1x560.4`,
+`interpolate=false`, `resample_quality` => `Nearest`, `effective_quality` =>
+`Nearest`, and `Nearest` handed to the backend. A probe against all three
+backends' nearest samplers under a clean magnification reproduces PDFium's
+`floor(dest * scale + scale / 2)` exactly. Neither the selection nor the
+kernels were ever wrong.
+
+The defect is the **grid**. Counting distinct destination columns inside the
+image box, the oracle has exactly 140 — the source width, clean
+nearest-neighbour replication — where we had 142. The oracle's column-run
+starts (0, 3, 5, 8, 10, 13, 15, 18, 20, 23, ...) are reproduced digit for
+digit by deriving the scale from the *whole-pixel* destination width, and not
+at all by our continuous transform, which drifts by up to half a source pixel
+down the page. That is upstream's geometry:
+`CPDF_ImageRenderer::GetUnitRect` (`cpdf_imagerenderer.cpp:658-664`) takes
+`image_matrix_.GetUnitRect().GetOuterRect()`, and `GetDimensionsFromUnitRect`
+(`:667-698`) derives `dest_width`/`dest_height` from that integer rect — so
+`CStretchEngine`'s `scale` is `src_len / integer_dest_len` counted from the
+integer left. The `:106` branch cited above is the right branch; what was
+missing is that its `scale` is not ours.
+
+`Placement` gains `Snapped(SnappedRect)`, carrying upstream's four
+`GetDimensionsFromUnitRect` outputs with the signs kept signed. Two
+restrictions, each measured: **magnification only** (a reduction runs the
+box-filter loop from `:136`, whose taps `reduce_to` has already applied —
+without this `resources/bug_642` fell to 0.9867, below the 0.990 floor), and
+**not inside a type-3 char proc** (there the target is a sub-bitmap with the
+glyph's own origin, so quantising is applied twice — without this
+`resources/bug_1746` fell 0.952411 -> 0.939177).
+
+#### `transparent1.pdf` — the gate was right, the arithmetic named the rest
+
+The diagnosis's gate and witness were both correct. What was missing is why
+`#930000` appears: the stroke is red at `/CA 0.58`, premultiplied
+`(148, 0, 0, 148)`; over the white page that is `#ff6b6c`, over the black
+fill `#940000`. So `#930000` is exactly the stroke composited against the
+fill rather than against the page, which is what
+`DrawFillStrokePath`'s backdrop copy (`:864-871`) plus `group_knockout=true`
+(`:873-875`) exists to prevent.
+
+The fix draws fill and stroke into **separate** targets and combines them
+with `Pixmap::knockout_replace`, a 12-line sibling to the existing
+`knockout_over`. The two differ in one place, the destination's alpha:
+`knockout_over` mixes toward the new object by coverage, which is right for a
+knockout *group* but here adds the opaque fill's alpha back in and returns
+the overlap to opaque — that *is* the defect. `knockout_replace` lets any
+coverage replace outright, alpha included, so the stroke leaves the buffer
+with its own 0.58 and the blit composites it once.
+
+**No new `RasterBackend` seam was needed**, and the section above's
+expectation that one would be is superseded. `new_target_with_backdrop`
+already exists and `Pixmap` already owned the composition; sized before
+choosing, the seam option was ~120 lines across four crates against 30 in one,
+and STYLE.md §2b closes the seam list at three. The composition is pixel
+arithmetic on a finished buffer, which is not something a rasterizer does
+differently.
+
+`#930000` went 12 567 -> **0**, matching the oracle's zero, and `#ff6c6c`
+13 200 -> 27 335 against the oracle's 27 586. The residual 0.41 % is the
+independent closepath-seam defect recorded above, which is untouched and
+still open.
