@@ -184,7 +184,9 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
      48.3 → 47.1 / 82.9 → 93.5 / 87.3 → 98.1 pages/s (+12.8% at 4, +12.4%
      at 8). Board byte-identical, 1759 rows, 0 changed. Still open: the gap
      to hayro and mupdf is not closed, and the glyph caches are still
-     per-session. mupdf's row was re-measured threaded on
+     per-session. Found, not fixed: `tounicode::parse` expands an identity
+     CMap into 65,536 map entries (~19 M `Ir` per font) — a `ToUnicode`
+     storage pass, keeping `Range::Consecutive` as a range. mupdf's row was re-measured threaded on
      2026-09-05 (214c597) in MuPDF's own model — display lists recorded on
      one thread, rasterized on N cloned contexts, 17.7% serial share — after
      the user pointed out the "single-thread-only" label was wrong; only
