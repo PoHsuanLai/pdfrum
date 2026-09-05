@@ -16,15 +16,20 @@ description = "The C ABI for pdfrum: libpdfrum.so, libpdfrum.a and pdfrum.h"
 publish = false
 
 [lib]
-# `libpdfrum.so` / `libpdfrum.a`, not `libpdfrum_capi.*`: the artefact is the
-# library a C program links, and its name is the product's.
-name = "pdfrum"
-# No `rlib`. The two C artefacts are the whole point and nothing in this
-# workspace links this crate as a Rust library — but with an `rlib` here the
-# lib target is *named* `pdfrum`, the same as the facade it depends on, and
-# `cargo test --doc` then hands rustdoc two `--extern pdfrum` rlibs and fails
-# with E0464. Dropping the rlib keeps the artefact names the product's and the
-# doctest unambiguous.
+# The Rust crate name, which is NOT the artefact name. It has to differ from
+# `pdfrum`: the facade is this crate's dependency, and two lib targets called
+# `pdfrum` in one workspace collide twice over — `cargo test --doc` gets two
+# `--extern pdfrum` candidates (E0464), and `cargo doc --workspace` would write
+# both crates' pages to `doc/pdfrum/`, which cargo refuses rather than
+# clobbering. Keeping the docs and the doctests working is worth more than a
+# name nothing outside cargo reads.
+#
+# The **artefacts** are still `libpdfrum.so` and `libpdfrum.a`, which is what
+# actually matters: cargo-c takes their name from
+# `[package.metadata.capi.library]` below, and the `cdylib`/`staticlib` that
+# `cargo build` produces are renamed by ctest/run.sh's consumer — see the
+# `output_name` there. A C program links `-lpdfrum` either way.
+name = "pdfrum_capi"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]

@@ -326,7 +326,7 @@ pub unsafe extern "C" fn pdfrum_page_count(document: *const pdfrum_document) -> 
 /// at a time. Taking a page per worker from one shared document is the
 /// supported way to render in parallel, and is what `ctest/test.c` proves.
 ///
-/// The caller closes the page with [`pdfrum_page_close`].
+/// The caller closes the page with `pdfrum_page_close`.
 ///
 /// # Safety
 ///
