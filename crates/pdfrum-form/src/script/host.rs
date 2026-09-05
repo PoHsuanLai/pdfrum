@@ -111,23 +111,29 @@ pub(crate) struct HostState {
 /// The handle the context holds.
 pub(crate) type Host = Rc<RefCell<HostState>>;
 
-/// A `HostHooks` that reports a fixed local timezone offset.
+/// A `HostHooks` that reports a configured local zone rather than the
+/// machine's.
 ///
 /// PDFium's test runner sets `TZ=America/Los_Angeles` and freezes the clock at
 /// `--time=1399672130`, and **both leak into the expected bytes**:
 /// `public_methods_expected.txt` pins `AFParseDateEx(1, 2) = 1399672130000`,
 /// and every `util.printd` line is shifted to the Los Angeles offset. So the
-/// offset is configuration rather than something read from the machine — a
+/// zone is configuration rather than something read from the machine — a
 /// golden run on a machine in another zone must produce the same bytes.
+///
+/// **The zone is a rule, not a number.** `pdfium_test` hooks
+/// `FXSYS_localtime` but not V8, so `Date` resolves the real
+/// `America/Los_Angeles` per instant, daylight saving included — see
+/// [`super::zone`] for what a flat offset here gets wrong.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct FixedZone {
-    /// Seconds east of UTC. `-25200` is `GMT-0700`, PDFium's own.
-    pub(crate) offset_secs: i32,
+pub(crate) struct ConfiguredZone {
+    /// The zone `Date` reports.
+    pub(crate) zone: super::zone::Zone,
 }
 
-impl boa_engine::context::HostHooks for FixedZone {
-    fn local_timezone_offset_seconds(&self, _unix_time_seconds: i64) -> i32 {
-        self.offset_secs
+impl boa_engine::context::HostHooks for ConfiguredZone {
+    fn local_timezone_offset_seconds(&self, unix_time_seconds: i64) -> i32 {
+        self.zone.offset_secs_at(unix_time_seconds)
     }
 }
 
