@@ -51,7 +51,7 @@ use crate::pixmap::Pixmap;
 /// rationals in the two axis lengths, so an `f64` intermediate can only lose
 /// them, and the scheme below rounds a *running sum* — where one `f64` ulp of
 /// drift moves a whole unit of weight from one tap to its neighbour.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Weight(u32);
 
 impl Weight {

@@ -42,8 +42,6 @@ pub pdfrum_page::ColorSpace::Lab(alloc::boxed::Box<pdfrum_page::color::cie::Lab>
 pub pdfrum_page::ColorSpace::Pattern(alloc::boxed::Box<pdfrum_page::PatternSpace>)
 pub pdfrum_page::ColorSpace::Separation(alloc::boxed::Box<pdfrum_page::Separation>)
 impl pdfrum_page::ColorSpace
-pub fn pdfrum_page::ColorSpace::convert_row(&self, pdfrum_page::Samples<'_>, core::option::Option<&pdfrum_page::Palette>, &mut [pdfrum_page::Rgba8])
-impl pdfrum_page::ColorSpace
 pub fn pdfrum_page::ColorSpace::default_color(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_page::ColorSpace::default_value(&self, usize) -> (f32, f32, f32)
 pub fn pdfrum_page::ColorSpace::family(&self) -> pdfrum_page::Family
@@ -272,11 +270,6 @@ impl pdfrum_page::Rotation
 pub fn pdfrum_page::Rotation::display_matrix(self, kurbo::rect::Rect) -> kurbo::affine::Affine
 pub fn pdfrum_page::Rotation::from_degrees(i64) -> Self
 pub fn pdfrum_page::Rotation::quarters(self) -> u8
-pub enum pdfrum_page::Samples<'a>
-pub pdfrum_page::Samples::Cmyk(&'a [u8])
-pub pdfrum_page::Samples::Gray(&'a [u8])
-pub pdfrum_page::Samples::Indexed(&'a [u8])
-pub pdfrum_page::Samples::Rgb(&'a [u8])
 pub enum pdfrum_page::SetComponentsError
 pub pdfrum_page::SetComponentsError::PatternSpace
 pub pdfrum_page::SetComponentsError::TooFew
@@ -613,9 +606,6 @@ pub fn pdfrum_page::Rgb::to_bytes_truncating(self) -> [u8; 3]
 #[repr(C)] pub struct pdfrum_page::Rgba8(pub [u8; 4])
 pub struct pdfrum_page::Row<'a, P>(_)
 impl<'a, P> pdfrum_page::Row<'a, P>
-pub const fn pdfrum_page::Row<'a, P>::is_empty(self) -> bool
-pub const fn pdfrum_page::Row<'a, P>::len(self) -> usize
-pub const fn pdfrum_page::Row<'a, P>::new(&'a [P]) -> Self
 pub const fn pdfrum_page::Row<'a, P>::pixels(self) -> &'a [P]
 pub struct pdfrum_page::Separation
 pub pdfrum_page::Separation::alternate: core::option::Option<alloc::boxed::Box<pdfrum_page::ColorSpace>>
@@ -654,7 +644,6 @@ pub fn pdfrum_page::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_o
 pub struct pdfrum_page::Source<'a>
 impl<'a> pdfrum_page::Source<'a>
 pub fn pdfrum_page::Source<'a>::new(&'a pdfrum_page::Pixels, u32, u32) -> Self
-pub fn pdfrum_page::Source<'a>::next_row(&mut self) -> core::option::Option<pdfrum_page::Samples<'_>>
 pub struct pdfrum_page::StateStack
 impl pdfrum_page::StateStack
 pub fn pdfrum_page::StateStack::depth(&self) -> usize

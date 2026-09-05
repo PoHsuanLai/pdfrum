@@ -94,7 +94,7 @@ pub use function::{Function, FunctionCache, PostScript, parse_program};
 pub use image::decode_jbig2;
 pub use image::{
     BitImage, Converted, ImageCache, ImageData, ImageMask, MAX_BYTES, Palette, Pixels,
-    RequestedSize, Rgb8, Rgba8, Row, Rows, Samples, Source, decode_image,
+    RequestedSize, Rgb8, Rgba8, Row, Rows, Source, decode_image,
 };
 #[cfg(feature = "jpx")]
 pub use image::{JpxImage, decode_jpx};
