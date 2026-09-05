@@ -307,9 +307,21 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   boundary row two destination rows share (`Shortened` does; the bug was
   alpha 223 on every row but the first, caught by a unit test); a short
   buffer keeps its partial row.
-- Still to do — **step 5, lazy `unpack`** (292 M): a public `ImageData`/
-  `Pixels` change with four consumers listed by file:line in the design
-  doc, now that the facade and CLI are free.
+- ~~Step 5, lazy `unpack`~~ — landed 2026-09-06 (528356b):
+  `ImageData::samples: Samples`, a two-state enum — `Packed` (bit depth,
+  `/Decode` folded into one byte table per component) walked as a row
+  stage, or `Whole` for the three families that cannot be lazy (indexed and
+  single-colorant tint, multi-colorant DeviceN, stencils); `Samples::
+  to_pixels` the one place a whole image is materialized. Guide 3.00 G →
+  2.80 G `Ir` (−6.7%); the 292 M eager pass is 47 M of row work. The
+  ratchet earned its keep: it flagged `build/image_ccitt_transfer` +4.8%,
+  `Ir` confirmed +6.6 M, the cause was an integer division per sample and a
+  per-sample bit read at sub-byte depths, and the fix (a wrapping component
+  counter, a byte walk) turned it into a win. 27 image rows improved, up to
+  −89% on `build/image_ccitt_3bigpreview`. Board on the merged main: 0
+  changed rows against the image-rows reference. The design was wrong
+  about the CLI (`pages.rs` has a `Pixels` of its own for image files) and
+  missed `imagecache.rs`'s stencil check; both corrected in the doc.
 
 - Read side by side with the two callgrind profiles (ours 3.86 G, PDFium's
   1.96 G on the guide at 150 DPI). PDFium's image path is one fused loop:
