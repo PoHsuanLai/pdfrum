@@ -250,6 +250,21 @@ enum Inspect {
         /// For a stream: write its decoded data to stdout instead.
         #[arg(long)]
         decode: bool,
+        /// One JSON document, `{object, generation, value, hints}`, so a
+        /// script can walk the file without parsing PDF syntax.
+        ///
+        /// `value` encodes the object: null, booleans and numbers as
+        /// themselves; a name as `{"name": "Type"}`; a string as
+        /// `{"string": "…"}` after PDF text decoding when it is text, else
+        /// `{"hex": "…"}` with its bytes; an array as an array; a
+        /// dictionary as an object keyed by the name, a repeated key keeping
+        /// its last value; a reference as `{"ref": [num, gen]}`; a stream as
+        /// `{"dict": {…}, "stream": {"length": N, "filters": […]}}` with no
+        /// data — `--decode` gives that. `hints` names what each top-level
+        /// reference points at, keyed by the dictionary key: the `% …`
+        /// the text form prints.
+        #[arg(long, conflicts_with = "decode")]
+        json: bool,
     },
     /// The cross-reference table as the parser holds it: every object's
     /// place, and the trailer.
@@ -878,7 +893,17 @@ fn run_inspect(
             num,
             generation,
             decode,
-        } => cmd::inspect::object(&input.file, password, num, generation, decode, term),
+            json,
+        } => {
+            let form = if decode {
+                cmd::inspect::ObjectForm::Decode
+            } else if json {
+                cmd::inspect::ObjectForm::Json
+            } else {
+                cmd::inspect::ObjectForm::Syntax
+            };
+            cmd::inspect::object(&input.file, password, num, generation, form, term)
+        }
         Inspect::Xref { input, json } => {
             cmd::inspect::xref(&input.file, password, json.mode(), term)
         }

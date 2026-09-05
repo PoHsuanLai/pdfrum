@@ -1,12 +1,13 @@
 //! `pdfrum inspect …`: the file's insides — objects, the cross-reference
 //! table, revisions, the structure tree.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{Kid, ObjRef, Object, Resolve, StructTree};
+use pdfrum::{Dict, Kid, ObjRef, Object, Resolve, StructTree};
 use serde::Serialize;
 
 use crate::out::{Align, Table, out, outln};
@@ -15,6 +16,26 @@ use crate::{out, syntax};
 
 // ---- object ---------------------------------------------------------------
 
+/// `inspect object --json`: the object in [`syntax::json`]'s encoding,
+/// with the same hints the text form prints after each top-level
+/// reference, keyed by the dictionary key.
+#[derive(Serialize)]
+struct ObjectReport {
+    object: u32,
+    generation: u16,
+    value: serde_json::Value,
+    hints: BTreeMap<String, String>,
+}
+
+/// What `inspect object` does with the object: prints it in PDF syntax
+/// for a person, as JSON, or — for a stream — writes its decoded data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectForm {
+    Syntax,
+    Json,
+    Decode,
+}
+
 /// One indirect object, printed in PDF syntax. `--decode` writes a
 /// stream's decoded data to stdout instead.
 pub fn object(
@@ -22,7 +43,7 @@ pub fn object(
     password: Option<&str>,
     num: u32,
     generation: u16,
-    decode: bool,
+    form: ObjectForm,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -30,18 +51,45 @@ pub fn object(
     let object = doc
         .fetch(reference)
         .with_context(|| format!("object {num} {generation} is not in the document"))?;
-    if decode {
-        let Object::Stream(_) = &*object else {
-            bail!("object {num} {generation} is not a stream; nothing to decode");
-        };
-        let data = doc.stream_data(reference)?;
-        out::write_bytes(&data);
-        return Ok(ExitCode::SUCCESS);
+    match form {
+        ObjectForm::Decode => {
+            let Object::Stream(_) = &*object else {
+                bail!("object {num} {generation} is not a stream; nothing to decode");
+            };
+            let data = doc.stream_data(reference)?;
+            out::write_bytes(&data);
+        }
+        ObjectForm::Json => {
+            let entries = match &*object {
+                Object::Dict(d) => Some(d),
+                Object::Stream(s) => Some(&s.dict),
+                _ => None,
+            };
+            let hints = entries
+                .into_iter()
+                .flat_map(Dict::iter)
+                .filter_map(|(key, value)| match value {
+                    Object::Ref(r) => {
+                        let target = doc.fetch(*r).ok()?;
+                        Some((key.as_text().into_owned(), syntax::describe(&target)))
+                    }
+                    _ => None,
+                })
+                .collect();
+            out::json(&ObjectReport {
+                object: num,
+                generation,
+                value: syntax::json(&object),
+                hints,
+            })?;
+        }
+        ObjectForm::Syntax => {
+            let mut text = format!("{num} {generation} obj\n");
+            syntax::object(&mut text, &object, 0);
+            text.push_str("\nendobj");
+            outln!("{}", syntax::highlight(&with_hints(&text, &doc), term));
+        }
     }
-    let mut text = format!("{num} {generation} obj\n");
-    syntax::object(&mut text, &object, 0);
-    text.push_str("\nendobj");
-    outln!("{}", syntax::highlight(&with_hints(&text, &doc), term));
     Ok(ExitCode::SUCCESS)
 }
 
