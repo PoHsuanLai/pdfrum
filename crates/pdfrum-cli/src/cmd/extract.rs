@@ -453,10 +453,19 @@ fn signature_rows(doc: &Document) -> Vec<SignatureRow> {
 
 // ---- images ---------------------------------------------------------------
 
+/// Below this many pixels on a side an image is a spacer, a rule or a
+/// tracking dot, not a picture; `--all` lists them anyway.
+const TINY: u32 = 4;
+
 #[derive(Serialize)]
 struct ImageRow {
     page: u32,
     index: usize,
+    /// The image `XObject`'s object number, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    object: Option<u32>,
+    /// How many times the same `XObject` is drawn on the selected pages.
+    uses: usize,
     width: u32,
     height: u32,
     is_mask: bool,
@@ -474,6 +483,7 @@ pub fn images(
     password: Option<&str>,
     spec: Option<&str>,
     dir: Option<&Path>,
+    all: bool,
     json: bool,
     term: Term,
 ) -> Result<ExitCode> {
@@ -484,37 +494,56 @@ pub fn images(
     let stem = file
         .file_stem()
         .map_or_else(|| "page".to_owned(), |s| s.to_string_lossy().into_owned());
+    // One row per picture, not per draw: the same XObject placed on ten
+    // pages is one image with ten uses. Only what has no object (an
+    // inline image) is listed per draw.
+    let mut seen: Vec<(Option<pdfrum::ObjRef>, usize)> = Vec::new();
     let mut rows = Vec::new();
+    let mut pictures = Vec::new();
     for index in pages::select(spec, doc.page_count())? {
         let page = doc.page(index)?;
         let number = out::page_number(page.index());
-        for (i, image) in page.images().into_iter().enumerate() {
-            let native = image
-                .raw
-                .as_ref()
-                .map(|r| (r.encoding.extension(), &r.data));
-            let format = native.map_or("png", |(ext, _)| ext);
-            let written = match dir {
-                Some(dir) => {
-                    let path = dir.join(format!("{stem}-p{number}-{}.{format}", i + 1));
-                    match native {
-                        Some((_, data)) => std::fs::write(&path, data).map_err(anyhow::Error::from),
-                        None => image.pixmap().save_png(&path).map_err(anyhow::Error::from),
-                    }
-                    .with_context(|| format!("cannot write {}", path.display()))?;
-                    Some(path.display().to_string())
-                }
-                None => None,
-            };
+        for image in page.images() {
+            if !all && (image.width < TINY || image.height < TINY) {
+                continue;
+            }
+            if let Some(source) = image.source
+                && !all
+                && let Some((_, at)) = seen.iter().find(|(s, _)| *s == Some(source))
+            {
+                let row: &mut ImageRow = &mut rows[*at];
+                row.uses += 1;
+                continue;
+            }
+            seen.push((image.source, rows.len()));
             rows.push(ImageRow {
                 page: number,
-                index: i + 1,
+                index: rows.len() + 1,
+                object: image.source.map(|r| r.num),
+                uses: 1,
                 width: image.width,
                 height: image.height,
                 is_mask: image.is_mask,
-                format,
-                written,
+                format: "png",
+                written: None,
             });
+            pictures.push(image);
+        }
+    }
+    for (row, image) in rows.iter_mut().zip(&pictures) {
+        let native = image
+            .raw
+            .as_ref()
+            .map(|r| (r.encoding.extension(), &r.data));
+        row.format = native.map_or("png", |(ext, _)| ext);
+        if let Some(dir) = dir {
+            let path = dir.join(format!("{stem}-{}.{}", row.index, row.format));
+            match native {
+                Some((_, data)) => std::fs::write(&path, data).map_err(anyhow::Error::from),
+                None => image.pixmap().save_png(&path).map_err(anyhow::Error::from),
+            }
+            .with_context(|| format!("cannot write {}", path.display()))?;
+            row.written = Some(path.display().to_string());
         }
     }
     if json {
@@ -523,19 +552,27 @@ pub fn images(
         out::none("images");
     } else {
         let mut table = Table::new(&[
-            ("PAGE", Align::Right),
             ("IMAGE", Align::Right),
+            ("PAGE", Align::Right),
+            ("OBJ", Align::Right),
             ("PIXELS", Align::Left),
             ("FORMAT", Align::Left),
+            ("USES", Align::Right),
             ("MASK", Align::Left),
             ("WRITTEN", Align::Left),
         ]);
         for r in &rows {
             table.row(vec![
+                term.paint(Style::Ident, &r.index.to_string()),
                 out::page(term, r.page),
-                r.index.to_string(),
+                r.object.map(|o| o.to_string()).unwrap_or_default(),
                 format!("{}x{}", r.width, r.height),
                 r.format.to_owned(),
+                if r.uses > 1 {
+                    r.uses.to_string()
+                } else {
+                    String::new()
+                },
                 if r.is_mask {
                     "mask".to_owned()
                 } else {

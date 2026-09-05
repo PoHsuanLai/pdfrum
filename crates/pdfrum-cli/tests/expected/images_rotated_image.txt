@@ -1,2 +1,2 @@
-PAGE  IMAGE  PIXELS  FORMAT
-   1      1  50x50   png
+IMAGE  PAGE  OBJ  PIXELS  FORMAT
+    1     1    5  50x50   png

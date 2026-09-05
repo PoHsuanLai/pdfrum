@@ -530,6 +530,11 @@ enum Extract {
         /// it is in the file, everything else decoded to PNG.
         #[arg(short, long, value_name = "DIR")]
         output: Option<PathBuf>,
+        /// Every draw, including repeats of one image and images under 4
+        /// pixels on a side (spacers, rules), which are otherwise folded
+        /// into one row or left out.
+        #[arg(long)]
+        all: bool,
         /// One JSON document.
         #[arg(long)]
         json: bool,
@@ -689,12 +694,14 @@ fn run_extract(
             input,
             pages,
             output,
+            all,
             json,
         } => cmd::extract::images(
             &input.file,
             password,
             pages.as_deref(),
             output.as_deref(),
+            all,
             json,
             term,
         ),
@@ -753,7 +760,7 @@ fn run_inspect(
             num,
             generation,
             decode,
-        } => cmd::inspect::object(&input.file, password, num, generation, decode),
+        } => cmd::inspect::object(&input.file, password, num, generation, decode, term),
         Inspect::Xref { input, json } => cmd::inspect::xref(&input.file, password, json, term),
         Inspect::Revisions { input, json } => {
             cmd::inspect::revisions(&input.file, password, json, term)

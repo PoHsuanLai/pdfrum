@@ -1,6 +1,7 @@
 //! `pdfrum inspect …`: the file's insides — objects, the cross-reference
 //! table, revisions, the structure tree.
 
+use std::fmt::Write as _;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -8,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use pdfrum::{Kid, ObjRef, Object, Resolve, StructTree};
 use serde::Serialize;
 
-use crate::out::{Align, Table, outln};
+use crate::out::{Align, Table, out, outln};
 use crate::term::{Style, Term};
 use crate::{out, syntax};
 
@@ -22,6 +23,7 @@ pub fn object(
     num: u32,
     generation: u16,
     decode: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let reference = ObjRef::new(num, generation);
@@ -39,8 +41,45 @@ pub fn object(
     let mut text = format!("{num} {generation} obj\n");
     syntax::object(&mut text, &object, 0);
     text.push_str("\nendobj");
-    outln!("{text}");
+    outln!("{}", syntax::highlight(&with_hints(&text, &doc), term));
     Ok(ExitCode::SUCCESS)
+}
+
+/// The dump with a `% …` hint after each top-level entry whose value is a
+/// reference — what the object it points at is — so `/Pages 2 0 R` reads
+/// `/Pages 2 0 R  % Pages` without a second command.
+fn with_hints(text: &str, doc: &pdfrum::Document) -> String {
+    let mut out = String::with_capacity(text.len() + 64);
+    for (i, line) in text.lines().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(line);
+        // Exactly one level in, `/Key N G R`.
+        let entry = line.strip_prefix("  ").filter(|l| !l.starts_with(' '));
+        if let Some(entry) = entry
+            && let Some(hint) = reference_hint(entry, doc)
+        {
+            out.push_str("  % ");
+            out.push_str(&hint);
+        }
+    }
+    out
+}
+
+fn reference_hint(entry: &str, doc: &pdfrum::Document) -> Option<String> {
+    let mut parts = entry.split(' ');
+    let key = parts.next()?;
+    if !key.starts_with('/') {
+        return None;
+    }
+    let num: u32 = parts.next()?.parse().ok()?;
+    let generation: u16 = parts.next()?.parse().ok()?;
+    if parts.next()? != "R" || parts.next().is_some() {
+        return None;
+    }
+    let target = doc.fetch(ObjRef::new(num, generation)).ok()?;
+    Some(syntax::describe(&target))
 }
 
 // ---- xref -----------------------------------------------------------------
@@ -51,6 +90,10 @@ struct XrefRow {
     generation: u16,
     /// `offset`, `in_stream` or `free`.
     kind: &'static str,
+    /// What the object is: its `/Type`, a stream's filter and size, an
+    /// array's length, or the scalar.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    what: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     offset: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,6 +123,7 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
                 object: num,
                 generation,
                 kind: "offset",
+                what: what(&doc, num, generation),
                 offset: Some(offset),
                 stream: None,
                 index: None,
@@ -88,6 +132,7 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
                 object: num,
                 generation,
                 kind: "in_stream",
+                what: what(&doc, num, generation),
                 offset: None,
                 stream: Some(stream.num),
                 index: Some(index),
@@ -96,6 +141,7 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
                 object: num,
                 generation,
                 kind: "free",
+                what: None,
                 offset: None,
                 stream: None,
                 index: None,
@@ -135,13 +181,16 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
             ],
         );
         out::heading(term, "trailer");
-        for line in report.trailer.lines() {
-            outln!("  {line}");
+        let mut trailer = String::new();
+        for line in with_hints(&report.trailer, &doc).lines() {
+            let _ = writeln!(trailer, "  {line}");
         }
+        out!("{}", syntax::highlight(&trailer, term));
         let mut table = Table::new(&[
             ("OBJ", Align::Right),
             ("GEN", Align::Right),
             ("PLACE", Align::Left),
+            ("WHAT", Align::Left),
         ]);
         for r in &report.rows {
             let place = match (r.offset, r.stream, r.index) {
@@ -153,11 +202,19 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
                 term.paint(Style::Ident, &r.object.to_string()),
                 r.generation.to_string(),
                 place,
+                r.what.clone().unwrap_or_default(),
             ]);
         }
         table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// [`syntax::describe`] of one object, or nothing when it cannot be read.
+fn what(doc: &pdfrum::Document, num: u32, generation: u16) -> Option<String> {
+    doc.fetch(ObjRef::new(num, generation))
+        .ok()
+        .map(|o| syntax::describe(&o))
 }
 
 // ---- revisions ------------------------------------------------------------

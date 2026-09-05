@@ -1234,8 +1234,9 @@ fn extract_images_keeps_jpeg_bytes_and_decodes_the_rest_to_png() {
     .unwrap();
     assert_eq!(v[0]["format"], "jpg");
     assert_eq!(v[0]["width"], 120);
+    assert_eq!(v[0]["uses"], 1);
     let written = v[0]["written"].as_str().unwrap();
-    assert!(written.ends_with("mona-p1-1.jpg"), "{written}");
+    assert!(written.ends_with("mona-1.jpg"), "{written}");
     assert_eq!(
         std::fs::read(written).unwrap(),
         std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mona_lisa.jpg"))
@@ -1260,6 +1261,40 @@ fn extract_images_keeps_jpeg_bytes_and_decodes_the_rest_to_png() {
             .unwrap()
             .contains("no images")
     );
+}
+
+#[test]
+fn extract_images_folds_repeated_draws_and_leaves_spacers_out_unless_asked() {
+    // The corpus guide draws one 15x15 bullet sixteen times and no spacers;
+    // the FQA file draws two-pixel spacers 301 times and nothing else.
+    let guide = "../../../benches/corpus/text_quick_start.pdf";
+    let v = json(&["extract", "images", guide, "--json"]).unwrap();
+    let bullet = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["width"] == 15 && r["height"] == 15)
+        .expect("the bullet is listed once");
+    assert_eq!(bullet["uses"], 16);
+    assert_eq!(bullet["object"], 33);
+    let all = json(&["extract", "images", guide, "--all", "--json"]).unwrap();
+    assert!(all.as_array().unwrap().len() > v.as_array().unwrap().len());
+    assert!(all.as_array().unwrap().iter().all(|r| r["uses"] == 1));
+
+    let fqa = "../../../benches/corpus/image_en_fqa.pdf";
+    assert!(stdout(&["extract", "images", fqa]).unwrap().contains("no images"));
+    let spacers = json(&["extract", "images", fqa, "--all", "--json"]).unwrap();
+    assert_eq!(spacers.as_array().unwrap().len(), 301);
+    assert!(spacers.as_array().unwrap().iter().all(|r| r["width"] == 2));
+}
+
+#[test]
+fn inspect_object_hints_at_what_a_reference_is() {
+    let text = stdout(&["inspect", "object", fx("fixtures/hello_world_2_pages.pdf"), "1"]).unwrap();
+    assert!(text.contains("/Pages 2 0 R  % Pages"), "{text}");
+    let xref = stdout(&["inspect", "xref", fx("fixtures/bug_1484283.pdf")]).unwrap();
+    assert!(xref.contains("/Root 1 0 R  % Catalog"), "{xref}");
+    assert!(xref.contains("ObjStm, stream raw"), "{xref}");
 }
 
 #[test]
