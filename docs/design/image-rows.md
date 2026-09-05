@@ -119,6 +119,18 @@ the board.
 
 ## Step 5 — lazy `unpack`
 
+*Landed 2026-09-06 in `048b0c7`, `4e30401` and `df77df2`; what it cost and
+what it moved is in `docs/status/image-rows.md` §"Step 5 — lazy unpack".
+`ImageData::pixels` became `ImageData::samples: Samples`, a `Packed`/`Whole`
+enum rather than the "`ImageData` carries the still-packed bytes" this
+section describes, because three of the four families the ladder produces
+genuinely cannot be walked lazily. Two corrections to what follows: the CLI
+consumer named below is not one — `crates/pdfrum-cli/src/cmd/pages.rs`
+declares a `Pixels` of its own, for image files on the way into a save, and
+never sees `pdfrum_page::Pixels`; and `crates/pdfrum-render/src/imagecache.rs`
+does hold a fourth consumer this section did not name, the stencil check at
+`:102`.*
+
 Deferred out of step 2 and not yet done. Worth **292 M `Ir`** on the guide
 (`unpack` inclusive, measured at step 1), which is the last large block of
 the image path this pass does not reach.

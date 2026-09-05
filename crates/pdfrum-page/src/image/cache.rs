@@ -277,7 +277,7 @@ mod tests {
     )]
 
     use super::{ImageCache, MAX_ENTRIES, RequestedSize};
-    use crate::image::{ImageData, Pixels};
+    use crate::image::{ImageData, Pixels, Samples};
     use pdfrum_object::ObjRef;
     use std::sync::Arc;
 
@@ -285,7 +285,7 @@ mod tests {
         Arc::new(ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Gray8(Box::from(&[0u8][..])),
+            samples: Samples::Whole(Pixels::Gray8(Box::from(&[0u8][..]))),
             mask: None,
             matte: None,
             interpolate: false,
@@ -425,7 +425,7 @@ mod tests {
         Arc::new(ImageData {
             width,
             height,
-            pixels: Pixels::Gray8(vec![0u8; count].into()),
+            samples: Samples::Whole(Pixels::Gray8(vec![0u8; count].into())),
             mask: None,
             matte: None,
             interpolate: false,

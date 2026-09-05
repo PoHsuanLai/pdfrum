@@ -26,18 +26,17 @@
 //! per-pixel entry point beside it: a caller that wants a whole image walks
 //! the rows, and a caller that wants one pixel does not exist.
 //!
-//! # What is not here yet
+//! # Where the packed samples come in
 //!
-//! The design (`docs/design/image-rows.md`) also names `Unpacked`, which
-//! widens *packed* samples — one, two, four and sixteen bits per component —
-//! to bytes per row, and a `Depth` to drive it. Those belong with the lazy
-//! `unpack` step, which is deferred: today [`crate::image::unpack`] has
-//! already widened everything to eight bits by the time a [`Pixels`] exists,
-//! so the row pipeline starts at [`Source`] and there is nothing packed left
-//! for an `Unpacked` stage to do. See that design's "Step 5 — lazy unpack".
+//! [`Source`] takes [`Samples`], not [`Pixels`]: for a [`Samples::Packed`]
+//! image it drives an [`Unpacked`] stage that widens the row it is about to
+//! yield, and for a [`Samples::Whole`] one it borrows straight out of the
+//! decoded buffer. So the pipeline is `Unpacked -> Converted` for everything
+//! the filter chain left packed, and the full-size widened buffer the eager
+//! `unpack` used to build never exists.
 
 use crate::color::{Rgb, adobe_cmyk_to_srgb};
-use crate::image::{BitImage, Pixels};
+use crate::image::{BitImage, Pixels, Samples, Unpacked};
 
 /// A run of pixels in one representation.
 ///
@@ -109,11 +108,12 @@ impl Palette {
     }
 }
 
-/// The source stage: an already-unpacked [`Pixels`] walked one row at a time.
+/// The source stage: an image's [`Samples`] walked one row at a time.
 ///
-/// Every arm borrows straight out of the decoded buffer, so this stage owns no
-/// memory at all — except for [`Pixels::Stencil`], whose bits have to be
-/// widened into something a row can borrow.
+/// A [`Samples::Whole`] arm borrows straight out of the decoded buffer, so it
+/// owns no memory at all — except for [`Pixels::Stencil`], whose bits have to
+/// be widened into something a row can borrow. A [`Samples::Packed`] one owns
+/// the [`Unpacked`] stage's single row buffer, and nothing more.
 #[derive(Debug)]
 pub struct Source<'a> {
     kind: SourceKind<'a>,
@@ -130,6 +130,14 @@ enum SourceKind<'a> {
         bits: &'a BitImage,
         scratch: Vec<u8>,
     },
+    /// Still-packed samples, widened one row at a time by [`Unpacked`].
+    ///
+    /// The component count decides which [`Samples`] arm the widened row is,
+    /// exactly as it decided which [`Pixels`] variant the eager pass built.
+    Packed {
+        rows: Unpacked<'a>,
+        components: usize,
+    },
     Gray(&'a [u8]),
     Rgb(&'a [u8]),
     Cmyk(&'a [u8]),
@@ -142,7 +150,7 @@ enum SourceKind<'a> {
 /// arm it is, at run time, and a caller that must handle all five would
 /// otherwise be five monomorphised copies of the same loop.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum Samples<'a> {
+pub(crate) enum SampleRow<'a> {
     /// One grey component per pixel. A stencil arrives here too, already
     /// widened: a set bit is ink, which is 0, and a clear one is 255.
     Gray(&'a [u8]),
@@ -155,19 +163,23 @@ pub(crate) enum Samples<'a> {
 }
 
 impl<'a> Source<'a> {
-    /// Start walking `pixels`, an image `width` by `height`.
+    /// Start walking `samples`, an image `width` by `height`.
     #[must_use]
-    pub fn new(pixels: &'a Pixels, width: u32, height: u32) -> Self {
+    pub fn new(samples: &'a Samples, width: u32, height: u32) -> Self {
         let width = width as usize;
-        let kind = match pixels {
-            Pixels::Stencil(bits) => SourceKind::Stencil {
+        let kind = match samples {
+            Samples::Packed(p) => SourceKind::Packed {
+                rows: Unpacked::new(p),
+                components: p.components(),
+            },
+            Samples::Whole(Pixels::Stencil(bits)) => SourceKind::Stencil {
                 bits,
                 scratch: vec![0_u8; width],
             },
-            Pixels::Gray8(d) => SourceKind::Gray(d),
-            Pixels::Rgb8(d) => SourceKind::Rgb(d),
-            Pixels::Cmyk8(d) => SourceKind::Cmyk(d),
-            Pixels::Indexed { indices, .. } => SourceKind::Indexed(indices),
+            Samples::Whole(Pixels::Gray8(d)) => SourceKind::Gray(d),
+            Samples::Whole(Pixels::Rgb8(d)) => SourceKind::Rgb(d),
+            Samples::Whole(Pixels::Cmyk8(d)) => SourceKind::Cmyk(d),
+            Samples::Whole(Pixels::Indexed { indices, .. }) => SourceKind::Indexed(indices),
         };
         Self {
             kind,
@@ -184,9 +196,22 @@ impl<'a> Source<'a> {
     /// quadratic in `y`. The pipeline itself never wants this: the render path
     /// walks every row in order, which is the whole point of it.
     #[cfg(test)]
-    pub(crate) fn at_row(pixels: &'a Pixels, width: u32, y: u32) -> Self {
-        let mut source = Self::new(pixels, width, y.saturating_add(1));
-        source.y = y;
+    pub(crate) fn at_row(samples: &'a Samples, width: u32, y: u32) -> Self {
+        let mut source = Self::new(samples, width, y.saturating_add(1));
+        match &mut source.kind {
+            // A packed source has no index to skip to — its rows come out of
+            // a bit walk that has to run — so it is pulled forward instead.
+            // Only tests reach this, and only for small `y`.
+            SourceKind::Packed { rows, .. } => {
+                for _ in 0..y {
+                    if rows.next_row().is_none() {
+                        break;
+                    }
+                }
+                source.y = y;
+            }
+            _ => source.y = y,
+        }
         source
     }
 
@@ -200,7 +225,7 @@ impl<'a> Source<'a> {
     /// rejected` and the corpus's damaged images both pin. [`Converted`]
     /// clears the tail of its own buffer so the missing pixels read as black
     /// rather than as the row before.
-    pub(crate) fn next_row(&mut self) -> Option<Samples<'_>> {
+    pub(crate) fn next_row(&mut self) -> Option<SampleRow<'_>> {
         if self.y >= self.height {
             return None;
         }
@@ -228,23 +253,34 @@ impl<'a> Source<'a> {
                     // later, so this stage only preserves that convention.
                     *slot = if set { 0 } else { 255 };
                 }
-                Some(Samples::Gray(scratch))
+                Some(SampleRow::Gray(scratch))
             }
             SourceKind::Gray(d) => {
                 let (a, b) = span(1, d.len())?;
-                Some(Samples::Gray(d.get(a..b)?))
+                Some(SampleRow::Gray(d.get(a..b)?))
             }
             SourceKind::Rgb(d) => {
                 let (a, b) = span(3, d.len())?;
-                Some(Samples::Rgb(d.get(a..b)?))
+                Some(SampleRow::Rgb(d.get(a..b)?))
             }
             SourceKind::Cmyk(d) => {
                 let (a, b) = span(4, d.len())?;
-                Some(Samples::Cmyk(d.get(a..b)?))
+                Some(SampleRow::Cmyk(d.get(a..b)?))
             }
             SourceKind::Indexed(d) => {
                 let (a, b) = span(1, d.len())?;
-                Some(Samples::Indexed(d.get(a..b)?))
+                Some(SampleRow::Indexed(d.get(a..b)?))
+            }
+            // `Unpacked` yields exactly the row the eager pass would have
+            // written, already at a byte per component, so the representation
+            // is the component count and nothing else.
+            SourceKind::Packed { rows, components } => {
+                let row = rows.next_row()?;
+                Some(match *components {
+                    1 => SampleRow::Gray(row),
+                    4 => SampleRow::Cmyk(row),
+                    _ => SampleRow::Rgb(row),
+                })
             }
         }
     }
@@ -317,22 +353,22 @@ impl Rows for Converted<'_> {
 /// **opaque black** in the tail, because that is what the per-pixel path
 /// produced: it read each missing component through `get(..).unwrap_or(0)`
 /// and then made a colour of the zeroes.
-fn convert_row(samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8]) {
+fn convert_row(samples: SampleRow<'_>, palette: Option<&Palette>, dst: &mut [Rgba8]) {
     let converted = match samples {
-        Samples::Gray(src) => {
+        SampleRow::Gray(src) => {
             for (slot, &v) in dst.iter_mut().zip(src) {
                 *slot = Rgba8([v, v, v, 255]);
             }
             src.len()
         }
-        Samples::Rgb(src) => {
+        SampleRow::Rgb(src) => {
             for (slot, px) in dst.iter_mut().zip(src.chunks_exact(3)) {
                 let rgb = [px.first(), px.get(1), px.get(2)].map(|c| c.copied().unwrap_or(0));
                 *slot = Rgba8([rgb[0], rgb[1], rgb[2], 255]);
             }
             src.len() / 3
         }
-        Samples::Cmyk(src) => {
+        SampleRow::Cmyk(src) => {
             for (slot, px) in dst.iter_mut().zip(src.chunks_exact(4)) {
                 let cmyk =
                     [px.first(), px.get(1), px.get(2), px.get(3)].map(|v| v.copied().unwrap_or(0));
@@ -342,7 +378,7 @@ fn convert_row(samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8
             }
             src.len() / 4
         }
-        Samples::Indexed(src) => {
+        SampleRow::Indexed(src) => {
             for (slot, &index) in dst.iter_mut().zip(src) {
                 let Rgb8(rgb) = palette.map_or(Rgb8([0, 0, 0]), |p| p.get(index));
                 *slot = Rgba8([rgb[0], rgb[1], rgb[2], 255]);
@@ -356,15 +392,15 @@ fn convert_row(samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8
         let black = match samples {
             // An absent *index* is 0, and index 0's palette entry is a real
             // colour — the same ladder the per-pixel path walked.
-            Samples::Indexed(_) => {
+            SampleRow::Indexed(_) => {
                 let Rgb8(rgb) = palette.map_or(Rgb8([0, 0, 0]), |p| p.get(0));
                 Rgba8([rgb[0], rgb[1], rgb[2], 255])
             }
-            Samples::Cmyk(_) => {
+            SampleRow::Cmyk(_) => {
                 let rgb = adobe_cmyk_to_srgb(0, 0, 0, 0);
                 Rgba8([rgb[0], rgb[1], rgb[2], 255])
             }
-            Samples::Gray(_) | Samples::Rgb(_) => Rgba8([0, 0, 0, 255]),
+            SampleRow::Gray(_) | SampleRow::Rgb(_) => Rgba8([0, 0, 0, 255]),
         };
         tail.fill(black);
     }
@@ -374,8 +410,23 @@ fn convert_row(samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8
 mod tests {
     use super::*;
 
-    fn gray(data: &[u8]) -> Pixels {
-        Pixels::Gray8(data.into())
+    fn gray(data: &[u8]) -> Samples {
+        Samples::Whole(Pixels::Gray8(data.into()))
+    }
+
+    /// The still-packed form of the same grey samples: eight bits, one
+    /// component, the identity decode.
+    fn packed_gray(data: &[u8], width: u32, height: u32) -> Samples {
+        Samples::Packed(crate::image::Packed::new(
+            data.into(),
+            crate::image::Depth::Eight,
+            1,
+            width as usize,
+            width,
+            height,
+            &crate::color::ColorSpace::DeviceGray,
+            None,
+        ))
     }
 
     #[test]
@@ -397,7 +448,7 @@ mod tests {
 
     #[test]
     fn an_rgb_row_keeps_its_component_order() {
-        let px = Pixels::Rgb8(Box::new([1, 2, 3, 4, 5, 6]));
+        let px = Samples::Whole(Pixels::Rgb8(Box::new([1, 2, 3, 4, 5, 6])));
         let mut c = Converted::new(Source::new(&px, 2, 1), None);
         let row = c.next().expect("row").pixels().to_vec();
         assert_eq!(row, vec![Rgba8([1, 2, 3, 255]), Rgba8([4, 5, 6, 255])]);
@@ -405,10 +456,10 @@ mod tests {
 
     #[test]
     fn an_indexed_row_reads_its_palette_and_falls_back_to_black() {
-        let px = Pixels::Indexed {
+        let px = Samples::Whole(Pixels::Indexed {
             indices: Box::new([0, 1, 9]),
             palette: Box::new([]),
-        };
+        });
         let palette = Palette::new(&[
             Rgb {
                 r: 1.0,
@@ -444,7 +495,7 @@ mod tests {
             row_bytes: 1,
             bits: vec![0b1010_0000],
         };
-        let px = Pixels::Stencil(bits);
+        let px = Samples::Whole(Pixels::Stencil(bits));
         let mut c = Converted::new(Source::new(&px, 4, 1), None);
         let row = c.next().expect("row").pixels().to_vec();
         assert_eq!(
@@ -484,5 +535,27 @@ mod tests {
         assert_eq!(c.next().expect("row 3").pixels(), vec![black, black]);
         // And the image ends where it said it would.
         assert!(c.next().is_none());
+    }
+
+    /// The lazy arm and the eager one are the same rows.
+    ///
+    /// `Unpacked` widens as the pipeline pulls; the eager `unpack` widened
+    /// first and `Source` walked the result. For eight-bit identity-decoded
+    /// samples the two are the same bytes, which is what makes step 5 a move
+    /// of work rather than a change of arithmetic.
+    #[test]
+    fn a_packed_source_yields_what_an_unpacked_one_does() {
+        let data: Vec<u8> = (0..12u8).map(|i| i.wrapping_mul(23)).collect();
+        let eager = gray(&data);
+        let lazy = packed_gray(&data, 3, 4);
+        let mut a = Converted::new(Source::new(&eager, 3, 4), None);
+        let mut b = Converted::new(Source::new(&lazy, 3, 4), None);
+        for _ in 0..4 {
+            let want = a.next().expect("an eager row").pixels().to_vec();
+            let got = b.next().expect("a lazy row").pixels().to_vec();
+            assert_eq!(want, got);
+        }
+        assert!(a.next().is_none());
+        assert!(b.next().is_none());
     }
 }
