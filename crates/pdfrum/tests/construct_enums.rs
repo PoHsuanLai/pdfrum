@@ -38,6 +38,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum.txt", "pdfrum::Error", "Error"),
     ("pdfrum.txt", "pdfrum::Rotation", "Rotation"),
     ("pdfrum.txt", "pdfrum::Update", "Update"),
+    ("pdfrum.txt", "pdfrum::StampPosition", "StampPosition"),
     ("pdfrum.txt", "pdfrum::FlattenMode", "FlattenMode"),
     ("pdfrum.txt", "pdfrum::Flattened", "Flattened"),
     ("pdfrum-common.txt", "pdfrum_common::DiagKind", "DiagKind"),
@@ -146,6 +147,14 @@ fn construct_default_feature_variants() -> usize {
     let _ = Update::Incremental;
     let _ = Update::Rewrite;
     n += 2;
+
+    // pdfrum::StampPosition — 5
+    let _ = StampPosition::Center;
+    let _ = StampPosition::TopLeft;
+    let _ = StampPosition::TopRight;
+    let _ = StampPosition::BottomLeft;
+    let _ = StampPosition::BottomRight;
+    n += 5;
 
     // pdfrum::FlattenMode — 2, pdfrum::Flattened — 2
     let _ = FlattenMode::Display;
@@ -694,8 +703,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 298, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 32, "default-feature enum count");
+    assert_eq!(constructed, 303, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 33, "default-feature enum count");
 }
 
 #[test]

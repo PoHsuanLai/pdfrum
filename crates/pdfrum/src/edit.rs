@@ -157,16 +157,7 @@ impl PageEdit {
         let Some(object) = self.page.object_mut(index) else {
             return Err(IndexOutOfRange { index, len });
         };
-        match object {
-            PageObject::Path(p) => p.object.matrix = transform * p.object.matrix,
-            PageObject::Text(t) => {
-                t.object.matrix = transform * t.object.matrix;
-                t.object.position = transform * t.object.position;
-            }
-            PageObject::Image(i) => i.object.matrix = transform * i.object.matrix,
-            PageObject::Shading(s) => s.object.matrix = transform * s.object.matrix,
-            PageObject::Form(f) => f.object.matrix = transform * f.object.matrix,
-        }
+        transform_object(object, transform);
         Ok(())
     }
 
@@ -196,21 +187,20 @@ impl PageEdit {
     pub fn graph_mut(&mut self) -> &mut pdfrum_page::Page {
         &mut self.page
     }
+}
 
-    /// The page's `/Resources` as it stands in the document, which the
-    /// regenerator consults for the names already in use.
-    pub(crate) fn resources(&self, doc: &crate::Document) -> pdfrum_object::Dict {
-        doc.inner
-            .page(self.index)
-            .ok()
-            .and_then(|page| {
-                page.inherited(pdfrum_object::names::RESOURCES, &doc.inner)?
-                    .resolve(&doc.inner)
-                    .ok()?
-                    .as_dict()
-                    .cloned()
-            })
-            .unwrap_or_default()
+/// Move `object` by `transform`, composed before whatever it already had —
+/// the body of [`PageEdit::transform`], for an object not yet on a page.
+pub(crate) fn transform_object(object: &mut PageObject, transform: Affine) {
+    match object {
+        PageObject::Path(p) => p.object.matrix = transform * p.object.matrix,
+        PageObject::Text(t) => {
+            t.object.matrix = transform * t.object.matrix;
+            t.object.position = transform * t.object.position;
+        }
+        PageObject::Image(i) => i.object.matrix = transform * i.object.matrix,
+        PageObject::Shading(s) => s.object.matrix = transform * s.object.matrix,
+        PageObject::Form(f) => f.object.matrix = transform * f.object.matrix,
     }
 }
 

@@ -546,43 +546,7 @@ impl<'a> Page<'a> {
     /// than parsed apart — and the ends are what lets the editor say which
     /// element each object came from.
     fn content_segments(&self, diags: &mut Diagnostics) -> (Vec<u8>, Vec<usize>) {
-        let r = &self.doc.inner;
-        let Some(contents) = self.dict.dict.get(&Name::from("Contents"), r) else {
-            return (Vec::new(), Vec::new());
-        };
-        let mut out = Vec::new();
-        let mut ends = Vec::new();
-        let mut push = |object: &pdfrum_object::Object,
-                        out: &mut Vec<u8>,
-                        ends: &mut Vec<usize>| {
-            if let Some(stream) = object.as_stream() {
-                let decoded = pdfrum_filters::decode_chain(stream, 0, r, &self.doc.limits, diags);
-                out.extend_from_slice(&decoded.data);
-                // The separating space belongs to the element before it: it is
-                // what terminates a stream ending mid-token.
-                out.push(b' ');
-            }
-            ends.push(out.len());
-        };
-        let Some(direct) = contents.as_direct() else {
-            return (out, ends);
-        };
-        match direct {
-            pdfrum_object::Object::Stream(_) => push(direct, &mut out, &mut ends),
-            pdfrum_object::Object::Array(array) => {
-                for element in array.iter() {
-                    if let Ok(resolved) = element.resolve(r) {
-                        push(resolved.get(), &mut out, &mut ends);
-                    } else {
-                        // A dangling element still occupies an index, so the
-                        // ones after it keep their numbers.
-                        ends.push(out.len());
-                    }
-                }
-            }
-            _ => {}
-        }
-        (out, ends)
+        content_segments(self.doc, &self.dict, &self.doc.inner, diags)
     }
 
     #[cfg(feature = "edit")]
@@ -593,30 +557,87 @@ impl<'a> Page<'a> {
     /// the element boundaries, which the render and text paths have no use
     /// for.
     pub(crate) fn build_for_edit(&self, ctx: &mut BuildContext) -> pdfrum_page::Page {
-        let mut diags = Diagnostics::default();
-        let (bytes, ends) = self.content_segments(&mut diags);
-        let ops = pdfrum_page::parse_content(&bytes, &self.doc.limits, &mut diags);
-        let bounds =
-            pdfrum_page::StreamBounds::from_joined(&bytes, ops.len(), &ends, &self.doc.limits);
-        let resources = pdfrum_page::Resources::for_page(
-            self.dict
-                .inherited(&Name::from("Resources"), &self.doc.inner)
-                .and_then(|object| object.resolve(&self.doc.inner).ok()?.as_dict().cloned()),
-        );
-        let page = pdfrum_page::build_page_streams(
-            &ops,
-            &bounds,
-            &self.dict.dict,
-            |key| self.dict.inherited(key, &self.doc.inner),
-            &resources,
-            &self.doc.inner,
-            ctx,
-            &self.doc.limits,
-            &mut diags,
-        );
-        self.doc.note(&diags);
-        page
+        build_graph(self.doc, &self.dict, &self.doc.inner, ctx)
     }
+}
+
+/// The content of `dict`'s page, decoded and joined, with the end offset of
+/// each `/Contents` element — read through `r`.
+fn content_segments(
+    doc: &Document,
+    dict: &PageDict,
+    r: &impl Resolve,
+    diags: &mut Diagnostics,
+) -> (Vec<u8>, Vec<usize>) {
+    let Some(contents) = dict.dict.get(&Name::from("Contents"), r) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut ends = Vec::new();
+    let mut push = |object: &pdfrum_object::Object, out: &mut Vec<u8>, ends: &mut Vec<usize>| {
+        if let Some(stream) = object.as_stream() {
+            let decoded = pdfrum_filters::decode_chain(stream, 0, r, &doc.limits, diags);
+            out.extend_from_slice(&decoded.data);
+            // The separating space belongs to the element before it: it is
+            // what terminates a stream ending mid-token.
+            out.push(b' ');
+        }
+        ends.push(out.len());
+    };
+    let Some(direct) = contents.as_direct() else {
+        return (out, ends);
+    };
+    match direct {
+        pdfrum_object::Object::Stream(_) => push(direct, &mut out, &mut ends),
+        pdfrum_object::Object::Array(array) => {
+            for element in array.iter() {
+                if let Ok(resolved) = element.resolve(r) {
+                    push(resolved.get(), &mut out, &mut ends);
+                } else {
+                    // A dangling element still occupies an index, so the
+                    // ones after it keep their numbers.
+                    ends.push(out.len());
+                }
+            }
+        }
+        _ => {}
+    }
+    (out, ends)
+}
+
+/// The object graph of `dict`'s page for editing, read through `r`: the
+/// base document for a page as it was opened, or an editing session's
+/// overlay for the page as that session's edits leave it — so a stream an
+/// earlier edit appended is a clean stream of the graph, and the names it
+/// uses are kept.
+#[cfg(feature = "edit")]
+pub(crate) fn build_graph(
+    doc: &Document,
+    dict: &PageDict,
+    r: &impl Resolve,
+    ctx: &mut BuildContext,
+) -> pdfrum_page::Page {
+    let mut diags = Diagnostics::default();
+    let (bytes, ends) = content_segments(doc, dict, r, &mut diags);
+    let ops = pdfrum_page::parse_content(&bytes, &doc.limits, &mut diags);
+    let bounds = pdfrum_page::StreamBounds::from_joined(&bytes, ops.len(), &ends, &doc.limits);
+    let resources = pdfrum_page::Resources::for_page(
+        dict.inherited(&Name::from("Resources"), r)
+            .and_then(|object| object.resolve(r).ok()?.as_dict().cloned()),
+    );
+    let page = pdfrum_page::build_page_streams(
+        &ops,
+        &bounds,
+        &dict.dict,
+        |key| dict.inherited(key, r),
+        &resources,
+        r,
+        ctx,
+        &doc.limits,
+        &mut diags,
+    );
+    doc.note(&diags);
+    page
 }
 
 /// A page's `/Rotate`, normalized to one of four quarter turns

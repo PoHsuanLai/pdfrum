@@ -8,6 +8,68 @@ use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, encode_text,
 };
 
+/// What an attachment carries besides its name and bytes.
+///
+/// A config struct with [`Default`], filled in with struct-update syntax;
+/// every field is optional and an absent one writes no key.
+///
+/// ```
+/// use pdfrum::AttachmentOptions;
+///
+/// let options = AttachmentOptions {
+///     description: Some("The source data".into()),
+///     mime_type: Some("text/csv".into()),
+///     ..AttachmentOptions::default()
+/// };
+/// assert!(options.modified.is_none());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AttachmentOptions {
+    /// The file specification's `/Desc`, the text a viewer shows beside the
+    /// name. Read back by [`Attachment::description`](crate::Attachment::description).
+    pub description: Option<String>,
+    /// The embedded file's MIME type — `text/plain`, `application/pdf` —
+    /// written as the stream's `/Subtype` name. Read back by
+    /// [`Attachment::subtype`](crate::Attachment::subtype).
+    pub mime_type: Option<String>,
+    /// The file's own modification time as a PDF date string
+    /// (`D:YYYYMMDDHHmmSS…`, ISO 32000-1 §7.9.4), written to `/Params
+    /// /ModDate`. [`pdf_date`](crate::pdf_date) spells a `SystemTime` that
+    /// way. Read back by [`Attachment::param`](crate::Attachment::param).
+    pub modified: Option<String>,
+}
+
+/// The embedded file stream (ISO 32000-1 §7.11.4): `/Type /EmbeddedFile`,
+/// the MIME type as `/Subtype`, `/DL` and `/Params` with the size, an MD5
+/// `/CheckSum` and the modification date when one was given. The save
+/// flate-compresses it like every other filterless stream it writes.
+fn embedded_file(bytes: &[u8], mime_type: Option<&str>, modified: Option<&str>) -> Stream {
+    let len = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
+    let mut params = Dict::new();
+    params.insert(Name::from("Size"), Object::Int(len));
+    params.insert(
+        Name::from("CheckSum"),
+        Object::Str(PdfString::hex(pdfrum_crypt::md5(bytes))),
+    );
+    if let Some(modified) = modified.filter(|date| !date.is_empty()) {
+        params.insert(
+            Name::from("ModDate"),
+            Object::Str(PdfString::literal(encode_text(modified))),
+        );
+    }
+    let mut dict = Dict::new();
+    dict.insert(Name::from("Type"), Object::Name(Name::from("EmbeddedFile")));
+    if let Some(mime_type) = mime_type.filter(|mime| !mime.is_empty()) {
+        dict.insert(
+            Name::from("Subtype"),
+            Object::Name(Name::from(mime_type.as_bytes())),
+        );
+    }
+    dict.insert(Name::from("DL"), Object::Int(len));
+    dict.insert(Name::from("Params"), Object::Dict(params));
+    Stream::new(dict, ByteSpan::from(bytes.to_vec()))
+}
+
 impl DocEdit<'_> {
     /// The current attachments as (name, value) pairs, read through the
     /// edits so far; empty without a tree.
@@ -185,17 +247,56 @@ impl DocEdit<'_> {
         Ok(true)
     }
 
-    /// Adds an embedded file named `name`, sorted into the name tree by
-    /// name, and returns its index among the attachments. The file
-    /// specification is `<< /Type /Filespec /UF (name) /F (name) >>`, a new
-    /// indirect object; `bytes` are stored as
-    /// [`DocEdit::set_attachment_file`] stores them.
+    /// Adds an embedded file named `name`, sorted into the `/EmbeddedFiles`
+    /// name tree by name — creating the tree when the document has none —
+    /// and returns its index among the attachments.
+    ///
+    /// The file specification is `<< /Type /Filespec /UF (name) /F (name)
+    /// /Desc (…) /EF << /F stream >> >>`, a new indirect object; the stream
+    /// is `/Type /EmbeddedFile` with `/Subtype` as the MIME type, `/DL`, and
+    /// `/Params` holding `/Size`, an MD5 `/CheckSum` and `/ModDate`, and the
+    /// save flate-compresses it. A second attachment with the same name is
+    /// a second entry, not a replacement.
+    ///
+    /// ```
+    /// use pdfrum::{AttachmentOptions, Document, SaveOptions};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// edit.add_attachment(
+    ///     "notes.txt",
+    ///     b"Read me",
+    ///     &AttachmentOptions {
+    ///         mime_type: Some("text/plain".into()),
+    ///         ..AttachmentOptions::default()
+    ///     },
+    /// )?;
+    /// let mut bytes = Vec::new();
+    /// edit.write_to(&mut bytes, &SaveOptions::default())?;
+    ///
+    /// let saved = Document::from_bytes(bytes.into())?;
+    /// let attachment = &saved.attachments()[0];
+    /// assert_eq!(attachment.file_name(), "notes.txt");
+    /// assert_eq!(attachment.data().as_deref(), Some(&b"Read me"[..]));
+    /// assert_eq!(attachment.subtype().as_deref(), Some("text/plain"));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
     ///
     /// # Errors
     ///
     /// When the document has no catalog to hold the tree.
-    pub fn add_attachment(&mut self, name: &str, bytes: &[u8]) -> crate::Result<usize> {
+    pub fn add_attachment(
+        &mut self,
+        name: &str,
+        bytes: &[u8],
+        options: &AttachmentOptions,
+    ) -> crate::Result<usize> {
         let mut entries = self.attachment_entries()?;
+        let stream_ref = self.inner.add(Object::Stream(Box::new(embedded_file(
+            bytes,
+            options.mime_type.as_deref(),
+            options.modified.as_deref(),
+        ))));
         let mut spec = Dict::new();
         spec.insert(Name::from("Type"), Object::Name(Name::from("Filespec")));
         spec.insert(
@@ -206,6 +307,15 @@ impl DocEdit<'_> {
             Name::from("F"),
             Object::Str(PdfString::literal(encode_text(name))),
         );
+        if let Some(description) = options.description.as_deref().filter(|d| !d.is_empty()) {
+            spec.insert(
+                Name::from("Desc"),
+                Object::Str(PdfString::literal(encode_text(description))),
+            );
+        }
+        let mut ef = Dict::new();
+        ef.insert(Name::from("F"), Object::Ref(stream_ref));
+        spec.insert(Name::from("EF"), Object::Dict(ef));
         let reference = self.inner.add(Object::Dict(spec));
         let index = entries
             .iter()
@@ -213,14 +323,42 @@ impl DocEdit<'_> {
             .unwrap_or(entries.len());
         entries.insert(index, (name.to_owned(), Object::Ref(reference)));
         self.write_attachment_entries(entries)?;
-        self.set_attachment_file(index, bytes)?;
         Ok(index)
     }
 
+    /// Removes every attachment named `name` from the name tree; `Ok(false)`
+    /// when there is none. The objects go with the next full save's garbage
+    /// collection.
+    ///
+    /// ```
+    /// use pdfrum::Document;
+    ///
+    /// let doc = Document::open("tests/fixtures/embedded_attachments.pdf")?;
+    /// let mut edit = doc.edit();
+    /// assert!(edit.remove_attachment("1.txt")?);
+    /// assert!(!edit.remove_attachment("1.txt")?, "already gone");
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog to hold the tree.
+    pub fn remove_attachment(&mut self, name: &str) -> crate::Result<bool> {
+        let mut entries = self.attachment_entries()?;
+        let before = entries.len();
+        entries.retain(|(existing, _)| existing != name);
+        if entries.len() == before {
+            return Ok(false);
+        }
+        self.write_attachment_entries(entries)?;
+        Ok(true)
+    }
+
     /// Replaces attachment `index`'s embedded file with a new stream carrying
-    /// `/DL <len>` and `/Params << /Size <len> /CheckSum <md5> >>`, linked as
-    /// `/EF << /F <ref> >>` on the file specification. `Ok(false)` when there
-    /// is no such attachment.
+    /// `/Type /EmbeddedFile`, `/DL <len>` and `/Params << /Size <len>
+    /// /CheckSum <md5> >>`, linked as `/EF << /F <ref> >>` on the file
+    /// specification; a MIME type or date the old stream had is not carried
+    /// over. `Ok(false)` when there is no such attachment.
     ///
     /// # Errors
     ///
@@ -229,20 +367,9 @@ impl DocEdit<'_> {
         let Some((reference, mut spec)) = self.attachment_spec(index)? else {
             return Ok(false);
         };
-        let len = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
-        let mut params = Dict::new();
-        params.insert(Name::from("Size"), Object::Int(len));
-        params.insert(
-            Name::from("CheckSum"),
-            Object::Str(PdfString::hex(pdfrum_crypt::md5(bytes))),
-        );
-        let mut dict = Dict::new();
-        dict.insert(Name::from("DL"), Object::Int(len));
-        dict.insert(Name::from("Params"), Object::Dict(params));
-        let stream_ref = self.inner.add(Object::Stream(Box::new(Stream::new(
-            dict,
-            ByteSpan::from(bytes.to_vec()),
-        ))));
+        let stream_ref = self
+            .inner
+            .add(Object::Stream(Box::new(embedded_file(bytes, None, None))));
         let mut ef = Dict::new();
         ef.insert(Name::from("F"), Object::Ref(stream_ref));
         spec.insert(Name::from("EF"), Object::Dict(ef));
