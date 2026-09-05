@@ -1915,6 +1915,39 @@ fn quiet_drops_the_notices_and_verbose_lists_every_diagnostic() {
     assert!(piped.stderr.is_empty(), "{piped:?}");
 }
 
+#[test]
+fn the_password_comes_from_the_environment_when_the_flag_is_absent() {
+    let from_env = run_with(
+        &["info", "fixtures/encrypted.pdf", "--json"],
+        b"",
+        &[("PDFRUM_PASSWORD", "1234")],
+    )
+    .unwrap();
+    assert!(from_env.status.success(), "{from_env:?}");
+    let v: serde_json::Value = serde_json::from_slice(&from_env.stdout).unwrap();
+    assert_eq!(v["encrypted"], true);
+    let wrong_env = run_with(
+        &["info", "fixtures/encrypted.pdf"],
+        b"",
+        &[("PDFRUM_PASSWORD", "nope")],
+    )
+    .unwrap();
+    assert_eq!(wrong_env.status.code(), Some(1));
+    // The flag wins over the variable.
+    let flag_wins = run_with(
+        &["info", "--password", "1234", "fixtures/encrypted.pdf"],
+        b"",
+        &[("PDFRUM_PASSWORD", "nope")],
+    )
+    .unwrap();
+    assert!(flag_wins.status.success(), "{flag_wins:?}");
+    // The value never shows in the help.
+    let help = run_with(&["info", "--help"], b"", &[("PDFRUM_PASSWORD", "s3cret")]).unwrap();
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(text.contains("PDFRUM_PASSWORD"), "{text}");
+    assert!(!text.contains("s3cret"), "{text}");
+}
+
 // ---- javascript (a feature, off by default) --------------------------------
 
 /// The transcript PDFium's own harness expects for a fixture, beside it.
