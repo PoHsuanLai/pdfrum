@@ -50,7 +50,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   does not move with load. Build the binary from `main` first — the one in
   `dawai/release` on 2026-09-04 was from the `fontfix` worktree.
 
-## M19 — the `pdfrum` CLI (scoped 2026-09-04, `docs/design/pdfrum-cli.md` §9) — IN PROGRESS from 2026-09-05
+## ~~M19 — the `pdfrum` CLI~~ — MET 2026-09-05 (`docs/status/M19.md`); rows below are the record
 
 - ~~Phase 1 — foundation and the read-only core~~ — landed 2026-09-05
   (`docs/status/M19.md`): `crates/pdfrum-cli`, `info`, `doctor`, `render`,
@@ -100,6 +100,22 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Not in the library and not faked: linearization (M16), date stamping
   (`SOURCE_DATE_EPOCH` dropped), luminance inversion (`--color-scheme` is
   what exists).
+
+## M20 — the CLI as a Unix citizen and an agent tool (scoped 2026-09-05, PLAN.md M20) — IN PROGRESS
+
+- Phase 1 — composition: `-` input everywhere, `-o -` on writers,
+  several files for `info|hash|doctor|search` with `file:page:` prefixes,
+  `--quiet`/`--verbose`, `PDFRUM_PASSWORD`, `--jsonl`.
+- Phase 2 — `extract words --json` (facade `Page::words`), `inspect
+  object --json`, `pdfrum schema <command>`.
+- Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
+- Phase 4 — `pdfrum serve --stdio`: JSON-RPC over stdin/stdout, one parse
+  per document, plus MCP tool listing; no new dependency.
+- Phase 5 — `metadata set`, `pages delete|rotate`, `attach add`, `stamp`;
+  signature verification scoped separately (CMS/X.509 in pure Rust is a
+  dependency decision first).
+- Delegated to Claude agents in worktrees, one phase at a time because
+  they share `main.rs`; Claude verifies (gate, board) and lands.
 
 ## Feature gaps (added 2026-09-03)
 

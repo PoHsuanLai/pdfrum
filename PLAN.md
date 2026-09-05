@@ -1400,6 +1400,62 @@ luminance inversion, `viuer`/`comfy-table`/`indicatif`; `security encrypt`
 kept at R6.
 
 
+
+## M20 — The CLI as a Unix citizen and an agent tool  *(after M19; scoped 2026-09-05 from the user's first sessions with the tool)*  — IN PROGRESS from 2026-09-05
+
+M19 made `pdfrum` complete; M20 makes it compose. Two readers were held
+in mind while scoping: a person at a shell, chaining it with `grep`,
+`jq`, `xargs` and `fzf`, and an agent calling it from a loop. The rules
+of M19 stand — facade-only, `docs/design/cli-style.md`, `--json` twins,
+no dead options — and every phase is verified the same way: CLI tests
+against expected files, the gate, the board byte-identical. Five
+phases, each landable alone:
+
+1. **Composition.** `-` as the input of every reading command (bytes from
+   stdin) and `-o -` on every writing command (the file to stdout), so
+   `pages slice a.pdf --pages 1 -o - | pdfrum extract text -` works.
+   Several files at once for `info`, `hash`, `doctor` and `search`, with
+   `search` printing `file:page:` prefixes when given more than one, as
+   `grep` does; JSON becomes an array of per-file documents. `--quiet`
+   silences the recovery notices, `--verbose` prints every parser
+   diagnostic. `PDFRUM_PASSWORD` as the environment's password, so one
+   never lands in shell history. `--jsonl` on the per-item commands
+   (`search`, `extract links|annotations|images|fonts`, `inspect xref`)
+   for one object per line.
+2. **Structured text and objects for agents.** `extract words --json`:
+   every word with its page, bounding box, font name and size, in
+   reading order — the shape extraction and citation pipelines want
+   (facade fill: `Page::words` over the text page's character boxes).
+   `inspect object --json`: a JSON encoding of any object (dict, array,
+   name, string, number, reference, stream summary), so an agent can
+   walk a file without parsing PDF syntax. `pdfrum schema <command>`
+   prints the JSON shape a command's `--json` emits, generated from the
+   same `serde` types.
+3. **Limits and safety.** The facade's `Limits` reach the command line:
+   `--max-pixels` for a render, `--time-limit` for any command, both
+   refusing with exit 1 and a one-line reason, so a server handling
+   untrusted uploads has a ceiling. Scripts stay off unless the feature
+   is built in.
+4. **A session for agents.** `pdfrum serve --stdio`: one process, the
+   document parsed once, JSON-RPC over stdin/stdout exposing the same
+   commands as methods with the same JSON shapes; and, on top of it, the
+   Model Context Protocol's tool listing so an agent host can discover
+   `pdfrum` as a tool set. No new dependency: the protocol is JSON lines,
+   `serde_json` already carries it. Written as its own status section
+   with the protocol pinned by tests that drive the process.
+5. **The verbs the other tools have.** `metadata set` (title, author,
+   subject, keywords), `pages delete` and `pages rotate` as verbs beside
+   `slice`, `attach add`, `stamp` (a text or image mark on every page),
+   each on an edit-crate fill. Signature *verification* is scoped
+   separately: it needs CMS and X.509 parsing in pure Rust and is a
+   dependency decision before it is a command.
+
+**Rules:** everything through the facade; a phase lands only with its
+tests, its expected files, `docs/status/M20.md`, and a byte-identical
+board. **Exit:** the five phases landed, and the three-command chain
+`pages slice … -o - | pdfrum extract words - --json | jq` working on the
+corpus guide.
+
 ## XFA — declined, with the count written down
 
 35 corpus files exist, so it *qualifies* under this phase's criterion, and the
