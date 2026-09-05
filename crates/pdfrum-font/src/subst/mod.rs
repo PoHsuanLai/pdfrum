@@ -9,6 +9,10 @@
 // thousand-line class whose only real job is that one decision.
 mod charset;
 mod db;
+// Reading only the tables a directory scan needs, rather than each font file
+// whole. Filesystem work, so it exists only where the scan does.
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+mod probe;
 mod standard;
 mod style;
 mod substfont;
