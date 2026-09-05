@@ -94,6 +94,90 @@ pub enum Error {
 /// This crate's result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// A stable number for each kind of [`Error`], for a caller who cannot
+/// match on the enum: a C header, a JSON body, a log line.
+///
+/// `#[repr(u32)]`, and **every number is fixed for good** — a variant added
+/// later takes a new number, and none of these is ever renumbered or
+/// reused, which is what lets a `pdfrum.h` carry them as constants. The
+/// gaps are deliberate room: `Save` is 7 whether or not the `edit` feature
+/// that produces it is on. [`Display`](std::fmt::Display) on [`Error`] is
+/// unchanged; the number is beside the message, not instead of it.
+///
+/// ```
+/// use pdfrum::{Document, Error, ErrorCode};
+///
+/// let err = Document::open_with_password("tests/fixtures/encrypted.pdf", b"nope")
+///     .expect_err("the wrong password");
+/// assert_eq!(err.code(), ErrorCode::WrongPassword);
+/// assert_eq!(u32::from(err.code()), 3);
+/// assert_eq!(err.to_string(), "wrong password");
+/// # Ok::<(), Error>(())
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum ErrorCode {
+    /// [`Error::Io`]: the filesystem refused a read or a write.
+    Io = 1,
+    /// [`Error::Open`]: the file could not be opened.
+    Open = 2,
+    /// [`Error::WrongPassword`]: the password does not open the document.
+    WrongPassword = 3,
+    /// [`Error::Read`]: the document opened, but a read of it failed.
+    Read = 4,
+    /// [`Error::Render`]: a page would not render.
+    Render = 5,
+    /// [`Error::Doc`]: a document-level feature would not read.
+    Doc = 6,
+    /// [`Error::Save`]: writing the document out failed. Only produced with
+    /// the `edit` feature; the number is reserved either way.
+    Save = 7,
+    /// [`Error::Text`]: text extraction refused an index.
+    Text = 8,
+    /// [`Error::Limit`]: a ceiling the caller set was exceeded.
+    Limit = 9,
+}
+
+/// The number, for a header or a wire format.
+///
+/// ```
+/// assert_eq!(u32::from(pdfrum::ErrorCode::Limit), 9);
+/// ```
+impl From<ErrorCode> for u32 {
+    fn from(code: ErrorCode) -> u32 {
+        code as u32
+    }
+}
+
+impl Error {
+    /// The error's stable code — see [`ErrorCode`].
+    ///
+    /// ```
+    /// use pdfrum::{Document, Error, ErrorCode};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let err = doc.page(7).expect_err("there is one page");
+    /// assert_eq!(err.code(), ErrorCode::Read);
+    /// # Ok::<(), Error>(())
+    /// ```
+    #[must_use]
+    pub fn code(&self) -> ErrorCode {
+        match self {
+            Error::WrongPassword => ErrorCode::WrongPassword,
+            Error::Open(_) => ErrorCode::Open,
+            Error::Read(_) => ErrorCode::Read,
+            Error::Render(_) => ErrorCode::Render,
+            Error::Doc(_) => ErrorCode::Doc,
+            #[cfg(feature = "edit")]
+            Error::Save(_) => ErrorCode::Save,
+            Error::Text(_) => ErrorCode::Text,
+            Error::Limit(_) => ErrorCode::Limit,
+            Error::Io(_) => ErrorCode::Io,
+        }
+    }
+}
+
 /// Wrong passwords become [`Error::WrongPassword`]; everything else an open
 /// can fail with becomes [`Error::Open`].
 ///
@@ -130,5 +214,69 @@ impl From<pdfrum_render::Error> for Error {
             pdfrum_render::Error::Limit(limit) => Error::Limit(limit),
             other => Error::Render(other),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every variant maps, and the numbers are the ones the header will
+    /// carry: change a row here and the header is a different header.
+    #[test]
+    fn every_error_has_the_code_the_table_says() {
+        let table: Vec<(Error, ErrorCode, u32)> = vec![
+            (Error::Io(std::io::Error::other("io")), ErrorCode::Io, 1),
+            (
+                Error::Open(pdfrum_parser::LoadError::NotPdf),
+                ErrorCode::Open,
+                2,
+            ),
+            (Error::WrongPassword, ErrorCode::WrongPassword, 3),
+            (
+                Error::Read(pdfrum_parser::Error::Unresolved(
+                    pdfrum_object::ObjRef::new(1, 0),
+                )),
+                ErrorCode::Read,
+                4,
+            ),
+            (
+                Error::Render(pdfrum_render::Error::TargetEmpty {
+                    width: 0,
+                    height: 0,
+                }),
+                ErrorCode::Render,
+                5,
+            ),
+            (Error::Doc(pdfrum_doc::Error::NoCatalog), ErrorCode::Doc, 6),
+            #[cfg(feature = "edit")]
+            (
+                Error::Save(pdfrum_edit::Error::BadPageRange),
+                ErrorCode::Save,
+                7,
+            ),
+            (
+                Error::Text(pdfrum_text::Error::CharIndexOutOfRange {
+                    index: pdfrum_text::CharIndex::from(3),
+                    len: 1,
+                }),
+                ErrorCode::Text,
+                8,
+            ),
+            (
+                Error::Limit(pdfrum_common::LimitExceeded::Stopped {
+                    during: pdfrum_common::Operation::PageLoad,
+                    page: None,
+                }),
+                ErrorCode::Limit,
+                9,
+            ),
+        ];
+        for (error, code, number) in table {
+            assert_eq!(error.code(), code, "{error}");
+            assert_eq!(u32::from(code), number, "{error}");
+        }
+        // The reserved number is reserved with the feature off too.
+        assert_eq!(u32::from(ErrorCode::Save), 7);
     }
 }
