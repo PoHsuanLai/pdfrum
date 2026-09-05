@@ -222,6 +222,20 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   it (zune-image #434), which cuts `decode_dct`'s 293 M on downscaled
   JPEGs and changes pixels.
 
+## M22 — `libpdfrum` (scoped 2026-09-05, PLAN.md M22) — NOT STARTED
+
+- Phase 1 owned handles on the facade (`page_owned`, `FormSession::owned`,
+  error codes); phase 2 `crates/pdfrum-capi` (cdylib + staticlib, cbindgen
+  header, cargo-c, the one `allow(unsafe_code)` crate under a written
+  rule); phase 3 the C test in CI and the header under api-snapshot;
+  phase 4 `pdfrum-wasm` on wasm-bindgen; phase 5 UniFFI/PyO3 on request.
+- Facts checked 2026-09-05: the facade already `cargo check`s on
+  `wasm32-unknown-unknown` with vello-cpu, tinyskia, agg, codecs-all,
+  forms, edit, markdown; only `javascript` fails (boa's getrandom wants
+  `wasm_js`); entropy for `/ID` comes from `RandomState`; base-14 fonts
+  are `include_bytes!`. `Instant::now()` panics on that target — the M20
+  phase 3 deadline is being built as a host-set flag for that reason.
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
