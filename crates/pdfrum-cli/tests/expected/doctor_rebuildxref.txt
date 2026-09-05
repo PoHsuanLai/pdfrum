@@ -1,5 +1,8 @@
-fixtures/parser_rebuildxref_correct.pdf: 4 recovered, 0 suspicious; cross-reference table rebuilt
-  recovered          -  BadStartXref
-  recovered          -  XrefRebuilt
-  recovered          -  XrefRebuilt
-  recovered       @471  KeywordResync
+file   fixtures/parser_rebuildxref_correct.pdf
+state  4 recovered, 0 suspicious
+xref   rebuilt by scanning the file
+SEVERITY   OFFSET  WHAT
+recovered          BadStartXref
+recovered          XrefRebuilt
+recovered          XrefRebuilt
+recovered    @471  KeywordResync

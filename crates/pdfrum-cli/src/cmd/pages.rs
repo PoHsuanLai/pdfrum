@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 use pdfrum::{Document, IdSource, PageBox, Rect, SaveOptions};
 
 use crate::out::outln;
+use crate::term::{Style, Term};
 use crate::{out, pages};
 
 /// Save options shared by every writing command.
@@ -109,6 +110,7 @@ pub fn merge(
     password: Option<&str>,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let Some((first, rest)) = files.split_first() else {
         bail!("merge needs at least one input file");
@@ -126,10 +128,11 @@ pub fn merge(
     }
     edit.save(output, &save_options(deterministic, base.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: {at} pages from {} files",
-        output.display(),
-        files.len()
+    out::summary(
+        term,
+        output,
+        &format!("{at} pages"),
+        Some(&format!("from {} files", files.len())),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -142,6 +145,7 @@ pub fn split(
     spec: Option<&str>,
     dir: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let count = doc.page_count();
@@ -154,7 +158,7 @@ pub fn split(
         let path = dir.join(format!("{}-{}.pdf", stem(file), index + 1));
         edit.save(&path, &options)
             .with_context(|| format!("cannot write {}", path.display()))?;
-        outln!("{}", path.display());
+        outln!("{}", term.paint(Style::Ident, &path.display().to_string()));
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -173,7 +177,7 @@ pub struct Slice<'a> {
 }
 
 /// Keep the selected pages in document order, rotated or cropped as asked.
-pub fn slice(req: &Slice<'_>) -> Result<ExitCode> {
+pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
     let doc = out::open(req.file, req.password)?;
     let count = doc.page_count();
     let mut keep = pages::select(req.spec, count)?;
@@ -191,7 +195,7 @@ pub fn slice(req: &Slice<'_>) -> Result<ExitCode> {
     }
     edit.save(req.output, &save_options(req.deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", req.output.display()))?;
-    outln!("{}: {} pages", req.output.display(), keep.len());
+    out::summary(term, req.output, &format!("{} pages", keep.len()), None);
     Ok(ExitCode::SUCCESS)
 }
 
@@ -204,6 +208,7 @@ pub fn reorder(
     spec: &str,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let order = pages::select(Some(spec), doc.page_count())?;
@@ -219,21 +224,36 @@ pub fn reorder(
     edit.delete_pages([0u32])?;
     edit.save(output, &save_options(deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!("{}: {} pages", output.display(), order.len());
+    out::summary(term, output, &format!("{} pages", order.len()), None);
     Ok(ExitCode::SUCCESS)
 }
 
 // ---- nup ------------------------------------------------------------------
 
-pub fn nup(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    grid: (u32, u32),
-    sheet: (f64, f64),
-    output: &Path,
-    deterministic: bool,
-) -> Result<ExitCode> {
+/// What `nup` was asked for.
+#[derive(Clone, Copy)]
+pub struct Nup<'a> {
+    pub file: &'a Path,
+    pub password: Option<&'a str>,
+    pub spec: Option<&'a str>,
+    /// Columns by rows per sheet.
+    pub grid: (u32, u32),
+    /// Sheet width and height in points.
+    pub sheet: (f64, f64),
+    pub output: &'a Path,
+    pub deterministic: bool,
+}
+
+pub fn nup(req: &Nup<'_>, term: Term) -> Result<ExitCode> {
+    let Nup {
+        file,
+        password,
+        spec,
+        grid,
+        sheet,
+        output,
+        deterministic,
+    } = *req;
     let doc = out::open(file, password)?;
     let selected = pages::select(spec, doc.page_count())?;
     let dest = Document::blank(sheet.0, sheet.1)?;
@@ -246,12 +266,16 @@ pub fn nup(
     let sheets = u32::try_from(selected.len())
         .unwrap_or(u32::MAX)
         .div_ceil(per_sheet.max(1));
-    outln!(
-        "{}: {sheets} sheets of {}x{} from {} pages",
-        output.display(),
-        grid.0,
-        grid.1,
-        selected.len()
+    out::summary(
+        term,
+        output,
+        &format!("{sheets} sheets"),
+        Some(&format!(
+            "{}x{} from {} pages",
+            grid.0,
+            grid.1,
+            selected.len()
+        )),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -277,6 +301,7 @@ pub fn booklet(
     password: Option<&str>,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let count = doc.page_count();
@@ -302,16 +327,19 @@ pub fn booklet(
     edit.delete_pages([0u32])?;
     edit.save(output, &save_options(deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: {} sheets ({} sides) for {count} pages{}",
-        output.display(),
-        padded_count / 4,
-        padded_count / 2,
-        if padded_count > count {
-            format!(", {} blank", padded_count - count)
-        } else {
-            String::new()
-        }
+    out::summary(
+        term,
+        output,
+        &format!("{} sheets", padded_count / 4),
+        Some(&format!(
+            "{} sides for {count} pages{}",
+            padded_count / 2,
+            if padded_count > count {
+                format!(", {} blank", padded_count - count)
+            } else {
+                String::new()
+            }
+        )),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -327,6 +355,7 @@ pub fn create(
     dpi: f64,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     if images.is_empty() {
         bail!("create needs at least one image");
@@ -379,11 +408,11 @@ pub fn create(
         &save_options(deterministic, &all_input),
     )
     .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: {} pages from {} images",
-        output.display(),
-        decoded.len(),
-        images.len()
+    out::summary(
+        term,
+        output,
+        &format!("{} pages", decoded.len()),
+        Some(&format!("from {} images", images.len())),
     );
     Ok(ExitCode::SUCCESS)
 }

@@ -1,7 +1,6 @@
 //! `pdfrum extract …`: text, links, the outline, attachments, annotations,
 //! signatures.
 
-use std::fmt::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -9,9 +8,9 @@ use anyhow::{Context, Result};
 use pdfrum::{Document, LinkTarget};
 use serde::Serialize;
 
-use crate::out::{self, JsonRect, out, outln};
+use crate::out::{self, Align, JsonRect, Table, out, outln};
 use crate::pages;
-use crate::term::Term;
+use crate::term::{Style, Term};
 
 // ---- text -----------------------------------------------------------------
 
@@ -155,25 +154,34 @@ pub fn links(
     }
     if json {
         out::json(&rows)?;
+    } else if rows.is_empty() {
+        out::none("links");
     } else {
+        let mut table = Table::new(&[
+            ("PAGE", Align::Right),
+            ("KIND", Align::Left),
+            ("RECT", Align::Left),
+            ("TARGET", Align::Left),
+        ]);
         for r in &rows {
             let target = match (r.kind, r.target_page, &r.uri) {
                 (_, Some(p), _) => term.link(&page_url(file, p), &format!("page {p}")),
                 (_, _, Some(u)) => term.link(u, u),
-                _ => "(action)".to_owned(),
+                _ => "action".to_owned(),
             };
-            outln!(
-                "page {:<4} {:<5} {:<28} {target}",
-                r.page,
-                r.kind,
+            table.row(vec![
+                out::page(term, r.page),
+                r.kind.to_owned(),
                 out::rect(pdfrum::Rect::new(
                     r.rect.0[0],
                     r.rect.0[1],
                     r.rect.0[2],
-                    r.rect.0[3]
-                ))
-            );
+                    r.rect.0[3],
+                )),
+                target,
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -207,13 +215,17 @@ pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resul
         .collect();
     if json {
         out::json(&rows)?;
+    } else if rows.is_empty() {
+        out::none("bookmarks");
     } else {
+        let mut table = Table::new(&[("TITLE", Align::Left), ("PAGE", Align::Right)]);
         for r in &rows {
             let page = r.page.map_or(String::new(), |p| {
-                format!("  {}", term.link(&page_url(file, p), &format!("p.{p}")))
+                term.link(&page_url(file, p), &out::page(term, p))
             });
-            outln!("{}{}{page}", "  ".repeat(r.depth), r.title);
+            table.row(vec![format!("{}{}", "  ".repeat(r.depth), r.title), page]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -237,6 +249,7 @@ pub fn attachments(
     password: Option<&str>,
     dir: Option<&Path>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let mut rows = Vec::new();
@@ -270,21 +283,24 @@ pub fn attachments(
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
-        outln!("no attachments");
+        out::none("attachments");
     } else {
+        let mut table = Table::new(&[
+            ("NAME", Align::Left),
+            ("SIZE", Align::Right),
+            ("DESCRIPTION", Align::Left),
+            ("WRITTEN", Align::Left),
+        ]);
         for r in &rows {
-            let size = r
-                .size
-                .map_or("(no data)".to_owned(), |n| format!("{n} bytes"));
-            let mut line = format!("{:<32} {size:>14}", r.name);
-            if !r.description.is_empty() {
-                let _ = write!(line, "  {}", r.description);
-            }
-            if let Some(w) = &r.written {
-                let _ = write!(line, "  -> {w}");
-            }
-            outln!("{line}");
+            table.row(vec![
+                term.paint(Style::Ident, &r.name),
+                r.size
+                    .map_or("no data".to_owned(), |n| out::bytes(n as u64)),
+                r.description.clone(),
+                r.written.clone().unwrap_or_default(),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -312,6 +328,7 @@ pub fn annotations(
     password: Option<&str>,
     spec: Option<&str>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let mut rows = Vec::new();
@@ -333,30 +350,40 @@ pub fn annotations(
     }
     if json {
         out::json(&rows)?;
+    } else if rows.is_empty() {
+        out::none("annotations");
     } else {
+        let mut table = Table::new(&[
+            ("PAGE", Align::Right),
+            ("SUBTYPE", Align::Left),
+            ("RECT", Align::Left),
+            ("FLAGS", Align::Left),
+            ("TITLE", Align::Left),
+            ("CONTENTS", Align::Left),
+        ]);
         for r in &rows {
-            let mut line = format!(
-                "page {:<4} {:<12} {:<28}",
-                r.page,
-                r.subtype,
+            table.row(vec![
+                out::page(term, r.page),
+                r.subtype.clone(),
                 out::rect(pdfrum::Rect::new(
                     r.rect.0[0],
                     r.rect.0[1],
                     r.rect.0[2],
-                    r.rect.0[3]
-                ))
-            );
-            if r.hidden {
-                line.push_str(" hidden");
-            }
-            if let Some(t) = &r.title {
-                let _ = write!(line, "  [{t}]");
-            }
-            if let Some(c) = &r.contents {
-                let _ = write!(line, "  {}", c.replace(['\r', '\n'], " "));
-            }
-            outln!("{line}");
+                    r.rect.0[3],
+                )),
+                if r.hidden {
+                    "hidden".to_owned()
+                } else {
+                    String::new()
+                },
+                r.title.clone().unwrap_or_default(),
+                r.contents
+                    .as_ref()
+                    .map(|c| c.replace(['\r', '\n'], " "))
+                    .unwrap_or_default(),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -373,31 +400,38 @@ struct SignatureRow {
     contents_len: usize,
 }
 
-pub fn signatures(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn signatures(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let rows = signature_rows(&doc);
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
-        outln!("no signature fields");
+        out::none("signatures");
     } else {
         for (i, s) in rows.iter().enumerate() {
-            outln!(
-                "signature {}: {}  contents {} bytes  byte range {:?}",
-                i + 1,
-                s.sub_filter.as_deref().unwrap_or("(no SubFilter)"),
-                s.contents_len,
-                s.byte_range
-            );
-            if let Some(t) = &s.time {
-                outln!("  signed {t}");
-            }
+            out::heading(term, &format!("signature {}", i + 1));
+            let mut record = vec![
+                ("  sub filter", s.sub_filter.clone()),
+                ("  signed", s.time.clone()),
+            ];
             if let Some(r) = &s.reason {
-                outln!("  reason: {r}");
+                record.push(("  reason", Some(r.clone())));
             }
+            record.push(("  contents", Some(out::bytes(s.contents_len as u64))));
+            record.push((
+                "  byte range",
+                Some(
+                    s.byte_range
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
+            ));
             if s.doc_mdp_permission != 0 {
-                outln!("  DocMDP permission {}", s.doc_mdp_permission);
+                record.push(("  DocMDP", Some(format!("P={}", s.doc_mdp_permission))));
             }
+            out::record(term, &record);
         }
     }
     Ok(ExitCode::SUCCESS)
@@ -441,6 +475,7 @@ pub fn images(
     spec: Option<&str>,
     dir: Option<&Path>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     if let Some(dir) = dir {
@@ -485,23 +520,31 @@ pub fn images(
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
-        outln!("no images");
+        out::none("images");
     } else {
+        let mut table = Table::new(&[
+            ("PAGE", Align::Right),
+            ("IMAGE", Align::Right),
+            ("PIXELS", Align::Left),
+            ("FORMAT", Align::Left),
+            ("MASK", Align::Left),
+            ("WRITTEN", Align::Left),
+        ]);
         for r in &rows {
-            let mut line = format!(
-                "page {:<4} image {:<3} {:>5}x{:<5} {:<5}{}",
-                r.page,
-                r.index,
-                r.width,
-                r.height,
-                r.format,
-                if r.is_mask { " mask" } else { "" }
-            );
-            if let Some(w) = &r.written {
-                let _ = write!(line, "  -> {w}");
-            }
-            outln!("{line}");
+            table.row(vec![
+                out::page(term, r.page),
+                r.index.to_string(),
+                format!("{}x{}", r.width, r.height),
+                r.format.to_owned(),
+                if r.is_mask {
+                    "mask".to_owned()
+                } else {
+                    String::new()
+                },
+                r.written.clone().unwrap_or_default(),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -526,6 +569,7 @@ pub fn fonts(
     password: Option<&str>,
     dir: Option<&Path>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     if let Some(dir) = dir {
@@ -568,18 +612,25 @@ pub fn fonts(
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
-        outln!("no embedded fonts");
+        out::none("fonts");
     } else {
+        let mut table = Table::new(&[
+            ("NAME", Align::Left),
+            ("KIND", Align::Left),
+            ("OBJ", Align::Right),
+            ("SIZE", Align::Right),
+            ("WRITTEN", Align::Left),
+        ]);
         for r in &rows {
-            let mut line = format!(
-                "{:<40} {:<9} obj {:<6} {:>9} bytes",
-                r.name, r.kind, r.object, r.size
-            );
-            if let Some(w) = &r.written {
-                let _ = write!(line, "  -> {w}");
-            }
-            outln!("{line}");
+            table.row(vec![
+                term.paint(Style::Ident, &r.name),
+                r.kind.to_owned(),
+                r.object.to_string(),
+                out::bytes(r.size as u64),
+                r.written.clone().unwrap_or_default(),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }

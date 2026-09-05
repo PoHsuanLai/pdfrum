@@ -560,13 +560,13 @@ fn main() -> ExitCode {
     let password = cli.password.as_deref();
     let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
     let outcome = match cli.command {
-        Command::Info { input, json } => cmd::info::run(&input.file, password, json),
+        Command::Info { input, json } => cmd::info::run(&input.file, password, json, term),
         Command::Doctor {
             input,
             json,
             strict,
             scan_all,
-        } => cmd::doctor::run(&input.file, password, json, strict, scan_all),
+        } => cmd::doctor::run(&input.file, password, json, strict, scan_all, term),
         Command::Preview { input, page, width } => {
             cmd::terminal::preview(&input.file, password, page, width, term)
         }
@@ -602,14 +602,15 @@ fn main() -> ExitCode {
             annotations: !no_annotations,
         }),
         Command::Extract { what } => run_extract(what, password, term),
-        Command::Pages { what } => run_pages(what, password),
-        Command::Forms { what } => run_forms(what, password),
+        Command::Pages { what } => run_pages(what, password, term),
+        Command::Forms { what } => run_forms(what, password, term),
         Command::Repair { input, save } => cmd::file::rewrite(
             &input.file,
             password,
             &save.output,
             save.deterministic,
             "repaired",
+            term,
         ),
         Command::Optimize { input, save } => cmd::file::rewrite(
             &input.file,
@@ -617,9 +618,10 @@ fn main() -> ExitCode {
             &save.output,
             save.deterministic,
             "rewritten",
+            term,
         ),
-        Command::Security { what } => run_security(what, password),
-        Command::Inspect { what } => run_inspect(what, password),
+        Command::Security { what } => run_security(what, password, term),
+        Command::Inspect { what } => run_inspect(what, password, term),
         Command::Diff {
             left,
             right,
@@ -637,14 +639,17 @@ fn main() -> ExitCode {
             json,
             term,
         }),
-        Command::Hash { input, json } => cmd::hash::run(&input.file, password, json),
+        Command::Hash { input, json } => cmd::hash::run(&input.file, password, json, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
-        Command::Manpage { output } => cmd::shell::manpage(&output),
+        Command::Manpage { output } => cmd::shell::manpage(&output, term),
     };
     match outcome {
         Ok(code) => code,
         Err(err) => {
-            eprintln!("pdfrum: {err:#}");
+            eprintln!(
+                "{}",
+                term.paint(term::Style::Error, &format!("pdfrum: {}", error_line(&err)))
+            );
             ExitCode::from(1)
         }
     }
@@ -673,12 +678,12 @@ fn run_extract(
             input,
             output,
             json,
-        } => cmd::extract::attachments(&input.file, password, output.as_deref(), json),
+        } => cmd::extract::attachments(&input.file, password, output.as_deref(), json, term),
         Extract::Annotations { input, pages, json } => {
-            cmd::extract::annotations(&input.file, password, pages.as_deref(), json)
+            cmd::extract::annotations(&input.file, password, pages.as_deref(), json, term)
         }
         Extract::Signatures { input, json } => {
-            cmd::extract::signatures(&input.file, password, json)
+            cmd::extract::signatures(&input.file, password, json, term)
         }
         Extract::Images {
             input,
@@ -691,20 +696,29 @@ fn run_extract(
             pages.as_deref(),
             output.as_deref(),
             json,
+            term,
         ),
         Extract::Fonts {
             input,
             output,
             json,
-        } => cmd::extract::fonts(&input.file, password, output.as_deref(), json),
+        } => cmd::extract::fonts(&input.file, password, output.as_deref(), json, term),
     }
 }
 
-fn run_security(what: Security, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_security(
+    what: Security,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
     match what {
-        Security::Decrypt { input, save } => {
-            cmd::file::decrypt(&input.file, password, &save.output, save.deterministic)
-        }
+        Security::Decrypt { input, save } => cmd::file::decrypt(
+            &input.file,
+            password,
+            &save.output,
+            save.deterministic,
+            term,
+        ),
         Security::Encrypt {
             input,
             user_password,
@@ -712,20 +726,27 @@ fn run_security(what: Security, password: Option<&str>) -> anyhow::Result<ExitCo
             allow,
             plain_metadata,
             save,
-        } => cmd::file::encrypt(&cmd::file::EncryptRequest {
-            file: &input.file,
-            password,
-            user_password: &user_password,
-            owner_password: &owner_password,
-            allow: allow.as_deref(),
-            encrypt_metadata: !plain_metadata,
-            output: &save.output,
-            deterministic: save.deterministic,
-        }),
+        } => cmd::file::encrypt(
+            &cmd::file::EncryptRequest {
+                file: &input.file,
+                password,
+                user_password: &user_password,
+                owner_password: &owner_password,
+                allow: allow.as_deref(),
+                encrypt_metadata: !plain_metadata,
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
     }
 }
 
-fn run_inspect(what: Inspect, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_inspect(
+    what: Inspect,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
     match what {
         Inspect::Object {
             input,
@@ -733,21 +754,23 @@ fn run_inspect(what: Inspect, password: Option<&str>) -> anyhow::Result<ExitCode
             generation,
             decode,
         } => cmd::inspect::object(&input.file, password, num, generation, decode),
-        Inspect::Xref { input, json } => cmd::inspect::xref(&input.file, password, json),
-        Inspect::Revisions { input, json } => cmd::inspect::revisions(&input.file, password, json),
+        Inspect::Xref { input, json } => cmd::inspect::xref(&input.file, password, json, term),
+        Inspect::Revisions { input, json } => {
+            cmd::inspect::revisions(&input.file, password, json, term)
+        }
         Inspect::Revision { input, rev, output } => {
-            cmd::inspect::revision(&input.file, password, rev, &output)
+            cmd::inspect::revision(&input.file, password, rev, &output, term)
         }
         Inspect::Structure { input, pages, json } => {
-            cmd::inspect::structure(&input.file, password, pages.as_deref(), json)
+            cmd::inspect::structure(&input.file, password, pages.as_deref(), json, term)
         }
     }
 }
 
-fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_pages(what: Pages, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
     match what {
         Pages::Merge { files, save } => {
-            cmd::pages::merge(&files, password, &save.output, save.deterministic)
+            cmd::pages::merge(&files, password, &save.output, save.deterministic, term)
         }
         Pages::Split {
             input,
@@ -760,6 +783,7 @@ fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
             pages.as_deref(),
             &output,
             deterministic,
+            term,
         ),
         Pages::Slice {
             input,
@@ -772,15 +796,18 @@ fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
             .map(cmd::pages::parse_rect)
             .transpose()
             .and_then(|crop| {
-                cmd::pages::slice(&cmd::pages::Slice {
-                    file: &input.file,
-                    password,
-                    spec: pages.as_deref(),
-                    rotate,
-                    crop,
-                    output: &save.output,
-                    deterministic: save.deterministic,
-                })
+                cmd::pages::slice(
+                    &cmd::pages::Slice {
+                        file: &input.file,
+                        password,
+                        spec: pages.as_deref(),
+                        rotate,
+                        crop,
+                        output: &save.output,
+                        deterministic: save.deterministic,
+                    },
+                    term,
+                )
             }),
         Pages::Reorder { input, pages, save } => cmd::pages::reorder(
             &input.file,
@@ -788,9 +815,10 @@ fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
             &pages,
             &save.output,
             save.deterministic,
+            term,
         ),
         Pages::Create { images, dpi, save } => {
-            cmd::pages::create(&images, dpi, &save.output, save.deterministic)
+            cmd::pages::create(&images, dpi, &save.output, save.deterministic, term)
         }
         Pages::Nup {
             input,
@@ -801,30 +829,38 @@ fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
         } => cmd::pages::parse_grid(&grid).and_then(|grid| {
             let sheet = cmd::pages::parse_size(&sheet)?;
             cmd::pages::nup(
-                &input.file,
-                password,
-                pages.as_deref(),
-                grid,
-                sheet,
-                &save.output,
-                save.deterministic,
+                &cmd::pages::Nup {
+                    file: &input.file,
+                    password,
+                    spec: pages.as_deref(),
+                    grid,
+                    sheet,
+                    output: &save.output,
+                    deterministic: save.deterministic,
+                },
+                term,
             )
         }),
-        Pages::Booklet { input, save } => {
-            cmd::pages::booklet(&input.file, password, &save.output, save.deterministic)
-        }
+        Pages::Booklet { input, save } => cmd::pages::booklet(
+            &input.file,
+            password,
+            &save.output,
+            save.deterministic,
+            term,
+        ),
     }
 }
 
-fn run_forms(what: Forms, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_forms(what: Forms, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
     match what {
-        Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json),
+        Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json, term),
         Forms::Fill { input, data, save } => cmd::forms::fill(
             &input.file,
             password,
             &data,
             &save.output,
             save.deterministic,
+            term,
         ),
         Forms::Flatten { input, print, save } => cmd::forms::flatten(
             &input.file,
@@ -832,6 +868,25 @@ fn run_forms(what: Forms, password: Option<&str>) -> anyhow::Result<ExitCode> {
             print,
             &save.output,
             save.deterministic,
+            term,
         ),
     }
+}
+
+/// The error's causes, outermost first, joined by `: ` — with a cause
+/// left out when the message above it already quotes it, which the
+/// library's errors do, so nothing is said twice.
+fn error_line(err: &anyhow::Error) -> String {
+    let mut line = String::new();
+    for cause in err.chain() {
+        let text = cause.to_string();
+        if line.contains(&text) {
+            continue;
+        }
+        if !line.is_empty() {
+            line.push_str(": ");
+        }
+        line.push_str(&text);
+    }
+    line
 }

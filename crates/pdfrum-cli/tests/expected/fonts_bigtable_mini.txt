@@ -1,1 +1,2 @@
-RFSQHQ+CMSY9                             cff       obj 8            512 bytes
+NAME          KIND  OBJ   SIZE
+RFSQHQ+CMSY9  cff     8  512 B

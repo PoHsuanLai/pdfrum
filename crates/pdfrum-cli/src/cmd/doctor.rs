@@ -1,5 +1,6 @@
 //! `pdfrum doctor`: what the parser recovered or dropped, without saving.
 
+use std::fmt::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -7,7 +8,9 @@ use anyhow::Result;
 use pdfrum::{Diagnostic, Diagnostics, Severity};
 use serde::Serialize;
 
-use crate::out::{self, outln};
+use crate::out;
+use crate::out::{Align, Table};
+use crate::term::{Style, Term};
 
 #[derive(Serialize)]
 struct Report {
@@ -34,6 +37,7 @@ pub fn run(
     json: bool,
     strict: bool,
     scan_all: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open_quietly(file, password)?;
     if scan_all {
@@ -48,7 +52,7 @@ pub fn run(
     if json {
         out::json(&report)?;
     } else {
-        print(&report);
+        print(&report, term);
     }
     Ok(if strict && !diags.is_empty() {
         ExitCode::from(3)
@@ -93,37 +97,42 @@ fn severity_name(severity: Severity) -> &'static str {
     }
 }
 
-fn print(r: &Report) {
-    if r.notices.is_empty() && r.dropped == 0 {
-        outln!("{}: clean — nothing to recover", r.file);
+fn print(r: &Report, term: Term) {
+    let state = if r.notices.is_empty() && r.dropped == 0 {
+        term.paint(Style::Ok, "clean")
+    } else {
+        let mut text = format!("{} recovered, {} suspicious", r.recovered, r.suspicious);
+        if r.dropped > 0 {
+            let _ = write!(text, ", {} more not kept", r.dropped);
+        }
+        term.paint(Style::Warn, &text)
+    };
+    let mut rows = vec![("file", Some(r.file.clone())), ("state", Some(state))];
+    if r.xref_rebuilt {
+        rows.push((
+            "xref",
+            Some(term.paint(Style::Warn, "rebuilt by scanning the file")),
+        ));
+    }
+    out::record(term, &rows);
+    if r.notices.is_empty() {
         return;
     }
-    outln!(
-        "{}: {} recovered, {} suspicious{}{}",
-        r.file,
-        r.recovered,
-        r.suspicious,
-        if r.dropped > 0 {
-            format!(", {} more not kept", r.dropped)
-        } else {
-            String::new()
-        },
-        if r.xref_rebuilt {
-            "; cross-reference table rebuilt"
-        } else {
-            ""
-        },
-    );
+    let mut table = Table::new(&[
+        ("SEVERITY", Align::Left),
+        ("OFFSET", Align::Right),
+        ("WHAT", Align::Left),
+    ]);
     for n in &r.notices {
-        let offset = n
-            .at_text()
-            .map_or_else(|| "        -".to_owned(), |o| format!("{o:>9}"));
-        outln!("  {:<10} {offset}  {}", n.severity, n.what);
+        let severity = match n.severity {
+            "suspicious" => term.paint(Style::Warn, n.severity),
+            other => other.to_owned(),
+        };
+        table.row(vec![
+            severity,
+            n.offset.map_or(String::new(), |o| format!("@{o}")),
+            n.what.clone(),
+        ]);
     }
-}
-
-impl Notice {
-    fn at_text(&self) -> Option<String> {
-        self.offset.map(|o| format!("@{o}"))
-    }
+    table.print(term, 0);
 }

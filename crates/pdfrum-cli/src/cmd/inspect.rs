@@ -1,7 +1,6 @@
 //! `pdfrum inspect …`: the file's insides — objects, the cross-reference
 //! table, revisions, the structure tree.
 
-use std::fmt::Write as _;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -9,7 +8,8 @@ use anyhow::{Context, Result, bail};
 use pdfrum::{Kid, ObjRef, Object, Resolve, StructTree};
 use serde::Serialize;
 
-use crate::out::outln;
+use crate::out::{Align, Table, outln};
+use crate::term::{Style, Term};
 use crate::{out, syntax};
 
 // ---- object ---------------------------------------------------------------
@@ -68,7 +68,7 @@ struct XrefReport {
     rows: Vec<XrefRow>,
 }
 
-pub fn xref(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open_quietly(file, password)?;
     let parser = doc.parser();
     let table = parser.xref();
@@ -119,25 +119,43 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode>
     if json {
         out::json(&report)?;
     } else {
-        outln!(
-            "{}: {} objects{}",
-            report.file,
-            report.entries,
-            if report.rebuilt {
-                " (table rebuilt by scanning the file)"
-            } else {
-                ""
-            }
+        out::record(
+            term,
+            &[
+                ("file", Some(report.file.clone())),
+                ("objects", Some(report.entries.to_string())),
+                (
+                    "xref",
+                    Some(if report.rebuilt {
+                        term.paint(Style::Warn, "rebuilt by scanning the file")
+                    } else {
+                        "as written".to_owned()
+                    }),
+                ),
+            ],
         );
-        outln!("trailer {}", report.trailer);
+        out::heading(term, "trailer");
+        for line in report.trailer.lines() {
+            outln!("  {line}");
+        }
+        let mut table = Table::new(&[
+            ("OBJ", Align::Right),
+            ("GEN", Align::Right),
+            ("PLACE", Align::Left),
+        ]);
         for r in &report.rows {
             let place = match (r.offset, r.stream, r.index) {
                 (Some(o), _, _) => format!("@{o}"),
                 (_, Some(s), Some(i)) => format!("in {s} 0 R [{i}]"),
                 _ => "free".to_owned(),
             };
-            outln!("{:>6} {:>3}  {}", r.object, r.generation, place);
+            table.row(vec![
+                term.paint(Style::Ident, &r.object.to_string()),
+                r.generation.to_string(),
+                place,
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -153,7 +171,7 @@ struct RevisionRow {
     end: usize,
 }
 
-pub fn revisions(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn revisions(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let rows: Vec<RevisionRow> = doc
         .revisions()
@@ -168,25 +186,23 @@ pub fn revisions(file: &Path, password: Option<&str>, json: bool) -> Result<Exit
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
-        outln!(
-            "{}: no revision chain{}",
-            file.display(),
-            if doc.xref_was_rebuilt() {
-                " (the cross-reference table was rebuilt, so no chain was followed)"
-            } else {
-                ""
-            }
-        );
+        out::none("revisions");
     } else {
+        let mut table = Table::new(&[
+            ("REV", Align::Right),
+            ("XREF", Align::Right),
+            ("KIND", Align::Left),
+            ("SIZE", Align::Right),
+        ]);
         for r in &rows {
-            outln!(
-                "revision {:<3} xref @{:<10} {:<8} {} bytes",
-                r.revision,
-                r.xref_offset,
-                if r.xref_stream { "stream" } else { "table" },
-                r.end
-            );
+            table.row(vec![
+                term.paint(Style::Ident, &r.revision.to_string()),
+                format!("@{}", r.xref_offset),
+                if r.xref_stream { "stream" } else { "table" }.to_owned(),
+                out::bytes(r.end as u64),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -197,6 +213,7 @@ pub fn revision(
     password: Option<&str>,
     rev: usize,
     output: &Path,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let count = doc.revisions().len();
@@ -214,10 +231,11 @@ pub fn revision(
         .revision_bytes(rev - 1)
         .context("the revision's end could not be found")?;
     std::fs::write(output, bytes).with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: revision {rev} of {count}, {} bytes",
-        output.display(),
-        bytes.len()
+    out::summary(
+        term,
+        output,
+        &format!("revision {rev} of {count}"),
+        Some(&out::bytes(bytes.len() as u64)),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -242,6 +260,7 @@ pub fn structure(
     password: Option<&str>,
     spec: Option<&str>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let mut rows = Vec::new();
@@ -262,25 +281,38 @@ pub fn structure(
     if json {
         out::json(&rows)?;
     } else if !tagged {
-        outln!("{}: not a tagged document", file.display());
+        out::none("structure tree");
     } else {
+        let columns = [
+            ("ELEMENT", Align::Left),
+            ("MCID", Align::Left),
+            ("ALT", Align::Left),
+            ("TEXT", Align::Left),
+        ];
         let mut last_page = 0;
+        let mut table = Table::new(&columns);
         for r in &rows {
             if r.page != last_page {
-                outln!("page {}", r.page);
+                if !table.is_empty() {
+                    table.print(term, 2);
+                    table = Table::new(&columns);
+                }
+                out::heading(term, &format!("page {}", r.page));
                 last_page = r.page;
             }
-            let mut line = format!("{}{}", "  ".repeat(r.depth + 1), r.kind);
-            if !r.content_ids.is_empty() {
-                let _ = write!(line, "  mcid {:?}", r.content_ids);
-            }
-            if let Some(a) = &r.alt {
-                let _ = write!(line, "  alt {a:?}");
-            }
-            if let Some(t) = &r.actual_text {
-                let _ = write!(line, "  text {t:?}");
-            }
-            outln!("{line}");
+            table.row(vec![
+                format!("{}{}", "  ".repeat(r.depth), r.kind),
+                r.content_ids
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+                r.alt.clone().unwrap_or_default(),
+                r.actual_text.clone().unwrap_or_default(),
+            ]);
+        }
+        if !table.is_empty() {
+            table.print(term, 2);
         }
     }
     Ok(ExitCode::SUCCESS)

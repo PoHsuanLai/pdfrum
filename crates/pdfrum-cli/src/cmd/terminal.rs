@@ -9,7 +9,7 @@ use pdfrum::{Document, FindOptions, RenderOptions, RenderSession, VelloCpuBacken
 use serde::Serialize;
 
 use crate::out::outln;
-use crate::term::{Graphics, Term};
+use crate::term::{Graphics, Style, Term};
 use crate::{out, pages, term};
 
 /// The scale that fits a page of `width` points into `columns` cells at
@@ -118,7 +118,7 @@ pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Resu
                     format!("  [/{needle}: n next]")
                 }
             );
-            write!(stdout, "\r\n{}", term.sgr("7", &status))?;
+            write!(stdout, "\r\n{}", term.paint(Style::Bar, &status))?;
             stdout.flush()?;
             if let Event::Key(KeyEvent {
                 code, modifiers, ..
@@ -186,7 +186,7 @@ fn read_line(stdout: &mut std::io::Stdout, term: Term, prompt: &str) -> Result<S
     use crossterm::event::{Event, KeyCode, KeyEvent, read};
     let mut line = String::new();
     loop {
-        write!(stdout, "\r\x1b[K{}{line}", term.sgr("7", prompt))?;
+        write!(stdout, "\r\x1b[K{}{line}", term.paint(Style::Bar, prompt))?;
         stdout.flush()?;
         if let Event::Key(KeyEvent { code, .. }) = read()? {
             match code {
@@ -298,11 +298,14 @@ pub fn search(
                 let before: String = chars.get(..at).unwrap_or(&[]).iter().collect();
                 let hit: String = chars.get(at..at + hit_len).unwrap_or(&[]).iter().collect();
                 let after: String = chars.get(at + hit_len..).unwrap_or(&[]).iter().collect();
-                format!("{before}{}{after}", term.sgr("7;33", &hit))
+                format!("{before}{}{after}", term.paint(Style::Match, &hit))
             } else {
                 h.line.clone()
             };
-            outln!("{}:{painted}", term.sgr("35", &format!("page {}", h.page)));
+            outln!(
+                "{}:{painted}",
+                term.paint(Style::Ident, &format!("page {}", h.page))
+            );
         }
     }
     Ok(if hits.is_empty() {

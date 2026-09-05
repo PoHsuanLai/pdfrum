@@ -8,7 +8,8 @@ use anyhow::Result;
 use pdfrum::{Document, Rotation};
 use serde::Serialize;
 
-use crate::out::{self, JsonRect, outln};
+use crate::out::{self, JsonRect};
+use crate::term::{Style, Term};
 
 /// The whole report, which is also the JSON schema.
 #[derive(Serialize)]
@@ -86,13 +87,13 @@ struct PageBoxes {
     art_box: Option<JsonRect>,
 }
 
-pub fn run(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let report = report(&doc, file);
     if json {
         out::json(&report)?;
     } else {
-        print(&report);
+        print(&report, term);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -163,18 +164,16 @@ fn rotation_degrees(rotation: Rotation) -> u32 {
     rotation.degrees()
 }
 
-fn print(r: &Report) {
-    let row = |key: &str, value: &str| outln!("{key:<14}{value}");
-    row("file", &r.file);
-    row(
-        "version",
-        r.version.as_deref().unwrap_or("(no header version)"),
-    );
-    row("pages", &r.pages.to_string());
+fn print(r: &Report, term: Term) {
+    let mut rows: Vec<(&str, Option<String>)> = Vec::new();
+    let mut row = |key: &'static str, value: Option<String>| rows.push((key, value));
+    row("file", Some(r.file.clone()));
+    row("version", r.version.clone());
+    row("pages", Some(r.pages.to_string()));
     if let Some(first) = r.page_boxes.first() {
         let mut size = format!("{:.2} x {:.2} pt", first.width, first.height);
         if first.rotation != 0 {
-            let _ = write!(size, ", rotated {}°", first.rotation);
+            let _ = write!(size, ", rotated {}", first.rotation);
         }
         if r.page_boxes
             .iter()
@@ -182,11 +181,11 @@ fn print(r: &Report) {
         {
             size.push_str(" (first page; sizes vary)");
         }
-        row("page size", &size);
+        row("page size", Some(size));
     }
     row(
         "security",
-        &if r.encrypted {
+        r.encrypted.then(|| {
             let allowed = [
                 ("print", r.permissions.print),
                 ("modify", r.permissions.modify),
@@ -195,16 +194,26 @@ fn print(r: &Report) {
                 ("fill forms", r.permissions.fill_form),
             ]
             .iter()
-            .map(|(name, ok)| format!("{name} {}", if *ok { "allowed" } else { "denied" }))
+            .map(|(name, ok)| {
+                format!(
+                    "{name} {}",
+                    if *ok {
+                        term.paint(Style::Ok, "allowed")
+                    } else {
+                        term.paint(Style::Warn, "denied")
+                    }
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
             format!("encrypted; {allowed}")
-        } else {
-            "none".to_owned()
-        },
+        }),
     );
     if r.xref_rebuilt {
-        row("structure", "cross-reference table rebuilt on open");
+        row(
+            "structure",
+            Some(term.paint(Style::Warn, "cross-reference table rebuilt on open")),
+        );
     }
     for (key, value) in [
         ("title", &r.metadata.title),
@@ -217,43 +226,58 @@ fn print(r: &Report) {
         ("modified", &r.metadata.modification_date),
     ] {
         if let Some(value) = value {
-            row(key, value);
+            row(key, Some(value.clone()));
         }
     }
     match &r.id {
         Some(id) => {
-            row("id", &id.permanent);
+            row("id", Some(id.permanent.clone()));
             row(
                 "identity",
-                if id.pristine {
-                    "original generation (both /ID elements equal)"
-                } else {
-                    "re-saved since first written (/ID elements differ)"
-                },
+                Some(
+                    if id.pristine {
+                        "original generation (both /ID elements equal)"
+                    } else {
+                        "re-saved since first written (/ID elements differ)"
+                    }
+                    .to_owned(),
+                ),
             );
         }
-        None => row("id", "none"),
+        None => row("id", None),
     }
     if r.outline_entries > 0 {
-        row("outline", &format!("{} entries", r.outline_entries));
+        row("outline", Some(format!("{} entries", r.outline_entries)));
     }
     if r.attachments > 0 {
-        row("attachments", &r.attachments.to_string());
+        row("attachments", Some(r.attachments.to_string()));
     }
-    for (i, s) in r.signatures.iter().enumerate() {
-        let mut parts = Vec::new();
-        if let Some(f) = &s.sub_filter {
-            parts.push(f.clone());
-        }
-        if let Some(t) = &s.time {
-            parts.push(format!("signed {t}"));
-        }
-        if let Some(reason) = &s.reason {
-            parts.push(format!("reason: {reason}"));
-        }
-        if s.doc_mdp_permission != 0 {
-            parts.push(format!("DocMDP P={}", s.doc_mdp_permission));
-        }
-        row(&format!("signature {}", i + 1), &parts.join("; "));
+    let signatures = signature_lines(r);
+    if !signatures.is_empty() {
+        row("signatures", Some(signatures.join("\n")));
     }
+    out::record(term, &rows);
+}
+
+/// One line per signature: sub-filter, time, reason, `DocMDP`.
+fn signature_lines(r: &Report) -> Vec<String> {
+    r.signatures
+        .iter()
+        .map(|s| {
+            let mut parts = Vec::new();
+            if let Some(f) = &s.sub_filter {
+                parts.push(f.clone());
+            }
+            if let Some(t) = &s.time {
+                parts.push(format!("signed {t}"));
+            }
+            if let Some(reason) = &s.reason {
+                parts.push(format!("reason {reason}"));
+            }
+            if s.doc_mdp_permission != 0 {
+                parts.push(format!("DocMDP P={}", s.doc_mdp_permission));
+            }
+            parts.join("; ")
+        })
+        .collect()
 }

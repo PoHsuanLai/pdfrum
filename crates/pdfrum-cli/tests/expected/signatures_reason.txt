@@ -1,3 +1,6 @@
-signature 1: ETSI.CAdES.detached  contents 20 bytes  byte range [0, 10, 30, 10]
-  signed D:20200624093114+02'00'
-  reason: test reason
+signature 1
+  sub filter  ETSI.CAdES.detached
+  signed      D:20200624093114+02'00'
+  reason      test reason
+  contents    20 B
+  byte range  0 10 30 10

@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use crate::out;
 use crate::out::outln;
-use crate::term::Term;
+use crate::term::{Style, Term};
 
 /// What the diff was asked for.
 pub struct Request<'a> {
@@ -260,7 +260,13 @@ fn pixel_diff(
 
 fn print(r: &Report, term: Term) {
     if r.left_pages != r.right_pages {
-        outln!("pages: {} vs {}", r.left_pages, r.right_pages);
+        out::record(
+            term,
+            &[(
+                "pages",
+                Some(format!("{} vs {}", r.left_pages, r.right_pages)),
+            )],
+        );
     }
     for p in &r.pages {
         let changed = !p.removed.is_empty()
@@ -269,12 +275,12 @@ fn print(r: &Report, term: Term) {
         if !changed {
             continue;
         }
-        outln!("{}", term.sgr("1", &format!("page {}", p.page)));
+        out::heading(term, &format!("page {}", p.page));
         for l in &p.removed {
-            outln!("{}", term.sgr("31", &format!("- {l}")));
+            outln!("  {}", term.paint(Style::Removed, &format!("- {l}")));
         }
         for l in &p.added {
-            outln!("{}", term.sgr("32", &format!("+ {l}")));
+            outln!("  {}", term.paint(Style::Added, &format!("+ {l}")));
         }
         if let Some(x) = &p.pixels
             && x.differing > 0
@@ -282,19 +288,19 @@ fn print(r: &Report, term: Term) {
             // Hundredths of a percent, in integers: the counts are exact.
             let basis_points = x.differing * 10_000 / x.total.max(1);
             let mut line = format!(
-                "  pixels: {} of {} differ ({}.{:02}%)",
+                "pixels {} of {} differ ({}.{:02}%)",
                 x.differing,
                 x.total,
                 basis_points / 100,
                 basis_points % 100
             );
             if let Some([x0, y0, x1, y1]) = x.bbox {
-                let _ = write!(line, " in [{x0},{y0}]-[{x1},{y1}]");
+                let _ = write!(line, " in {x0} {y0} {x1} {y1}");
             }
             if let Some(w) = &x.written {
-                let _ = write!(line, " -> {w}");
+                let _ = write!(line, ", wrote {w}");
             }
-            outln!("{line}");
+            outln!("  {}", term.paint(Style::Muted, &line));
         }
     }
 }

@@ -301,7 +301,13 @@ fn a_closed_pipe_is_not_an_error() {
 fn a_missing_file_is_exit_1_with_the_path_named() {
     let out = run(&["info", "fixtures/nonesuch.pdf"]).unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("nonesuch.pdf"));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("nonesuch.pdf"), "{err}");
+    assert_eq!(
+        err.matches("os error 2").count(),
+        1,
+        "each cause is said once: {err}"
+    );
 }
 
 // ---- phase 2: pages, forms, whole-file commands ---------------------------
@@ -614,7 +620,7 @@ fn forms_dump_fill_and_flatten_round_trip() {
     assert!(
         stdout(&["forms", "dump", flat.to_str().unwrap()])
             .unwrap()
-            .contains("no interactive form")
+            .contains("no form fields")
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -733,7 +739,7 @@ fn colour_and_hyperlinks_are_off_in_a_pipe_unless_asked_and_no_color_wins() {
     ])
     .unwrap();
     assert!(
-        painted.contains("\u{1b}[7;33mworld\u{1b}[0m"),
+        painted.contains("\u{1b}[1;33mworld\u{1b}[0m"),
         "{painted:?}"
     );
     let linked = stdout(&[
@@ -1165,7 +1171,7 @@ fn inspect_revisions_lists_the_chain_and_revision_writes_an_earlier_file() {
         fx("fixtures/parser_rebuildxref_correct.pdf"),
     ])
     .unwrap();
-    assert!(none.contains("no revision chain"));
+    assert!(none.contains("no revisions"));
 }
 
 #[test]
@@ -1195,7 +1201,7 @@ fn inspect_structure_walks_the_tree_with_its_content_ids_and_text() {
         fx("fixtures/hello_world_2_pages.pdf"),
     ])
     .unwrap();
-    assert!(untagged.contains("not a tagged document"));
+    assert!(untagged.contains("no structure tree"));
 }
 
 #[test]
@@ -1287,7 +1293,7 @@ fn extract_fonts_lists_and_writes_embedded_programs() {
     assert!(
         stdout(&["extract", "fonts", fx("fixtures/hello_world_2_pages.pdf")])
             .unwrap()
-            .contains("no embedded fonts")
+            .contains("no fonts")
     );
 }
 
@@ -1326,9 +1332,9 @@ fn diff_reports_text_and_pixels_per_page_and_exits_1_on_a_difference() {
     .unwrap();
     assert_eq!(out.status.code(), Some(1));
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(text.starts_with("pages: 2 vs 1\n"), "{text}");
+    assert!(text.starts_with("pages  2 vs 1\n"), "{text}");
     assert!(
-        text.contains("page 2\n- Hello, world!\n- Goodbye, world!\n"),
+        text.contains("page 2\n  - Hello, world!\n  - Goodbye, world!\n"),
         "{text}"
     );
     assert!(

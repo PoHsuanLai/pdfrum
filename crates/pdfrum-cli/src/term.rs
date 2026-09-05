@@ -50,6 +50,50 @@ pub enum Graphics {
     Off,
 }
 
+/// The roles colour plays in the output, and nothing else is ever painted
+/// (`docs/design/cli-style.md` §2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Style {
+    /// A section heading: `page 3`.
+    Heading,
+    /// The key column of a record; the header row of a table.
+    Key,
+    /// Something a person would copy: a path, a page or object number, a name.
+    Ident,
+    /// Secondary detail after the main fact: a size, a count, an offset.
+    Muted,
+    /// A good state.
+    Ok,
+    /// A state to notice.
+    Warn,
+    /// An error line.
+    Error,
+    /// The matched text in `search`.
+    Match,
+    /// A line only the right-hand document has.
+    Added,
+    /// A line only the left-hand document has.
+    Removed,
+    /// The pager's status bar.
+    Bar,
+}
+
+impl Style {
+    fn sgr(self) -> &'static str {
+        match self {
+            Self::Heading => "1",
+            Self::Key | Self::Muted => "2",
+            Self::Ident => "36",
+            Self::Ok | Self::Added => "32",
+            Self::Warn => "33",
+            Self::Error => "1;31",
+            Self::Match => "1;33",
+            Self::Removed => "31",
+            Self::Bar => "7",
+        }
+    }
+}
+
 /// The capabilities in force for this run.
 #[derive(Debug, Clone, Copy)]
 pub struct Term {
@@ -89,10 +133,11 @@ impl Term {
         }
     }
 
-    /// `text` wrapped in SGR `params` when colour is on.
-    pub fn sgr(self, params: &str, text: &str) -> String {
+    /// `text` in `style`, when colour is on. The only way anything is
+    /// painted (`docs/design/cli-style.md` §2).
+    pub fn paint(self, style: Style, text: &str) -> String {
         if self.color {
-            format!("\x1b[{params}m{text}\x1b[0m")
+            format!("\x1b[{}m{text}\x1b[0m", style.sgr())
         } else {
             text.to_owned()
         }

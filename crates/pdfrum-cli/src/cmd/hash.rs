@@ -16,7 +16,7 @@ use pdfrum::{Dict, Name, Object, Resolve};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::out::outln;
+use crate::term::Term;
 use crate::{out, syntax};
 
 #[derive(Serialize)]
@@ -29,7 +29,7 @@ struct Report {
     objects: usize,
 }
 
-pub fn run(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let bytes = std::fs::read(file).with_context(|| format!("cannot read {}", file.display()))?;
     let sha256 = hex(&Sha256::digest(&bytes));
     let doc = out::open_quietly(file, password)?;
@@ -45,16 +45,22 @@ pub fn run(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> 
     if json {
         out::json(&report)?;
     } else {
-        outln!("file      {}", report.sha256);
-        match &report.id {
-            Some([a, b]) if a == b => outln!("id        {a}"),
-            Some([a, b]) => outln!("id        {a} (created)\n          {b} (this revision)"),
-            None => outln!("id        none"),
-        }
-        outln!(
-            "semantic  {}  ({} objects)",
-            report.semantic,
-            report.objects
+        let id = report.id.as_ref().map(|[a, b]| {
+            if a == b {
+                a.clone()
+            } else {
+                format!("{a} (created)\n{b} (this revision)")
+            }
+        });
+        out::record(
+            term,
+            &[
+                ("file", Some(report.file.clone())),
+                ("sha256", Some(report.sha256.clone())),
+                ("id", id),
+                ("semantic", Some(report.semantic.clone())),
+                ("objects", Some(report.objects.to_string())),
+            ],
         );
     }
     Ok(ExitCode::SUCCESS)

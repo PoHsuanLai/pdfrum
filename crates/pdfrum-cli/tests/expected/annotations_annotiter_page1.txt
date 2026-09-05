@@ -1,4 +1,5 @@
-page 1    Widget       200.00 200.00 220.00 220.00   [Sub_LeftBottom]
-page 1    Widget       401.00 401.00 421.00 421.00   [Sub_RightTop]
-page 1    Widget       201.00 400.00 221.00 420.00   [Sub_LeftTop]
-page 1    Widget       400.00 201.00 420.00 221.00   [Sub_RightBottom]
+PAGE  SUBTYPE  RECT                         TITLE
+   1  Widget   200.00 200.00 220.00 220.00  Sub_LeftBottom
+   1  Widget   401.00 401.00 421.00 421.00  Sub_RightTop
+   1  Widget   201.00 400.00 221.00 420.00  Sub_LeftTop
+   1  Widget   400.00 201.00 420.00 221.00  Sub_RightBottom

@@ -8,6 +8,8 @@ use anyhow::{Context, Result};
 use pdfrum::{Document, Rect};
 use serde::Serialize;
 
+use crate::term::{Style, Term};
+
 /// Open `file`, with `password` when one was given.
 ///
 /// An encrypted file with no password is the one error a user hits most, so
@@ -108,6 +110,185 @@ macro_rules! out {
 }
 pub(crate) use {out, outln};
 
+// ---- the four forms of docs/design/cli-style.md §3 -------------------------
+
+/// A record: keys padded to the longest, in `Key`; values plain. A `None`
+/// value prints as `none`.
+pub fn record(term: Term, rows: &[(&str, Option<String>)]) {
+    let width = rows
+        .iter()
+        .map(|(k, _)| k.chars().count())
+        .max()
+        .unwrap_or(0)
+        + 2;
+    for (key, value) in rows {
+        let value = value.as_deref().unwrap_or("none");
+        let mut lines = value.lines();
+        let first = lines.next().unwrap_or("");
+        let padded = format!("{key:<width$}");
+        outln!("{}{first}", term.paint(Style::Key, &padded));
+        for continued in lines {
+            outln!("{}{continued}", " ".repeat(width));
+        }
+    }
+}
+
+/// Which way a table column lines up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Align {
+    Left,
+    Right,
+}
+
+/// A table: a header row in `Key`, columns two spaces apart, the last one
+/// unpadded, a column that is empty in every row dropped.
+pub struct Table {
+    columns: Vec<(&'static str, Align)>,
+    rows: Vec<Vec<String>>,
+}
+
+impl Table {
+    pub fn new(columns: &[(&'static str, Align)]) -> Self {
+        Self {
+            columns: columns.to_vec(),
+            rows: Vec::new(),
+        }
+    }
+
+    /// Add one row; missing trailing cells are empty.
+    pub fn row(&mut self, cells: Vec<String>) {
+        self.rows.push(cells);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    /// Print with each row indented by `indent` spaces (a section's rows
+    /// sit under their heading by two).
+    pub fn print(&self, term: Term, indent: usize) {
+        fn cell(row: &[String], i: usize) -> &str {
+            row.get(i).map_or("", String::as_str)
+        }
+        let keep: Vec<usize> = (0..self.columns.len())
+            .filter(|&i| self.rows.iter().any(|r| !cell(r, i).is_empty()))
+            .collect();
+        let widths: Vec<usize> = keep
+            .iter()
+            .map(|&i| {
+                self.rows
+                    .iter()
+                    .map(|r| visible_width(cell(r, i)))
+                    .chain(std::iter::once(self.columns[i].0.chars().count()))
+                    .max()
+                    .unwrap_or(0)
+            })
+            .collect();
+        let pad = " ".repeat(indent);
+        let header: Vec<String> = keep
+            .iter()
+            .zip(&widths)
+            .map(|(&i, &w)| fit(self.columns[i].0, w, self.columns[i].1))
+            .collect();
+        outln!(
+            "{pad}{}",
+            term.paint(Style::Key, header.join("  ").trim_end())
+        );
+        for row in &self.rows {
+            let cells: Vec<String> = keep
+                .iter()
+                .zip(&widths)
+                .map(|(&i, &w)| fit(cell(row, i), w, self.columns[i].1))
+                .collect();
+            outln!("{pad}{}", cells.join("  ").trim_end());
+        }
+    }
+}
+
+/// `text` padded to `width` visible characters on the side its alignment
+/// leaves free; escape sequences do not count.
+fn fit(text: &str, width: usize, align: Align) -> String {
+    let fill = width.saturating_sub(visible_width(text));
+    match align {
+        Align::Left => format!("{text}{}", " ".repeat(fill)),
+        Align::Right => format!("{}{text}", " ".repeat(fill)),
+    }
+}
+
+/// Characters a terminal shows: everything outside `ESC [ … m` and
+/// `ESC ] … ESC \` sequences.
+pub fn visible_width(text: &str) -> usize {
+    let mut width = 0;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\x1b' {
+            width += 1;
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for c in chars.by_ref() {
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                let mut last = ' ';
+                for c in chars.by_ref() {
+                    if c == '\x07' || (last == '\x1b' && c == '\\') {
+                        break;
+                    }
+                    last = c;
+                }
+            }
+            _ => {}
+        }
+    }
+    width
+}
+
+/// A section heading: `page 3`.
+pub fn heading(term: Term, text: &str) {
+    outln!("{}", term.paint(Style::Heading, text));
+}
+
+/// The one line a writing command prints: the path, what was done, the
+/// detail muted.
+pub fn summary(term: Term, path: &Path, what: &str, detail: Option<&str>) {
+    let path = term.paint(Style::Ident, &path.display().to_string());
+    match detail {
+        Some(d) if !d.is_empty() => outln!("{path}: {what}, {}", term.paint(Style::Muted, d)),
+        _ => outln!("{path}: {what}"),
+    }
+}
+
+/// Nothing found: `no <things>`.
+pub fn none(what: &str) {
+    outln!("no {what}");
+}
+
+/// A size for a person: `3 B`, `1.2 KB`, `24.3 KB`, `1.8 MB`.
+pub fn bytes(n: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    if n < 1000 {
+        return format!("{n} B");
+    }
+    #[expect(clippy::cast_precision_loss, reason = "a size shown to one decimal")]
+    let mut value = n as f64;
+    let mut unit = 0;
+    while value >= 999.95 && unit + 1 < UNITS.len() {
+        value /= 1000.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit])
+}
+
+/// A page number in `Ident`.
+pub fn page(term: Term, number: u32) -> String {
+    term.paint(Style::Ident, &number.to_string())
+}
+
 /// A rectangle as JSON: `[x0, y0, x1, y1]` in points.
 #[derive(Serialize)]
 pub struct JsonRect(pub [f64; 4]);
@@ -137,4 +318,49 @@ pub fn hex(bytes: &[u8]) -> String {
 /// A page number for a person: 1-based.
 pub fn page_number(index: pdfrum::PageIndex) -> u32 {
     u32::from(index) + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Align, Table, bytes, fit, visible_width};
+
+    #[test]
+    fn a_table_aligns_numbers_right_and_drops_a_column_nobody_fills() {
+        let mut table = Table::new(&[
+            ("PAGE", Align::Right),
+            ("NAME", Align::Left),
+            ("NOTE", Align::Left),
+            ("SIZE", Align::Right),
+        ]);
+        table.row(vec!["1".into(), "a".into(), String::new(), "3 B".into()]);
+        table.row(vec![
+            "10".into(),
+            "bcd".into(),
+            String::new(),
+            "1.2 KB".into(),
+        ]);
+        // The layout, without going through stdout: the same fit() the
+        // printer uses, over the same kept columns and widths.
+        assert_eq!(fit("PAGE", 4, Align::Right), "PAGE");
+        assert_eq!(fit("1", 4, Align::Right), "   1");
+        assert_eq!(fit("a", 4, Align::Left), "a   ");
+        assert!(!table.is_empty());
+        let kept: Vec<usize> = (0..4)
+            .filter(|&i| table.rows.iter().any(|r| !r[i].is_empty()))
+            .collect();
+        assert_eq!(kept, [0, 1, 3], "NOTE is empty in every row and goes");
+    }
+
+    #[test]
+    fn sizes_read_like_du_h_and_escapes_take_no_width() {
+        assert_eq!(bytes(0), "0 B");
+        assert_eq!(bytes(999), "999 B");
+        assert_eq!(bytes(1000), "1.0 KB");
+        assert_eq!(bytes(24332), "24.3 KB");
+        assert_eq!(bytes(1_833_639), "1.8 MB");
+        assert_eq!(bytes(999_950), "1.0 MB");
+        assert_eq!(visible_width("page 3"), 6);
+        assert_eq!(visible_width("\x1b[36mpage 3\x1b[0m"), 6);
+        assert_eq!(visible_width("\x1b]8;;http://x\x1b\\p.2\x1b]8;;\x1b\\"), 3);
+    }
 }
