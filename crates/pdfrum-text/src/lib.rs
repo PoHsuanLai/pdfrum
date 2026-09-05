@@ -39,6 +39,7 @@ mod orientation;
 mod pipeline;
 mod select;
 mod unicode;
+mod word;
 
 pub use charinfo::{CharBox, CharType, ObjectIndex};
 pub use error::Error;
@@ -47,6 +48,7 @@ pub use index::{CharIndex, CharSegment, IndexMap, TextIndex};
 pub use links::WebLink;
 pub use object::TextRun;
 pub use orientation::Orientation;
+pub use word::Word;
 
 /// The two candidate scanners [`WebLink`] detection is built from, and the
 /// range type they report.
@@ -62,6 +64,7 @@ use kurbo::{Affine, Point, Rect, Size};
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::Resolve;
 use pdfrum_page::Page;
+use std::collections::BTreeMap;
 use std::ops::{Range, RangeBounds};
 
 /// How extraction behaves.
@@ -102,6 +105,11 @@ pub struct TextPage {
     pub search_text: Vec<char>,
     /// Map between [`CharIndex`] and [`TextIndex`].
     pub runs: IndexMap,
+    /// The base font name of each text object whose font has one, by the
+    /// [`ObjectIndex`] its characters carry. A Type 3 font has no base name
+    /// and is absent. Read through a character with
+    /// [`font_name`](Self::font_name).
+    pub fonts: BTreeMap<ObjectIndex, String>,
 }
 
 #[doc(hidden)]
@@ -157,11 +165,20 @@ pub fn extract<R: Resolve>(
         .iter()
         .filter_map(|unit| char::from_u32(*unit))
         .collect();
+    let fonts = runs
+        .iter()
+        .filter(|run| !run.font.base_font_name().is_empty())
+        .map(|run| {
+            let name = String::from_utf8_lossy(run.font.base_font_name()).into_owned();
+            (run.index, name)
+        })
+        .collect();
     let runs = index::build(&out.chars);
     TextPage {
         chars: out.chars,
         search_text: text,
         runs,
+        fonts,
     }
 }
 
@@ -325,6 +342,19 @@ impl TextPage {
                 index,
                 len: self.chars.len(),
             })
+    }
+
+    /// The base font name of the font the character at `index` was drawn
+    /// with, as the font crate normalized it — the subset tag stripped and a
+    /// standard-14 alias canonicalized, so `ABCDEF+Arial,Bold` reads as
+    /// `Helvetica-Bold`.
+    ///
+    /// `None` past the end, for a character no text object drew (every
+    /// generated one), and for a font with no base name (Type 3).
+    #[must_use]
+    pub fn font_name(&self, index: CharIndex) -> Option<&str> {
+        let object = self.chars.get(index.get())?.object?;
+        self.fonts.get(&object).map(String::as_str)
     }
 }
 
