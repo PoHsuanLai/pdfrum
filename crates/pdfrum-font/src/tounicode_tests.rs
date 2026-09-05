@@ -390,6 +390,67 @@ fn lowest_value_wins_in_both_directions() {
 }
 
 // ---------------------------------------------------------------------------
+// Runs — a contiguous `bfrange` is stored whole, not expanded (see `Run`).
+// The oracle expands it (`InsertIntoMaps(code, value++)` per code), so these
+// pin that the folded reads are indistinguishable from that.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_char_inside_a_stored_run_reads_both_ways() {
+    // One 256-code run, stored as a single `Run`.
+    let map = map_of("1 beginbfrange<0100><01ff><0041>endbfrange");
+    assert_eq!(map.len(), 256);
+    // Its two ends and a code well inside it.
+    assert_eq!(text(&map, 0x100), "A");
+    assert_eq!(text(&map, 0x180), "\u{c1}");
+    assert_eq!(text(&map, 0x1ff), "\u{140}");
+    // One past each end is unmapped.
+    assert_eq!(text(&map, 0xff), "");
+    assert_eq!(text(&map, 0x200), "");
+    // The reverse direction covers the run's whole value span, and nothing
+    // outside it.
+    assert_eq!(map.reverse('A').0, 0x100);
+    assert_eq!(map.reverse('\u{c1}').0, 0x180);
+    assert_eq!(map.reverse('\u{140}').0, 0x1ff);
+    assert_eq!(map.reverse('\u{40}').0, 0);
+    assert_eq!(map.reverse('\u{141}').0, 0);
+    assert_eq!(map.unicode_count(0x180), 1);
+}
+
+#[test]
+fn a_code_covered_by_both_a_run_and_a_single_takes_the_smaller_value() {
+    // The run gives code 5 the value 0x0045; the `bfchar` gives it 0x0041,
+    // which is smaller, so `InsertIntoMaps`'s `min` keeps 0x0041 whichever
+    // order they were declared in.
+    let run_first =
+        map_of("1 beginbfrange<0001><000a><0041>endbfrange\n1 beginbfchar<0005><0041>endbfchar");
+    let single_first =
+        map_of("1 beginbfchar<0005><0041>endbfchar\n1 beginbfrange<0001><000a><0041>endbfrange");
+    for map in [&run_first, &single_first] {
+        assert_eq!(text(map, 5), "A");
+        // The run's own value for code 5 still reverse-maps to code 5, and
+        // U+0041 keeps the *lowest* code that reaches it — code 1, from the
+        // run's own start.
+        assert_eq!(map.reverse('A').0, 1);
+        // Codes 1..=10 are covered by the run; the single adds no new code.
+        assert_eq!(map.len(), 10);
+    }
+
+    // And the other way round: the single is the *larger* value, so the run
+    // wins the forward direction while the single still contributes its own
+    // reverse entry.
+    let map =
+        map_of("1 beginbfrange<0001><000a><0041>endbfrange\n1 beginbfchar<0005><0050>endbfchar");
+    assert_eq!(
+        text(&map, 5),
+        "E",
+        "the run's 0x0045 beats the single's 0x0050"
+    );
+    assert_eq!(map.reverse('P').0, 5);
+    assert_eq!(map.reverse('E').0, 5);
+}
+
+// ---------------------------------------------------------------------------
 // Non-BMP and surrogates.
 // ---------------------------------------------------------------------------
 
