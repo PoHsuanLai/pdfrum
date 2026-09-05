@@ -635,7 +635,16 @@ impl ScriptCascade {
     }
 
     /// Whether a script called `Doc.calculateNow()`, drained.
-    pub fn take_calculate_request(&mut self) -> bool {
+    ///
+    /// **Nothing reads this yet.** The sweep it asks for is
+    /// [`Cascade::calculate`], which today runs only inside a commit; running
+    /// it on request is item 6 of `docs/status/unwired-oracle-ports.md`,
+    /// which says what the wire needs.
+    #[expect(
+        dead_code,
+        reason = "unwired — see docs/status/unwired-oracle-ports.md"
+    )]
+    pub(crate) fn take_calculate_request(&mut self) -> bool {
         std::mem::take(&mut self.host.borrow_mut().calculate_requested)
     }
 
