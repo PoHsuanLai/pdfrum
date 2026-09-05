@@ -43,113 +43,130 @@
 
 use crate::pixmap::Pixmap;
 
-/// The fixed-point scale the weights are carried in (`kFixedPointBits`).
+/// A box-filter tap weight, in fixed point.
 ///
-/// Weights within one destination pixel sum to exactly this, which is what
-/// lets the accumulation shift rather than divide.
-const FIXED_ONE: u32 = 1 << 16;
+/// The whole weight path is integers: a weight is an exact rational area
+/// scaled by `2 ^ SHIFT` and rounded, and nothing on the way to it is an
+/// `f64`. That is not only speed. The areas a box filter integrates are exact
+/// rationals in the two axis lengths, so an `f64` intermediate can only lose
+/// them, and the scheme below rounds a *running sum* — where one `f64` ulp of
+/// drift moves a whole unit of weight from one tap to its neighbour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Weight(u32);
 
-/// Round-half-away-from-zero, which is what the oracle does and what
-/// `f64::round` also does — spelled out because the weight table's exactness
-/// depends on the tie direction and a reader should not have to check.
-fn fixed_from(v: f64) -> u32 {
-    let scaled = v * f64::from(FIXED_ONE);
-    if !scaled.is_finite() || scaled <= 0.0 {
-        return 0;
+impl Weight {
+    /// The bit position of the fixed point (`kFixedPointBits` upstream).
+    const SHIFT: u32 = 16;
+
+    /// The value the weights of one destination pixel sum to.
+    ///
+    /// An accumulation over the taps is `sample * ONE` at most, so shifting it
+    /// right by [`Weight::SHIFT`] is the normalisation — no division, and no
+    /// per-pixel normalising factor to get wrong.
+    const ONE: Self = Self(1 << Self::SHIFT);
+
+    /// The weight as the `u32` an accumulation multiplies by.
+    const fn get(self) -> u32 {
+        self.0
     }
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "clamped to [0, FIXED_ONE] just above and below, both exactly \
-                  representable in f64 and inside u32"
-    )]
-    let rounded = scaled.round().min(f64::from(FIXED_ONE)) as u32;
-    rounded
 }
 
 /// One destination pixel's taps: the first source index it reads, and one
 /// weight per consecutive source pixel from there.
 ///
-/// The weights sum to [`FIXED_ONE`] whenever the range is non-empty, so an
+/// The weights sum to [`Weight::ONE`] whenever the range is non-empty, so an
 /// accumulation over them needs no normalisation — only a shift.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Taps {
-    start: usize,
-    weights: Vec<u32>,
+    first: u32,
+    weights: Box<[Weight]>,
+}
+
+impl Taps {
+    /// The first source index, as the `usize` an index computation wants.
+    const fn start(&self) -> usize {
+        self.first as usize
+    }
 }
 
 /// The taps for every destination pixel along one axis being reduced.
 ///
 /// Each destination pixel maps back to the half-open source interval
-/// `[d * scale, (d + 1) * scale)`, and each source pixel in it contributes the
-/// share of the *destination* pixel that it covers. Computing the overlap in
-/// destination space rather than source space is what keeps the weights
-/// summing to one without a division per pixel.
+/// `[d * src / dest, (d + 1) * src / dest)`, and each source pixel in it
+/// contributes the share of the *destination* pixel that it covers. Computing
+/// the overlap in destination space rather than source space is what keeps the
+/// weights summing to one without a division per pixel.
 ///
-/// The fractional residue of each weight is carried into the next
-/// (`rounding_error`), and whatever is still unspent lands on the final tap —
-/// so the sum is exactly [`FIXED_ONE`] rather than one part in 65536 short,
-/// which over a wide image would otherwise show as a gradient.
+/// # Why a cumulative rounding rather than a carried residue
+///
+/// The area of source pixel `s` inside destination pixel `d`, in destination
+/// units, is `A(s) - A(s - 1)` where `A` is the cumulative coverage
+/// `clamp((s + 1) * dest / src, d, d + 1) - d`. Rounding each *difference* and
+/// carrying the residue into the next — which is what the `f64` version did —
+/// and rounding each *cumulative* value and differencing are the same sequence
+/// of weights, algebraically: the carried scheme's running total after `k`
+/// taps is exactly `round(A(k) * ONE)`, because the residue it carries is by
+/// construction `A(k) - total / ONE`. So this computes `round(A(k) * ONE)`
+/// directly, in exact integer arithmetic, and the sum telescopes to
+/// [`Weight::ONE`] with no residue to chase.
+///
+/// `A(k) * ONE` is `(k + 1) * dest_len * ONE / src_len` clamped, so the whole
+/// table is one `u64` multiply and one divide per tap, rounded half away from
+/// zero by adding half the divisor before the division.
 fn axis_taps(src_len: u32, dest_len: u32) -> Vec<Taps> {
-    let (src_len_i, dest_len_i) = (i64::from(src_len), i64::from(dest_len));
-    if src_len_i == 0 || dest_len_i == 0 {
+    if src_len == 0 || dest_len == 0 {
         return Vec::new();
     }
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "both are image dimensions, far below 2^53"
-    )]
-    let scale = src_len_i as f64 / dest_len_i as f64;
+    let (src, dest_n) = (u64::from(src_len), u64::from(dest_len));
+    let one = u64::from(Weight::ONE.get());
     let mut out = Vec::with_capacity(dest_len as usize);
-    for dest in 0..dest_len_i {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a destination index, far below 2^53"
-        )]
-        let dest_f = dest as f64;
-        let span_start = dest_f * scale;
-        let span_end = span_start + scale;
-        // The source pixels the destination pixel's footprint touches, clamped
-        // to the image. `floor(span_end)` is inclusive because a footprint
-        // ending exactly on a boundary still nominally taps the pixel beyond
-        // it — at weight zero, which the area computation then assigns.
-        let first = span_start.floor().max(0.0);
-        let last = span_end.floor().min(f64::from(src_len - 1));
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "clamped to [0, src_len - 1] above"
-        )]
-        let (first, last) = (first as usize, last as usize);
+    for d in 0..dest_n {
+        // `first` and `last` are the `floor`s the `f64` path reached through
+        // `floor(d * src / dest)`; as an integer division they cannot land on
+        // the wrong side of a boundary. `last` is inclusive because a
+        // footprint ending exactly on a pixel edge still nominally taps the
+        // pixel beyond it — at weight zero, which the area computation then
+        // assigns, matching upstream's inclusive `end_i`.
+        let first = d.saturating_mul(src) / dest_n;
+        let last = (d.saturating_add(1).saturating_mul(src) / dest_n).min(src - 1);
+        let first_u32 = u32::try_from(first.min(src - 1)).unwrap_or(0);
         if first > last {
+            // The footprint fell outside the source — a clamped edge — and
+            // the only defensible answer is the nearest source pixel entire.
             out.push(Taps {
-                start: first.min(src_len as usize - 1),
-                weights: vec![FIXED_ONE],
+                first: first_u32,
+                weights: Box::new([Weight::ONE]),
             });
             continue;
         }
-        let mut weights = Vec::with_capacity(last - first + 1);
-        let mut remaining = FIXED_ONE;
-        let mut rounding_error = 0.0_f64;
-        for src in first..last {
-            #[expect(clippy::cast_precision_loss, reason = "a source index, far below 2^53")]
-            let src_f = src as f64;
-            // This source pixel's extent, expressed in destination pixels.
-            let cover_start = (src_f / scale).max(dest_f);
-            let cover_end = ((src_f + 1.0) / scale).min(dest_f + 1.0);
-            let area = (cover_end - cover_start).max(0.0);
-            let weight = fixed_from(area + rounding_error);
-            weights.push(weight.min(remaining));
-            remaining = remaining.saturating_sub(weight);
-            rounding_error = area - f64::from(weight) / f64::from(FIXED_ONE);
+        let mut weights = Vec::with_capacity(usize::try_from(last - first + 1).unwrap_or(0));
+        let mut remaining = Weight::ONE.get();
+        let mut previous = 0_u64;
+        for s in first..last {
+            // The cumulative coverage of source pixels `first ..= s`, in fixed
+            // point: `(s + 1) * dest / src`, clamped into this destination
+            // pixel and taken relative to its start. Rounded half away from
+            // zero by adding `src / 2` before the divide.
+            let numerator = s
+                .saturating_add(1)
+                .saturating_mul(dest_n)
+                .saturating_mul(one);
+            let scaled = numerator.saturating_add(src / 2) / src;
+            let low = d.saturating_mul(one);
+            let cumulative = scaled.clamp(low, low.saturating_add(one)) - low;
+            let step = u32::try_from(cumulative.saturating_sub(previous)).unwrap_or(0);
+            previous = cumulative;
+            let capped = step.min(remaining);
+            remaining -= capped;
+            weights.push(Weight(capped));
         }
         // Whatever the fractional areas did not spend belongs to the last tap;
         // the alternative — dropping it — biases every reduced image dark by
-        // up to one part in 65536 per tap, which accumulates across the axis.
-        weights.push(remaining);
+        // up to one part in `ONE` per tap, which accumulates across the axis.
+        weights.push(Weight(remaining));
         out.push(Taps {
-            start: first,
-            weights,
+            first: first_u32,
+            weights: weights.into_boxed_slice(),
         });
     }
     out
@@ -241,15 +258,17 @@ pub fn reduce_gray_to(
         };
         for (taps, out) in x_taps.iter().zip(inter_row.iter_mut()) {
             let mut acc = 0_u32;
-            for (i, &weight) in taps.weights.iter().enumerate() {
-                let Some(&sample) = taps.start.checked_add(i).and_then(|sx| src_row.get(sx)) else {
+            for (i, weight) in taps.weights.iter().enumerate() {
+                let weight = weight.get();
+                let Some(&sample) = taps.start().checked_add(i).and_then(|sx| src_row.get(sx))
+                else {
                     continue;
                 };
                 acc += weight * u32::from(sample);
             }
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "the weights sum to FIXED_ONE and the sample is a byte, \
+                reason = "the weights sum to Weight::ONE and the sample is a byte, \
                           so the accumulator is at most 255 << 16"
             )]
             let byte = (acc >> 16) as u8;
@@ -273,7 +292,8 @@ pub fn reduce_gray_to(
             .iter()
             .enumerate()
             .filter_map(|(i, &weight)| {
-                let sy = taps.start.checked_add(i)?;
+                let weight = weight.get();
+                let sy = taps.start().checked_add(i)?;
                 let at = sy.checked_mul(dest_w)?;
                 let row = inter.get(at..at.checked_add(dest_w)?)?;
                 Some((weight, row))
@@ -287,7 +307,7 @@ pub fn reduce_gray_to(
             }
             #[expect(
                 clippy::cast_possible_truncation,
-                reason = "the weights sum to FIXED_ONE and the sample is a byte, \
+                reason = "the weights sum to Weight::ONE and the sample is a byte, \
                           so the accumulator is at most 255 << 16"
             )]
             let byte = (acc >> 16) as u8;
@@ -352,9 +372,10 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
         };
         for (taps, out) in x_taps.iter().zip(inter_row.chunks_exact_mut(4)) {
             let mut acc = [0_u32; 4];
-            for (i, &weight) in taps.weights.iter().enumerate() {
+            for (i, weight) in taps.weights.iter().enumerate() {
+                let weight = weight.get();
                 let Some(px) = taps
-                    .start
+                    .start()
                     .checked_add(i)
                     .and_then(|sx| sx.checked_mul(4))
                     .and_then(|at| src_row.get(at..at.checked_add(4)?))
@@ -368,7 +389,7 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
             for (slot, a) in out.iter_mut().zip(acc) {
                 #[expect(
                     clippy::cast_possible_truncation,
-                    reason = "the weights sum to FIXED_ONE and each channel is \
+                    reason = "the weights sum to Weight::ONE and each channel is \
                               a byte, so every accumulator is at most 255 << 16"
                 )]
                 let byte = (a >> 16) as u8;
@@ -403,7 +424,8 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
             .iter()
             .enumerate()
             .filter_map(|(i, &weight)| {
-                let sy = taps.start.checked_add(i)?;
+                let weight = weight.get();
+                let sy = taps.start().checked_add(i)?;
                 let at = sy.checked_mul(inter_width)?.checked_mul(4)?;
                 let row = inter_data.get(at..at.checked_add(inter_width.checked_mul(4)?)?)?;
                 Some((weight, row))
@@ -423,7 +445,7 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
             for (slot, a) in out.iter_mut().zip(acc) {
                 #[expect(
                     clippy::cast_possible_truncation,
-                    reason = "the weights sum to FIXED_ONE and each channel is \
+                    reason = "the weights sum to Weight::ONE and each channel is \
                               a byte, so every accumulator is at most 255 << 16"
                 )]
                 let byte = (a >> 16) as u8;
@@ -554,8 +576,8 @@ mod tests {
     fn weights_sum_to_one_per_destination_pixel() {
         for (src, dest) in [(455_u32, 159_u32), (100, 7), (9, 4), (1000, 999), (5, 1)] {
             for taps in axis_taps(src, dest) {
-                let total: u32 = taps.weights.iter().sum();
-                assert_eq!(total, FIXED_ONE, "src {src} dest {dest}");
+                let total: u32 = taps.weights.iter().map(|w| w.get()).sum();
+                assert_eq!(total, Weight::ONE.get(), "src {src} dest {dest}");
             }
         }
     }
@@ -575,21 +597,81 @@ mod tests {
         let [first, second] = taps.as_slice() else {
             panic!("two destination pixels");
         };
-        assert_eq!(first.start, 0);
+        assert_eq!(first.first, 0);
+        let quarter = Weight(Weight::ONE.get() / 4);
         assert_eq!(
-            first.weights,
-            vec![
-                FIXED_ONE / 4,
-                FIXED_ONE / 4,
-                FIXED_ONE / 4,
-                FIXED_ONE / 4,
-                0
-            ]
+            &*first.weights,
+            [quarter, quarter, quarter, quarter, Weight(0)]
         );
-        assert_eq!(second.start, 4);
+        assert_eq!(second.first, 4);
         // The second pixel's footprint ends at the image's edge, where the
         // clamp to `src_len - 1` stops the range: four taps, no trailing zero.
-        assert_eq!(second.weights, vec![FIXED_ONE / 4; 4]);
+        assert_eq!(&*second.weights, [quarter; 4]);
+    }
+
+    /// The three ratios where the exact table and the old `f64` one part
+    /// company, pinned by value so the difference can never be reintroduced
+    /// silently.
+    ///
+    /// These are the cases that moved twenty-eight board rows when the weight
+    /// path became integer arithmetic, and in every one of them the `f64`
+    /// table was the drifting one:
+    ///
+    /// - `7 -> 1`: the exact area is `65536 / 7 = 9362.28…` per tap. The
+    ///   carried-residue `f64` loop produced
+    ///   `[9362, 9363, 9362, 9363, 9362, 9363, 9361]` — the tail is a count
+    ///   *low*, which is the accumulated residue drift landing on the last
+    ///   tap. The exact table is symmetric about the middle, as the ratio is.
+    /// - `10 -> 2`, first destination pixel: the footprint closes exactly on
+    ///   a pixel boundary, so the trailing tap covers no area at all. The
+    ///   `f64` table gave it a weight of `1` — a whole unit of ink taken from
+    ///   inside the footprint and given to a pixel outside it, because
+    ///   `floor` of a float that should have been exactly `5.0` was not.
+    /// - `5 -> 1`: both tables sum to `ONE`, and they differ only in *which*
+    ///   tap carries the `+1` residue — the exact one puts it where the
+    ///   cumulative coverage genuinely crosses a half, the third tap, rather
+    ///   than on the tail by default.
+    #[test]
+    fn the_exact_table_is_pinned_where_the_float_one_drifted() {
+        let weights = |src, dest| -> Vec<Vec<u32>> {
+            axis_taps(src, dest)
+                .iter()
+                .map(|t| t.weights.iter().map(|w| w.get()).collect())
+                .collect()
+        };
+
+        // Symmetric, and every tap within one of the exact 9362.28…
+        assert_eq!(
+            weights(7, 1),
+            vec![vec![9362, 9363, 9362, 9362, 9362, 9363, 9362]]
+        );
+
+        // The trailing tap of the first pixel covers nothing, and weighs
+        // nothing; the second pixel is clamped at the image edge so it has no
+        // trailing tap at all.
+        assert_eq!(
+            weights(10, 2),
+            vec![
+                vec![13107, 13107, 13108, 13107, 13107, 0],
+                vec![13107, 13107, 13108, 13107, 13107],
+            ]
+        );
+
+        // The residue lands on the third tap, where the cumulative coverage
+        // crosses a half — not on the tail.
+        assert_eq!(weights(5, 1), vec![vec![13107, 13107, 13108, 13107, 13107]]);
+
+        // And all three still sum to exactly one, which is the property the
+        // accumulation's bare `>> SHIFT` depends on.
+        for (src, dest) in [(7_u32, 1_u32), (10, 2), (5, 1)] {
+            for row in weights(src, dest) {
+                assert_eq!(
+                    row.iter().sum::<u32>(),
+                    Weight::ONE.get(),
+                    "{src} -> {dest}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -601,10 +683,10 @@ mod tests {
         for src in [1_u32, 2, 187, 256, 809, 1110] {
             for dest in [1_u32, 2, 337, 512, 808, 2550] {
                 for taps in axis_taps(src, dest) {
-                    let total: u32 = taps.weights.iter().sum();
-                    assert_eq!(total, FIXED_ONE, "src {src} dest {dest}");
+                    let total: u32 = taps.weights.iter().map(|w| w.get()).sum();
+                    assert_eq!(total, Weight::ONE.get(), "src {src} dest {dest}");
                     assert!(
-                        taps.start + taps.weights.len() <= src as usize + 1,
+                        taps.start() + taps.weights.len() <= src as usize + 1,
                         "src {src} dest {dest}: taps run past the source"
                     );
                 }
