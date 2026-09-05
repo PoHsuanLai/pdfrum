@@ -22,14 +22,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use pdfrum_object::{ObjRef, Object, Resolve};
+use pdfrum_object::{Dict, ObjRef, Object, Resolve, names};
 use pdfrum_parser::Document;
 
 /// A document plus the edits made to it.
 ///
 /// Cheap to create and to drop: it borrows the base and owns only what
-/// changed.
-#[derive(Debug)]
+/// changed. Cloning copies the overlay's map and shares its objects, so a
+/// save that must not disturb the session works on a clone.
+#[derive(Debug, Clone)]
 pub struct EditDoc<'a> {
     base: &'a Document,
     /// Objects added or replaced, by number. Sorted, because the writer walks
@@ -39,6 +40,10 @@ pub struct EditDoc<'a> {
     removed: BTreeSet<u32>,
     /// The next number [`EditDoc::add`] will hand out.
     next_num: u32,
+    /// An `/Info` for the saved trailer to name, when the edits gave the
+    /// document one it did not have. The trailer is the writer's, built from
+    /// the base's, so this is the one key an edit overrides there.
+    info: Option<ObjRef>,
 }
 
 impl<'a> EditDoc<'a> {
@@ -52,6 +57,7 @@ impl<'a> EditDoc<'a> {
             // One past the highest number the file used, so a fresh object
             // can never collide with one the xref already names.
             next_num: base.xref().last_object_number().saturating_add(1),
+            info: None,
         }
     }
 
@@ -59,6 +65,21 @@ impl<'a> EditDoc<'a> {
     #[must_use]
     pub fn base(&self) -> &'a Document {
         self.base
+    }
+
+    /// The trailer the save will build from: the base's, with `/Info`
+    /// pointing at the object [`EditDoc::set_info`] named.
+    pub(crate) fn trailer(&self) -> Dict {
+        let mut trailer = self.base.trailer().clone();
+        if let Some(info) = self.info {
+            trailer.insert(names::INFO.clone(), Object::Ref(info));
+        }
+        trailer
+    }
+
+    /// Name `r` as the document's `/Info` in the saved trailer.
+    pub(crate) fn set_info(&mut self, r: ObjRef) {
+        self.info = Some(r);
     }
 
     /// Add `obj` as a new indirect object, returning the reference that names

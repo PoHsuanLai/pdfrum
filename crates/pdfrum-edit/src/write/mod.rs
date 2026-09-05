@@ -265,7 +265,11 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     let (old_nums, new_nums) = partition(doc, incremental);
 
     // ---- old objects, garbage-collected ----
-    let reach = reach::walk(base.trailer(), base.trailer_object_number(), doc);
+    //
+    // The trailer is the edited one: an `/Info` the session added is reached
+    // from it and named by it.
+    let trailer_dict = doc.trailer();
+    let reach = reach::walk(&trailer_dict, base.trailer_object_number(), doc);
     for num in old_nums {
         // A full save keeps only what the trailer can still reach.
         if !reach.is_reachable(num) || encrypt_number == Some(num) {
@@ -348,7 +352,7 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
 
     // ---- trailer ----
     let dict = trailer::build(trailer::TrailerParts {
-        source: base.trailer(),
+        source: &trailer_dict,
         id: &id.array,
         last_object_number: last_written,
         prev: (incremental && base.last_xref_offset() > 0).then(|| base.last_xref_offset()),

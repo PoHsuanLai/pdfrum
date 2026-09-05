@@ -81,6 +81,8 @@ mod render;
 mod save;
 mod session;
 mod signature;
+#[cfg(feature = "edit")]
+mod stamp;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
@@ -147,6 +149,13 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 
+/// What [`DocEdit::add_attachment`] writes beside the name and the bytes.
+#[cfg(feature = "edit")]
+pub use attach::AttachmentOptions;
+/// A `SystemTime` as the PDF date string [`AttachmentOptions::modified`] and
+/// [`Metadata`]'s two dates carry.
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::pdf_date;
 /// An image this save is adding: [`EmbeddedImage`] from
 /// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
 /// naming the layout of raw samples handed to the latter.
@@ -172,6 +181,10 @@ pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
+/// A mark on every page: what [`DocEdit::stamp_text`] and
+/// [`DocEdit::stamp_image`] draw, and where.
+#[cfg(feature = "edit")]
+pub use stamp::{StampOptions, StampPosition};
 
 /// The things a page draws, as the interpreter produced them.
 ///
