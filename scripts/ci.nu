@@ -86,6 +86,51 @@ def main [] {
     }
     print "ok: dependency tree is pure Rust"
 
+    # M22 phase 2: the C library, proved by a C program rather than by a Rust
+    # test asserting things about one. It compiles `crates/pdfrum-capi/ctest`
+    # against the generated header, links the built `libpdfrum.so`, and checks
+    # what only C can check — that the header's declarations match the
+    # library's symbols, that a `#[repr(C)]` struct reads the same from both
+    # sides, and that eight pthreads each rendering their own page of one
+    # shared document produce pixmaps identical to a single-threaded render.
+    #
+    # A C compiler is a **test-time** tool, not a build dependency. DEPS.md's
+    # pure-Rust guarantee is about what the library ships, and nothing in
+    # `pdfrum-capi`'s own build touches `cc` — the check above still walks this
+    # crate's tree and still passes. So a contributor without a C compiler gets
+    # a printed note and the rest of the gate, the same bargain `cargo deny`
+    # gets above.
+    # The C header is generated and committed, and this is the pair of checks
+    # that keeps both halves honest: the committed header still matches what
+    # cbindgen makes of the source, and the header's declarations still match
+    # the library's exported symbols exactly. It needs the release cdylib the
+    # C test builds below, so it runs first only in the sense of reading it —
+    # `run.sh` builds it, and this asks for it after.
+    #
+    # Skipped, like `cargo deny`, when the tool is absent: a contributor who
+    # never touches the C ABI should not need `cbindgen` to run the gate.
+    print "==> the C header (generated, committed, and matching the library)"
+    if (which cbindgen | is-empty) {
+        print --stderr "warning: cbindgen not installed; skipping the C header check"
+        print --stderr "         install with: cargo install cbindgen --locked"
+    } else if (which cc | is-empty) {
+        print --stderr "warning: no C compiler, so no libpdfrum.so was built;"
+        print --stderr "         skipping the C header check"
+    } else {
+        # `run.sh` builds the release cdylib the symbol half reads.
+        ^./crates/pdfrum-capi/ctest/run.sh --build-only
+        ^./scripts/capi-header.nu check
+    }
+
+    print "==> the C test (libpdfrum)"
+    if (which cc | is-empty) {
+        print --stderr "warning: no C compiler (cc); skipping the C test"
+        print --stderr "         it is a test-time tool, not a build dependency —"
+        print --stderr "         see DEPS.md, \"Tools & tests only\""
+    } else {
+        ^./crates/pdfrum-capi/ctest/run.sh
+    }
+
     # The exemption above is only tolerable because it cannot reach an embedder
     # who did not ask for it. That is the claim, and this is the check.
     ^./scripts/check-no-wgpu.nu
