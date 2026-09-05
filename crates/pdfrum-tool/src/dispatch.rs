@@ -10,10 +10,9 @@
 //! [`Modifiers`], and no key-up at all. This module is the bridge, and it is the only place in the
 //! tool that knows both.
 //!
-//! Five of the harness reviewer's seven bridging facts
-//! (`docs/reviews/claude-review-evt-harness.md`) are decisions taken here
-//! rather than notes about them; the remaining two are the caller's
-//! (`run.rs`) and the golden store's.
+//! Five of the seven bridging facts are decisions taken here rather than
+//! notes about them; the remaining two are the caller's (`run.rs`) and the
+//! golden store's.
 //!
 //! 1. **Coordinates are page space, y-up, and no transform happens.** The
 //!    `.evt` integers are PDF user space as given. The widening to `f64` is

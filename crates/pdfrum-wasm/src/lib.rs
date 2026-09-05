@@ -2,8 +2,8 @@
 //!
 //! This crate is a translation layer and nothing else: every export is an
 //! opaque handle plus one call into the facade. It holds no parsing, no
-//! rendering and no policy. It is the same shape `pdfrum-capi` gives C
-//! (`docs/design/capi.md`), said in JavaScript.
+//! rendering and no policy. It is the same shape `pdfrum-capi` gives C,
+//! said in JavaScript.
 //!
 //! ```js
 //! import init, { Document } from "pdfrum";

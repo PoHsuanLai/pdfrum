@@ -8,8 +8,7 @@
 //! # The unsafe rule
 //!
 //! The workspace sets `unsafe_code = "forbid"`. This crate overrides it to
-//! `allow`, under a rule that is narrower than the lint it replaces and is
-//! stated in full in `docs/design/capi.md`:
+//! `allow`, under a rule that is narrower than the lint it replaces:
 //!
 //! - `unsafe` appears **only** inside an `extern "C"` boundary function. No
 //!   helper below the boundary is unsafe, and no `unsafe` reaches the facade
