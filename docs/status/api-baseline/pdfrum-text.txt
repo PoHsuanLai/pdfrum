@@ -97,7 +97,6 @@ pub pdfrum_text::TextRun::index: pdfrum_text::ObjectIndex
 pub pdfrum_text::TextRun::items: alloc::vec::Vec<pdfrum_text::object::Item>
 pub pdfrum_text::TextRun::kernings: alloc::vec::Vec<f32>
 pub pdfrum_text::TextRun::marks: pdfrum_page::state::marks::ContentMarks
-pub pdfrum_text::TextRun::original_rect: kurbo::rect::Rect
 pub pdfrum_text::TextRun::position: kurbo::point::Point
 pub pdfrum_text::TextRun::rect: kurbo::rect::Rect
 pub pdfrum_text::TextRun::text_matrix: kurbo::affine::Affine
