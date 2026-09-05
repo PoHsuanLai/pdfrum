@@ -104,12 +104,6 @@ pub struct TextPage {
     pub runs: IndexMap,
 }
 
-#[doc(hidden)]
-#[must_use]
-pub fn debug_runs(page: &Page) -> Vec<TextRun> {
-    object::walk(&page.objects)
-}
-
 /// Extracts text, layout, and reading order from an interpreted page
 /// (ISO 32000-1 §14.8.2).
 ///
