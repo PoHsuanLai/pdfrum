@@ -118,6 +118,15 @@ const SUBTYPES: [(Subtype, &[u8]); 28] = [
 impl Subtype {
     /// Reads a `/Subtype` spelling. Anything unrecognized is
     /// [`Subtype::Unknown`].
+    ///
+    /// ```
+    /// use pdfrum_doc::Subtype;
+    ///
+    /// assert_eq!(Subtype::from_bytes(b"Widget"), Subtype::Widget);
+    /// // Matching is exact: no case folding, and `3D` is spelled `3D`.
+    /// assert_eq!(Subtype::from_bytes(b"widget"), Subtype::Unknown);
+    /// assert_eq!(Subtype::from_bytes(b"3D"), Subtype::ThreeD);
+    /// ```
     #[must_use]
     pub fn from_bytes(bytes: &[u8]) -> Subtype {
         SUBTYPES
@@ -127,6 +136,13 @@ impl Subtype {
     }
 
     /// The spelling. [`Subtype::Unknown`] has none and answers empty.
+    ///
+    /// ```
+    /// use pdfrum_doc::Subtype;
+    ///
+    /// assert_eq!(Subtype::XfaWidget.as_bytes(), b"XFAWidget");
+    /// assert_eq!(Subtype::Unknown.as_bytes(), b"");
+    /// ```
     #[must_use]
     pub fn as_bytes(self) -> &'static [u8] {
         SUBTYPES
@@ -140,6 +156,13 @@ impl Subtype {
     ///
     /// This is **not** the same set as [`Subtype::has_attachment_points`],
     /// which the `--annot` dump uses and which also admits links.
+    ///
+    /// ```
+    /// use pdfrum_doc::Subtype;
+    ///
+    /// assert!(Subtype::Highlight.is_text_markup());
+    /// assert!(!Subtype::Link.is_text_markup());
+    /// ```
     #[must_use]
     pub fn is_text_markup(self) -> bool {
         matches!(
@@ -152,6 +175,13 @@ impl Subtype {
     ///
     /// Links are in the set, which is why every link in the corpus prints
     /// `Number of quadpoints sets: 0`.
+    ///
+    /// ```
+    /// use pdfrum_doc::Subtype;
+    ///
+    /// assert!(Subtype::Link.has_attachment_points());
+    /// assert!(!Subtype::Square.has_attachment_points());
+    /// ```
     #[must_use]
     pub fn has_attachment_points(self) -> bool {
         matches!(self, Subtype::Link) || self.is_text_markup()
@@ -197,33 +227,108 @@ impl AnnotFlags {
     ///
     /// Only widgets consult it here — `CPDFSDK_BAAnnot::IsVisible` adds it,
     /// and Pass A never tests it.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!(AnnotFlags::INVISIBLE.bits(), 1);
+    /// assert!(!AnnotFlags::INVISIBLE.is_visible());
+    /// ```
     pub const INVISIBLE: Self = Self(1 << 0);
     /// Bit 2: not displayed and not printed at all.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::HIDDEN.is_hidden());
+    /// ```
     pub const HIDDEN: Self = Self(1 << 1);
     /// Bit 3: appears in printed output.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.prints());
+    /// ```
     pub const PRINT: Self = Self(1 << 2);
     /// Bit 4: the annotation keeps its size when the page is zoomed.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(!AnnotFlags::NO_ZOOM.zooms());
+    /// ```
     pub const NO_ZOOM: Self = Self(1 << 3);
     /// Bit 5: the annotation ignores the page's rotation.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NO_ROTATE.no_rotate());
+    /// ```
     pub const NO_ROTATE: Self = Self(1 << 4);
     /// Bit 6: suppressed on screen, though it may still print.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NO_VIEW.no_view());
+    /// ```
     pub const NO_VIEW: Self = Self(1 << 5);
     /// Bit 7: the annotation does not interact with the user.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!(AnnotFlags::READ_ONLY.names(), ["ReadOnly"]);
+    /// ```
     pub const READ_ONLY: Self = Self(1 << 6);
     /// Bit 8: the annotation may not be deleted, moved or resized.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!(AnnotFlags::LOCKED.names(), ["Locked"]);
+    /// ```
     pub const LOCKED: Self = Self(1 << 7);
     /// Bit 9: [`AnnotFlags::NO_VIEW`]'s sense is inverted for the viewer's
     /// own idea of "selected".
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!(AnnotFlags::TOGGLE_NO_VIEW.names(), ["ToggleNoView"]);
+    /// ```
     pub const TOGGLE_NO_VIEW: Self = Self(1 << 8);
     /// Bit 10: the annotation's contents may not be changed.
     ///
     /// The one defined bit the dump has no printed name for.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// // The one defined bit with no printed name.
+    /// assert!(AnnotFlags::LOCKED_CONTENTS.names().is_empty());
+    /// ```
     pub const LOCKED_CONTENTS: Self = Self(1 << 9);
 
     /// No bit set.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NONE.is_empty());
+    /// assert!(AnnotFlags::NONE.names().is_empty());
+    /// ```
     pub const NONE: Self = Self(0);
 
     /// The raw `/F` word, including any bit this type does not name.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!((AnnotFlags::PRINT | AnnotFlags::LOCKED).bits(), 4 | 128);
+    /// ```
     #[must_use]
     pub const fn bits(self) -> i64 {
         self.0
@@ -231,6 +336,14 @@ impl AnnotFlags {
 
     /// The word as written in the file. **Unknown bits are retained**: a
     /// reserved bit a damaged file sets is kept, not dropped.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// let f = AnnotFlags::from_bits((1 << 20) | 4);
+    /// assert!(f.prints());
+    /// assert_eq!(f.bits(), (1 << 20) | 4);
+    /// ```
     #[must_use]
     pub const fn from_bits(bits: i64) -> Self {
         Self(bits)
@@ -241,30 +354,67 @@ impl AnnotFlags {
     /// [`AnnotFlags::NONE`] is contained in everything, so `contains` is the
     /// wrong question to ask about "no flags at all" — use
     /// `== AnnotFlags::NONE`.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// let f = AnnotFlags::PRINT | AnnotFlags::NO_VIEW;
+    /// assert!(f.contains(AnnotFlags::PRINT));
+    /// assert!(!f.contains(AnnotFlags::PRINT | AnnotFlags::LOCKED));
+    /// // Every flag word contains the empty one.
+    /// assert!(f.contains(AnnotFlags::NONE));
+    /// ```
     #[must_use]
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
     }
 
     /// Both sets of bits.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// let f = AnnotFlags::PRINT.union(AnnotFlags::LOCKED);
+    /// assert_eq!(f.names(), ["Print", "Locked"]);
+    /// ```
     #[must_use]
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
 
     /// A copy with `other`'s bits set. An alias for [`AnnotFlags::union`].
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert_eq!(AnnotFlags::NONE.with(AnnotFlags::LOCKED), AnnotFlags::LOCKED);
+    /// ```
     #[must_use]
     pub const fn with(self, other: Self) -> Self {
         self.union(other)
     }
 
     /// The bits of `self` that are not in `other`.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// let f = AnnotFlags::PRINT | AnnotFlags::NO_VIEW;
+    /// assert!(f.without(AnnotFlags::NO_VIEW).views());
+    /// ```
     #[must_use]
     pub const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
     }
 
     /// Whether no bit at all is set.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NONE.is_empty());
+    /// assert!(!AnnotFlags::PRINT.is_empty());
+    /// ```
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.0 == 0
@@ -275,6 +425,13 @@ impl AnnotFlags {
     /// The positive reading of the spec's `Invisible` bit, and **the bit
     /// alone**: whether an annotation is actually drawn also depends on
     /// [`AnnotFlags::is_hidden`], [`AnnotFlags::no_view`] and the subtype.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.is_visible());
+    /// assert!(!AnnotFlags::INVISIBLE.is_visible());
+    /// ```
     #[must_use]
     #[doc(alias = "Invisible")]
     pub const fn is_visible(self) -> bool {
@@ -282,12 +439,26 @@ impl AnnotFlags {
     }
 
     /// The annotation is not displayed and not printed at all.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::HIDDEN.is_hidden());
+    /// assert!(!AnnotFlags::PRINT.is_hidden());
+    /// ```
     #[must_use]
     pub const fn is_hidden(self) -> bool {
         self.contains(Self::HIDDEN)
     }
 
     /// The annotation appears in printed output.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.prints());
+    /// assert!(!AnnotFlags::NONE.prints());
+    /// ```
     #[must_use]
     pub const fn prints(self) -> bool {
         self.contains(Self::PRINT)
@@ -296,6 +467,13 @@ impl AnnotFlags {
     /// The annotation is shown on screen.
     ///
     /// The positive reading of the spec's `NoView` bit.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.views());
+    /// assert!(!AnnotFlags::NO_VIEW.views());
+    /// ```
     #[must_use]
     #[doc(alias = "NoView")]
     pub const fn views(self) -> bool {
@@ -303,6 +481,13 @@ impl AnnotFlags {
     }
 
     /// The annotation is suppressed on screen.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NO_VIEW.no_view());
+    /// assert!(!AnnotFlags::PRINT.no_view());
+    /// ```
     #[must_use]
     #[doc(alias = "NoView")]
     pub const fn no_view(self) -> bool {
@@ -312,6 +497,13 @@ impl AnnotFlags {
     /// The annotation scales with the page.
     ///
     /// The positive reading of the spec's `NoZoom` bit.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.zooms());
+    /// assert!(!AnnotFlags::NO_ZOOM.zooms());
+    /// ```
     #[must_use]
     #[doc(alias = "NoZoom")]
     pub const fn zooms(self) -> bool {
@@ -321,6 +513,13 @@ impl AnnotFlags {
     /// The annotation turns with the page.
     ///
     /// The positive reading of the spec's `NoRotate` bit.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::PRINT.rotates());
+    /// assert!(!AnnotFlags::NO_ROTATE.rotates());
+    /// ```
     #[must_use]
     #[doc(alias = "NoRotate")]
     pub const fn rotates(self) -> bool {
@@ -328,6 +527,13 @@ impl AnnotFlags {
     }
 
     /// The annotation ignores the page's rotation.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// assert!(AnnotFlags::NO_ROTATE.no_rotate());
+    /// assert!(!AnnotFlags::PRINT.no_rotate());
+    /// ```
     #[must_use]
     #[doc(alias = "NoRotate")]
     pub const fn no_rotate(self) -> bool {
@@ -339,6 +545,13 @@ impl AnnotFlags {
     /// **The order is the dump's** — `--annot` prints exactly this sequence,
     /// and [`AnnotFlags::LOCKED_CONTENTS`] never appears because it has no
     /// printed name.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    ///
+    /// let f = AnnotFlags::from_bits(4 | 8 | 16);
+    /// assert_eq!(f.names(), ["Print", "NoZoom", "NoRotate"]);
+    /// ```
     #[must_use]
     pub fn names(self) -> Vec<&'static str> {
         FLAG_NAMES

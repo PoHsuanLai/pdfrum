@@ -69,6 +69,17 @@ pub struct Hidden {
 
 impl Hidden {
     /// Whether the open action touched no annotation at all.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::hidden_by_open_action;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// // No `/OpenAction`: nothing is touched, at the cost of one lookup.
+    /// let hidden = hidden_by_open_action(&Dict::default(), &NoResolve, &limits, &mut diags);
+    /// assert!(hidden.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.touched.is_empty()
@@ -78,6 +89,20 @@ impl Hidden {
     ///
     /// The dictionary's own `/F` when the action did not name it, which is
     /// every annotation in a document with no `/OpenAction`.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::AnnotFlags;
+    /// use pdfrum_doc::nav::hidden_by_open_action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let hidden = hidden_by_open_action(&Dict::default(), &NoResolve, &limits, &mut diags);
+    ///
+    /// // Untouched by any action: the dictionary's own `/F`.
+    /// let widget = Dict::from_pairs([(Name::from("F"), Object::Int(4))]);
+    /// assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags::PRINT);
+    /// ```
     #[must_use]
     pub fn flags<R: Resolve>(&self, dict: &Dict, r: &R) -> AnnotFlags {
         self.touched
@@ -95,6 +120,16 @@ impl Hidden {
 /// The `/Next` chain is walked, because a hide can sit behind a `/GoTo` that
 /// we otherwise ignore; every action in the chain that reads as `/Hide`
 /// contributes, in order, so a later one showing what an earlier one hid wins.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::nav::hidden_by_open_action;
+/// use pdfrum_object::{Dict, NoResolve};
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// let hidden = hidden_by_open_action(&Dict::default(), &NoResolve, &limits, &mut diags);
+/// assert!(hidden.is_empty());
+/// ```
 #[must_use]
 pub fn hidden_by_open_action<R: Resolve>(
     catalog: &Dict,

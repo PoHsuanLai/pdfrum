@@ -21,6 +21,24 @@ use crate::geom;
 use crate::names;
 
 /// Which appearance a lookup wants.
+///
+/// ```
+/// use pdfrum_doc::annot::{ApMode, annot_ap, has_appearance};
+/// use pdfrum_object::{ByteSpan, Dict, Name, NoResolve, Object, Stream};
+///
+/// let normal = Stream::new(Dict::default(), ByteSpan::whole(b"0 0 10 10 re f".as_slice().into()));
+/// let annot = Dict::from_pairs([(
+///     Name::from("AP"),
+///     Object::Dict(Dict::from_pairs([(
+///         Name::from("N"),
+///         Object::Stream(Box::new(normal)),
+///     )])),
+/// )]);
+///
+/// // A missing `/R` falls back to `/N` when the caller allows it.
+/// assert!(annot_ap(&annot, ApMode::Rollover, true, &NoResolve).is_some());
+/// assert!(annot_ap(&annot, ApMode::Rollover, false, &NoResolve).is_none());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ApMode {
     /// The normal appearance (`/N`).
@@ -49,6 +67,24 @@ impl ApMode {
 /// With it set, a **missing key** falls back to `/N`; a key that is present
 /// but holds nothing usable does **not** — it suppresses the fallback and the
 /// lookup comes back empty.
+///
+/// ```
+/// use pdfrum_doc::annot::{ApMode, annot_ap, has_appearance};
+/// use pdfrum_object::{ByteSpan, Dict, Name, NoResolve, Object, Stream};
+///
+/// let normal = Stream::new(Dict::default(), ByteSpan::whole(b"0 0 10 10 re f".as_slice().into()));
+/// let annot = Dict::from_pairs([(
+///     Name::from("AP"),
+///     Object::Dict(Dict::from_pairs([(
+///         Name::from("N"),
+///         Object::Stream(Box::new(normal)),
+///     )])),
+/// )]);
+///
+/// assert!(annot_ap(&annot, ApMode::Normal, false, &NoResolve).is_some());
+/// // No `/AP` at all: nothing.
+/// assert!(annot_ap(&Dict::default(), ApMode::Normal, true, &NoResolve).is_none());
+/// ```
 #[must_use]
 pub fn annot_ap<R: Resolve>(
     dict: &Dict,
@@ -95,6 +131,23 @@ pub fn annot_ap<R: Resolve>(
 /// with its own dictionary, so the overwhelmingly common "a stream is there"
 /// case suppresses generation just as a multi-state dictionary does. Only a
 /// missing `/AP`, a missing `/N`, or a scalar `/N` leaves the door open.
+///
+/// ```
+/// use pdfrum_doc::annot::{ApMode, annot_ap, has_appearance};
+/// use pdfrum_object::{ByteSpan, Dict, Name, NoResolve, Object, Stream};
+///
+/// let normal = Stream::new(Dict::default(), ByteSpan::whole(b"0 0 10 10 re f".as_slice().into()));
+/// let annot = Dict::from_pairs([(
+///     Name::from("AP"),
+///     Object::Dict(Dict::from_pairs([(
+///         Name::from("N"),
+///         Object::Stream(Box::new(normal)),
+///     )])),
+/// )]);
+///
+/// assert!(has_appearance(&annot, &NoResolve));
+/// assert!(!has_appearance(&Dict::default(), &NoResolve));
+/// ```
 #[must_use]
 pub fn has_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     dict.dict(names::AP, r)

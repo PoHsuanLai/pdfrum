@@ -36,6 +36,14 @@ use std::ops::Range;
 pub use bidi::Direction;
 
 /// How a line sits within the plate.
+///
+/// ```
+/// use pdfrum_doc::vt::Alignment;
+///
+/// // `/Q` names the three, and the default is flush left.
+/// assert_eq!(Alignment::default(), Alignment::Left);
+/// assert_eq!(Alignment::from_quadding(1), Alignment::Center);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Alignment {
     /// Flush left.
@@ -49,6 +57,15 @@ pub enum Alignment {
 
 impl Alignment {
     /// Reads a `/Q` value; anything outside `0..=2` is left-aligned.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::Alignment;
+    ///
+    /// assert_eq!(Alignment::from_quadding(0), Alignment::Left);
+    /// assert_eq!(Alignment::from_quadding(2), Alignment::Right);
+    /// // Anything outside `0..=2` is left-aligned.
+    /// assert_eq!(Alignment::from_quadding(9), Alignment::Left);
+    /// ```
     #[must_use]
     pub fn from_quadding(q: i64) -> Alignment {
         match q {
@@ -76,6 +93,28 @@ pub(crate) const FONT_SIZE_STEPS: [u8; 25] = [
 /// A plain record rather than a trait: there is exactly one real
 /// implementation, and the test stub is a different set of numbers rather
 /// than a different behavior.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// // Nothing here reads a font dictionary; the numbers are the whole
+/// // contract between a caller and the engine.
+/// assert_eq!(laid_out.font_size, 10.0);
+/// ```
 #[derive(Clone, Copy)]
 pub struct Metrics<'a> {
     /// Width per character, in thousandths of an em.
@@ -96,6 +135,27 @@ impl std::fmt::Debug for Metrics<'_> {
 }
 
 /// How a piece of variable text is to be set.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// // A plain config struct with `Default` plus struct-update syntax.
+/// assert_eq!(laid_out.sections.len(), 1);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     /// The box the text is set into.
@@ -136,6 +196,29 @@ impl Default for Config {
 }
 
 /// One character, placed.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// // One entry per character, not per word.
+/// let section = &laid_out.sections[0];
+/// assert_eq!(section.words.len(), 2);
+/// assert_eq!(section.words[0].ch, u32::from('H'));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Word {
     /// The code point. A password field still records the real one; only its
@@ -152,6 +235,28 @@ pub struct Word {
 }
 
 /// One line of a section.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// let line = &laid_out.sections[0].lines[0];
+/// // Half-open, over the section's own word indices.
+/// assert_eq!(line.word_range(2), 0..2);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     /// The words this line covers, **half-open**, or `None` for the single
@@ -174,6 +279,30 @@ impl Line {
     ///
     /// Empty for the single line of an empty section, and for a `begin` past
     /// the section's words — a layout that shrank under an edit.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom;
+    /// use pdfrum_doc::vt::{Config, Metrics, layout};
+    ///
+    /// // Every character ten thousandths wide: the stub the layout assertions
+    /// // in this crate are written against.
+    /// let width = |_code: u32| 10;
+    /// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+    ///
+    /// let config = Config {
+    ///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+    ///     font_size: 10.0,
+    ///     multi_line: true,
+    ///     ..Config::default()
+    /// };
+    /// let laid_out = layout("Hi", &config, &metrics);
+    ///
+    /// let line = &laid_out.sections[0].lines[0];
+    /// assert_eq!(line.word_range(2), 0..2);
+    /// // Clamped: a layout that shrank under an edit answers empty rather
+    /// // than a range past the end.
+    /// assert_eq!(line.word_range(0), 0..0);
+    /// ```
     #[must_use]
     pub fn word_range(&self, available: usize) -> Range<usize> {
         let Some(words) = self.words.clone() else {
@@ -188,6 +317,27 @@ impl Line {
     }
 
     /// The **last** word index the line covers, if it covers any.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom;
+    /// use pdfrum_doc::vt::{Config, Metrics, layout};
+    ///
+    /// // Every character ten thousandths wide: the stub the layout assertions
+    /// // in this crate are written against.
+    /// let width = |_code: u32| 10;
+    /// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+    ///
+    /// let config = Config {
+    ///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+    ///     font_size: 10.0,
+    ///     multi_line: true,
+    ///     ..Config::default()
+    /// };
+    /// let laid_out = layout("Hi", &config, &metrics);
+    ///
+    /// let line = &laid_out.sections[0].lines[0];
+    /// assert_eq!(line.last_word(), Some(1));
+    /// ```
     #[must_use]
     pub fn last_word(&self) -> Option<u32> {
         let words = self.words.clone()?;
@@ -196,6 +346,28 @@ impl Line {
 }
 
 /// One paragraph.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// // One paragraph, split on the line breaks the text carries.
+/// let two = layout("a\nb", &config, &metrics);
+/// assert_eq!(two.sections.len(), 2);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Section {
     /// Its characters, in logical order.
@@ -207,6 +379,28 @@ pub struct Section {
 }
 
 /// A laid-out piece of variable text.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// assert_eq!(laid_out.sections.len(), 1);
+/// // The extent is y-down; `content_rect_pdf` flips it back.
+/// let _ = laid_out.content_rect_pdf(config.plate);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Layout {
     /// The paragraphs.
@@ -219,12 +413,56 @@ pub struct Layout {
 
 impl Layout {
     /// Converts an internal point to PDF's y-up space.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom;
+    /// use pdfrum_doc::vt::{Config, Metrics, layout};
+    ///
+    /// // Every character ten thousandths wide: the stub the layout assertions
+    /// // in this crate are written against.
+    /// let width = |_code: u32| 10;
+    /// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+    ///
+    /// let config = Config {
+    ///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+    ///     font_size: 10.0,
+    ///     multi_line: true,
+    ///     ..Config::default()
+    /// };
+    /// let laid_out = layout("Hi", &config, &metrics);
+    /// use pdfrum_doc::vt::Layout;
+    ///
+    /// // Internal space is y-down from the plate's top-left corner.
+    /// assert_eq!(Layout::to_pdf(config.plate, 0.0, 0.0), (0.0, 40.0));
+    /// ```
     #[must_use]
     pub fn to_pdf(plate: Rect, x: f32, y: f32) -> (f32, f32) {
         (crate::geom::left(plate) + x, crate::geom::top(plate) - y)
     }
 
     /// The content rectangle in PDF's y-up space.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom;
+    /// use pdfrum_doc::vt::{Config, Metrics, layout};
+    ///
+    /// // Every character ten thousandths wide: the stub the layout assertions
+    /// // in this crate are written against.
+    /// let width = |_code: u32| 10;
+    /// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+    ///
+    /// let config = Config {
+    ///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+    ///     font_size: 10.0,
+    ///     multi_line: true,
+    ///     ..Config::default()
+    /// };
+    /// let laid_out = layout("Hi", &config, &metrics);
+    ///
+    /// let rect = laid_out.content_rect_pdf(config.plate);
+    /// // Back in PDF's y-up space, so the top edge is above the bottom.
+    /// assert!(geom::top(rect) >= geom::bottom(rect));
+    /// ```
     #[must_use]
     pub fn content_rect_pdf(&self, plate: Rect) -> Rect {
         let (left, top) = Layout::to_pdf(
@@ -241,6 +479,28 @@ impl Layout {
     }
 
     /// Every word in reading order, paired with the line it belongs to.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom;
+    /// use pdfrum_doc::vt::{Config, Metrics, layout};
+    ///
+    /// // Every character ten thousandths wide: the stub the layout assertions
+    /// // in this crate are written against.
+    /// let width = |_code: u32| 10;
+    /// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+    ///
+    /// let config = Config {
+    ///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+    ///     font_size: 10.0,
+    ///     multi_line: true,
+    ///     ..Config::default()
+    /// };
+    /// let laid_out = layout("Hi", &config, &metrics);
+    ///
+    /// // Reading order, each character paired with its section and line.
+    /// let chars: Vec<u32> = laid_out.words().map(|(_, _, word)| word.ch).collect();
+    /// assert_eq!(chars, [u32::from('H'), u32::from('i')]);
+    /// ```
     pub fn words(&self) -> impl Iterator<Item = (usize, usize, &Word)> {
         self.sections.iter().enumerate().flat_map(|(s, section)| {
             section.lines.iter().enumerate().flat_map(move |(l, line)| {
@@ -311,6 +571,27 @@ pub(crate) fn split_sections(text: &str, config: &Config) -> Vec<Vec<u32>> {
 /// A pure function: nothing here reads a document or a font dictionary, only
 /// the numbers [`Metrics`] supplies, which is what makes the whole engine
 /// testable against a stub.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+///
+/// assert_eq!(laid_out.sections.len(), 1);
+/// assert_eq!(laid_out.sections[0].words.len(), 2);
+/// ```
 #[must_use]
 pub fn layout(text: &str, config: &Config, metrics: &Metrics<'_>) -> Layout {
     let mut config = config.clone();

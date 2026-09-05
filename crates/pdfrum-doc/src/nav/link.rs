@@ -26,18 +26,61 @@ pub struct Link {
 
 impl Link {
     /// Wraps a dictionary as a link.
+    ///
+    /// ```
+    /// use pdfrum_doc::{Link, geom};
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let link = Link::new(Dict::from_pairs([(
+    ///     Name::from("Rect"),
+    ///     Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+    /// )]));
+    /// assert_eq!(link.rect(&NoResolve), geom::rect(0.0, 700.0, 200.0, 780.0));
+    /// ```
     #[must_use]
     pub fn new(dict: Dict) -> Link {
         Link { dict }
     }
 
     /// The link's `/Rect`, **not** normalized.
+    ///
+    /// ```
+    /// use pdfrum_doc::nav::{Link, page_links};
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let link = Dict::from_pairs([
+    ///     (Name::from("Subtype"), Object::Name(Name::from("Link"))),
+    ///     (
+    ///         Name::from("Rect"),
+    ///         Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+    ///     ),
+    /// ]);
+    /// let page = Dict::from_pairs([(
+    ///     Name::from("Annots"),
+    ///     Object::Array(Array::of([Object::Dict(link)])),
+    /// )]);
+    /// use pdfrum_doc::geom;
+    ///
+    /// let links = page_links(&page, &NoResolve);
+    /// let link = links[0].as_ref().expect("a link at index 0");
+    /// // Not normalized: the numbers are the ones the file wrote.
+    /// assert_eq!(link.rect(&NoResolve), geom::rect(0.0, 700.0, 200.0, 780.0));
+    /// ```
     #[must_use]
     pub fn rect<R: Resolve>(&self, r: &R) -> kurbo::Rect {
         self.dict.rect(obj_names::RECT, r)
     }
 
     /// The link's action, when it has one.
+    ///
+    /// ```
+    /// use pdfrum_doc::{ActionKind, Link};
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let action = Dict::from_pairs([(Name::from("S"), Object::Name(Name::from("URI")))]);
+    /// let link = Link::new(Dict::from_pairs([(Name::from("A"), Object::Dict(action))]));
+    /// assert_eq!(link.action(&NoResolve).map(|a| a.kind()), Some(ActionKind::Uri));
+    /// ```
     #[must_use]
     pub fn action<R: Resolve>(&self, r: &R) -> Option<Action> {
         self.dict.dict(names::A, r).map(Action::new)
@@ -47,6 +90,22 @@ impl Link {
     ///
     /// `/Dest` is tried first and the action's destination only when that
     /// yields no array — the same two-rung fallback a viewer applies.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Link;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let link = Link::new(Dict::from_pairs([(
+    ///     Name::from("Dest"),
+    ///     Object::Array(Array::of([Object::Int(1), Object::Name(Name::from("Fit"))])),
+    /// )]));
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let dest = link.dest(&Dict::default(), &NoResolve, &Limits::default(), &mut diags);
+    /// // `/Dest` wins; the action is consulted only when it yields no array.
+    /// assert!(dest.array.is_some());
+    /// ```
     #[must_use]
     pub fn dest<R: Resolve>(
         &self,
@@ -67,6 +126,28 @@ impl Link {
 }
 
 /// A page's links, with a gap where every non-link annotation sits.
+///
+/// ```
+/// use pdfrum_doc::nav::{Link, page_links};
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let link = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Link"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(link)])),
+/// )]);
+///
+/// // One slot per `/Annots` entry, so an index here is an annotation index.
+/// let links = page_links(&page, &NoResolve);
+/// assert_eq!(links.len(), 1);
+/// assert!(links[0].is_some());
+/// ```
 #[must_use]
 pub fn page_links<R: Resolve>(page: &Dict, r: &R) -> Vec<Option<Link>> {
     let Some(array) = page.array(obj_names::ANNOTS, r) else {

@@ -100,6 +100,22 @@ pub(crate) const MAX_GLYPH_DIMENSION: i32 = 2048;
 /// subpixel to red. Each is gamma-adjusted and merged into its own destination
 /// channel independently, which is what puts colour on the fringes of a glyph
 /// drawn in a single colour.
+///
+/// ```
+/// use pdfrum_render::glyph::SubpixelBitmap;
+///
+/// let bitmap = SubpixelBitmap {
+///     left: 0,
+///     top: 0,
+///     width: 2,
+///     height: 1,
+///     channels: vec![255, 0, 0, 0, 0, 0],
+/// };
+///
+/// // The three bytes are the destination's red, green and blue
+/// // coverages, each merged into its own channel.
+/// assert_eq!(bitmap.at(0, 0), [255, 0, 0]);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubpixelBitmap {
     /// The device x of column 0, relative to the glyph's snapped origin.
@@ -117,6 +133,23 @@ pub struct SubpixelBitmap {
 
 impl SubpixelBitmap {
     /// The `[r, g, b]` coverages at `(x, y)`, or zeroes outside the bitmap.
+    ///
+    /// ```
+    /// use pdfrum_render::glyph::SubpixelBitmap;
+    ///
+    /// let bitmap = SubpixelBitmap {
+    ///     left: 0,
+    ///     top: 0,
+    ///     width: 2,
+    ///     height: 1,
+    ///     channels: vec![255, 0, 0, 0, 0, 0],
+    /// };
+    ///
+    /// assert_eq!(bitmap.at(1, 0), [0, 0, 0]);
+    /// // Outside the bitmap is zeroes, not a panic.
+    /// assert_eq!(bitmap.at(-1, 0), [0, 0, 0]);
+    /// assert_eq!(bitmap.at(9, 9), [0, 0, 0]);
+    /// ```
     #[must_use]
     pub fn at(&self, x: i32, y: i32) -> [u8; 3] {
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
@@ -130,6 +163,23 @@ impl SubpixelBitmap {
     }
 
     /// Whether the bitmap has no pixels at all, which a blank glyph produces.
+    ///
+    /// ```
+    /// use pdfrum_render::glyph::SubpixelBitmap;
+    ///
+    /// let bitmap = SubpixelBitmap {
+    ///     left: 0,
+    ///     top: 0,
+    ///     width: 2,
+    ///     height: 1,
+    ///     channels: vec![255, 0, 0, 0, 0, 0],
+    /// };
+    ///
+    /// assert!(!bitmap.is_empty());
+    /// // What a blank glyph produces.
+    /// let blank = SubpixelBitmap { width: 0, height: 0, ..bitmap };
+    /// assert!(blank.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.width <= 0 || self.height <= 0
