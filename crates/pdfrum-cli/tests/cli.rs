@@ -2467,3 +2467,115 @@ fn forms_fill_scripts_writes_back_what_the_open_action_assigned() {
         .unwrap();
     assert_eq!(echo["value"], "");
 }
+
+/// The corpus guide: eleven pages, 1240 x 1753 px at 150 dpi.
+const GUIDE: &str = "../../../benches/corpus/text_quick_start.pdf";
+
+#[test]
+fn max_pixels_refuses_a_render_above_the_cap_with_exit_4_and_writes_nothing() {
+    let dir = scratch("max-pixels").unwrap();
+    let template = dir.join("{n}.png");
+    let refused = run(&[
+        "render",
+        "--max-pixels",
+        "1000",
+        "-o",
+        template.to_str().unwrap(),
+        fx(GUIDE),
+    ])
+    .unwrap();
+    assert_eq!(refused.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert_eq!(
+        stderr,
+        "pdfrum: render of 1240 x 1753 px (2.1 megapixels) is above the cap of 0 megapixels; \
+         render at a smaller scale or raise `Limits::max_render_pixels`\n"
+    );
+    assert!(refused.stdout.is_empty());
+    assert_eq!(
+        std::fs::read_dir(&dir).unwrap().count(),
+        0,
+        "refused before anything was drawn"
+    );
+
+    let rendered = run(&[
+        "render",
+        "--max-pixels",
+        "100M",
+        "--pages",
+        "1",
+        "--dpi",
+        "36",
+        "-o",
+        template.to_str().unwrap(),
+        fx(GUIDE),
+    ])
+    .unwrap();
+    assert!(
+        rendered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&rendered.stderr)
+    );
+    let png = std::fs::read(dir.join("1.png")).unwrap();
+    assert_eq!(&png[..4], b"\x89PNG");
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    // The grammar: `K`, `M`, `G` or digits; anything else is clap's exit 2.
+    for junk in ["lots", "1.5M", "100MiB"] {
+        let out = run(&["render", "--max-pixels", junk, fx(GUIDE)]).unwrap();
+        assert_eq!(out.status.code(), Some(2), "{junk:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("is not a number of pixels"),
+            "{junk:?}"
+        );
+    }
+}
+
+#[test]
+fn time_limit_stops_the_command_with_exit_4_and_a_generous_one_changes_nothing() {
+    // One millisecond is spent by the open or by the first page load after
+    // it — the checks are at the boundaries the library has, so which one
+    // says so depends on the machine; the budget and the code do not.
+    let stopped = run(&["--time-limit", "1ms", "extract", "text", fx(GUIDE)]).unwrap();
+    assert_eq!(stopped.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&stopped.stderr);
+    assert!(stderr.starts_with("pdfrum: "), "{stderr}");
+    assert!(
+        stderr.contains("time limit of 1 ms exceeded while "),
+        "{stderr}"
+    );
+    assert!(
+        stderr.ends_with("; allow more time or do less\n"),
+        "{stderr}"
+    );
+
+    let plain = stdout(&["extract", "text", fx(GUIDE)]).unwrap();
+    let budgeted = stdout(&["--time-limit", "10s", "extract", "text", fx(GUIDE)]).unwrap();
+    assert_eq!(
+        budgeted, plain,
+        "a budget that is not spent changes nothing"
+    );
+    assert_eq!(plain.matches('\u{c}').count(), 10, "eleven pages");
+
+    // Several files under a spent budget: each reported, exit 4 at the end.
+    let several = run(&[
+        "--time-limit",
+        "1ms",
+        "info",
+        fx(GUIDE),
+        fx("fixtures/hello_world_2_pages.pdf"),
+    ])
+    .unwrap();
+    assert_eq!(several.status.code(), Some(4));
+    let stderr = String::from_utf8_lossy(&several.stderr);
+    assert_eq!(stderr.matches("time limit of 1 ms exceeded").count(), 2);
+
+    for junk in ["5", "1.5s", "5 s", "1d"] {
+        let out = run(&["--time-limit", junk, "info", fx(GUIDE)]).unwrap();
+        assert_eq!(out.status.code(), Some(2), "{junk:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("is not a duration"),
+            "{junk:?}"
+        );
+    }
+}
