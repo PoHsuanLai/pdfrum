@@ -133,6 +133,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     // pdfrum-text
     nameable::<TextPage>();
     nameable::<CharBox>();
+    nameable::<Word>();
     nameable::<FindOptions>();
     nameable::<WebLink>();
     nameable::<TextError>();
@@ -144,8 +145,14 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<CharIndex>();
     nameable::<TextIndex>();
     nameable::<IndexMap>();
+}
 
-    // The facade's own, for completeness of the block a caller reads.
+/// The facade's own types, for completeness of the block a caller reads.
+///
+/// Its own function only because the member-crate list above is one line
+/// short of the tree's function-length ceiling; the claim is the same.
+#[test]
+fn every_facade_own_type_is_nameable() {
     nameable::<Document>();
     nameable::<Metadata>();
     nameable::<OpenOptions>();

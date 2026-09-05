@@ -93,6 +93,7 @@ pub use pdfrum::TextRenderMode
 pub use pdfrum::UpdateKind
 pub use pdfrum::VelloCpuBackend
 pub use pdfrum::WebLink
+pub use pdfrum::Word
 pub use pdfrum::XrefEntry
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
@@ -371,6 +372,7 @@ pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::trim_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::width(&self) -> f64
+pub fn pdfrum::Page<'a>::words(&self) -> alloc::vec::Vec<pdfrum_text::word::Word>
 pub struct pdfrum::PageEdit
 impl pdfrum::PageEdit
 pub fn pdfrum::PageEdit::font_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
