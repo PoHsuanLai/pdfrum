@@ -53,9 +53,17 @@ pub struct Shortened<S: Rows<Pixel = Rgba16>> { src: S, taps: Taps, acc: Vec<Rgb
   is the one conversion function; `Indexed` carries a `Palette<Rgb8>`, a
   lookup rather than a re-parse per pixel. The existing fallbacks stay:
   an absent index is 0, an absent palette entry is black.
-- Fixed point is a type: `Weight(u16)` with the shift as an associated
+- Fixed point is a type: `Weight(u32)` with the shift as an associated
   constant, `Taps { first: u32, weights: Box<[Weight]> }` built by integer
   arithmetic only. `f64` cannot enter the weight path.
+
+  *Corrected while landing step 1:* this said `Weight(u16)`, which does not
+  work. `Weight::ONE` is `1 << 16`, one past the top of a `u16`, and it is a
+  real single-tap value: a destination pixel whose footprint falls outside the
+  source is clamped to the nearest source pixel *entire*. A `u16` would have
+  forced a `whole: bool` beside the slice — a flag encoding a state that the
+  weight itself should carry, which is the shape this design exists to avoid.
+  The width was never the point; the integer arithmetic is.
 - Masks: the stencil and `/SMask` alpha join at stage 2, per row, as they
   do today inside `to_pixmap`; nothing is expanded ahead of time.
 - The JPEG source wraps zune-jpeg's whole-image buffer until the decoder
