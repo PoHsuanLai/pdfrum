@@ -49,6 +49,7 @@ mod annot_dump;
 mod chrome;
 mod content;
 mod dispatch;
+/// The `.evt` script grammar the oracle's form harness replays.
 pub mod events;
 #[cfg(feature = "javascript")]
 mod jstranscript;
@@ -67,6 +68,11 @@ use std::process::ExitCode;
 
 use options::{OutputFormat, ParseError};
 
+/// Parses the command line and walks every input file through [`run`].
+///
+/// Exits 1 only for a refused command line, no inputs, or a closed output
+/// pipe; a file that fails to load or a page that fails to render still exits
+/// 0, which is what the oracle's own `main` does.
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut stdout = std::io::stdout().lock();

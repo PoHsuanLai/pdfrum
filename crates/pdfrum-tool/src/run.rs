@@ -27,14 +27,18 @@ use crate::{annot, dispatch, events, metadata, pageinfo, render, structure, text
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
 pub struct Streams<'a> {
+    /// The byte-compared stream: dumps and notice lines.
     pub out: &'a mut dyn Write,
+    /// The chatter stream: page counts and per-event notices.
     pub err: &'a mut dyn Write,
 }
 
 /// What one file's processing produced, for the caller's exit decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Counts {
+    /// Pages that loaded and were dumped.
     pub processed: u32,
+    /// Pages in range that failed to load.
     pub bad: u32,
 }
 
@@ -531,7 +535,9 @@ fn dump_page(
 // labels are owned strings.
 #[derive(Debug, Clone)]
 struct Output<'a> {
+    /// The input PDF's path, which the `<input>.<page>.<ext>` name is built on.
     input: &'a Path,
+    /// The zero-based page index that name carries.
     index: u32,
     /// What this page's event replay left behind — the appearances the
     /// tool's form-filler pass lays over, which widget is focused (and so

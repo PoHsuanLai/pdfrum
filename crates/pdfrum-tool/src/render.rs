@@ -456,6 +456,7 @@ pub fn encode(pixmap: &Pixmap, has_transparency: bool) -> Rendered {
     Rendered { png, digest }
 }
 
+/// Wraps a raw eight-bit bitmap as a PNG; an encoder failure yields no bytes.
 fn encode_png(width: u32, height: u32, data: &[u8], color: png::ColorType) -> Vec<u8> {
     let mut out = Vec::new();
     {
@@ -472,6 +473,7 @@ fn encode_png(width: u32, height: u32, data: &[u8], color: png::ColorType) -> Ve
     out
 }
 
+/// The lowercase hex MD5 the `MD5:` line carries, over the raw bitmap buffer.
 fn md5_hex(bytes: &[u8]) -> String {
     use md5::{Digest, Md5};
     let mut hasher = Md5::new();

@@ -14,6 +14,16 @@ use crate::names;
 /// The catalog's `/Metadata` stream, decoded.
 ///
 /// Returns nothing when the key is absent or does not hold a stream.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::xmp;
+/// use pdfrum_object::{Dict, NoResolve};
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// // Absent, or not holding a stream: nothing.
+/// assert!(xmp(&Dict::default(), &NoResolve, &limits, &mut diags).is_none());
+/// ```
 #[must_use]
 pub fn xmp<R: Resolve>(
     catalog: &Dict,

@@ -35,6 +35,13 @@ def main [] {
         ^cargo doc --no-deps --workspace
     }
 
+    # `cargo doc` above proves the docs *build*; this proves they are *there*.
+    # Neither `missing_docs` nor `-D warnings` sees an undocumented struct
+    # field or a public method with no example, and both regress one item at a
+    # time. Nightly-only tooling, so it stands down with a note on stable —
+    # the script says why.
+    ^./scripts/check-rustdoc-coverage.nu
+
     # WP13. The committed snapshots are the public API; a drift is a change
     # to what `cargo add pdfrum` sees. The script's header used to forbid
     # this line — that sentence became false when the surface settled.

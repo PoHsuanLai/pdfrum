@@ -38,6 +38,31 @@ impl NameTree {
     /// A missing link at either step means **no tree**, which is not the same
     /// as an empty one: a lookup against nothing and a lookup against an
     /// empty tree take different fallback paths at the caller.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::NameTree;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString, names};
+    ///
+    /// let dests = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Array(Array::of([
+    ///         Object::Str(PdfString::literal(b"intro")),
+    ///         Object::Array(Array::of([Object::Int(0), Object::Name(Name::from("Fit"))])),
+    ///     ])),
+    /// )]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Dict(Dict::from_pairs([(Name::from("Dests"), Object::Dict(dests))])),
+    /// )]);
+    ///
+    /// let tree = NameTree::open(&catalog, &Name::from("Dests"), &NoResolve)
+    ///     .expect("the catalog carries a `/Names /Dests` tree");
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    ///
+    /// // A missing link at either step is *no tree*, not an empty one.
+    /// assert!(NameTree::open(&Dict::default(), &Name::from("Dests"), &NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn open<R: Resolve>(catalog: &Dict, category: &Name, r: &R) -> Option<NameTree> {
         let names = catalog.dict(names::NAMES, r)?;
@@ -47,6 +72,31 @@ impl NameTree {
     }
 
     /// Looks up one key's value.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::NameTree;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString, names};
+    ///
+    /// let dests = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Array(Array::of([
+    ///         Object::Str(PdfString::literal(b"intro")),
+    ///         Object::Array(Array::of([Object::Int(0), Object::Name(Name::from("Fit"))])),
+    ///     ])),
+    /// )]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Dict(Dict::from_pairs([(Name::from("Dests"), Object::Dict(dests))])),
+    /// )]);
+    ///
+    /// let tree = NameTree::open(&catalog, &Name::from("Dests"), &NoResolve)
+    ///     .expect("the catalog carries a `/Names /Dests` tree");
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    ///
+    /// assert!(tree.lookup("intro", &NoResolve, &limits, &mut diags).is_some());
+    /// assert!(tree.lookup("absent", &NoResolve, &limits, &mut diags).is_none());
+    /// ```
     #[must_use]
     pub fn lookup<R: Resolve>(
         &self,
@@ -68,6 +118,33 @@ impl NameTree {
     /// `/Limits` is not consulted, because this is a pure in-order walk. A
     /// slot whose value will not resolve aborts the whole search rather than
     /// being skipped.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::NameTree;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString, names};
+    ///
+    /// let dests = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Array(Array::of([
+    ///         Object::Str(PdfString::literal(b"intro")),
+    ///         Object::Array(Array::of([Object::Int(0), Object::Name(Name::from("Fit"))])),
+    ///     ])),
+    /// )]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Dict(Dict::from_pairs([(Name::from("Dests"), Object::Dict(dests))])),
+    /// )]);
+    ///
+    /// let tree = NameTree::open(&catalog, &Name::from("Dests"), &NoResolve)
+    ///     .expect("the catalog carries a `/Names /Dests` tree");
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    ///
+    /// let (key, _value) = tree
+    ///     .lookup_by_index(0, &NoResolve, &limits, &mut diags)
+    ///     .expect("the tree has a first entry");
+    /// assert_eq!(key, "intro");
+    /// ```
     #[must_use]
     pub fn lookup_by_index<R: Resolve>(
         &self,
@@ -84,6 +161,30 @@ impl NameTree {
     ///
     /// The visited set here is on **dictionary identity**, so an inline node
     /// counts too — a different guard from the by-name lookup's.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::NameTree;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString, names};
+    ///
+    /// let dests = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Array(Array::of([
+    ///         Object::Str(PdfString::literal(b"intro")),
+    ///         Object::Array(Array::of([Object::Int(0), Object::Name(Name::from("Fit"))])),
+    ///     ])),
+    /// )]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("Names"),
+    ///     Object::Dict(Dict::from_pairs([(Name::from("Dests"), Object::Dict(dests))])),
+    /// )]);
+    ///
+    /// let tree = NameTree::open(&catalog, &Name::from("Dests"), &NoResolve)
+    ///     .expect("the catalog carries a `/Names /Dests` tree");
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    ///
+    /// assert_eq!(tree.count(&NoResolve, &limits, &mut diags), 1);
+    /// ```
     #[must_use]
     pub fn count<R: Resolve>(&self, r: &R, limits: &Limits, diags: &mut Diagnostics) -> usize {
         let mut seen = Vec::new();
@@ -288,6 +389,32 @@ fn count_names<R: Resolve>(
 /// The new-style tree is keyed on the **decoded text** of the name, while the
 /// pre-1.2 `/Dests` dictionary is keyed on the **raw bytes** verbatim, so a
 /// document can reach one and not the other with the same spelling.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::NameTree;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString, names};
+///
+/// let dests = Dict::from_pairs([(
+///     Name::from("Names"),
+///     Object::Array(Array::of([
+///         Object::Str(PdfString::literal(b"intro")),
+///         Object::Array(Array::of([Object::Int(0), Object::Name(Name::from("Fit"))])),
+///     ])),
+/// )]);
+/// let catalog = Dict::from_pairs([(
+///     Name::from("Names"),
+///     Object::Dict(Dict::from_pairs([(Name::from("Dests"), Object::Dict(dests))])),
+/// )]);
+///
+/// let tree = NameTree::open(&catalog, &Name::from("Dests"), &NoResolve)
+///     .expect("the catalog carries a `/Names /Dests` tree");
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// use pdfrum_doc::nav::lookup_named_dest;
+///
+/// let found = lookup_named_dest(&catalog, b"intro", &NoResolve, &limits, &mut diags);
+/// assert!(found.is_some());
+/// ```
 #[must_use]
 pub fn lookup_named_dest<R: Resolve>(
     catalog: &Dict,

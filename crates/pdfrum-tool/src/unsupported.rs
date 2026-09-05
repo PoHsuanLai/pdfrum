@@ -29,14 +29,24 @@ use pdfrum_object::{Dict, Name, Resolve, names};
 /// A feature notice, spelled as the oracle spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Feature {
+    /// An XFA form: the catalog's `/AcroForm` carries `/XFA`.
     Xfa,
+    /// A portfolio: the catalog carries `/Collection`.
     PortfoliosPackages,
+    /// An embedded file: the catalog's `/Names /EmbeddedFiles`, or a
+    /// `/FileAttachment` annotation.
     Attachment,
+    /// A shared review, named by its JavaScript registration action.
     SharedReview,
+    /// A `/3D` annotation.
     ThreeD,
+    /// A `/Movie` annotation.
     Movie,
+    /// A `/Sound` annotation.
     Sound,
+    /// A `/RichMedia` annotation, or a `/Screen` that is not `/IT /Img`.
     Screen,
+    /// A signature `/Widget`: `/FT /Sig` on the annotation itself.
     DigitalSignature,
 }
 

@@ -17,6 +17,34 @@ use crate::names;
 use crate::nav::number_tree;
 
 /// The label for one page, or nothing when the index is out of range.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::page_label;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+///
+/// // `/PageLabels` maps a *starting* page index to a rule; page 1 onwards
+/// // is upper-case roman with the prefix `A-`.
+/// let rule = Dict::from_pairs([
+///     (Name::from("S"), Object::Name(Name::from("R"))),
+///     (Name::from("P"), Object::Str(PdfString::literal(b"A-"))),
+/// ]);
+/// let labels = Dict::from_pairs([(
+///     Name::from("Nums"),
+///     Object::Array(Array::of([Object::Int(1), Object::Dict(rule)])),
+/// )]);
+/// let catalog = Dict::from_pairs([(Name::from("PageLabels"), Object::Dict(labels))]);
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// let label = page_label(&catalog, 2_u32, 3, &NoResolve, &limits, &mut diags);
+/// assert_eq!(label.as_deref(), Some("A-II"));
+///
+/// // A page index outside the document has no label at all.
+/// assert_eq!(
+///     page_label(&catalog, 9_u32, 3, &NoResolve, &limits, &mut diags),
+///     None,
+/// );
+/// ```
 #[must_use]
 pub fn page_label<R: Resolve>(
     catalog: &Dict,

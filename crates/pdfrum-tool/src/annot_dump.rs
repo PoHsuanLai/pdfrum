@@ -338,6 +338,7 @@ fn round_half_even(value: f64, places: usize) -> String {
 
 /// Whether a decimal spelling names the value exactly.
 trait ExactParse {
+    /// The value the spelling names, or `None` when it is itself a rounding.
     fn from_str_exact(text: &str) -> Option<f64>;
 }
 

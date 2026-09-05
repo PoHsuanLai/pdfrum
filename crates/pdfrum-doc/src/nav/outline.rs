@@ -32,6 +32,23 @@ impl Bookmark {
     /// **raised to a space**, so control characters become blanks without
     /// changing the length. The second matters because titles are compared
     /// case-insensitively when searching.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// assert_eq!(bookmarks[0].title(&NoResolve), "Introduction");
+    /// ```
     #[must_use]
     pub fn title<R: Resolve>(&self, r: &R) -> String {
         let Some(raw) = self
@@ -51,6 +68,24 @@ impl Bookmark {
     /// descendants, negative for a closed one, zero for a leaf.
     ///
     /// The sign is preserved and the value is not masked.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// // A leaf: zero, with no `/Count` in the file.
+    /// assert_eq!(bookmarks[0].count(&NoResolve), 0);
+    /// ```
     #[must_use]
     pub fn count<R: Resolve>(&self, r: &R) -> i64 {
         self.dict.int(obj_names::COUNT, r).unwrap_or(0)
@@ -58,6 +93,23 @@ impl Bookmark {
 
     /// `/F`, the style flag word, **unmasked** — a file writing 15 reports
     /// 15, not the two defined bits.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// assert_eq!(bookmarks[0].style(&NoResolve), 0);
+    /// ```
     #[must_use]
     pub fn style<R: Resolve>(&self, r: &R) -> i64 {
         self.dict.int(names::F, r).unwrap_or(0)
@@ -69,6 +121,25 @@ impl Bookmark {
     /// number inside the unit interval; anything else is no colour. Upstream
     /// dereferences a non-number here without checking, which is a latent
     /// crash — we answer `None`.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// // No `/C`: no colour. So is any array that is not exactly three
+    /// // numbers inside the unit interval.
+    /// assert_eq!(bookmarks[0].color(&NoResolve), None);
+    /// ```
     #[must_use]
     pub fn color<R: Resolve>(&self, r: &R) -> Option<(f32, f32, f32)> {
         let array = self.dict.array(names::C, r)?;
@@ -85,6 +156,23 @@ impl Bookmark {
     }
 
     /// The item's action.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// assert!(bookmarks[0].action(&NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn action<R: Resolve>(&self, r: &R) -> Option<Action> {
         self.dict.dict(names::A, r).map(Action::new)
@@ -92,6 +180,24 @@ impl Bookmark {
 
     /// Where the item goes: `/Dest` first, the action's destination only when
     /// that yields no array.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::outline_bookmarks;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let item = Dict::from_pairs([
+    ///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+    /// ]);
+    /// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+    /// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+    ///
+    /// let dest = bookmarks[0].dest(&catalog, &NoResolve, &limits, &mut diags);
+    /// assert!(dest.array.is_none());
+    /// ```
     #[must_use]
     pub fn dest<R: Resolve>(
         &self,
@@ -113,6 +219,25 @@ impl Bookmark {
 
 /// Walks the whole outline pre-order: each item, then its subtree, then its
 /// next sibling.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::nav::outline_bookmarks;
+/// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+///
+/// let item = Dict::from_pairs([
+///     (Name::from("Title"), Object::Str(PdfString::literal(b"Introduction"))),
+/// ]);
+/// let outlines = Dict::from_pairs([(Name::from("First"), Object::Dict(item))]);
+/// let catalog = Dict::from_pairs([(Name::from("Outlines"), Object::Dict(outlines))]);
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// let bookmarks = outline_bookmarks(&catalog, &NoResolve, &limits, &mut diags);
+///
+/// // Pre-order, with the top level at depth zero.
+/// assert_eq!(bookmarks.len(), 1);
+/// assert_eq!(bookmarks[0].depth, 0);
+/// ```
 #[must_use]
 pub fn outline_bookmarks<R: Resolve>(
     catalog: &Dict,

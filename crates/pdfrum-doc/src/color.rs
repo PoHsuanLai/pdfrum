@@ -43,6 +43,16 @@ impl Color {
     /// Components come through the non-resolving numeric accessor, so a
     /// missing or mistyped element reads as `0.0` rather than rejecting the
     /// array.
+    ///
+    /// ```
+    /// use pdfrum_doc::color::Color;
+    /// use pdfrum_object::{Array, Object};
+    ///
+    /// let grey = Array::of([0.5].map(Object::from));
+    /// assert_eq!(Color::from_array(&grey), Color::Gray(0.5));
+    /// // An empty array says "no colour", not "damaged".
+    /// assert_eq!(Color::from_array(&Array::of([])), Color::Transparent);
+    /// ```
     #[must_use]
     pub fn from_array(array: &Array) -> Color {
         let at = |i: usize| array.number_at_or_zero(i);
@@ -66,6 +76,14 @@ impl Color {
     ///
     /// Negative components saturate at zero rather than wrapping, which is
     /// what the C++'s float-to-`unsigned` conversion does in practice.
+    ///
+    /// ```
+    /// use pdfrum_doc::color::Color;
+    ///
+    /// assert_eq!(Color::Rgb(1.0, 0.0, 0.5).annot_rgb_bytes(), (255, 0, 127));
+    /// // CMYK converts multiplicatively here, not the way `/MK` colours do.
+    /// assert_eq!(Color::Cmyk(0.0, 0.0, 0.0, 0.0).annot_rgb_bytes(), (255, 255, 255));
+    /// ```
     #[must_use]
     pub fn annot_rgb_bytes(self) -> (u32, u32, u32) {
         let byte = |v: f32| {

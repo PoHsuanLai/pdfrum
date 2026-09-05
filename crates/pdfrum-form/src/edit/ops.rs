@@ -10,6 +10,31 @@
 //!
 //! Every mutation ends the same way: re-lay out, collapse the selection onto
 //! the caret, re-seed the sticky column — except a vertical move.
+//!
+//! A control needs a [`vt::Config`] for the field's shape and a
+//! [`Metrics`] for its face; neither needs a PDF or a font file.
+//!
+//! ```
+//! use pdfrum_doc::vt::{Config, Metrics};
+//! use pdfrum_form::edit::ops::{self, TextEdit};
+//!
+//! // A fixed-width face: one unit per character.
+//! let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+//! let config = Config {
+//!     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+//!     font_size: 1.0,
+//!     ..Config::default()
+//! };
+//!
+//! let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+//! // The caret starts at the line header, so type at the end deliberately.
+//! edit.set_caret_index(edit.len_chars());
+//! ops::insert_char(&mut edit, &config, &metrics, '!', None);
+//! assert_eq!(edit.text, "Hello!");
+//!
+//! ops::undo(&mut edit, &config, &metrics);
+//! assert_eq!(edit.text, "Hello");
+//! ```
 
 use pdfrum_doc::ap::field_body::Highlight;
 use pdfrum_doc::vt::{self, Layout, Metrics};
@@ -23,6 +48,26 @@ use super::undo::{UndoItem, UndoStack};
 /// The invariant is one sentence: `caret` and both ends of `selection` are
 /// places in `layout`, and `layout` is what laying `text` out again would
 /// produce.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+/// assert_eq!(edit.text, "Hello");
+/// // A fresh control's caret sits at the line header, before the text.
+/// assert_eq!(edit.caret_index(), 0);
+/// assert!(!edit.has_selection());
+///
+/// edit.set_selection(0, 4);
+/// assert_eq!(edit.selected_text(), "Hell");
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextEdit {
     /// The text as the user has it, which may differ from the field's stored
@@ -92,6 +137,22 @@ pub struct TextEdit {
 /// This is not a convenience: the layout engine already applies exactly this
 /// rule when it lays the text out, so a control that stored the raw string
 /// would disagree with its own layout about how many characters it has.
+///
+/// ```
+/// use pdfrum_form::edit::ops::normalize_breaks;
+///
+/// // A single-line field REMOVES the break; it does not become a space and
+/// // it does not terminate the text.
+/// assert_eq!(normalize_breaks("Foo\nBar", false), "FooBar");
+/// assert_eq!(normalize_breaks("Foo\n", false), "Foo");
+///
+/// // A multiline field keeps it, normalized to `'\n'`, and a `\r\n` pair is
+/// // one break rather than two.
+/// assert_eq!(normalize_breaks("Foo\r\nBar", true), "Foo\nBar");
+///
+/// // A tab is set as a space either way, which is what the layout does.
+/// assert_eq!(normalize_breaks("a\tb", false), "a b");
+/// ```
 #[must_use]
 pub fn normalize_breaks(text: &str, multi_line: bool) -> String {
     let chars: Vec<char> = text.chars().collect();
@@ -126,6 +187,26 @@ pub fn normalize_breaks(text: &str, multi_line: bool) -> String {
 /// between the content and the plate. The same rule the appearance path uses,
 /// because the two must agree — a caret computed against a different offset
 /// from the one the glyphs were drawn with lands in the wrong place.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+/// use pdfrum_doc::vt;
+///
+/// let layout = vt::layout("Hi", &config, &metrics);
+/// // Top alignment shifts nothing at all.
+/// assert_eq!(ops::vertical_offset(false, &config, &layout), (0.0, 0.0));
+///
+/// // Centred alignment never shifts horizontally.
+/// let (x, _y) = ops::vertical_offset(true, &config, &layout);
+/// assert_eq!(x, 0.0);
+/// ```
 #[must_use]
 pub fn vertical_offset(centred: bool, config: &vt::Config, layout: &Layout) -> (f32, f32) {
     if !centred {
@@ -150,6 +231,22 @@ impl TextEdit {
     /// single-line field's layout silently drops line breaks, so a raw
     /// `"Foo\nBar"` would report seven characters while the layout held six,
     /// and every index derived from one would miss in the other.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// // The text arrives normalized, so the control and its layout agree.
+    /// let edit = TextEdit::new("Foo\nBar", &config, &metrics, true);
+    /// assert_eq!(edit.text, "FooBar");
+    /// assert_eq!(edit.len_chars(), 6);
+    /// ```
     #[must_use]
     pub fn new(
         text: impl Into<String>,
@@ -180,12 +277,47 @@ impl TextEdit {
     }
 
     /// The caret's flat character index.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+    /// // A fresh control starts at the line header, index zero.
+    /// assert_eq!(edit.caret_index(), 0);
+    /// edit.set_caret_index(2);
+    /// assert_eq!(edit.caret_index(), 2);
+    /// ```
     #[must_use]
     pub fn caret_index(&self) -> usize {
         vt::hit::word_index_of_place(&self.layout, self.caret)
     }
 
     /// The selection's flat character range, ordered.
+    ///
+    /// Ordered whichever way the selection runs, so a backwards selection
+    /// answers the same pair as the forwards one over the same run.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+    /// edit.set_selection(4, 1);
+    /// assert_eq!(edit.selection_indices(), (1, 4));
+    /// ```
     #[must_use]
     pub fn selection_indices(&self) -> (usize, usize) {
         let range = self.selection.range();
@@ -196,6 +328,22 @@ impl TextEdit {
     }
 
     /// The selected text, empty when nothing is selected.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+    /// assert_eq!(edit.selected_text(), "");
+    /// edit.set_selection(1, 4);
+    /// assert_eq!(edit.selected_text(), "BCD");
+    /// ```
     #[must_use]
     pub fn selected_text(&self) -> String {
         let (from, to) = self.selection_indices();
@@ -203,18 +351,71 @@ impl TextEdit {
     }
 
     /// Whether anything is selected.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+    /// assert!(!edit.has_selection());
+    /// edit.select_all();
+    /// assert!(edit.has_selection());
+    /// ```
     #[must_use]
     pub fn has_selection(&self) -> bool {
         !self.selection.is_empty()
     }
 
     /// How many characters the text holds.
+    ///
+    /// Characters, not bytes: a field of Hebrew letters is as long as it
+    /// looks.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let edit = TextEdit::new("\u{05D1}\u{05D2}\u{05EA}", &config, &metrics, true);
+    /// assert_eq!(edit.len_chars(), 3);
+    /// ```
     #[must_use]
     pub fn len_chars(&self) -> usize {
         self.text.chars().count()
     }
 
     /// Moves the caret to a flat character index, collapsing the selection.
+    ///
+    /// The selection is left collapsed *at the new caret*, which is a live
+    /// anchor rather than no anchor.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+    /// edit.select_all();
+    /// edit.set_caret_index(2);
+    /// assert_eq!(edit.caret_index(), 2);
+    /// assert!(!edit.has_selection());
+    /// ```
     pub fn set_caret_index(&mut self, index: usize) {
         self.previous_caret = self.caret;
         self.caret = vt::hit::place_of_word_index(&self.layout, index);
@@ -223,12 +424,51 @@ impl TextEdit {
 
     /// Moves the caret without touching the selection — what a shift-move
     /// needs, since it must extend from an anchor the caret is leaving.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+    /// edit.set_selection(1, 4);
+    /// edit.move_caret_keeping_selection(0);
+    /// assert_eq!(edit.caret_index(), 0);
+    /// // The selection is untouched, unlike after `set_caret_index`.
+    /// assert_eq!(edit.selected_text(), "BCD");
+    /// ```
     pub fn move_caret_keeping_selection(&mut self, index: usize) {
         self.previous_caret = self.caret;
         self.caret = vt::hit::place_of_word_index(&self.layout, index);
     }
 
     /// Selects everything. Records no undo item — selecting is not an edit.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+    /// edit.select_all();
+    /// assert_eq!(edit.selected_text(), "Hello");
+    /// assert!(!edit.undo.can_undo(), "selecting records nothing");
+    ///
+    /// // An empty field has nothing to select.
+    /// let mut blank = TextEdit::new("", &config, &metrics, true);
+    /// blank.select_all();
+    /// assert_eq!(blank.selected_text(), "");
+    /// ```
     pub fn select_all(&mut self) {
         let begin = vt::hit::begin_place(&self.layout);
         let end = vt::hit::end_place(&self.layout);
@@ -238,6 +478,24 @@ impl TextEdit {
     }
 
     /// Drops the selection, leaving a live anchor at the caret.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+    /// edit.select_all();
+    /// edit.select_none();
+    /// assert!(!edit.has_selection());
+    /// // Collapsed, not reset: the next shift-move extends from here.
+    /// assert!(!edit.selection.is_reset());
+    /// ```
     pub fn select_none(&mut self) {
         self.selection = Selection::collapsed_at(self.caret);
     }
@@ -258,6 +516,37 @@ impl TextEdit {
     ///   and `(12, 23)` select the same run. An end past the text clamps to
     ///   its end, which is ordinary index saturation rather than a fourth
     ///   rule.
+    ///
+    /// ```
+    /// # use pdfrum_doc::vt::{Config, Metrics};
+    /// # use pdfrum_form::edit::ops::{self, TextEdit};
+    /// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// # let config = Config {
+    /// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    /// #     font_size: 1.0,
+    /// #     ..Config::default()
+    /// # };
+    ///
+    /// let mut edit = TextEdit::new("ABCDEFGHIJ", &config, &metrics, true);
+    ///
+    /// // (0, negative) is "to the end".
+    /// edit.set_selection(0, -1);
+    /// assert_eq!(edit.selected_text(), "ABCDEFGHIJ");
+    ///
+    /// // A negative start selects nothing; it is not clamped to zero.
+    /// edit.set_selection(-8, -1);
+    /// assert_eq!(edit.selected_text(), "");
+    ///
+    /// // Otherwise the two are ordered, so either way round is the same run.
+    /// edit.set_selection(5, 2);
+    /// assert_eq!(edit.selected_text(), "CDE");
+    /// edit.set_selection(2, 5);
+    /// assert_eq!(edit.selected_text(), "CDE");
+    ///
+    /// // An end past the text clamps, which is ordinary saturation.
+    /// edit.set_selection(9, 99);
+    /// assert_eq!(edit.selected_text(), "J");
+    /// ```
     pub fn set_selection(&mut self, start: i32, end: i32) {
         if start == 0 && end < 0 {
             self.select_all();
@@ -288,6 +577,31 @@ impl TextEdit {
 /// refusing, because the rule is **truncation, not rejection**: an insert
 /// that does not fit is trimmed to what does, and only an insert with no room
 /// at all does nothing.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let edit = TextEdit::new("ABCDEFGH", &config, &metrics, true);
+///
+/// // No limit at all.
+/// assert_eq!(ops::room_for(&edit, None, 0), None);
+///
+/// // Eight of ten used, so two are free.
+/// assert_eq!(ops::room_for(&edit, Some(10), 0), Some(2));
+///
+/// // Replacing three of them first frees those three too.
+/// assert_eq!(ops::room_for(&edit, Some(10), 3), Some(5));
+///
+/// // A limit already reached answers zero rather than refusing.
+/// assert_eq!(ops::room_for(&edit, Some(8), 0), Some(0));
+/// ```
 #[must_use]
 pub fn room_for(edit: &TextEdit, max_len: Option<u32>, replacing: usize) -> Option<usize> {
     let max = max_len? as usize;
@@ -344,6 +658,31 @@ fn insertion_is_refused(
 ///
 /// Overflow is a **comb field's** property and only a comb field's, so a comb
 /// never refuses — which is why the `char_array` test comes first here.
+///
+/// ```
+/// use pdfrum_doc::vt::{Config, Metrics};
+/// use pdfrum_form::edit::ops::{self, TextEdit};
+///
+/// let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// // A plate ten characters wide that may not scroll.
+/// let config = Config {
+///     plate: kurbo::Rect::new(0.0, 0.0, 10.0, 20.0),
+///     font_size: 1.0,
+///     ..Config::default()
+/// };
+///
+/// let mut edit = TextEdit::new("ABCDEFGHIJKL", &config, &metrics, true);
+/// // A scrolling field never overflows, however long its text.
+/// assert!(!ops::is_text_overflow(&edit, &config));
+///
+/// edit.auto_scroll = false;
+/// assert!(ops::is_text_overflow(&edit, &config));
+///
+/// // A short text still fits.
+/// let mut short = TextEdit::new("AB", &config, &metrics, true);
+/// short.auto_scroll = false;
+/// assert!(!ops::is_text_overflow(&short, &config));
+/// ```
 #[must_use]
 pub fn is_text_overflow(edit: &TextEdit, config: &vt::Config) -> bool {
     if edit.auto_scroll || config.char_array > 0 {
@@ -391,6 +730,31 @@ fn layout_overflows(layout: &vt::Layout, config: &vt::Config) -> bool {
 /// truncates the insertion — never the field — so inserting a long string
 /// into a nearly-full field puts in as much as fits and leaves the rest of
 /// the text alone.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDEF", &config, &metrics, true);
+/// // Replace [1, 4) with "xy", recording one undo item.
+/// assert!(ops::replace_range(&mut edit, &config, &metrics, 1, 4, "xy", None, true));
+/// assert_eq!(edit.text, "AxyEF");
+/// assert_eq!(edit.caret_index(), 3, "the caret lands after the insertion");
+///
+/// // Nothing removed and nothing inserted is not an edit.
+/// assert!(!ops::replace_range(&mut edit, &config, &metrics, 2, 2, "", None, true));
+///
+/// // `max_len` truncates the INSERTION, never the field.
+/// let mut limited = TextEdit::new("AB", &config, &metrics, true);
+/// ops::replace_range(&mut limited, &config, &metrics, 2, 2, "xyz", Some(4), true);
+/// assert_eq!(limited.text, "ABxy");
+/// ```
 #[allow(clippy::too_many_arguments)] // The one primitive; every other
 // mutation is a short call into it, so the arguments live here rather than
 // being spread across five near-identical bodies.
@@ -505,6 +869,32 @@ fn insertion_item(old: Place, new: Place, inserted: &str, before: Selection) -> 
 /// A field that has filled its plate and may not scroll refuses outright —
 /// see [`is_text_overflow`], which is `InsertWord`'s and `InsertReturn`'s
 /// first statement upstream.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("", &config, &metrics, true);
+/// for ch in "ABC".chars() {
+///     ops::insert_char(&mut edit, &config, &metrics, ch, None);
+/// }
+/// assert_eq!(edit.text, "ABC");
+///
+/// // One undo item per keystroke, so a run undoes one character at a time.
+/// ops::undo(&mut edit, &config, &metrics);
+/// assert_eq!(edit.text, "AB");
+///
+/// // Typing over a selection replaces it, still in one item.
+/// edit.set_selection(0, 2);
+/// ops::insert_char(&mut edit, &config, &metrics, 'Z', None);
+/// assert_eq!(edit.text, "Z");
+/// ```
 pub fn insert_char(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -535,6 +925,29 @@ pub fn insert_char(
 }
 
 /// Deletes the selection, or the character **before** the caret.
+///
+/// Answers whether anything was removed; a backspace at the very start of
+/// the text does nothing.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// edit.set_caret_index(3);
+/// assert!(ops::backspace(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "ABDE");
+///
+/// edit.set_caret_index(0);
+/// assert!(!ops::backspace(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "ABDE");
+/// ```
 pub fn backspace(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> bool {
     let (from, to) = if edit.has_selection() {
         edit.selection_indices()
@@ -549,6 +962,29 @@ pub fn backspace(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>
 }
 
 /// Deletes the selection, or the character **after** the caret.
+///
+/// The other side of the caret from [`backspace`]; a delete at the end of
+/// the text does nothing.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// edit.set_caret_index(3);
+/// assert!(ops::delete(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "ABCE");
+///
+/// edit.set_caret_index(edit.len_chars());
+/// assert!(!ops::delete(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "ABCE");
+/// ```
 pub fn delete(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> bool {
     let (from, to) = if edit.has_selection() {
         edit.selection_indices()
@@ -571,6 +1007,29 @@ pub fn delete(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -
 /// half — see [`is_text_overflow`] — but the *removal* half still runs
 /// upstream, because `ReplaceSelection` clears before it inserts. Deleting a
 /// selection therefore always works, however full the field is.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("AB", &config, &metrics, true);
+/// edit.set_selection(0, 1);
+/// assert!(ops::replace_selection(&mut edit, &config, &metrics, "XYZ", None));
+/// assert_eq!(edit.text, "XYZB");
+/// // A caret is left after the insertion, not a selection over it.
+/// assert_eq!(edit.selected_text(), "");
+/// assert_eq!(edit.caret_index(), 3);
+///
+/// // One undo item however long the text, unlike typing it out.
+/// ops::undo(&mut edit, &config, &metrics);
+/// assert_eq!(edit.text, "AB");
+/// ```
 pub fn replace_selection(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -598,6 +1057,30 @@ pub fn replace_selection(
 /// The whole difference from [`replace_selection`], and the reason both
 /// exist: one leaves a caret, the other leaves a selection over what it just
 /// put in.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("AB", &config, &metrics, true);
+/// edit.set_selection(0, 1);
+/// assert!(ops::replace_and_keep_selection(&mut edit, &config, &metrics, "XYZ", None));
+/// assert_eq!(edit.text, "XYZB");
+/// // The difference from `replace_selection`: the insertion stays selected.
+/// assert_eq!(edit.selected_text(), "XYZ");
+///
+/// // A reversed input selection still comes back selected forwards.
+/// edit.set_selection(3, 0);
+/// ops::replace_and_keep_selection(&mut edit, &config, &metrics, "12", None);
+/// assert_eq!(edit.text, "12B");
+/// assert_eq!(edit.selection_indices(), (0, 2));
+/// ```
 pub fn replace_and_keep_selection(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -651,6 +1134,29 @@ fn settle(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
 /// The step is a quarter of the plate per notch, and the position is clamped
 /// to the slack between content and plate, so a field with nothing to scroll
 /// answers `false` rather than accumulating an offset it cannot use.
+///
+/// ```
+/// use pdfrum_doc::vt::{Config, Metrics};
+/// use pdfrum_form::edit::ops::{self, TextEdit};
+///
+/// let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// // A short multiline plate, so the text has somewhere to scroll to.
+/// let config = Config {
+///     plate: kurbo::Rect::new(0.0, 0.0, 10.0, 4.0),
+///     font_size: 1.0,
+///     multi_line: true,
+///     auto_return: true,
+///     ..Config::default()
+/// };
+///
+/// let mut edit = TextEdit::new("one\ntwo\nthree\nfour\nfive", &config, &metrics, false);
+/// assert!(ops::scroll_by(&mut edit, &config, -1));
+/// assert!(edit.scroll.1 > 0.0);
+///
+/// // A `DoNotScroll` field does not move, wheel or not.
+/// edit.auto_scroll = false;
+/// assert!(!ops::scroll_by(&mut edit, &config, -1));
+/// ```
 pub fn scroll_by(edit: &mut TextEdit, config: &vt::Config, delta_y: i32) -> bool {
     if !edit.auto_scroll || delta_y == 0 {
         return false;
@@ -684,6 +1190,31 @@ pub fn scroll_by(edit: &mut TextEdit, config: &vt::Config, delta_y: i32) -> bool
 ///
 /// Only the **horizontal** half moves the view here; the wheel
 /// ([`scroll_by`]) is the only thing that moves the vertical offset.
+///
+/// ```
+/// use pdfrum_doc::vt::{Config, Metrics};
+/// use pdfrum_form::edit::ops::{self, TextEdit};
+///
+/// let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// // A plate ten characters wide, so a longer value must scroll.
+/// let config = Config {
+///     plate: kurbo::Rect::new(0.0, 0.0, 10.0, 20.0),
+///     font_size: 1.0,
+///     ..Config::default()
+/// };
+///
+/// let mut edit = TextEdit::new("", &config, &metrics, true);
+/// for ch in "ABCDEFGHIJKLMNO".chars() {
+///     ops::insert_char(&mut edit, &config, &metrics, ch, None);
+/// }
+/// // Every mutation ends here, so the caret is already in view.
+/// assert!(edit.scroll.0 > 0.0);
+///
+/// // Back to the start, and the view follows it home.
+/// edit.set_caret_index(0);
+/// ops::scroll_to_caret(&mut edit, &config, &metrics);
+/// assert_eq!(edit.scroll.0, 0.0);
+/// ```
 pub fn scroll_to_caret(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
     if !edit.auto_scroll {
         return;
@@ -745,6 +1276,24 @@ fn is_float_bigger(a: f32, b: f32) -> bool {
 }
 
 /// The caret's horizontal position in layout space.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// edit.set_caret_index(0);
+/// let at_start = ops::caret_x(&edit, &config, &metrics);
+/// edit.set_caret_index(5);
+/// let at_end = ops::caret_x(&edit, &config, &metrics);
+/// assert!(at_end > at_start);
+/// ```
 #[must_use]
 pub fn caret_x(edit: &TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> f32 {
     let point = vt::hit::point_at_place(
@@ -772,6 +1321,33 @@ fn slice_chars(text: &str, from: usize, to: usize) -> String {
 ///
 /// Returns whether anything was undone. The selection each item carries from
 /// *before* its edit is restored; a redo deliberately restores none.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("", &config, &metrics, true);
+/// for ch in "ABC".chars() {
+///     ops::insert_char(&mut edit, &config, &metrics, ch, None);
+/// }
+///
+/// // One item per keystroke, so each undo takes one character.
+/// assert!(ops::undo(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "AB");
+/// assert!(ops::undo(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "A");
+///
+/// // An exhausted stack answers `false` rather than doing nothing quietly.
+/// assert!(ops::undo(&mut edit, &config, &metrics));
+/// assert!(!ops::undo(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "");
+/// ```
 pub fn undo(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> bool {
     let items = edit.undo.undo();
     if items.is_empty() {
@@ -791,6 +1367,32 @@ pub fn undo(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> 
 
 /// Redoes one step. Restores text only, leaving the caret collapsed — the
 /// asymmetry with [`undo`], and the one four ported assertions observe.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("AB", &config, &metrics, true);
+/// edit.set_selection(0, 1);
+/// ops::replace_and_keep_selection(&mut edit, &config, &metrics, "XYZ", None);
+/// assert_eq!(edit.text, "XYZB");
+///
+/// // Undo restores the selection the edit was made over.
+/// assert!(ops::undo(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "AB");
+/// assert_eq!(edit.selected_text(), "A");
+///
+/// // Redo restores the text only, leaving the caret collapsed.
+/// assert!(ops::redo(&mut edit, &config, &metrics));
+/// assert_eq!(edit.text, "XYZB");
+/// assert_eq!(edit.selected_text(), "");
+/// ```
 pub fn redo(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> bool {
     let items = edit.undo.redo();
     if items.is_empty() {
@@ -887,6 +1489,23 @@ fn apply(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>, item: 
 /// `point` is in PDF user space. The field's own drawing offset is applied,
 /// which is what makes a click at a field's visible mid-height land on the
 /// character under the pointer rather than clamping to the end of the text.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+/// use pdfrum_form::edit::PlaceExt;
+///
+/// let edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// // Left of the first character is the line header, not character zero.
+/// let place = ops::place_at_point(&edit, &config, &metrics, kurbo::Point::new(-5.0, 10.0));
+/// assert!(place.at_line_start());
+/// ```
 #[must_use]
 pub fn place_at_point(
     edit: &TextEdit,
@@ -906,6 +1525,25 @@ pub fn place_at_point(
 
 /// Moves the caret to a click, collapsing the selection and dropping a fresh
 /// anchor there.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// edit.select_all();
+/// ops::click_at(&mut edit, &config, &metrics, kurbo::Point::new(-5.0, 10.0));
+/// assert_eq!(edit.caret_index(), 0);
+/// assert!(!edit.has_selection());
+/// // A live anchor, so a following shift-move extends from the click.
+/// assert!(!edit.selection.is_reset());
+/// ```
 pub fn click_at(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -921,6 +1559,23 @@ pub fn click_at(
 }
 
 /// Extends the selection to a point, keeping the anchor — a mouse drag.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("ABCDE", &config, &metrics, true);
+/// // Press at the far left, then drag to the far right.
+/// ops::click_at(&mut edit, &config, &metrics, kurbo::Point::new(-5.0, 10.0));
+/// ops::drag_to(&mut edit, &config, &metrics, kurbo::Point::new(900.0, 10.0));
+/// assert_eq!(edit.selected_text(), "ABCDE");
+/// ```
 pub fn drag_to(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -938,6 +1593,22 @@ pub fn drag_to(
 ///
 /// The whole line, deliberately, and not the word under the pointer: a double
 /// click in a field holding `"Hello World"` selects all of it.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("Hello World", &config, &metrics, true);
+/// // A double click anywhere on the line takes the whole line, not the word.
+/// ops::select_line_at(&mut edit, &config, &metrics, kurbo::Point::new(2000.0, 10.0));
+/// assert_eq!(edit.selected_text(), "Hello World");
+/// ```
 pub fn select_line_at(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -971,6 +1642,30 @@ fn line_bounds(edit: &TextEdit, place: Place) -> (Place, Place) {
 /// A field showing a selection shows **no** caret — the two are alternatives,
 /// not additions, which is what the two `form_textfield_selected_*` goldens
 /// pin against the two `form_textfield_focused_*` ones.
+///
+/// ```
+/// # use pdfrum_doc::vt::{Config, Metrics};
+/// # use pdfrum_form::edit::ops::{self, TextEdit};
+/// # let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// # let config = Config {
+/// #     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+/// #     font_size: 1.0,
+/// #     ..Config::default()
+/// # };
+///
+/// let mut edit = TextEdit::new("Hello", &config, &metrics, true);
+///
+/// // Nothing selected: a caret and no bands.
+/// let overlay = ops::highlight(&edit, &config, &metrics, 1.0);
+/// assert!(overlay.caret.is_some());
+/// assert!(overlay.selection.is_empty());
+///
+/// // Something selected: bands and NO caret, never both.
+/// edit.select_all();
+/// let overlay = ops::highlight(&edit, &config, &metrics, 1.0);
+/// assert!(overlay.caret.is_none());
+/// assert!(!overlay.selection.is_empty());
+/// ```
 #[must_use]
 pub fn highlight(
     edit: &TextEdit,

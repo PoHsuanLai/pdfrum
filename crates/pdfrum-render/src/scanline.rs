@@ -109,6 +109,25 @@ impl Cell {
 /// A caller that will throw away the spans outside a band of rows should say
 /// which band with [`Rasterizer::keep_rows`], and pay for the rows it keeps
 /// rather than for the rows the path reaches.
+///
+/// ```
+/// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+///
+/// let mut rasterizer = Rasterizer::new();
+/// rasterizer.move_to(0.0, 0.0);
+/// rasterizer.line_to(4.0, 0.0);
+/// rasterizer.line_to(4.0, 2.0);
+/// rasterizer.line_to(0.0, 2.0);
+/// rasterizer.close_polygon();
+///
+/// let mut spans = Vec::new();
+/// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+///     spans.push((x, y, len, alpha));
+/// });
+///
+/// // A 4x2 rectangle: two full rows, no partial coverage anywhere.
+/// assert_eq!(spans, [(0, 0, 4, 255), (0, 1, 4, 255)]);
+/// ```
 #[derive(Debug, Default)]
 pub struct Rasterizer {
     store: CellStore,
@@ -161,12 +180,38 @@ pub(crate) fn to_subpixel(v: f64) -> i32 {
 
 impl Rasterizer {
     /// A rasterizer with no cells.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::Rasterizer;
+    ///
+    /// assert!(Rasterizer::new().is_empty());
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Forget every cell, keeping the allocation and the kept row range.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.move_to(0.0, 0.0);
+    /// rasterizer.line_to(4.0, 0.0);
+    /// rasterizer.line_to(4.0, 2.0);
+    /// rasterizer.line_to(0.0, 2.0);
+    /// rasterizer.close_polygon();
+    ///
+    /// let mut spans = Vec::new();
+    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    ///     spans.push((x, y, len, alpha));
+    /// });
+    ///
+    /// // The allocation and the kept row range survive; the cells do not.
+    /// rasterizer.reset();
+    /// assert!(rasterizer.is_empty());
+    /// ```
     pub fn reset(&mut self) {
         self.store.clear();
         self.current = None;
@@ -190,6 +235,25 @@ impl Rasterizer {
     /// Only rows are restricted. A span too far left or right still costs its
     /// cells, because the horizontal extent is bounded by the path's own
     /// segment count rather than by the rows it crosses.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// // A promise about the caller: it will discard every span outside
+    /// // row 0 anyway, so those cells need not be sorted or swept.
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.keep_rows(0..1);
+    /// rasterizer.move_to(0.0, 0.0);
+    /// rasterizer.line_to(4.0, 0.0);
+    /// rasterizer.line_to(4.0, 2.0);
+    /// rasterizer.line_to(0.0, 2.0);
+    /// rasterizer.close_polygon();
+    ///
+    /// let mut rows = Vec::new();
+    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |_, _, y, _| rows.push(y));
+    /// // Byte-for-byte the spans an unrestricted rasterizer emits for row 0.
+    /// assert_eq!(rows, [0]);
+    /// ```
     pub fn keep_rows(&mut self, rows: Range<i32>) {
         self.keep = Some(rows);
     }
@@ -211,12 +275,41 @@ impl Rasterizer {
     /// A path entirely outside [`Rasterizer::keep_rows`]'s range is empty by
     /// this test once it has been swept, which is what it means for the caller
     /// to have said those rows do not matter.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::Rasterizer;
+    ///
+    /// let mut rasterizer = Rasterizer::new();
+    /// assert!(rasterizer.is_empty());
+    /// rasterizer.move_to(0.0, 0.0);
+    /// rasterizer.line_to(4.0, 2.0);
+    /// rasterizer.close_polygon();
+    /// assert!(!rasterizer.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.store.is_empty() && self.current.is_none_or(Cell::is_empty)
     }
 
     /// Start a new subpath at a device-space point.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.move_to(0.0, 0.0);
+    /// rasterizer.line_to(4.0, 0.0);
+    /// rasterizer.line_to(4.0, 2.0);
+    /// rasterizer.line_to(0.0, 2.0);
+    /// rasterizer.close_polygon();
+    ///
+    /// let mut spans = Vec::new();
+    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    ///     spans.push((x, y, len, alpha));
+    /// });
+    ///
+    /// assert_eq!(spans.len(), 2);
+    /// ```
     pub fn move_to(&mut self, x: f64, y: f64) {
         self.close_polygon();
         let (x, y) = (to_subpixel(x), to_subpixel(y));
@@ -229,6 +322,16 @@ impl Rasterizer {
     }
 
     /// Extend the current subpath to a device-space point.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::Rasterizer;
+    ///
+    /// // A `line_to` with no `move_to` before it is ignored rather than
+    /// // treated as starting at the origin.
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.line_to(4.0, 2.0);
+    /// assert!(rasterizer.is_empty());
+    /// ```
     pub fn line_to(&mut self, x: f64, y: f64) {
         if !self.open {
             return;
@@ -245,6 +348,30 @@ impl Rasterizer {
     /// before every `move_to` and before the sweep: an unclosed subpath in the
     /// input is filled as though the caller had closed it, which is what both
     /// PDF's `f` and the oracle's scan converter do.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// // An unclosed subpath fills as though the caller had closed it,
+    /// // which is what `f` and the oracle both do -- so closing explicitly
+    /// // and leaving it open give the same spans.
+    /// let build = |close: bool| {
+    ///     let mut rasterizer = Rasterizer::new();
+    ///     rasterizer.move_to(0.0, 0.0);
+    ///     rasterizer.line_to(4.0, 0.0);
+    ///     rasterizer.line_to(4.0, 2.0);
+    ///     rasterizer.line_to(0.0, 2.0);
+    ///     if close {
+    ///         rasterizer.close_polygon();
+    ///     }
+    ///     let mut spans = Vec::new();
+    ///     rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, a| {
+    ///         spans.push((x, y, len, a));
+    ///     });
+    ///     spans
+    /// };
+    /// assert_eq!(build(true), build(false));
+    /// ```
     pub fn close_polygon(&mut self) {
         if !self.open {
             return;
@@ -256,6 +383,23 @@ impl Rasterizer {
     }
 
     /// Add a whole flattened path, in device space.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// // Curves are flattened here; the rasterizer sees only segments.
+    /// use kurbo::Shape;
+    ///
+    /// let path = kurbo::Rect::new(0.0, 0.0, 4.0, 2.0).to_path(0.1);
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.add_path(&path, 0.25);
+    ///
+    /// let mut spans = Vec::new();
+    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, a| {
+    ///     spans.push((x, y, len, a));
+    /// });
+    /// assert_eq!(spans, [(0, 0, 4, 255), (0, 1, 4, 255)]);
+    /// ```
     pub fn add_path(&mut self, path: &kurbo::BezPath, tolerance: f64) {
         // `flatten` emits only MoveTo/LineTo/ClosePath, so the match below is
         // total over what can actually arrive; the curve arms are unreachable
@@ -514,6 +658,26 @@ impl Rasterizer {
     /// boundary crosses each scanline an even number of times and so returns
     /// the winding count to zero by the row's end. That is what makes
     /// [`Rasterizer::keep_rows`] exact rather than approximate.
+    ///
+    /// ```
+    /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+    ///
+    /// let mut rasterizer = Rasterizer::new();
+    /// rasterizer.move_to(0.0, 0.0);
+    /// rasterizer.line_to(4.0, 0.0);
+    /// rasterizer.line_to(4.0, 2.0);
+    /// rasterizer.line_to(0.0, 2.0);
+    /// rasterizer.close_polygon();
+    ///
+    /// let mut spans = Vec::new();
+    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    ///     spans.push((x, y, len, alpha));
+    /// });
+    ///
+    /// // Increasing y then increasing x, and only non-zero alphas, so a
+    /// // consumer can blend unconditionally.
+    /// assert_eq!(spans, [(0, 0, 4, 255), (0, 1, 4, 255)]);
+    /// ```
     pub fn sweep(
         &mut self,
         rule: FillRule,
@@ -532,6 +696,26 @@ impl Rasterizer {
 /// See [`AntiAlias`](crate::device::AntiAlias), whose three variants these
 /// mirror one for one; this is the integrator's own spelling of the same
 /// choice, so `scanline` does not depend on the device vocabulary.
+///
+/// ```
+/// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+///
+/// // A half-covered pixel: `Exact` keeps the partial alpha, `Full`
+/// // pushes any touched pixel to 255.
+/// let alpha = |coverage| {
+///     let mut rasterizer = Rasterizer::new();
+///     rasterizer.move_to(0.0, 0.0);
+///     rasterizer.line_to(0.5, 0.0);
+///     rasterizer.line_to(0.5, 1.0);
+///     rasterizer.line_to(0.0, 1.0);
+///     rasterizer.close_polygon();
+///     let mut out = 0u8;
+///     rasterizer.sweep(FillRule::NonZero, coverage, |_, _, _, a| out = a);
+///     out
+/// };
+/// assert!(alpha(Coverage::Exact) < 255);
+/// assert_eq!(alpha(Coverage::Full), 255);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Coverage {
     /// Coverage becomes alpha: `min(255, floor(cov * 256))`.
@@ -544,6 +728,32 @@ pub enum Coverage {
 }
 
 /// Which winding rule decides a path's interior.
+///
+/// ```
+/// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
+///
+/// // Two nested squares wound the same way: non-zero fills the hole,
+/// // even-odd leaves it clear.
+/// let covered = |rule| {
+///     let mut rasterizer = Rasterizer::new();
+///     for (lo, hi) in [(0.0, 6.0), (2.0, 4.0)] {
+///         rasterizer.move_to(lo, lo);
+///         rasterizer.line_to(hi, lo);
+///         rasterizer.line_to(hi, hi);
+///         rasterizer.line_to(lo, hi);
+///         rasterizer.close_polygon();
+///     }
+///     let mut len = 0;
+///     rasterizer.sweep(rule, Coverage::Exact, |_, l, y, _| {
+///         if y == 3 {
+///             len += l;
+///         }
+///     });
+///     len
+/// };
+/// assert_eq!(covered(FillRule::NonZero), 6);
+/// assert_eq!(covered(FillRule::EvenOdd), 4);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FillRule {
     /// Non-zero winding: covered where the signed crossing count is not zero.

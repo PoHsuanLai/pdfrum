@@ -268,6 +268,22 @@ pub(crate) fn composite_straight(
 /// A source that carries a *straight* colour — every
 /// [`Brush::Solid`](crate::device::Brush) — must use [`composite_solid`]
 /// instead: premultiplying it first quantises it.
+///
+/// ```
+/// use pdfrum_page::BlendMode;
+/// use pdfrum_render::blend::composite_premultiplied;
+///
+/// let dest = [0, 0, 255, 255];
+/// let src = [255, 0, 0, 255];
+///
+/// // Full coverage and a fully opaque source replace the destination.
+/// assert_eq!(
+///     composite_premultiplied(dest, src, 255, BlendMode::default()),
+///     [255, 0, 0, 255],
+/// );
+/// // Zero coverage leaves it untouched, so a caller can blend always.
+/// assert_eq!(composite_premultiplied(dest, src, 0, BlendMode::default()), dest);
+/// ```
 #[must_use]
 pub fn composite_premultiplied(
     dest: [u8; 4],
@@ -370,6 +386,20 @@ pub fn composite_premultiplied(
 /// [`Brush::Solid`](crate::device::Brush) — must use this; a source already
 /// premultiplied (an image sample, a composited layer) has no straight
 /// colour to preserve and uses [`composite_premultiplied`].
+///
+/// ```
+/// use pdfrum_page::BlendMode;
+/// use pdfrum_render::blend::composite_solid;
+///
+/// let dest = [0, 0, 255, 255];
+///
+/// // A straight colour, entered one step earlier so the round trip
+/// // through premultiplication cannot quantise it.
+/// assert_eq!(
+///     composite_solid(dest, [221, 0, 0], 255, 255, BlendMode::default()),
+///     [221, 0, 0, 255],
+/// );
+/// ```
 #[must_use]
 pub fn composite_solid(
     dest: [u8; 4],

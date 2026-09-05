@@ -14,6 +14,22 @@
 use crate::event::{Key, Modifiers};
 
 /// What an event asks the text field to do.
+///
+/// ```
+/// use pdfrum_form::field::text::{route_char, Disposition, TextAction};
+/// use pdfrum_form::Modifiers;
+///
+/// // Return means different things by field shape: a single-line field
+/// // commits, a multiline one takes a paragraph break.
+/// assert_eq!(
+///     route_char('\r', Modifiers::NONE, Modifiers::CONTROL, false, false),
+///     Disposition::Do(TextAction::Commit)
+/// );
+/// assert_eq!(
+///     route_char('\r', Modifiers::NONE, Modifiers::CONTROL, false, true),
+///     Disposition::Do(TextAction::InsertReturn)
+/// );
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAction {
     /// Insert a character at the caret, replacing any selection.
@@ -46,6 +62,26 @@ pub enum TextAction {
 }
 
 /// Which way a caret movement goes.
+///
+/// Home and End are line-wise on their own and document-wise with Control —
+/// on every platform, not on the session's accelerator.
+///
+/// ```
+/// use pdfrum_form::field::text::{route_key, Disposition, Motion, TextAction};
+/// use pdfrum_form::{Key, Modifiers};
+///
+/// let line_wise = route_key(Key::Home, Modifiers::NONE, Modifiers::CONTROL, true, false);
+/// assert_eq!(
+///     line_wise,
+///     Disposition::Do(TextAction::Move { motion: Motion::LineStart, extend: false })
+/// );
+///
+/// let doc_wise = route_key(Key::Home, Modifiers::CONTROL, Modifiers::CONTROL, true, false);
+/// assert_eq!(
+///     doc_wise,
+///     Disposition::Do(TextAction::Move { motion: Motion::DocStart, extend: false })
+/// );
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Motion {
     /// One character left.
@@ -67,6 +103,26 @@ pub enum Motion {
 }
 
 /// How an event was disposed of.
+///
+/// Consuming and ignoring are different answers, and a read-only field is the
+/// case that separates them: it takes the character and does nothing with it.
+///
+/// ```
+/// use pdfrum_form::field::text::{route_char, Disposition};
+/// use pdfrum_form::Modifiers;
+///
+/// // Read-only: consumed, and nothing happens.
+/// assert_eq!(
+///     route_char('a', Modifiers::NONE, Modifiers::CONTROL, true, false),
+///     Disposition::Consume
+/// );
+/// // A filtered character is ignored even by a read-only field, so a caller
+/// // may pass it on.
+/// assert_eq!(
+///     route_char('\n', Modifiers::NONE, Modifiers::CONTROL, true, false),
+///     Disposition::Ignore
+/// );
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disposition {
     /// The event asks for this, and was consumed.
@@ -86,6 +142,19 @@ pub enum Disposition {
 /// oracle calls it a shortcut. Shift is deliberately not consulted here,
 /// because each call site reads it differently: select-all and redo-with-Y
 /// are disqualified by it, while undo-with-Z takes it as meaning redo.
+///
+/// ```
+/// use pdfrum_form::Modifiers;
+/// use pdfrum_form::field::text::is_shortcut;
+///
+/// assert!(is_shortcut(Modifiers::CONTROL, Modifiers::CONTROL));
+/// // A chord carrying an extra modifier is still a shortcut.
+/// assert!(is_shortcut(Modifiers::CONTROL | Modifiers::META, Modifiers::CONTROL));
+/// // Alt takes it back out of shortcut territory.
+/// assert!(!is_shortcut(Modifiers::CONTROL | Modifiers::ALT, Modifiers::CONTROL));
+/// // And the other platform's modifier is not this platform's.
+/// assert!(!is_shortcut(Modifiers::META, Modifiers::CONTROL));
+/// ```
 #[must_use]
 pub fn is_shortcut(modifiers: Modifiers, accelerator: Modifiers) -> bool {
     modifiers.contains(accelerator) && !modifiers.contains(Modifiers::ALT)
@@ -101,6 +170,32 @@ pub fn is_shortcut(modifiers: Modifiers, accelerator: Modifiers) -> bool {
 /// A shortcut with the *wrong* modifier is [`Disposition::Ignore`], not a
 /// silent no-op: the assertions check the rejection as specifically as the
 /// acceptance.
+///
+/// ```
+/// use pdfrum_form::field::text::{route_key, Disposition, TextAction};
+/// use pdfrum_form::{Key, Modifiers};
+///
+/// // A general-keyboard configuration: Control is the accelerator and Y redoes.
+/// let general = |key, modifiers| route_key(key, modifiers, Modifiers::CONTROL, true, false);
+///
+/// // Select-all is the accelerator with A and only that; shift disqualifies it.
+/// assert_eq!(general(Key::A, Modifiers::CONTROL), Disposition::Do(TextAction::SelectAll));
+/// assert_eq!(
+///     general(Key::A, Modifiers::CONTROL | Modifiers::SHIFT),
+///     Disposition::Ignore
+/// );
+///
+/// // Z is the one shortcut that reads shift as a meaning rather than a
+/// // disqualifier.
+/// assert_eq!(general(Key::Z, Modifiers::CONTROL), Disposition::Do(TextAction::Undo));
+/// assert_eq!(
+///     general(Key::Z, Modifiers::CONTROL | Modifiers::SHIFT),
+///     Disposition::Do(TextAction::Redo)
+/// );
+///
+/// // The wrong platform's modifier is rejected outright.
+/// assert_eq!(general(Key::A, Modifiers::META), Disposition::Ignore);
+/// ```
 #[must_use]
 pub fn route_key(
     key: Key,
@@ -191,6 +286,21 @@ pub fn route_key(
 ///
 /// A **read-only** field consumes the character and does nothing, which is
 /// not the same as ignoring it.
+///
+/// ```
+/// use pdfrum_form::field::text::{route_char, Disposition, TextAction};
+/// use pdfrum_form::Modifiers;
+///
+/// let typed = |ch| route_char(ch, Modifiers::NONE, Modifiers::CONTROL, false, false);
+///
+/// assert_eq!(typed('a'), Disposition::Do(TextAction::Insert('a')));
+/// // Escape discards the in-progress edit rather than being filtered away.
+/// assert_eq!(typed('\u{1B}'), Disposition::Do(TextAction::Escape));
+/// // Line feed and the delete control code are refused, so an embedder that
+/// // also sends a delete key does not delete twice.
+/// assert_eq!(typed('\n'), Disposition::Ignore);
+/// assert_eq!(typed('\u{7F}'), Disposition::Ignore);
+/// ```
 #[must_use]
 pub fn route_char(
     ch: char,
