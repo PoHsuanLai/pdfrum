@@ -112,8 +112,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   --json`, `schema` with a test that every `--json` command has an entry);
   no facade gap.
 - Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
-- Phase 4 — `pdfrum serve --stdio`: JSON-RPC over stdin/stdout, one parse
-  per document, plus MCP tool listing; no new dependency.
+- ~~Phase 4 — `pdfrum serve --stdio`~~ — landed 2026-09-05 (5b905ce): JSON-RPC
+  over stdin/stdout, 27 methods on the commands' own JSON shapes, `--mcp`
+  for `initialize`/`tools/list`/`tools/call`, `schema serve`; no new
+  dependency, no facade gap. The Markdown follow-ups landed the same day
+  (fc89257): `extract markdown -o DIR` writes and links the images,
+  running headers and footers masked document-wide through
+  `Document::markdown`.
 - Phase 5, facade half — landed 2026-09-05 (a136e32): `DocEdit::set_metadata`,
   `add_attachment` with options and `remove_attachment`, `stamp_text` /
   `stamp_image`; found on the way and fixed: the text emitter transposed
