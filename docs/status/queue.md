@@ -139,10 +139,42 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Delegated to Claude agents in worktrees, one phase at a time because
   they share `main.rs`; Claude verifies (gate, board) and lands.
 
-## M21 — comparative benchmarks (scoped 2026-09-05, PLAN.md M21) — NOT STARTED
+## M21 — comparative benchmarks — first pass landed 2026-09-05 (05bdf3c; `docs/benchmarks/README.md`, `docs/status/M21.md`)
 
-- Peers: `hayro`, `pdf-render` (render); `pdf-extract`, `pdf`, `hayro-interpret`, `pdf_oxide` (text); `lopdf`, `pdf` (parse/write); baselines `pdfium-render`, `mupdf`; MinerU-rs and Python MinerU (Markdown).
-- Axes: correctness against the oracle first, then speed, memory, cost of adoption, coverage matrix; one script under `benches/compare/` behind a `compare` feature; losses published.
+- Nine engines ran (`benches/compare/`, its own workspace, peers never in
+  the root tree): hayro, hayro-interpret, pdf-extract, lopdf, pdf,
+  pdf_oxide, pdfium-render (pypdfium2's libpdfium), mupdf; `pdf-render`
+  not measured (commercial-licence fork). Load 18–88 throughout, so the
+  ratios are the reading.
+- **Where we lead:** correctness and robustness. Render inside SSIM 0.99 of
+  the oracle on 35/44 and 180/209 (pdfium-render 31/158, hayro 10/122,
+  mupdf 13/101, pdf_oxide 8/90 with 40 errors); text normalized match
+  89%/95% (pdf-extract panics on 9 of 44); opens 208/209 with zero
+  panics, crashes or timeouts in 759 runs; coverage 22/22 features.
+- **Where we lose, now work items:**
+  1. Render speed: slowest median renderer (warm 15.9 ms vs pdfium 8.3,
+     mupdf 6.1, hayro 15.0 on the 44; 10.4 vs 4.1/3.4/5.4 on the sample)
+     and cold render 3–9× the others — the image-rows pass is the first
+     answer; per-session setup the second (see 3).
+  2. Text extraction 10× PDFium (0.58 ms vs 0.05 warm on the 44) — profile
+     `Page::text` the M18 way; the text page is built eagerly with boxes
+     for every character.
+  3. Parallel scaling flattens after 4 threads (39 → 71 → 75 pages/s;
+     hayro 70 → 156 → 167): each new `RenderSession` enumerates fonts —
+     share the font database and glyph caches across sessions.
+  4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
+     vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
+     plus the scaled JPEG decode once zune-jpeg has it).
+  5. Render losses by file: `vector_en_system.pdf` 0.960 (every peer >
+     0.98), `vector_tcpdf_009.pdf` 0.959, `image_en_fqa.pdf` 0.977,
+     `image_jpx_123.pdf` 0.987, `fx/path/transparent1.pdf` 0.984,
+     `fx/image/1_image.pdf` 0.986 — each a conformance row to chase.
+  6. Text losses: `text_quick_start.pdf` 0.641 (dot leaders come out as
+     separate lines against PDFium's one line), `text_tcpdf_055.pdf`
+     0.953 where three peers are closer; nine FRC 8.2.4 pages where PDFium
+     emits U+0003 (oracle-bug rule, cited, not chased).
+- Deferred to the next pass: the full 1750-file corpus, `save` after a
+  merge, the MinerU-rs Markdown row.
 
 ## Dead-code audit (user, 2026-09-05) — landed 2026-09-05
 
