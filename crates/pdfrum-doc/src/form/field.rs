@@ -796,24 +796,25 @@ pub fn apply<R: Resolve>(
             let Some(widget_ref) = widget.reference else {
                 continue;
             };
+            // Merged field-and-widget: the value edit and the widget edit are
+            // the same object, so the widget's edit starts from the field
+            // dictionary that already carries the new `/V` — starting from
+            // the widget's own copy would put its old `/V` back.
+            let source = if widget_ref == reference {
+                &dict
+            } else {
+                &widget.dict
+            };
             // A toggle's widget selects its appearance with `/AS`; a text or
             // choice field's has to have one drawn.
             let widget_dict = if field.kind.is_toggle() {
                 rewrite(
-                    &widget.dict,
+                    source,
                     names::AS,
                     Object::Name(Name::from(value.as_bytes())),
                 )
             } else {
-                widget.dict.clone()
-            };
-            // Merged field-and-widget: the value edit and the widget edit are
-            // the same object, so fold them together rather than emitting two
-            // replacements that would clobber each other.
-            let widget_dict = if widget_ref == reference {
-                merge(&dict, &widget_dict)
-            } else {
-                widget_dict
+                source.clone()
             };
             if let Some(generated) = ap::widget::generate(&widget_dict, r) {
                 widgets.push((widget_ref, widget_dict, generated));
@@ -870,18 +871,6 @@ fn rewrite(dict: &Dict, key: &Name, value: Object) -> Dict {
     }
     if !replaced {
         out.push(key.clone(), value);
-    }
-    out
-}
-
-/// Folds `overlay`'s entries onto `base`, for the merged field-and-widget
-/// case where two edits target one object.
-fn merge(base: &Dict, overlay: &Dict) -> Dict {
-    let mut out = base.clone();
-    for (key, value) in overlay.iter() {
-        if base.raw(key) != Some(value) {
-            out = rewrite(&out, key, value.clone());
-        }
     }
     out
 }

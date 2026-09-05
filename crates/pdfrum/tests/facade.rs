@@ -657,6 +657,38 @@ fn a_filled_form_round_trips_through_save_and_reopen() {
 }
 
 #[test]
+fn a_field_that_already_holds_an_empty_value_takes_the_new_one() {
+    // A merged field-and-widget dictionary with `/V ()` already in it — the
+    // common shape a form authoring tool writes. The value edit and the
+    // widget edit target the same object; the widget's copy used to be
+    // folded back over the edited one and its old `/V ()` won, so the file
+    // came out unchanged while the save reported success.
+    let pdf = b"%PDF-1.7\n\
+1 0 obj<</Type/Catalog/Pages 2 0 R/AcroForm<</Fields[4 0 R]/DA(/Helv 0 Tf 0 g)>>>>endobj\n\
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n\
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]/Annots[4 0 R]>>endobj\n\
+4 0 obj<</Type/Annot/Subtype/Widget/FT/Tx/T(name)/V()/F 4/P 3 0 R/Rect[10 10 190 40]/DA(/Helv 12 Tf 0 g)>>endobj\n\
+trailer<</Root 1 0 R/Size 5>>\n";
+    let doc = Document::from_bytes(Arc::from(&pdf[..])).expect("open");
+    let mut form = doc.form().expect("form");
+    assert_eq!(form.field("name").expect("field").stored_value(), "");
+    form.set("name", "kept").expect("field exists");
+    let mut out = Vec::new();
+    doc.write_form_to(&mut out, &form, &SaveOptions::default())
+        .expect("save");
+    let reopened = Document::from_bytes(Arc::from(out)).expect("reopen");
+    assert_eq!(
+        reopened
+            .form()
+            .expect("form")
+            .field("name")
+            .expect("field")
+            .stored_value(),
+        "kept"
+    );
+}
+
+#[test]
 fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
     // The documented boundary (SPEC.md §10, ruling E1): appearance
     // generation builds a widget's *chrome* — background, border, and the
