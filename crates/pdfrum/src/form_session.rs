@@ -83,8 +83,19 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// ```
 #[derive(Debug)]
 pub struct FormSession<'a> {
-    doc: &'a Document,
-    inner: Inner,
+    pub(crate) doc: &'a Document,
+    pub(crate) state: State,
+}
+
+/// Everything a session holds besides the document it is over.
+///
+/// One record rather than five fields on [`FormSession`] so that an
+/// [`OwnedFormSession`](crate::OwnedFormSession), which holds the document
+/// by `Arc`, can move it into a borrowed session for the length of one call
+/// and take it back after — the same code path, and no second copy of it.
+#[derive(Debug)]
+pub(crate) struct State {
+    pub(crate) inner: Inner,
     /// The pages this session has already read, by index.
     ///
     /// Read on the first event that names a page and kept, because a replay
@@ -99,14 +110,169 @@ pub struct FormSession<'a> {
     /// focused**, which in practice means Tab entering the focus ring. Every
     /// other key goes to the page holding focus, and mouse events name their
     /// own page.
-    viewed_page: PageIndex,
+    pub(crate) viewed_page: PageIndex,
     /// The form's default-resource fonts, loaded once.
-    fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
+    pub(crate) fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
     /// The script hooks every commit passes through.
     ///
     /// [`NoScripts`] by default, which is a JavaScript-off viewer's behaviour
     /// rather than a stub of one — see [`Cascade`]'s own documentation.
     cascade: Cascades,
+}
+
+impl State {
+    /// A state with nothing read and nothing focused, over `fonts` — what an
+    /// owned session leaves in its slot while a call is in flight. Costs one
+    /// reference count: the config's focus ring is an empty `Vec`, the page
+    /// cache an empty map, and the boxed [`NoScripts`] a zero-sized
+    /// allocation.
+    pub(crate) fn vacant(fonts: &std::sync::Arc<pdfrum_doc::ap::FormFonts>) -> State {
+        State {
+            inner: Inner::with_config(SessionConfig {
+                focusable: Vec::new(),
+                ..SessionConfig::default()
+            }),
+            pages: std::collections::BTreeMap::new(),
+            viewed_page: PageIndex::FIRST,
+            fonts: std::sync::Arc::clone(fonts),
+            cascade: Cascades::Plain(Box::new(NoScripts)),
+        }
+    }
+
+    /// The state half of [`FormSession::script_failures`].
+    #[cfg(feature = "javascript")]
+    pub(crate) fn script_failures(
+        &mut self,
+        diags: &mut pdfrum_common::Diagnostics,
+    ) -> Vec<crate::ScriptFailure> {
+        match &mut self.cascade {
+            Cascades::Scripted(cascade) => cascade.drain_diagnostics(diags),
+            Cascades::Plain(_) => Vec::new(),
+        }
+    }
+
+    /// The state half of [`FormSession::focused_annot`].
+    pub(crate) fn focused_annot(&self) -> Option<pdfrum_form::AnnotId> {
+        self.inner.focus.map(pdfrum_form::FocusTarget::annot)
+    }
+
+    /// The state half of [`FormSession::hover_for_page`].
+    pub(crate) fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
+        let page = page.into();
+        let hover = self.inner.hover?;
+        (hover.page == page).then_some(hover.index as usize)
+    }
+
+    /// The state half of [`FormSession::can_undo`].
+    pub(crate) fn can_undo(&self) -> bool {
+        match self.inner.focused_state() {
+            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_undo(),
+            Some(
+                pdfrum_form::field::FieldState::Choice(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
+        }
+    }
+
+    /// The state half of [`FormSession::can_redo`].
+    pub(crate) fn can_redo(&self) -> bool {
+        match self.inner.focused_state() {
+            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_redo(),
+            Some(
+                pdfrum_form::field::FieldState::Choice(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
+        }
+    }
+
+    /// The state half of [`FormSession::focused_text`].
+    pub(crate) fn focused_text(&self) -> Option<String> {
+        match self.inner.focused_state()? {
+            pdfrum_form::field::FieldState::Text(text) => Some(text.text().to_string()),
+            pdfrum_form::field::FieldState::Choice(choice) => Some(choice.focused_text()),
+            // Neither holds text: a toggle's value is a state name and a
+            // button has none at all.
+            pdfrum_form::field::FieldState::Toggle(_)
+            | pdfrum_form::field::FieldState::Button(_) => None,
+        }
+    }
+
+    /// The state half of [`FormSession::selected_text`].
+    pub(crate) fn selected_text(&self) -> Option<String> {
+        match self.inner.focused_state()? {
+            pdfrum_form::field::FieldState::Text(text) => Some(text.edit.selected_text()),
+            pdfrum_form::field::FieldState::Choice(choice) => Some(
+                choice
+                    .edit
+                    .as_ref()
+                    .map(|edit| edit.selected_text())
+                    .unwrap_or_default(),
+            ),
+            // Neither holds selectable text.
+            pdfrum_form::field::FieldState::Toggle(_)
+            | pdfrum_form::field::FieldState::Button(_) => None,
+        }
+    }
+
+    /// The state half of [`FormSession::is_index_selected`].
+    pub(crate) fn is_index_selected(&self, index: usize) -> bool {
+        match self.inner.focused_state() {
+            Some(pdfrum_form::field::FieldState::Choice(choice)) => {
+                pdfrum_form::field::choice::is_index_selected(choice, index)
+            }
+            Some(
+                pdfrum_form::field::FieldState::Text(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
+        }
+    }
+
+    /// The state half of [`FormSession::set_index_selected`].
+    pub(crate) fn set_index_selected(&mut self, index: usize, selected: bool) -> bool {
+        match self.inner.focused_state_mut() {
+            Some(pdfrum_form::field::FieldState::Choice(choice)) => {
+                pdfrum_form::field::choice::set_index_selected(choice, index, selected)
+            }
+            // A text field has no rows, so every index is out of range.
+            Some(
+                pdfrum_form::field::FieldState::Text(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
+        }
+    }
+
+    /// The state half of [`FormSession::scripts`].
+    #[cfg(feature = "javascript")]
+    pub(crate) fn scripts(&self) -> Option<&pdfrum_form::ScriptCascade> {
+        match &self.cascade {
+            Cascades::Scripted(cascade) => Some(cascade),
+            Cascades::Plain(_) => None,
+        }
+    }
+
+    /// The state half of [`FormSession::scripts_mut`].
+    #[cfg(feature = "javascript")]
+    pub(crate) fn scripts_mut(&mut self) -> Option<&mut pdfrum_form::ScriptCascade> {
+        match &mut self.cascade {
+            Cascades::Scripted(cascade) => Some(cascade),
+            Cascades::Plain(_) => None,
+        }
+    }
+
+    /// The state half of [`FormSession::advance_time`].
+    #[cfg(feature = "javascript")]
+    pub(crate) fn advance_time(&mut self, elapsed: std::time::Duration) -> usize {
+        self.scripts_mut()
+            .map_or(0, |cascade| cascade.advance_time(elapsed))
+    }
 }
 
 /// Which cascade a session holds.
@@ -270,7 +436,7 @@ impl<'a> FormSession<'a> {
     /// session.character('7', M::NONE);
     ///
     /// let transcript = session.scripts().expect("a scripted session").transcript_text();
-    /// assert!(transcript.starts_with("Alert: *** starting test 2 ***"));
+    /// assert!(transcript.contains("Alert: *** starting test 2 ***\n"));
     /// # Ok(())
     /// # }
     /// # #[cfg(not(feature = "javascript"))] fn main() {}
@@ -332,7 +498,7 @@ impl<'a> FormSession<'a> {
     /// for is honoured. Nothing happens on an unscripted session.
     #[cfg(feature = "javascript")]
     pub fn open_document(&mut self) {
-        if !matches!(self.cascade, Cascades::Scripted(_)) {
+        if !matches!(self.state.cascade, Cascades::Scripted(_)) {
             return;
         }
         let requests = {
@@ -343,7 +509,7 @@ impl<'a> FormSession<'a> {
             open_requests::open_action(&catalog, parser, &mut found);
             found
         };
-        if let Cascades::Scripted(cascade) = &mut self.cascade {
+        if let Cascades::Scripted(cascade) = &mut self.state.cascade {
             for request in requests {
                 match request {
                     open_requests::Request::Script { whence, source } => {
@@ -363,10 +529,7 @@ impl<'a> FormSession<'a> {
         &mut self,
         diags: &mut pdfrum_common::Diagnostics,
     ) -> Vec<crate::ScriptFailure> {
-        match &mut self.cascade {
-            Cascades::Scripted(cascade) => cascade.drain_diagnostics(diags),
-            Cascades::Plain(_) => Vec::new(),
-        }
+        self.state.script_failures(diags)
     }
 
     #[cfg(feature = "javascript")]
@@ -388,7 +551,7 @@ impl<'a> FormSession<'a> {
             "",
             self.doc.parser(),
         );
-        if let Cascades::Scripted(cascade) = &mut self.cascade {
+        if let Cascades::Scripted(cascade) = &mut self.state.cascade {
             cascade.set_document(model);
         }
     }
@@ -411,7 +574,7 @@ impl<'a> FormSession<'a> {
     /// order; `pdfrum_form::WidgetInfo::field_index` is what closed that.
     #[cfg(feature = "javascript")]
     fn install_calculation_order(&mut self) {
-        let Cascades::Scripted(cascade) = &mut self.cascade else {
+        let Cascades::Scripted(cascade) = &mut self.state.cascade else {
             return;
         };
         let catalog = self.doc.catalog();
@@ -445,11 +608,13 @@ impl<'a> FormSession<'a> {
         let fonts = pdfrum_doc::ap::FormFonts::load(&doc.catalog(), doc.parser(), ctx);
         FormSession {
             doc,
-            inner,
-            pages: std::collections::BTreeMap::new(),
-            viewed_page: PageIndex::FIRST,
-            fonts,
-            cascade,
+            state: State {
+                inner,
+                pages: std::collections::BTreeMap::new(),
+                viewed_page: PageIndex::FIRST,
+                fonts,
+                cascade,
+            },
         }
     }
 
@@ -463,19 +628,19 @@ impl<'a> FormSession<'a> {
     /// Tab from nothing will enter the ring on the wrong one, and so will
     /// every click sent through `apply`.
     pub fn set_viewed_page(&mut self, page: impl Into<PageIndex>) {
-        self.viewed_page = page.into();
+        self.state.viewed_page = page.into();
     }
 
     /// Which page the embedder last said it was showing.
     #[must_use]
     pub fn viewed_page(&self) -> PageIndex {
-        self.viewed_page
+        self.state.viewed_page
     }
 
     /// The session's switches.
     #[must_use]
     pub fn config(&self) -> &SessionConfig {
-        &self.inner.config
+        &self.state.inner.config
     }
 
     /// Routes a whole [`Event`], for a caller whose input is already a value.
@@ -490,7 +655,7 @@ impl<'a> FormSession<'a> {
     pub fn apply(&mut self, event: Event) -> Response {
         match event {
             Event::KeyDown { .. } | Event::Char { .. } => self.dispatch_keyboard(event),
-            _ => self.dispatch(self.viewed_page, event),
+            _ => self.dispatch(self.state.viewed_page, event),
         }
     }
 
@@ -620,7 +785,7 @@ impl<'a> FormSession<'a> {
     /// Which annotation currently has the keyboard, if any.
     #[must_use]
     pub fn focused_annot(&self) -> Option<pdfrum_form::AnnotId> {
-        self.inner.focus.map(pdfrum_form::FocusTarget::annot)
+        self.state.focused_annot()
     }
 
     /// Which annotation on `page` holds focus, and what its focus rectangle
@@ -713,37 +878,19 @@ impl<'a> FormSession<'a> {
     /// is over nothing, or over an annotation on another page.
     #[must_use]
     pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
-        let page = page.into();
-        let hover = self.inner.hover?;
-        (hover.page == page).then_some(hover.index as usize)
+        self.state.hover_for_page(page)
     }
 
     /// Whether the focused field can undo.
     #[must_use]
     pub fn can_undo(&self) -> bool {
-        match self.inner.focused_state() {
-            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_undo(),
-            Some(
-                pdfrum_form::field::FieldState::Choice(_)
-                | pdfrum_form::field::FieldState::Toggle(_)
-                | pdfrum_form::field::FieldState::Button(_),
-            )
-            | None => false,
-        }
+        self.state.can_undo()
     }
 
     /// Whether the focused field can redo.
     #[must_use]
     pub fn can_redo(&self) -> bool {
-        match self.inner.focused_state() {
-            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_redo(),
-            Some(
-                pdfrum_form::field::FieldState::Choice(_)
-                | pdfrum_form::field::FieldState::Toggle(_)
-                | pdfrum_form::field::FieldState::Button(_),
-            )
-            | None => false,
-        }
+        self.state.can_redo()
     }
 
     /// The focused field's text, or `None` when no field has the keyboard.
@@ -752,14 +899,7 @@ impl<'a> FormSession<'a> {
     /// the oracle's byte-length return cannot express.
     #[must_use]
     pub fn focused_text(&self) -> Option<String> {
-        match self.inner.focused_state()? {
-            pdfrum_form::field::FieldState::Text(text) => Some(text.text().to_string()),
-            pdfrum_form::field::FieldState::Choice(choice) => Some(choice.focused_text()),
-            // Neither holds text: a toggle's value is a state name and a
-            // button has none at all.
-            pdfrum_form::field::FieldState::Toggle(_)
-            | pdfrum_form::field::FieldState::Button(_) => None,
-        }
+        self.state.focused_text()
     }
 
     /// The text currently selected in the focused field, if any.
@@ -769,19 +909,7 @@ impl<'a> FormSession<'a> {
     /// return cannot make, since it reports zero for both.
     #[must_use]
     pub fn selected_text(&self) -> Option<String> {
-        match self.inner.focused_state()? {
-            pdfrum_form::field::FieldState::Text(text) => Some(text.edit.selected_text()),
-            pdfrum_form::field::FieldState::Choice(choice) => Some(
-                choice
-                    .edit
-                    .as_ref()
-                    .map(|edit| edit.selected_text())
-                    .unwrap_or_default(),
-            ),
-            // Neither holds selectable text.
-            pdfrum_form::field::FieldState::Toggle(_)
-            | pdfrum_form::field::FieldState::Button(_) => None,
-        }
+        self.state.selected_text()
     }
 
     /// Replaces the focused field's selection with `text`, or deletes it when
@@ -795,20 +923,20 @@ impl<'a> FormSession<'a> {
     /// The `bool` is the answer, not a failed mutation: `true` when the field
     /// changed, `false` when nothing was focused or the text was unchanged.
     pub fn replace_selection(&mut self, text: &str) -> bool {
-        let Some(target) = self.inner.focus else {
+        let Some(target) = self.state.inner.focus else {
             return false;
         };
         let Some(field) = target.field() else {
             return false;
         };
         let page = target.annot().page;
-        if !self.pages.contains_key(&page) {
+        if !self.state.pages.contains_key(&page) {
             let Some(read) = self.read_page(page) else {
                 return false;
             };
-            self.pages.insert(page, read);
+            self.state.pages.insert(page, read);
         }
-        let Some(form) = self.pages.get(&page) else {
+        let Some(form) = self.state.pages.get(&page) else {
             return false;
         };
         let catalog = self.doc.catalog();
@@ -816,26 +944,16 @@ impl<'a> FormSession<'a> {
             page: form,
             catalog: &catalog,
             resolve: self.doc.parser(),
-            fonts: &self.fonts,
+            fonts: &self.state.fonts,
             permissions: self.permissions(),
         };
-        pdfrum_form::route::replace_selection(&mut self.inner, &ctx, field, text)
+        pdfrum_form::route::replace_selection(&mut self.state.inner, &ctx, field, text)
     }
 
     /// Whether a row of the focused choice field is selected.
     #[must_use]
     pub fn is_index_selected(&self, index: usize) -> bool {
-        match self.inner.focused_state() {
-            Some(pdfrum_form::field::FieldState::Choice(choice)) => {
-                pdfrum_form::field::choice::is_index_selected(choice, index)
-            }
-            Some(
-                pdfrum_form::field::FieldState::Text(_)
-                | pdfrum_form::field::FieldState::Toggle(_)
-                | pdfrum_form::field::FieldState::Button(_),
-            )
-            | None => false,
-        }
+        self.state.is_index_selected(index)
     }
 
     /// Selects or clears a row of the focused choice field.
@@ -846,18 +964,7 @@ impl<'a> FormSession<'a> {
     /// refuses every clear; a missing row, a text field, and nothing focused
     /// all answer `false` rather than panicking.
     pub fn set_index_selected(&mut self, index: usize, selected: bool) -> bool {
-        match self.inner.focused_state_mut() {
-            Some(pdfrum_form::field::FieldState::Choice(choice)) => {
-                pdfrum_form::field::choice::set_index_selected(choice, index, selected)
-            }
-            // A text field has no rows, so every index is out of range.
-            Some(
-                pdfrum_form::field::FieldState::Text(_)
-                | pdfrum_form::field::FieldState::Toggle(_)
-                | pdfrum_form::field::FieldState::Button(_),
-            )
-            | None => false,
-        }
+        self.state.set_index_selected(index, selected)
     }
 
     /// The session's scripting engine, when it has one — what the
@@ -874,10 +981,7 @@ impl<'a> FormSession<'a> {
     #[cfg(feature = "javascript")]
     #[must_use]
     pub fn scripts(&self) -> Option<&pdfrum_form::ScriptCascade> {
-        match &self.cascade {
-            Cascades::Scripted(cascade) => Some(cascade),
-            Cascades::Plain(_) => None,
-        }
+        self.state.scripts()
     }
 
     /// The session's scripting engine, mutably.
@@ -889,10 +993,7 @@ impl<'a> FormSession<'a> {
     /// `Some` only for a session built by [`FormSession::with_scripts`].
     #[cfg(feature = "javascript")]
     pub fn scripts_mut(&mut self) -> Option<&mut pdfrum_form::ScriptCascade> {
-        match &mut self.cascade {
-            Cascades::Scripted(cascade) => Some(cascade),
-            Cascades::Plain(_) => None,
-        }
+        self.state.scripts_mut()
     }
 
     /// Tells the session that `elapsed` passed, and runs whatever timers came
@@ -925,8 +1026,7 @@ impl<'a> FormSession<'a> {
     /// ```
     #[cfg(feature = "javascript")]
     pub fn advance_time(&mut self, elapsed: std::time::Duration) -> usize {
-        self.scripts_mut()
-            .map_or(0, |cascade| cascade.advance_time(elapsed))
+        self.state.advance_time(elapsed)
     }
 
     /// The page's own `/AA` script for one trigger, if it carries one.
@@ -1002,6 +1102,7 @@ impl<'a> FormSession<'a> {
     #[cfg(feature = "javascript")]
     fn page_of_field(&mut self, index: u32) -> Option<PageIndex> {
         let found = self
+            .state
             .pages
             .iter()
             .find(|(_, form)| form.field_of_index(index).is_some())
@@ -1013,6 +1114,7 @@ impl<'a> FormSession<'a> {
             let page = PageIndex::from(page);
             self.ensure_page(page);
             if self
+                .state
                 .pages
                 .get(&page)
                 .is_some_and(|form| form.field_of_index(index).is_some())
@@ -1092,7 +1194,7 @@ impl<'a> FormSession<'a> {
     ) -> T {
         let page = page.into();
         self.ensure_page(page);
-        let Some(form) = self.pages.get(&page) else {
+        let Some(form) = self.state.pages.get(&page) else {
             return T::default();
         };
         let catalog = self.doc.catalog();
@@ -1100,10 +1202,10 @@ impl<'a> FormSession<'a> {
             page: form,
             catalog: &catalog,
             resolve: self.doc.parser(),
-            fonts: &self.fonts,
+            fonts: &self.state.fonts,
             permissions: self.permissions(),
         };
-        body(&mut self.inner, &ctx)
+        body(&mut self.state.inner, &ctx)
     }
 
     /// [`FormSession::with_page`] for the three entry points that can commit
@@ -1134,10 +1236,12 @@ impl<'a> FormSession<'a> {
         // The page is read — and its scripts installed — **before** the
         // cascade leaves `self`, because the install needs both.
         self.ensure_page(page);
-        let mut cascade =
-            std::mem::replace(&mut self.cascade, Cascades::Plain(Box::new(NoScripts)));
+        let mut cascade = std::mem::replace(
+            &mut self.state.cascade,
+            Cascades::Plain(Box::new(NoScripts)),
+        );
         let out = self.with_page(page, |inner, ctx| body(inner, ctx, cascade.as_dyn()));
-        self.cascade = cascade;
+        self.state.cascade = cascade;
         out
     }
 
@@ -1147,7 +1251,7 @@ impl<'a> FormSession<'a> {
     /// one holding focus — which is why typing works after a click and does
     /// nothing before one.
     fn dispatch_keyboard(&mut self, event: Event) -> Response {
-        if let Some(target) = self.inner.focus {
+        if let Some(target) = self.state.inner.focus {
             let page = pdfrum_form::FocusTarget::annot(target).page;
             return self.dispatch(page, event);
         }
@@ -1161,7 +1265,7 @@ impl<'a> FormSession<'a> {
         // Every other key really does need a focused field, and answers
         // unhandled without one.
         match event {
-            Event::KeyDown { key: Key::Tab, .. } => self.dispatch(self.viewed_page, event),
+            Event::KeyDown { key: Key::Tab, .. } => self.dispatch(self.state.viewed_page, event),
             _ => Response::ignored(),
         }
     }
@@ -1175,13 +1279,13 @@ impl<'a> FormSession<'a> {
     /// into, and the page a commit is about is exactly the page whose scripts
     /// the commit runs.
     fn ensure_page(&mut self, page: PageIndex) {
-        if self.pages.contains_key(&page) {
+        if self.state.pages.contains_key(&page) {
             return;
         }
         let Some(read) = self.read_page(page) else {
             return;
         };
-        self.pages.insert(page, read);
+        self.state.pages.insert(page, read);
         self.install_page_scripts(page);
     }
 
@@ -1208,10 +1312,10 @@ impl<'a> FormSession<'a> {
     fn install_page_scripts(&mut self, page: PageIndex) {
         use pdfrum_doc::nav::AActionType;
 
-        let Cascades::Scripted(cascade) = &mut self.cascade else {
+        let Cascades::Scripted(cascade) = &mut self.state.cascade else {
             return;
         };
-        let Some(form) = self.pages.get(&page) else {
+        let Some(form) = self.state.pages.get(&page) else {
             return;
         };
         let resolve = self.doc.parser();

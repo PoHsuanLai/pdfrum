@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use pdfrum::{Document, OwnedPage, RenderOptions, RenderSession, VelloCpuBackend};
+use pdfrum::{
+    Document, FormSession, Key, Modifiers, OwnedFormSession, OwnedPage, Point, RenderOptions,
+    RenderSession, VelloCpuBackend,
+};
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 const TWO_PAGES: &str = "tests/fixtures/hello_world_2_pages.pdf";
@@ -142,4 +145,102 @@ fn pages_owned_walks_every_page_and_outlives_the_arc() {
 fn page_owned_refuses_an_index_past_the_end() {
     let doc = shared(HELLO).expect("the fixture must open");
     assert!(matches!(doc.page_owned(1), Err(pdfrum::Error::Read(_))));
+}
+
+// ---------------------------------------------------------------- forms
+
+const FORM: &str = "tests/fixtures/text_form.pdf";
+/// The fixture's one text field is `/Rect [100 100 200 130]`.
+const INSIDE: Point = Point::new(120.0, 115.0);
+
+fn click_owned(session: &mut OwnedFormSession, at: Point) {
+    session.mouse_move(0, at, Modifiers::NONE);
+    session.mouse_down(0, at, Modifiers::NONE);
+    session.mouse_up(0, at, Modifiers::NONE);
+}
+
+/// A fill through the owned session — click, type, undo, blur — reaches the
+/// same state the borrowed session reaches, and the session outlives the
+/// scope that opened the document.
+#[test]
+fn an_owned_form_session_fills_a_field_like_the_borrowed_one() {
+    let mut owned = {
+        let doc = shared(FORM).expect("the fixture must open");
+        FormSession::owned(doc)
+    };
+    let doc = Document::open(FORM).expect("the fixture must open");
+    let mut borrowed = FormSession::new(&doc);
+
+    assert!(owned.focused_annot().is_none());
+    click_owned(&mut owned, INSIDE);
+    borrowed.mouse_move(0, INSIDE, Modifiers::NONE);
+    borrowed.mouse_down(0, INSIDE, Modifiers::NONE);
+    borrowed.mouse_up(0, INSIDE, Modifiers::NONE);
+    assert_eq!(owned.focused_annot(), borrowed.focused_annot());
+    assert!(owned.focused_annot().is_some());
+
+    for ch in "Hello".chars() {
+        owned.character(ch, Modifiers::NONE);
+        borrowed.character(ch, Modifiers::NONE);
+    }
+    assert_eq!(owned.focused_text().as_deref(), Some("Hello"));
+    assert!(owned.can_undo());
+    owned.key_down(Key::Z, Modifiers::CONTROL);
+    borrowed.key_down(Key::Z, Modifiers::CONTROL);
+    assert_eq!(owned.focused_text(), borrowed.focused_text());
+    assert_eq!(owned.focused_text().as_deref(), Some("Hell"));
+
+    let committed = owned.blur();
+    let reference = borrowed.blur();
+    assert!(owned.focused_annot().is_none());
+    assert_eq!(committed.consumed, reference.consumed);
+    assert_eq!(committed.updates.len(), reference.updates.len());
+    assert!(
+        committed
+            .updates
+            .iter()
+            .any(|u| u.kind.appearance().is_some())
+    );
+}
+
+/// The state survives every call: what one event read and cached is there
+/// for the next, so a click followed by a keystroke on the owned session
+/// costs one page read, not two.
+#[test]
+fn an_owned_form_session_keeps_its_state_between_calls() {
+    let doc = shared(FORM).expect("the fixture must open");
+    let mut session = FormSession::owned(doc);
+    session.set_viewed_page(0);
+    assert!(session.key_down(Key::Tab, Modifiers::NONE).consumed);
+    session.character('x', Modifiers::NONE);
+    assert_eq!(session.focused_text().as_deref(), Some("x"));
+    assert_eq!(session.viewed_page(), 0.into());
+    assert!(session.replace_selection("y"));
+    assert_eq!(session.focused_text().as_deref(), Some("xy"));
+}
+
+/// The fill runs the document's own `/AA` script through the owned
+/// session, and the transcript comes back the same way.
+#[cfg(feature = "javascript")]
+#[test]
+fn an_owned_scripted_session_runs_the_documents_keystroke_script() {
+    use pdfrum::ScriptConfig;
+
+    let doc = shared("tests/fixtures/public_methods.pdf").expect("the fixture must open");
+    let mut session = FormSession::owned_with_scripts(doc, &ScriptConfig::frozen_at(1_399_672_130))
+        .expect("boa builds a realm on any input");
+    // The field's `/Rect [100 160 200 190]`.
+    click_owned(&mut session, Point::new(150.0, 175.0));
+    session.character('7', Modifiers::NONE);
+
+    let transcript = session
+        .scripts()
+        .expect("a scripted session")
+        .transcript_text();
+    assert!(
+        transcript.contains("Alert: *** starting test 2 ***\n"),
+        "the document's /AA /K did not run: {transcript}"
+    );
+    let mut diags = pdfrum::Diagnostics::default();
+    assert!(session.script_failures(&mut diags).is_empty());
 }
