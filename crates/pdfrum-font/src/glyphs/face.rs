@@ -175,7 +175,18 @@ pub struct Face {
     /// every access is a read, and `TextPage` is `Send + Sync` precisely so
     /// that pages extract in parallel. The `Arc` shares the cache across
     /// clones, so two fonts substituted onto one face pay once between them.
-    advances: Arc<RwLock<HashMap<u16, Option<f32>>>>,
+    advances: Arc<RwLock<HashMap<Gid, Option<f32>>>>,
+    /// Glyph id → the box [`glyph_bbox`](Self::glyph_bbox) reported for it,
+    /// cached for the same reason as [`advances`](Self::advances) and asked
+    /// for just as often -- once per shown character through
+    /// `TextRun::glyph_bbox`, and again by the width ladder's last rung.
+    ///
+    /// Each miss rebuilds a `skrifa::FontRef` and a whole `GlyphMetrics`
+    /// (`hmtx`, `loca`, `glyf`, the variation tables) to read one box, or,
+    /// on a CFF-flavoured face, draws the outline and measures it. On
+    /// `text_foxit_products` that was **28% of the whole text run**, over
+    /// half of it inside `GlyphMetrics::new`.
+    boxes: Arc<RwLock<HashMap<Gid, Option<Rect>>>>,
 }
 
 impl fmt::Debug for Face {
@@ -194,6 +205,7 @@ impl fmt::Debug for Face {
                 "advances",
                 &self.advances.read().map(|cache| cache.len()).ok(),
             )
+            .field("boxes", &self.boxes.read().map(|cache| cache.len()).ok())
             .finish()
     }
 }
@@ -249,6 +261,7 @@ impl Face {
             hinting: Arc::default(),
             names: Arc::default(),
             advances: Arc::default(),
+            boxes: Arc::default(),
         }))
     }
 
@@ -276,6 +289,7 @@ impl Face {
             hinting: Arc::default(),
             names: Arc::default(),
             advances: Arc::default(),
+            boxes: Arc::default(),
         }))
     }
 
@@ -654,13 +668,13 @@ impl Face {
     #[must_use]
     pub(crate) fn advance(&self, gid: Gid) -> Option<f32> {
         if let Ok(cache) = self.advances.read()
-            && let Some(hit) = cache.get(&gid.0)
+            && let Some(hit) = cache.get(&gid)
         {
             return *hit;
         }
         let computed = self.advance_uncached(gid);
         if let Ok(mut cache) = self.advances.write() {
-            cache.insert(gid.0, computed);
+            cache.insert(gid, computed);
         }
         computed
     }
@@ -691,6 +705,21 @@ impl Face {
     /// text extraction reads as a degenerate text object and drops whole.
     #[must_use]
     pub(crate) fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
+        if let Ok(cache) = self.boxes.read()
+            && let Some(hit) = cache.get(&gid)
+        {
+            return *hit;
+        }
+        let computed = self.glyph_bbox_uncached(gid);
+        if let Ok(mut cache) = self.boxes.write() {
+            cache.insert(gid, computed);
+        }
+        computed
+    }
+
+    /// [`glyph_bbox`](Self::glyph_bbox) with the cache bypassed.
+    #[must_use]
+    fn glyph_bbox_uncached(&self, gid: Gid) -> Option<Rect> {
         if self.backend != Backend::BareCff {
             let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
             if let Some(b) = font
