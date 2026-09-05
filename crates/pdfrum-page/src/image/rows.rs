@@ -22,7 +22,7 @@
 //! ```
 //!
 //! [`Converted`] is the one place a sample becomes a colour, and
-//! [`ColorSpace::convert_row`] is the one function that does it. There is no
+//! `convert_row` is the one function that does it. There is no
 //! per-pixel entry point beside it: a caller that wants a whole image walks
 //! the rows, and a caller that wants one pixel does not exist.
 //!
@@ -36,7 +36,7 @@
 //! so the row pipeline starts at [`Source`] and there is nothing packed left
 //! for an `Unpacked` stage to do. See that design's "Step 5 — lazy unpack".
 
-use crate::color::{ColorSpace, Rgb, adobe_cmyk_to_srgb};
+use crate::color::{Rgb, adobe_cmyk_to_srgb};
 use crate::image::{BitImage, Pixels};
 
 /// A run of pixels in one representation.
@@ -48,28 +48,10 @@ use crate::image::{BitImage, Pixels};
 pub struct Row<'a, P>(&'a [P]);
 
 impl<'a, P> Row<'a, P> {
-    /// Wrap a slice as a row.
-    #[must_use]
-    pub const fn new(pixels: &'a [P]) -> Self {
-        Self(pixels)
-    }
-
     /// The pixels.
     #[must_use]
     pub const fn pixels(self) -> &'a [P] {
         self.0
-    }
-
-    /// How many pixels the row holds.
-    #[must_use]
-    pub const fn len(self) -> usize {
-        self.0.len()
-    }
-
-    /// Whether the row is empty.
-    #[must_use]
-    pub const fn is_empty(self) -> bool {
-        self.0.is_empty()
     }
 }
 
@@ -160,7 +142,7 @@ enum SourceKind<'a> {
 /// arm it is, at run time, and a caller that must handle all five would
 /// otherwise be five monomorphised copies of the same loop.
 #[derive(Debug, Clone, Copy)]
-pub enum Samples<'a> {
+pub(crate) enum Samples<'a> {
     /// One grey component per pixel. A stencil arrives here too, already
     /// widened: a set bit is ink, which is 0, and a clear one is 255.
     Gray(&'a [u8]),
@@ -218,7 +200,7 @@ impl<'a> Source<'a> {
     /// rejected` and the corpus's damaged images both pin. [`Converted`]
     /// clears the tail of its own buffer so the missing pixels read as black
     /// rather than as the row before.
-    pub fn next_row(&mut self) -> Option<Samples<'_>> {
+    pub(crate) fn next_row(&mut self) -> Option<Samples<'_>> {
         if self.y >= self.height {
             return None;
         }
@@ -271,7 +253,7 @@ impl<'a> Source<'a> {
 /// Components to premultiplied RGBA, one row at a time.
 ///
 /// The second and last stage of today's pipeline: it takes whatever
-/// [`Source`] produced, runs it through [`ColorSpace::convert_row`], and joins
+/// [`Source`] produced, runs it through `convert_row`, and joins
 /// the mask alpha, the matte and the transfer function — all of which are
 /// per-pixel decisions that used to sit inside `to_pixmap`'s loop and are now
 /// the properties of the stage that they are.
@@ -310,7 +292,7 @@ impl<'a> Converted<'a> {
         let samples = self.source.next_row()?;
         convert_row(samples, self.palette.as_ref(), &mut self.buf);
         finish(&mut self.buf);
-        Some(Row::new(&self.buf))
+        Some(Row(&self.buf))
     }
 }
 
@@ -385,20 +367,6 @@ fn convert_row(samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8
             Samples::Gray(_) | Samples::Rgb(_) => Rgba8([0, 0, 0, 255]),
         };
         tail.fill(black);
-    }
-}
-
-impl ColorSpace {
-    /// A row of this space's samples as opaque RGBA.
-    ///
-    /// The space is already resolved into the [`Samples`] representation by
-    /// the time a row exists — `unpack` did that — so this is a thin, named
-    /// entry point onto the one conversion rather than a second one. It is
-    /// where a space that needs more than a table will hook in when the lazy
-    /// `unpack` step lands and the samples arrive still packed.
-    pub fn convert_row(&self, samples: Samples<'_>, palette: Option<&Palette>, dst: &mut [Rgba8]) {
-        let _ = self;
-        convert_row(samples, palette, dst);
     }
 }
 

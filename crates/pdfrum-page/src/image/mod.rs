@@ -47,7 +47,7 @@ pub(crate) use jpx::SpaceOverride;
 pub use jpx::{JpxImage, decode_jpx};
 pub use mask::ImageMask;
 pub(crate) use mask::{ColorKey, matte_color};
-pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Samples, Source};
+pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Source};
 
 use crate::color::{ColorSpace, Rgb};
 use crate::error::Error;
