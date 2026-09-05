@@ -769,27 +769,19 @@ impl SnappedRect {
 }
 
 impl Placement {
-    /// The transform a backend draws with.
-    ///
-    /// `Snapped` needs the source dimensions to turn its integer rect back
-    /// into a transform, so it is the one variant this cannot answer alone —
-    /// see [`Placement::transform_for`].
-    #[must_use]
-    pub fn transform(self) -> kurbo::Affine {
-        match self {
-            Self::Exact { x, y } => kurbo::Affine::translate((x, y)),
-            Self::Filtered(t) => t,
-            Self::Snapped(rect) => rect.transform(1, 1),
-        }
-    }
-
     /// The transform a backend draws the `src_width` x `src_height` pixmap
     /// with.
+    ///
+    /// The dimensions are a parameter rather than a field because only
+    /// `Snapped` needs them: its integer rect says where the pixmap lands,
+    /// and the scale that maps one onto the other is the last thing needed
+    /// to turn it back into an affine.
     #[must_use]
     pub fn transform_for(self, src_width: u32, src_height: u32) -> kurbo::Affine {
         match self {
+            Self::Exact { x, y } => kurbo::Affine::translate((x, y)),
+            Self::Filtered(t) => t,
             Self::Snapped(rect) => rect.transform(src_width, src_height),
-            other => other.transform(),
         }
     }
 
