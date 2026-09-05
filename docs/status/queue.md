@@ -349,17 +349,23 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   earlier row's "the system font scan M18 fixed is no longer visible" holds
   for the *host* scan; the `--font-dir` scan is a different path and was never
   cached until 2026-09-06.
-- **Owed, with the numbers attached: stop reading whole font files during a
-  scan.** `describe` needs each face's `name` and `OS/2` tables and currently
-  faults in the entire file to reach them. Memory-mapping is the natural fix
-  and was written and **backed out**: `pdfrum-font` carries
-  `#![forbid(unsafe_code)]` and the workspace sets `unsafe_code = "forbid"`,
-  so `memmap2::Mmap::map` cannot go there — weakening a stated safety
-  invariant for a benchmark is not an agent's call. The safe route is to parse
-  the sfnt table directory and read only those two tables by offset, which
-  risks changing which face the ladder picks across 1759 board files and so
-  wants a pinned before/after. Worth ~12 ms of the 44-file cold median and
-  nothing else in the engine.
+- ~~**Owed, with the numbers attached: stop reading whole font files during a
+  scan.**~~ — landed 2026-09-06, the safe route rather than the memory map.
+  `subst/probe.rs` parses the sfnt header and table directory (following a
+  `ttcf` header for a collection) and reads only the `name` and `OS/2` byte
+  ranges, reassembling them as a minimal single-face sfnt that goes through the
+  *same* `skrifa` parse the whole file went through — so the `FaceInfo` is
+  identical by construction, not by a second implementation of the two tables.
+  Measured on one cold render of `vector_en_tem` with `--font-dir`, back to
+  back: **34,953,667 bytes in 89 `read` calls at 199 us becomes 1,197,857 bytes
+  in 182 calls at 7 us** — 29x fewer bytes, `read` time 17.8 -> 1.36 ms, total
+  syscall time 22.0 -> 10.1 ms. Corpus cold render median 113.95 -> 56.27 ms
+  and cold/warm 3.83x -> 2.69x on a heavily loaded box (load 30-45, so the
+  ratio is the number, not the absolutes). Board: **0 changed rows** of 1759,
+  which is the pin the row asked for. A bare CFF or Type 1 `.pfb` has no table
+  directory, reports `NotSfnt` and keeps the whole-file read it had before.
+  `#![forbid(unsafe_code)]` stands untouched. Full numbers in
+  `docs/status/cold-start.md` §5.
 - The user asked whether the font layer makes cold start slow. Measured
   with callgrind on today's tree (`profile --op render --iterations 1`,
   vello-cpu): the guide's page 1 (images and text) is 3.86 G `Ir`, of
