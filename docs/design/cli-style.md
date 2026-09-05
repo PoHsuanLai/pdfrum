@@ -23,6 +23,17 @@ through nothing else.
   transcript — and those paint their tokens on a terminal only, leaving
   the bytes in a pipe untouched.
 - **A closed pipe is not an error.** Exit 0, quietly.
+- **Composition.** `-` is stdin wherever a FILE is read and stdout
+  wherever `-o` names a file to write; a file written to stdout is refused
+  on a terminal, and its summary line becomes a stderr notice, `pdfrum: -:
+  3 pages`, so stdout is the file and nothing else. The commands that
+  answer about a document — `info`, `hash`, `doctor`, `search` — take
+  several files: one record per file with a blank line between, `--json`
+  an array of the per-file documents, `search` naming the file before the
+  page as `grep -H` does; a file that cannot be opened is reported on
+  stderr and the run continues, exit 1 at the end. A command whose answer
+  is a list also has `--jsonl`, one compact object per line. `--quiet`
+  drops the notices, `--verbose` prints every parser diagnostic.
 
 ## 2. Colour
 
