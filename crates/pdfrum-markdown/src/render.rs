@@ -4,9 +4,20 @@ use std::fmt::Write;
 
 use crate::ast::{Block, lead_in};
 
-/// The blocks as Markdown, blank-line separated, ending in one newline.
+/// The blocks as Markdown, blank-line separated, ending in one newline;
+/// every image is `![alt](image)`.
 #[must_use]
 pub fn render(blocks: &[Block]) -> String {
+    render_with_images(blocks, |_| None)
+}
+
+/// [`render`] with each image linked where `url` says: called with the
+/// image's index in the page's drawing order, it returns the link's
+/// destination, or `None` to keep the `image` placeholder. A destination
+/// with a space or a bracket in it is written in angle brackets, as the
+/// `CommonMark` spec has it.
+#[must_use]
+pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String>) -> String {
     let mut out = String::new();
     for block in blocks {
         if !out.is_empty() {
@@ -75,8 +86,18 @@ pub fn render(blocks: &[Block]) -> String {
                     }
                 }
             }
-            Block::Image { alt } => {
-                let _ = writeln!(out, "![{}](image)", escape(alt.trim()));
+            Block::Image { alt, index } => {
+                let destination = index.and_then(&url).map_or_else(
+                    || "image".to_owned(),
+                    |url| {
+                        if url.contains(|c: char| c.is_whitespace() || matches!(c, '(' | ')')) {
+                            format!("<{url}>")
+                        } else {
+                            url
+                        }
+                    },
+                );
+                let _ = writeln!(out, "![{}]({destination})", escape(alt.trim()));
             }
         }
     }
@@ -123,7 +144,7 @@ fn escape_from(text: &str, at_line_start: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::render;
+    use super::{render, render_with_images};
 
     use crate::ast::Block;
 
@@ -147,6 +168,7 @@ mod tests {
             ]),
             Block::Image {
                 alt: "A chart".into(),
+                index: None,
             },
         ]);
         assert_eq!(
@@ -154,6 +176,37 @@ mod tests {
             "## Intro\n\nSome \\*text\\* here.\n\n**Redaction** - Lets you \\*remove\\* text.\n\n1. one\n2. two\n\n``\nlet a = `b`;\n``\n\n| h1 | h2 |\n| --- | --- |\n| a\\|b | c |\n\n![A chart](image)\n"
                 .replace("``\nlet", "```\nlet")
                 .replace("`;\n``\n", "`;\n```\n")
+        );
+    }
+
+    #[test]
+    fn an_image_is_linked_where_the_caller_says_and_a_figure_without_one_is_not() {
+        let blocks = [
+            Block::Image {
+                alt: "A chart".into(),
+                index: Some(3),
+            },
+            Block::Image {
+                alt: String::new(),
+                index: Some(4),
+            },
+            Block::Image {
+                alt: "Words only".into(),
+                index: None,
+            },
+        ];
+        let md = render_with_images(&blocks, |i| match i {
+            3 => Some("out/guide-p2-4.jpg".to_owned()),
+            4 => Some("my images/guide-p2-5.png".to_owned()),
+            _ => None,
+        });
+        assert_eq!(
+            md,
+            "![A chart](out/guide-p2-4.jpg)\n\n![](<my images/guide-p2-5.png>)\n\n![Words only](image)\n"
+        );
+        assert_eq!(
+            render(&blocks),
+            "![A chart](image)\n\n![](image)\n\n![Words only](image)\n"
         );
     }
 }

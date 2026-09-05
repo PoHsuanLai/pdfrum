@@ -96,6 +96,10 @@ pub use pdfrum::VelloCpuBackend
 pub use pdfrum::WebLink
 pub use pdfrum::Word
 pub use pdfrum::XrefEntry
+pub mod pdfrum::markdown
+pub use pdfrum::markdown::render
+pub use pdfrum::markdown::render
+pub use pdfrum::markdown::render_with_images
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
@@ -244,6 +248,10 @@ pub fn pdfrum::Document::write_form_to(&self, &mut impl core::io::write::Write, 
 pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum::Document
+pub fn pdfrum::Document::markdown(&self) -> alloc::string::String
+pub fn pdfrum::Document::markdown_blocks(&self, impl core::iter::traits::collect::IntoIterator<Item = pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<alloc::vec::Vec<alloc::vec::Vec<pdfrum_markdown::ast::Block>>>
+pub fn pdfrum::Document::markdown_pages(&self) -> alloc::vec::Vec<alloc::string::String>
+impl pdfrum::Document
 pub fn pdfrum::Document::signatures(&self) -> alloc::vec::Vec<pdfrum::Signature<'_>>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
 pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
@@ -363,6 +371,7 @@ pub fn pdfrum::Page<'a>::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::Page<'a>::layout_text(&self) -> alloc::string::String
 pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::Page<'a>::markdown(&self) -> alloc::string::String
+pub fn pdfrum::Page<'a>::markdown_blocks(&self) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
 pub fn pdfrum::Page<'a>::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
