@@ -152,6 +152,17 @@ The two costs that now lead, both **outside this pass's remit**:
   is the answer, and it is the same shared-font-database item M21 item 3
   already names for parallel scaling.
 
+  **Corrected 2026-09-05** (`docs/status/font-cache.md` §1.1): "per font per
+  page build" is wrong. Callgrind's call counts say `load_with_options` runs
+  **4 times** on this file — once per distinct `/Font` reference, over 11
+  pages — because `BuildContext.font_instances` already memoized it. The
+  100.9 M is four fonts loaded once each, and the 75.9 M is one identity
+  `/ToUnicode` (256 `bfrange` entries spanning 256 codes each, 65 536
+  mappings expanded into a `BTreeMap`) costing ~19 M `Ir` per parse. Caching
+  moved that cost off the per-session path, where it was real and now is
+  not; making the parse itself cheap is a `ToUnicode` storage change and is
+  still open.
+
 ## 7. The ratchet
 
 `cargo bench -p pdfrum-text` into
