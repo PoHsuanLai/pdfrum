@@ -42,6 +42,11 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum.txt", "pdfrum::FlattenMode", "FlattenMode"),
     ("pdfrum.txt", "pdfrum::Flattened", "Flattened"),
     ("pdfrum-common.txt", "pdfrum_common::DiagKind", "DiagKind"),
+    (
+        "pdfrum-common.txt",
+        "pdfrum_common::LimitExceeded",
+        "LimitExceeded",
+    ),
     ("pdfrum-common.txt", "pdfrum_common::Severity", "Severity"),
     ("pdfrum-doc.txt", "pdfrum_doc::Subtype", "Subtype"),
     ("pdfrum-doc.txt", "pdfrum_doc::FocusBox", "FocusBox"),
@@ -119,7 +124,7 @@ fn origin() -> Point {
 fn construct_default_feature_variants() -> usize {
     let mut n = 0;
 
-    // pdfrum::Error — 8
+    // pdfrum::Error — 9
     let _ = Error::WrongPassword;
     let _ = Error::Open(OpenError::NotPdf);
     let _ = Error::Read(ReadError::NoCatalog);
@@ -134,7 +139,20 @@ fn construct_default_feature_variants() -> usize {
         len: 0,
     });
     let _ = Error::Io(std::io::Error::other("construct"));
-    n += 8;
+    let _ = Error::Limit(LimitExceeded::RenderPixels {
+        width: 0,
+        height: 0,
+        allowed: 0,
+    });
+    n += 9;
+
+    // LimitExceeded — 1
+    let _ = LimitExceeded::RenderPixels {
+        width: 0,
+        height: 0,
+        allowed: 0,
+    };
+    n += 1;
 
     // pdfrum::Rotation — 4
     let _ = Rotation::None;
@@ -703,8 +721,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 303, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 33, "default-feature enum count");
+    assert_eq!(constructed, 305, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 34, "default-feature enum count");
 }
 
 #[test]

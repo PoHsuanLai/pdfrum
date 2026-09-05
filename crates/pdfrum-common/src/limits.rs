@@ -11,9 +11,24 @@
 //! enforce none either, there is no field — `max_string_len` was one of those
 //! and was removed rather than left defaulting to `usize::MAX` for a
 //! hardening pass nobody had scheduled.
+//!
+//! One field is **off by default** rather than PDFium-equivalent, because it
+//! is a host's ceiling on untrusted input and not a parser's: the render pixel
+//! cap. It answers with a [`LimitExceeded`] rather than a diagnostic — a
+//! caller who set a ceiling wants to hear that it was hit, not a result with
+//! a hole in it.
+
+use std::fmt;
 
 /// Caps applied while reading a document. Plain configuration data: pass it
 /// down, never store it in a parser struct that also owns state.
+///
+/// Which operations honour which cap: the parser's caps (nesting, array
+/// length, xref size, object numbers, the scans, word length, the page tree,
+/// stream length) are read while opening and while fetching objects; the
+/// CMap and name-tree caps while loading fonts and document-level trees; the
+/// script budgets by the script engine alone. [`Limits::max_render_pixels`]
+/// is read by the facade's render entry points, before a target is allocated.
 ///
 /// ```
 /// use pdfrum_common::Limits;
@@ -114,7 +129,69 @@ pub struct Limits {
     /// and every nested call returns immediately. The field makes that depth
     /// configurable rather than looser.
     pub max_calculate_depth: u32,
+
+    // ---- A host's ceilings on untrusted input (M20 phase 3) ----
+    /// The most pixels one render may produce: width × height of the target
+    /// under the render transform. `None` — the default — is no cap.
+    ///
+    /// PDFium has none: `pdfium_test --scale` sizes the bitmap and only
+    /// `CFX_DIBitmap`'s pitch overflow refuses it. Read by the facade before
+    /// the target is allocated, so a request above the cap costs nothing;
+    /// exceeding it is [`LimitExceeded::RenderPixels`].
+    pub max_render_pixels: Option<u64>,
 }
+
+/// A caller-set ceiling was hit. The error a render or an open answers when
+/// a [`Limits`] field that defaults to *off* was set and exceeded.
+///
+/// Distinct from the parser's own caps, which are damage tolerance and answer
+/// with a diagnostic or a truncated value: these are the host's, and the host
+/// asked to be told. The message names the cap and what would satisfy it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LimitExceeded {
+    /// A render target of `width` × `height` pixels has more than
+    /// [`Limits::max_render_pixels`] allows.
+    RenderPixels {
+        /// The target's width in pixels.
+        width: u32,
+        /// The target's height in pixels.
+        height: u32,
+        /// The cap, in pixels.
+        allowed: u64,
+    },
+}
+
+/// `px` as megapixels with one decimal where it has one: `100`, `1.2`.
+fn megapixels(px: u64) -> String {
+    let whole = px / 1_000_000;
+    let tenths = (px % 1_000_000) / 100_000;
+    if tenths == 0 {
+        whole.to_string()
+    } else {
+        format!("{whole}.{tenths}")
+    }
+}
+
+impl fmt::Display for LimitExceeded {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LimitExceeded::RenderPixels {
+                width,
+                height,
+                allowed,
+            } => write!(
+                f,
+                "render of {width} x {height} px ({} megapixels) is above the cap of {} \
+                 megapixels; render at a smaller scale or raise `Limits::max_render_pixels`",
+                megapixels(u64::from(*width) * u64::from(*height)),
+                megapixels(*allowed),
+            ),
+        }
+    }
+}
+
+impl std::error::Error for LimitExceeded {}
 
 impl Default for Limits {
     fn default() -> Self {
@@ -135,13 +212,14 @@ impl Default for Limits {
             max_script_recursion: 512,
             max_script_stack: 10_240,
             max_calculate_depth: 1,
+            max_render_pixels: None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Limits;
+    use super::{LimitExceeded, Limits};
 
     #[test]
     fn pdfium_equivalent_defaults() {
@@ -159,6 +237,28 @@ mod tests {
         assert_eq!(l.max_cmap_ranges, 65_536);
         assert_eq!(l.max_name_tree_depth, 32);
         assert_eq!(l.max_array_len, usize::MAX);
+        assert_eq!(l.max_render_pixels, None, "the host's ceilings are off");
+    }
+
+    #[test]
+    fn the_pixel_message_names_the_size_the_cap_and_the_remedy() {
+        let e = LimitExceeded::RenderPixels {
+            width: 20_000,
+            height: 20_000,
+            allowed: 100_000_000,
+        };
+        assert_eq!(
+            e.to_string(),
+            "render of 20000 x 20000 px (400 megapixels) is above the cap of 100 megapixels; \
+             render at a smaller scale or raise `Limits::max_render_pixels`"
+        );
+        let e = LimitExceeded::RenderPixels {
+            width: 1_234,
+            height: 1_000,
+            allowed: 1_050_000,
+        };
+        assert!(e.to_string().contains("(1.2 megapixels)"));
+        assert!(e.to_string().contains("cap of 1 megapixels"));
     }
 
     #[test]

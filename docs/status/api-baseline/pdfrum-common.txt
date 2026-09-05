@@ -103,6 +103,14 @@ pub pdfrum_common::DiagKind::XrefEntriesShifted
 pub pdfrum_common::DiagKind::XrefPrevLoop
 pub pdfrum_common::DiagKind::XrefRebuilt
 pub pdfrum_common::DiagKind::XrefStreamEntryDropped
+#[non_exhaustive] pub enum pdfrum_common::LimitExceeded
+pub pdfrum_common::LimitExceeded::RenderPixels
+pub pdfrum_common::LimitExceeded::RenderPixels::allowed: u64
+pub pdfrum_common::LimitExceeded::RenderPixels::height: u32
+pub pdfrum_common::LimitExceeded::RenderPixels::width: u32
+impl core::error::Error for pdfrum_common::LimitExceeded
+impl core::fmt::Display for pdfrum_common::LimitExceeded
+pub fn pdfrum_common::LimitExceeded::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum_common::Severity
 pub pdfrum_common::Severity::Recovered
 pub pdfrum_common::Severity::Suspicious
@@ -145,6 +153,7 @@ pub pdfrum_common::Limits::max_object_nesting: u32
 pub pdfrum_common::Limits::max_object_number: u32
 pub pdfrum_common::Limits::max_page_count: u32
 pub pdfrum_common::Limits::max_page_tree_depth: u32
+pub pdfrum_common::Limits::max_render_pixels: core::option::Option<u64>
 pub pdfrum_common::Limits::max_script_loop_iterations: u64
 pub pdfrum_common::Limits::max_script_recursion: usize
 pub pdfrum_common::Limits::max_script_stack: usize

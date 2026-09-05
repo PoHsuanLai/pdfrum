@@ -44,6 +44,7 @@ pub use pdfrum::Key
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
 pub use pdfrum::Kid
+pub use pdfrum::LimitExceeded
 pub use pdfrum::Limits
 pub use pdfrum::Link
 pub use pdfrum::Modifiers
@@ -106,6 +107,7 @@ pub use pdfrum::pdf_date
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
+pub pdfrum::Error::Limit(pdfrum_common::limits::LimitExceeded)
 pub pdfrum::Error::Open(pdfrum_parser::doc::LoadError)
 pub pdfrum::Error::Read(pdfrum_parser::error::Error)
 pub pdfrum::Error::Render(pdfrum_render::error::Error)
