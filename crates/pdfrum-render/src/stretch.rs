@@ -340,7 +340,7 @@ struct Rgba32([u32; 4]);
 
 /// One horizontal box pass, pulling rows from whatever yields them.
 ///
-/// The third stage of the pipeline (`docs/design/image-rows.md`): it takes
+/// The third stage of the pipeline: it takes
 /// source-width RGBA rows and gives destination-width ones. It owns exactly
 /// one row of storage, which is the whole point — the intermediate this
 /// replaces was `dest_width * src_height` pixels, materialized in full before
