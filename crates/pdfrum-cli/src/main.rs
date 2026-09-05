@@ -146,7 +146,8 @@ enum Command {
         #[command(subcommand)]
         what: Extract,
     },
-    /// Merge, split, slice, reorder, impose, or make pages from images.
+    /// Merge, split, slice, delete, rotate, reorder, impose, or make pages
+    /// from images.
     Pages {
         #[command(subcommand)]
         what: Pages,
@@ -374,6 +375,30 @@ enum Pages {
         /// Set the kept pages' crop box: `x0,y0,x1,y1` in points.
         #[arg(long, value_name = "BOX")]
         crop: Option<String>,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Drop some pages; the rest keep their order.
+    Delete {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to delete, 1-based: `3`, `1-5`, `2,7,10-end`.
+        #[arg(long, value_name = "RANGE", required = true)]
+        pages: String,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Turn pages by a quarter turn or more, from where each one stands.
+    Rotate {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to turn, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// Degrees clockwise, added to the page's own rotation: 90, 180,
+        /// 270 or -90.
+        #[arg(long, value_name = "DEGREES", allow_negative_numbers = true)]
+        by: i32,
         #[command(flatten)]
         save: SaveArgs,
     },
@@ -1029,24 +1054,40 @@ fn run_pages(what: Pages, password: Option<&str>, term: term::Term) -> anyhow::R
             rotate,
             crop,
             save,
-        } => crop
-            .as_deref()
-            .map(cmd::pages::parse_rect)
-            .transpose()
-            .and_then(|crop| {
-                cmd::pages::slice(
-                    &cmd::pages::Slice {
-                        file: &input.file,
-                        password,
-                        spec: pages.as_deref(),
-                        rotate,
-                        crop,
-                        output: &save.output,
-                        deterministic: save.deterministic,
-                    },
-                    term,
-                )
-            }),
+        } => cmd::pages::slice(
+            &cmd::pages::Slice {
+                file: &input.file,
+                password,
+                spec: pages.as_deref(),
+                rotate,
+                crop: crop.as_deref(),
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
+        Pages::Delete { input, pages, save } => cmd::pages::delete(
+            &input.file,
+            password,
+            &pages,
+            &save.output,
+            save.deterministic,
+            term,
+        ),
+        Pages::Rotate {
+            input,
+            pages,
+            by,
+            save,
+        } => cmd::pages::rotate(
+            &input.file,
+            password,
+            pages.as_deref(),
+            by,
+            &save.output,
+            save.deterministic,
+            term,
+        ),
         Pages::Reorder { input, pages, save } => cmd::pages::reorder(
             &input.file,
             password,
@@ -1064,21 +1105,18 @@ fn run_pages(what: Pages, password: Option<&str>, term: term::Term) -> anyhow::R
             grid,
             sheet,
             save,
-        } => cmd::pages::parse_grid(&grid).and_then(|grid| {
-            let sheet = cmd::pages::parse_size(&sheet)?;
-            cmd::pages::nup(
-                &cmd::pages::Nup {
-                    file: &input.file,
-                    password,
-                    spec: pages.as_deref(),
-                    grid,
-                    sheet,
-                    output: &save.output,
-                    deterministic: save.deterministic,
-                },
-                term,
-            )
-        }),
+        } => cmd::pages::nup(
+            &cmd::pages::Nup {
+                file: &input.file,
+                password,
+                spec: pages.as_deref(),
+                grid: &grid,
+                sheet: &sheet,
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
         Pages::Booklet { input, save } => cmd::pages::booklet(
             &input.file,
             password,

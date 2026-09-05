@@ -230,3 +230,170 @@ fn the_oracle_shows_the_metadata_we_set() {
     }
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+// ---- pages delete, pages rotate --------------------------------------------
+
+/// The rotation of every page of a written file, in order.
+fn rotations(path: &Path) -> Result<Vec<u64>, String> {
+    Ok(info(path)?["page_boxes"]
+        .as_array()
+        .ok_or("no page_boxes")?
+        .iter()
+        .map(|p| p["rotation"].as_u64().unwrap_or(u64::MAX))
+        .collect())
+}
+
+#[test]
+fn rotate_turns_from_where_a_page_stands_and_delete_keeps_the_rest_in_order() {
+    let dir = scratch("pages").unwrap();
+    let all = dir.join("all.pdf");
+    let line = stdout(&[
+        "pages",
+        "rotate",
+        HELLO,
+        "--by",
+        "90",
+        "-o",
+        all.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(line, format!("{}: 2 pages rotated by 90\n", all.display()));
+    assert_eq!(rotations(&all).unwrap(), [90, 90]);
+
+    // Relative: page 1 back by a quarter, then on by three quarters.
+    let back = dir.join("back.pdf");
+    let line = stdout(&[
+        "pages",
+        "rotate",
+        all.to_str().unwrap(),
+        "--pages",
+        "1",
+        "--by",
+        "-90",
+        "-o",
+        back.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(line, format!("{}: 1 page rotated by -90\n", back.display()));
+    assert_eq!(rotations(&back).unwrap(), [0, 90]);
+    let on = dir.join("on.pdf");
+    stdout(&[
+        "pages",
+        "rotate",
+        back.to_str().unwrap(),
+        "--by",
+        "270",
+        "-o",
+        on.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(rotations(&on).unwrap(), [270, 0]);
+
+    // Delete the first page; the page left is the one that stood at 90.
+    let fewer = dir.join("fewer.pdf");
+    let line = stdout(&[
+        "pages",
+        "delete",
+        back.to_str().unwrap(),
+        "--pages",
+        "1",
+        "-o",
+        fewer.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        line,
+        format!("{}: 1 page deleted, 1 left\n", fewer.display())
+    );
+    assert_eq!(rotations(&fewer).unwrap(), [90]);
+    let three = dir.join("three.pdf");
+    let line = stdout(&[
+        "pages",
+        "delete",
+        "fixtures/annotiter.pdf",
+        "--pages",
+        "1,3",
+        "-o",
+        three.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        line,
+        format!("{}: 2 pages deleted, 1 left\n", three.display())
+    );
+
+    let no = dir.join("no.pdf");
+    let err = refused(&[
+        "pages",
+        "delete",
+        HELLO,
+        "--pages",
+        "1-end",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("every page"), "{err}");
+    let err = refused(&[
+        "pages",
+        "rotate",
+        HELLO,
+        "--by",
+        "45",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("--by takes 90, 180, 270 or -90"), "{err}");
+    assert!(!no.exists(), "nothing written on a refusal");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A PNG's width and height, from its IHDR chunk.
+fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let field = |at: usize| {
+        bytes
+            .get(at..at + 4)
+            .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    Some((field(16)?, field(20)?))
+}
+
+#[test]
+fn the_oracle_counts_the_pages_left_and_draws_the_turned_page_on_its_side() {
+    let Some(bin) = oracle_bin() else {
+        return;
+    };
+    let dir = scratch("pages-oracle").unwrap();
+    stdout(&[
+        "pages",
+        "delete",
+        "fixtures/annotiter.pdf",
+        "--pages",
+        "2",
+        "-o",
+        dir.join("fewer.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    let (ok, log) = oracle(&bin, &dir, &["--show-pageinfo"], "fewer.pdf").unwrap();
+    assert!(ok && log.contains("Processed 2 pages."), "{log}");
+
+    // bookmarks.pdf is 612 by 792; turned a quarter, it renders 792 by 612.
+    stdout(&[
+        "pages",
+        "rotate",
+        "fixtures/bookmarks.pdf",
+        "--pages",
+        "1",
+        "--by",
+        "90",
+        "-o",
+        dir.join("turned.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    let (ok, log) = oracle(&bin, &dir, &["--png", "--pages=0"], "turned.pdf").unwrap();
+    assert!(ok, "{log}");
+    let png = std::fs::read(dir.join("turned.pdf.0.png")).unwrap();
+    assert_eq!(png_size(&png), Some((792, 612)));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
