@@ -38,8 +38,9 @@ pub(crate) use substfont::{GlyphSpacingGate, applies_glyph_spacing};
 use crate::FontFlags;
 use crate::glyphs::{Face, GlyphSource};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// What a font wants from substitution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -223,22 +224,72 @@ pub fn resolve_with_options(
     if opts.font_dirs.is_empty() && !opts.system_fonts {
         return resolve(req, &TestFontDb::new(), opts, diags);
     }
-    if opts.font_dirs.is_empty() {
-        // The host's fonts do not change under a running process, and the
-        // scan parses every installed face: measured 2026-09-05 on a host
-        // with 1 183 faces, 0.2 s per scan and one scan per substituted
-        // font. Once per process. A `--font-dir` run is a hermetic test and
-        // stays unshared.
-        static SYSTEM: OnceLock<SystemFontDb> = OnceLock::new();
-        return resolve(
-            req,
-            SYSTEM.get_or_init(|| SystemFontDb::scan(&[])),
-            opts,
-            diags,
-        );
+    let db = scanned(ScanKey::of(&opts.font_dirs));
+    resolve(req, db.as_ref(), opts, diags)
+}
+
+/// Which directories a scan covers — the whole identity of its result.
+///
+/// A scan is a pure function of this key: `fontdb` enumerates exactly these
+/// directories (or, for [`ScanKey::System`], the host's own four), and
+/// nothing else about the process changes what it finds. That is what makes
+/// [`scanned`] safe to memoize on it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum ScanKey {
+    /// The host's own font directories — an empty `font_dirs`.
+    System,
+    /// Exactly these directories, in the order given, and nothing else.
+    Dirs(Vec<PathBuf>),
+}
+
+impl ScanKey {
+    fn of(dirs: &[PathBuf]) -> Self {
+        if dirs.is_empty() {
+            Self::System
+        } else {
+            Self::Dirs(dirs.to_vec())
+        }
     }
-    let db = SystemFontDb::scan(&opts.font_dirs);
-    resolve(req, &db, opts, diags)
+
+    fn dirs(&self) -> &[PathBuf] {
+        match self {
+            Self::System => &[],
+            Self::Dirs(dirs) => dirs,
+        }
+    }
+}
+
+/// The database for `key`, scanned at most once per process.
+///
+/// Font directories do not change under a running process, and a scan reads
+/// every face they hold to describe it — 0.2 s on a host with 1 183 faces
+/// (2026-09-05), and on the oracle's hermetic `test_fonts` 33 MB of reads
+/// costing ~12 ms of kernel time (2026-09-06, `docs/status/cold-start.md`).
+/// The host scan was already cached here; a `--font-dir` scan was not, and
+/// paid that again per substituted font.
+///
+/// The measured corpus does not exercise the second scan — all 22 of the 44
+/// benchmark files that substitute at all substitute exactly once — so this
+/// is a correctness-of-cost fix rather than a win on that corpus: it bounds
+/// a per-font cost to per-process. Memoizing on [`ScanKey`] cannot change an
+/// answer, because the scan is a pure function of the key.
+fn scanned(key: ScanKey) -> Arc<SystemFontDb> {
+    static SCANS: OnceLock<Mutex<HashMap<ScanKey, Arc<SystemFontDb>>>> = OnceLock::new();
+    let scans = SCANS.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Ok(cache) = scans.lock()
+        && let Some(db) = cache.get(&key)
+    {
+        return Arc::clone(db);
+    }
+    // Scanned outside the lock, so one slow scan does not block a thread
+    // asking for a different directory set. Two threads racing the same key
+    // both scan and then agree on whichever result landed first, which is
+    // sound because the scan is a pure function of the key.
+    let db = Arc::new(SystemFontDb::scan(key.dirs()));
+    match scans.lock() {
+        Ok(mut cache) => Arc::clone(cache.entry(key).or_insert(db)),
+        Err(_) => db,
+    }
 }
 
 // The ladder is one ordered sequence: every step reads state the steps above
