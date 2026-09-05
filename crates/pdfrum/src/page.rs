@@ -1,13 +1,13 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
-use pdfrum_common::{Diagnostics, PageIndex};
+use pdfrum_common::{Diagnostics, LimitExceeded, Limits, Operation, PageIndex};
 use pdfrum_object::{Name, Resolve, names};
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
 
 use crate::{
-    Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
-    Word,
+    Annotation, Document, Error, Pixmap, RasterBackend, RenderOptions, RenderSession, Result,
+    TextPage, Word,
 };
 
 /// One page of a [`Document`].
@@ -30,6 +30,11 @@ pub struct Page<'a> {
 
 impl<'a> Page<'a> {
     pub(crate) fn load(doc: &'a Document, index: PageIndex) -> Result<Page<'a>> {
+        // The per-page boundary: a walk over a document that has run out of
+        // time stops at the next page, whatever it was going to do with it.
+        doc.limits
+            .check_deadline(Operation::PageLoad)
+            .map_err(|limit| limit.on_page(index))?;
         let dict = doc.inner.page(index)?;
         let mut diags = Diagnostics::default();
         let (media_box, crop_box) = pdfrum_page::derive_boxes(
@@ -148,9 +153,12 @@ impl<'a> Page<'a> {
     /// # Errors
     ///
     /// [`Error::Render`](crate::Error::Render) when the resulting target would
-    /// be empty or larger than the rasterizer's 65535-pixel limit. Content
-    /// that will not draw is *not* an error: it is recorded as a diagnostic
-    /// and the rest of the page still renders.
+    /// be empty or larger than the rasterizer's 65535-pixel limit, and
+    /// [`Error::Limit`](crate::Error::Limit) when it has more pixels than the
+    /// document's [`Limits::max_render_pixels`] allows — checked before
+    /// anything is allocated or decoded, so a refused request costs nothing.
+    /// Content that will not draw is *not* an error: it is recorded as a
+    /// diagnostic and the rest of the page still renders.
     ///
     /// ```
     /// use pdfrum::{Affine, Document, RenderOptions, VelloCpuBackend};
@@ -189,6 +197,9 @@ impl<'a> Page<'a> {
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
+        // Before `prepare`: the build decodes every image at the device size,
+        // which is the first allocation a too-large request would make.
+        check_pixel_cap(&self.doc.limits, self.display_size(), options)?;
         self.prepare(options, session).render_on(backend, session)
     }
 
@@ -232,6 +243,7 @@ impl<'a> Page<'a> {
         ctx.decode_target = previous;
         PreparedPage {
             doc: self.doc,
+            index: self.index,
             graph: page,
             options: options.clone(),
         }
@@ -247,10 +259,7 @@ impl<'a> Page<'a> {
     /// The truncation, and the reason the box is the *page's* rather than any
     /// image's, are both in [`pdfrum_page::RequestedSize::for_device`].
     fn decode_target(&self, options: &RenderOptions) -> pdfrum_page::RequestedSize {
-        let (pw, ph) = self.display_size();
-        let corners = options
-            .transform
-            .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph));
+        let corners = device_box(self.display_size(), options);
         pdfrum_page::RequestedSize::for_device(corners.width(), corners.height())
     }
 
@@ -261,6 +270,12 @@ impl<'a> Page<'a> {
     /// own that it throws away afterwards; for a run over many pages, or when
     /// the text must be measured with the same fonts a render uses, use
     /// [`Page::text_on`].
+    ///
+    /// Cannot fail, so a [`Limits::deadline`] that has passed answers an
+    /// empty page and records
+    /// [`DiagKind::TimeLimitReached`](crate::DiagKind::TimeLimitReached) on
+    /// [`Document::all_diagnostics`]; the next [`Document::page`] refuses
+    /// with [`Error::Limit`].
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
@@ -730,6 +745,7 @@ impl From<pdfrum_page::Rotation> for Rotation {
 #[derive(Debug)]
 pub struct PreparedPage<'a> {
     doc: &'a Document,
+    index: PageIndex,
     graph: pdfrum_page::Page,
     options: RenderOptions,
 }
@@ -756,10 +772,14 @@ impl PreparedPage<'_> {
         backend: &B,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
+        // Checked here as well as in `Page::render_on`: `prepare` is
+        // infallible, so a page prepared above the cap is refused at the draw.
+        check_pixel_cap(&self.doc.limits, self.graph.display_size(), &self.options)?;
         let inner = self.options.to_inner();
         let mut diags = Diagnostics::default();
         let render_session = pdfrum_render::RenderSession {
             caches: Some(&mut session.caches),
+            deadline: self.doc.limits.deadline.as_ref(),
             ..Default::default()
         };
         let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
@@ -774,8 +794,61 @@ impl PreparedPage<'_> {
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);
-        Ok(pixmap?)
+        pixmap.map_err(|error| match error {
+            // The engine does not know which page it drew; this is where the
+            // message learns it.
+            pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),
+            other => Error::Render(other),
+        })
     }
+}
+
+/// The device box a page of `display_size` points fills under the render
+/// transform — what sizes the target, and what the images are decoded for.
+fn device_box(display_size: (f64, f64), options: &RenderOptions) -> kurbo::Rect {
+    let (pw, ph) = display_size;
+    options
+        .transform
+        .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph))
+}
+
+/// Refuses a render whose target has more pixels than
+/// [`Limits::max_render_pixels`] allows, before anything is allocated.
+///
+/// The size is truncated exactly as the engine's `target_size` truncates it,
+/// so the pixels counted here are the pixels the pixmap would have. An axis
+/// that is not finite or not positive saturates to zero and is the engine's
+/// `TargetEmpty` to report, not this cap's.
+fn check_pixel_cap(
+    limits: &Limits,
+    display_size: (f64, f64),
+    options: &RenderOptions,
+) -> Result<()> {
+    let Some(allowed) = limits.max_render_pixels else {
+        return Ok(());
+    };
+    let corners = device_box(display_size, options);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the engine's own truncation: `as u32` saturates, so a huge, \
+                  negative or NaN axis becomes a reported number rather than \
+                  wrapping"
+    )]
+    let (width, height) = (
+        corners.width().trunc() as u32,
+        corners.height().trunc() as u32,
+    );
+    let asked = u64::from(width) * u64::from(height);
+    if asked > allowed {
+        return Err(LimitExceeded::RenderPixels {
+            width,
+            height,
+            allowed,
+        }
+        .into());
+    }
+    Ok(())
 }
 
 /// How far a Markdown read decodes the page's images: to a pixel, enough

@@ -16,7 +16,7 @@
 // swappable — the Coons scratch buffer.
 
 use kurbo::{Affine, Rect, Shape};
-use pdfrum_common::Diagnostics;
+use pdfrum_common::{Deadline, Diagnostics, Operation};
 use pdfrum_page::{Page, PageObject, Visibility};
 
 use crate::clip;
@@ -70,6 +70,16 @@ pub struct RenderSession<'a> {
     /// needs indirect-object lookup and a mutable evaluation cache, and
     /// consuming the answer needs neither — it is one index per object.
     pub visible: Option<&'a Visibility>,
+    /// When the render must have stopped. `None` — the default — is no
+    /// limit.
+    ///
+    /// Read once before the target is allocated and once per object during
+    /// the walk (nested lists included), so a page that has run out of time
+    /// stops at the next object; the render then fails with
+    /// [`Error::Limit`] rather than returning a pixmap with the rest of the
+    /// page missing. Costs one branch per object when unset. A borrow, like
+    /// the other two: the caller's `Limits` owns it.
+    pub deadline: Option<&'a Deadline>,
 }
 
 /// Render a page into a pixmap.
@@ -116,14 +126,26 @@ pub fn render_page_with<B: RasterBackend>(
     session: RenderSession<'_>,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
-    let RenderSession { caches, visible } = session;
+    let RenderSession {
+        caches,
+        visible,
+        deadline,
+    } = session;
     // The two `None` arms need somewhere to live that outlasts the call, so
     // each default is bound here and borrowed rather than built inline.
     let mut fresh_caches = RenderCaches::new();
     let all_visible = Visibility::all_visible();
     let visible = visible.unwrap_or(&all_visible);
     let caches = caches.unwrap_or(&mut fresh_caches);
-    render_page_inner(page, opts, backend, visible, caches, diags)
+    render_page_inner(page, opts, backend, visible, caches, deadline, diags)
+}
+
+/// `Ok` unless `deadline` is set and has passed.
+fn check_deadline(deadline: Option<&Deadline>) -> Result<(), Error> {
+    match deadline {
+        Some(deadline) => deadline.check(Operation::Render).map_err(Error::Limit),
+        None => Ok(()),
+    }
 }
 
 /// The body both entry points share.
@@ -133,12 +155,20 @@ fn render_page_inner<B: RasterBackend>(
     backend: &B,
     visible: &Visibility,
     caches: &mut RenderCaches,
+    deadline: Option<&Deadline>,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
     let (w, h) = target_size(page, opts)?;
+    // Before the allocation, and again after the walk: a walk that stopped
+    // on the deadline has left the device half-drawn, and the second read is
+    // what turns that into an error rather than a returned pixmap.
+    check_deadline(deadline)?;
     let clear = opts.background_for(needs_alpha_background(page));
     let mut device = backend.new_target(w, h, clear);
-    let ctx = RenderCtx::new(opts.clone(), page.transparency);
+    let ctx = RenderCtx {
+        deadline,
+        ..RenderCtx::new(opts.clone(), page.transparency)
+    };
     let to_device = page_matrix(page, opts);
     let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
 
@@ -153,6 +183,7 @@ fn render_page_inner<B: RasterBackend>(
         device_box,
         diags,
     );
+    check_deadline(deadline)?;
     Ok(backend.finish(device))
 }
 
@@ -320,6 +351,12 @@ pub fn render_object_list<B: RasterBackend>(
     }
     let cull = cull_rect(to_device, device_box);
     for (index, object) in objects.iter().enumerate() {
+        // The deadline is read per object — a draw call — and a list that is
+        // out of time returns; the enclosing list reads it again at its next
+        // object, so the whole walk unwinds without a flag.
+        if ctx.out_of_time() {
+            return;
+        }
         // The visibility gate runs first, exactly where `RenderSingleObject`
         // puts it (`cpdf_renderstatus.cpp:247`): before the clip is pushed,
         // so a hidden object's clip never reaches the device either.

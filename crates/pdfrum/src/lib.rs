@@ -241,7 +241,9 @@ pub use pdfrum_doc::{Action, ActionKind, Dest, Link};
 /// Everything a document reported repairing, working around, or refusing.
 ///
 /// Returned by [`Document::diagnostics`].
-pub use pdfrum_common::{DiagKind, Diagnostic, Diagnostics, Limits, Severity};
+pub use pdfrum_common::{
+    Deadline, DiagKind, Diagnostic, Diagnostics, LimitExceeded, Limits, Operation, Severity,
+};
 
 /// The version a header declares, and the one a save writes back.
 ///
@@ -319,9 +321,11 @@ pub use pdfrum_parser::Error as ReadError;
 /// renamed here: **the variant's name plus `Error`** — [`Error::Open`] wraps
 /// [`OpenError`], [`Error::Read`] wraps [`ReadError`], and so on. Without
 /// them a caller could match `Error::Open(_)` and `Display` what was inside,
-/// and could not write the type to inspect it. [`ObjectError`] is the one
-/// exception: it is not a variant of [`Error`] at all but what
-/// [`Document::fetch`] returns, so it keeps its crate's noun.
+/// and could not write the type to inspect it. Two exceptions keep their
+/// crate's noun: [`ObjectError`], which is not a variant of [`Error`] at all
+/// but what [`Document::fetch`] returns, and [`LimitExceeded`], the payload
+/// of [`Error::Limit`], which is not a member crate's `Error` but the value
+/// every crate answers a caller-set ceiling with.
 pub use pdfrum_parser::LoadError as OpenError;
 /// The error behind [`Error::Render`] — see [`OpenError`] for the naming.
 pub use pdfrum_render::Error as RenderError;

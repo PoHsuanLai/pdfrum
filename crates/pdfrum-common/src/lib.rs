@@ -1,5 +1,7 @@
 //! Shared foundation of the pdfrum workspace: the diagnostics channel for
-//! damage-tolerant parsing, hard resource limits mirroring PDFium's, the
+//! damage-tolerant parsing, hard resource limits mirroring PDFium's (with the
+//! [`Deadline`] a host may add and the [`LimitExceeded`] a host's own ceiling
+//! answers with), the
 //! two vocabulary newtypes every layer speaks in ([`PdfVersion`],
 //! [`PageIndex`]), and a re-export of [`kurbo`] as the workspace-wide geometry
 //! vocabulary (`Affine`, `BezPath`, `Rect`, `Point`). Deliberately tiny — anything that
@@ -26,6 +28,7 @@
 
 #![forbid(unsafe_code)]
 
+mod deadline;
 mod diagnostics;
 mod fasthash;
 mod hex;
@@ -33,11 +36,12 @@ mod limits;
 mod page_index;
 mod version;
 
+pub use deadline::{Deadline, Operation};
 pub use diagnostics::{DiagKind, Diagnostic, Diagnostics, Severity};
 pub use fasthash::{FxBuildHasher, FxHasher};
 pub use hex::hex_digit;
 pub use kurbo;
-pub use limits::Limits;
+pub use limits::{LimitExceeded, Limits};
 pub use page_index::PageIndex;
 pub use version::PdfVersion;
 

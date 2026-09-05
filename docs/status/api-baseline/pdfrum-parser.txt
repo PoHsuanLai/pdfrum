@@ -26,6 +26,7 @@ pub pdfrum_parser::Entry::InObjStream::stream: pdfrum_object::object::ObjRef
 pub pdfrum_parser::Entry::Offset(u64)
 #[non_exhaustive] pub enum pdfrum_parser::Error
 pub pdfrum_parser::Error::Cycle(pdfrum_object::object::ObjRef)
+pub pdfrum_parser::Error::Limit(pdfrum_common::limits::LimitExceeded)
 pub pdfrum_parser::Error::NoCatalog
 pub pdfrum_parser::Error::NoObject(u64)
 pub pdfrum_parser::Error::NoPage(pdfrum_common::page_index::PageIndex)
@@ -36,6 +37,7 @@ impl core::convert::From<pdfrum_parser::Error> for pdfrum_object::error::Error
 pub fn pdfrum_object::error::Error::from(pdfrum_parser::Error) -> Self
 #[non_exhaustive] pub enum pdfrum_parser::LoadError
 pub pdfrum_parser::LoadError::Broken(alloc::string::String)
+pub pdfrum_parser::LoadError::Limit(pdfrum_common::limits::LimitExceeded)
 pub pdfrum_parser::LoadError::NotPdf
 pub pdfrum_parser::LoadError::UnsupportedEncryption(alloc::string::String)
 pub pdfrum_parser::LoadError::WrongPassword

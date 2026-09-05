@@ -31,7 +31,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, PageIndex, PdfVersion, Severity};
+use pdfrum_common::{
+    DiagKind, Diagnostics, LimitExceeded, Limits, Operation, PageIndex, PdfVersion, Severity,
+};
 use pdfrum_crypt::{Permissions, SecurityHandler};
 use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
 
@@ -65,6 +67,11 @@ pub enum LoadError {
     /// cross-reference information, or no catalog with pages in it.
     #[error("damaged beyond recovery: {0}")]
     Broken(String),
+
+    /// The caller's `Limits::deadline` had passed when the open began, or
+    /// passed during the cross-reference rebuild scan.
+    #[error(transparent)]
+    Limit(LimitExceeded),
 }
 
 /// How to open a document.
@@ -181,6 +188,9 @@ struct PageCache {
               what is stored is a slice of it"
 )]
 pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError> {
+    opts.limits
+        .check_deadline(Operation::Open)
+        .map_err(LoadError::Limit)?;
     let mut diags = Diagnostics::default();
     let header_offset = find_header(&bytes, &opts.limits).ok_or(LoadError::NotPdf)?;
     if bytes.len() < header_offset.saturating_add(HEADER_SIZE) {
@@ -200,8 +210,10 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let version = read_version(&body);
 
     let (mut xref, mut trailer, mut xref_shape) =
-        crate::xref::read_xref_full(&body, &opts.limits, &mut diags)
-            .map_err(|e| LoadError::Broken(e.to_string()))?;
+        crate::xref::read_xref_full(&body, &opts.limits, &mut diags).map_err(|e| match e {
+            crate::Error::Limit(limit) => LoadError::Limit(limit),
+            other => LoadError::Broken(other.to_string()),
+        })?;
 
     // First attempt: the catalog has to be reachable *and* have pages in it.
     let mut security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
@@ -216,14 +228,16 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         diags.record(Severity::Recovered, DiagKind::RootRecovered, None);
         let mut fresh = Xref::new();
         let mut fresh_trailer = Trailer::default();
-        if !crate::xref::rebuild(
+        let rebuilt = crate::xref::rebuild(
             &body,
             &mut fresh,
             &mut fresh_trailer,
             &opts.limits,
             &mut diags,
             &NoResolve,
-        ) {
+        )
+        .map_err(LoadError::Limit)?;
+        if !rebuilt {
             return Err(LoadError::Broken("no document catalog".into()));
         }
         xref.merge_up(&fresh);
@@ -244,7 +258,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let page_count = page_count.unwrap_or(0);
     // Read last, from the trailer as it finally stands, so a rebuild that
     // replaced the trailer is reflected.
-    let encrypt = encrypt_dict_located(&body, &xref, &trailer.dict, opts.limits);
+    let encrypt = encrypt_dict_located(&body, &xref, &trailer.dict, &opts.limits);
 
     diags.extend(&store.drain_diags());
 
@@ -304,7 +318,7 @@ fn build_security(
     opts: &LoadOptions,
     diags: &mut Diagnostics,
 ) -> Result<SecurityHandler, LoadError> {
-    let Some(encrypt) = encrypt_dict(body, xref, trailer, opts.limits) else {
+    let Some(encrypt) = encrypt_dict(body, xref, trailer, &opts.limits) else {
         return Ok(SecurityHandler::Identity);
     };
     // The handler name is type-checked before being resolved, so a `/Filter`
@@ -347,7 +361,7 @@ fn build_security(
 /// defines. So the lookup goes through a throwaway store that decrypts
 /// nothing. That is not a shortcut: the encryption dictionary is the one
 /// object in a document that is always plaintext.
-fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: Limits) -> Option<Dict> {
+fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: &Limits) -> Option<Dict> {
     encrypt_dict_located(body, xref, trailer, limits).map(|(d, _)| d)
 }
 
@@ -362,7 +376,7 @@ fn encrypt_dict_located(
     body: &Arc<[u8]>,
     xref: &Xref,
     trailer: &Dict,
-    limits: Limits,
+    limits: &Limits,
 ) -> Option<(Dict, bool)> {
     match trailer.raw(names::ENCRYPT)? {
         Object::Dict(d) => Some((d.clone(), true)),
@@ -370,7 +384,7 @@ fn encrypt_dict_located(
             let plain = ObjectStore::new(
                 Arc::clone(body),
                 xref.clone(),
-                limits,
+                limits.clone(),
                 SecurityHandler::Identity,
             );
             Some((plain.get(r.num).ok()?.as_dict().cloned()?, false))
@@ -404,7 +418,12 @@ fn build_store(
     trailer: &Dict,
     security: SecurityHandler,
 ) -> Arc<ObjectStore> {
-    let mut store = ObjectStore::new(Arc::clone(body), xref.clone(), opts.limits, security);
+    let mut store = ObjectStore::new(
+        Arc::clone(body),
+        xref.clone(),
+        opts.limits.clone(),
+        security,
+    );
     exempt_metadata(&mut store, trailer);
     Arc::new(store)
 }

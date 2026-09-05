@@ -1167,6 +1167,30 @@ fn a_runaway_loop_terminates_with_a_diagnostic() {
     assert!(diags.contains(&pdfrum_common::DiagKind::ScriptLimitReached));
 }
 
+/// A spent `Limits::deadline` refuses the run before it starts, the same
+/// way an exhausted loop budget refuses it midway.
+#[test]
+fn a_spent_deadline_refuses_a_script_as_a_limit() {
+    let mut cascade = bounded(Limits {
+        deadline: Some(pdfrum_common::Deadline::after(std::time::Duration::ZERO)),
+        ..Limits::default()
+    });
+    cascade.set_field(
+        0,
+        "Text Box",
+        "",
+        FieldActions {
+            validate: Some("event.rc = true;".to_string()),
+            ..FieldActions::default()
+        },
+    );
+    assert!(!cascade.validate(&field(), "x"));
+    assert!(cascade.last_stop_was_a_limit());
+    let mut diags = pdfrum_common::Diagnostics::default();
+    cascade.drain_diagnostics(&mut diags);
+    assert!(diags.contains(&pdfrum_common::DiagKind::ScriptLimitReached));
+}
+
 /// Deep recursion stops the same way.
 #[test]
 fn unbounded_recursion_terminates_with_a_diagnostic() {
@@ -1218,7 +1242,7 @@ fn every_hook_refuses_when_its_script_is_stopped() {
         ..Limits::default()
     };
 
-    let mut keystroke = bounded(limits);
+    let mut keystroke = bounded(limits.clone());
     keystroke.set_field(
         0,
         "Text Box",
@@ -1241,7 +1265,7 @@ fn every_hook_refuses_when_its_script_is_stopped() {
         KeystrokeOutcome::Reject
     );
 
-    let mut commit = bounded(limits);
+    let mut commit = bounded(limits.clone());
     commit.set_field(
         0,
         "Text Box",
@@ -1253,7 +1277,7 @@ fn every_hook_refuses_when_its_script_is_stopped() {
     );
     assert!(!commit.keystroke_commit(&field(), "x"));
 
-    let mut validate = bounded(limits);
+    let mut validate = bounded(limits.clone());
     validate.set_field(
         0,
         "Text Box",

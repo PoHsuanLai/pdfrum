@@ -18,6 +18,7 @@ pub use pdfrum::CharIndex
 pub use pdfrum::Color
 pub use pdfrum::ColorMode
 pub use pdfrum::ColorScheme
+pub use pdfrum::Deadline
 pub use pdfrum::Dest
 pub use pdfrum::DiagKind
 pub use pdfrum::Diagnostic
@@ -44,6 +45,7 @@ pub use pdfrum::Key
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
 pub use pdfrum::Kid
+pub use pdfrum::LimitExceeded
 pub use pdfrum::Limits
 pub use pdfrum::Link
 pub use pdfrum::Modifiers
@@ -53,6 +55,7 @@ pub use pdfrum::ObjRef
 pub use pdfrum::Object
 pub use pdfrum::ObjectError
 pub use pdfrum::OpenError
+pub use pdfrum::Operation
 pub use pdfrum::PageBox
 pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
@@ -104,6 +107,7 @@ pub use pdfrum::markdown::render_with_images
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
+pub pdfrum::Error::Limit(pdfrum_common::limits::LimitExceeded)
 pub pdfrum::Error::Open(pdfrum_parser::doc::LoadError)
 pub pdfrum::Error::Read(pdfrum_parser::error::Error)
 pub pdfrum::Error::Render(pdfrum_render::error::Error)
@@ -112,6 +116,10 @@ pub pdfrum::Error::Text(pdfrum_text::error::Error)
 pub pdfrum::Error::WrongPassword
 impl core::convert::From<pdfrum_parser::doc::LoadError> for pdfrum::Error
 pub fn pdfrum::Error::from(pdfrum_parser::doc::LoadError) -> Self
+impl core::convert::From<pdfrum_parser::error::Error> for pdfrum::Error
+pub fn pdfrum::Error::from(pdfrum_parser::error::Error) -> Self
+impl core::convert::From<pdfrum_render::error::Error> for pdfrum::Error
+pub fn pdfrum::Error::from(pdfrum_render::error::Error) -> Self
 pub enum pdfrum::FlattenMode
 pub pdfrum::FlattenMode::Display
 pub pdfrum::FlattenMode::Print
