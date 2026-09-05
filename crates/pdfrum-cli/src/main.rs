@@ -152,6 +152,12 @@ enum Command {
         #[command(subcommand)]
         what: Pages,
     },
+    /// Embedded files: attach some, or take some out. `extract attachments`
+    /// lists them.
+    Attach {
+        #[command(subcommand)]
+        what: Attach,
+    },
     /// The document's /Info metadata: set or clear its keys. `info` shows them.
     Metadata {
         #[command(subcommand)]
@@ -443,6 +449,38 @@ enum Pages {
     Booklet {
         #[command(flatten)]
         input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+#[derive(Subcommand)]
+enum Attach {
+    /// Attach files, each under its own file name.
+    Add {
+        #[command(flatten)]
+        input: Input,
+        /// The files to attach.
+        #[arg(value_name = "PATH", required = true)]
+        paths: Vec<PathBuf>,
+        /// The text a viewer shows beside the name, on every file given.
+        #[arg(long, value_name = "TEXT")]
+        description: Option<String>,
+        /// The MIME type, for a single file; guessed from the extension
+        /// otherwise (pdf, png, jpg, txt, json, csv, xml, zip), else
+        /// `application/octet-stream`.
+        #[arg(long, value_name = "TYPE")]
+        mime: Option<String>,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Take attachments out, by name.
+    Remove {
+        #[command(flatten)]
+        input: Input,
+        /// The names, as `extract attachments` lists them.
+        #[arg(value_name = "NAME", required = true)]
+        names: Vec<String>,
         #[command(flatten)]
         save: SaveArgs,
     },
@@ -809,6 +847,7 @@ fn main() -> ExitCode {
         }),
         Command::Extract { what } => run_extract(what, password, term),
         Command::Pages { what } => run_pages(what, password, term),
+        Command::Attach { what } => run_attach(what, password, term),
         Command::Metadata { what } => run_metadata(what, password, term),
         Command::Forms { what } => run_forms(what, password, term),
         #[cfg(feature = "javascript")]
@@ -1137,6 +1176,37 @@ fn run_scripts(
         Scripts::Run { input, time, json } => {
             cmd::scripts::run(&input.file, password, time, json, term)
         }
+    }
+}
+
+fn run_attach(what: Attach, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
+    match what {
+        Attach::Add {
+            input,
+            paths,
+            description,
+            mime,
+            save,
+        } => cmd::attach::add(
+            &cmd::attach::Add {
+                file: &input.file,
+                password,
+                paths: &paths,
+                description: description.as_deref(),
+                mime: mime.as_deref(),
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
+        Attach::Remove { input, names, save } => cmd::attach::remove(
+            &input.file,
+            password,
+            &names,
+            &save.output,
+            save.deterministic,
+            term,
+        ),
     }
 }
 

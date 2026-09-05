@@ -1,5 +1,6 @@
 //! One module per command family.
 
+pub mod attach;
 pub mod diff;
 pub mod doctor;
 pub mod extract;

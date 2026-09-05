@@ -49,6 +49,12 @@ fn scratch(name: &str) -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name)
+}
+
 /// `pdfrum info --json` of a written file.
 fn info(path: &Path) -> Result<serde_json::Value, String> {
     json(&["info", path.to_str().ok_or("non-utf8 path")?, "--json"])
@@ -395,5 +401,189 @@ fn the_oracle_counts_the_pages_left_and_draws_the_turned_page_on_its_side() {
     assert!(ok, "{log}");
     let png = std::fs::read(dir.join("turned.pdf.0.png")).unwrap();
     assert_eq!(png_size(&png), Some((792, 612)));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+// ---- attach add, attach remove ---------------------------------------------
+
+const WITH_FOUR: &str = "fixtures/embedded_attachments_with_desc.pdf";
+
+/// `extract attachments --json` of a written file, written into `into`.
+fn attachments(path: &Path, into: &Path) -> Result<serde_json::Value, String> {
+    json(&[
+        "extract",
+        "attachments",
+        path.to_str().ok_or("non-utf8 path")?,
+        "-o",
+        into.to_str().ok_or("non-utf8 path")?,
+        "--json",
+    ])
+}
+
+#[test]
+fn attach_add_names_and_types_the_files_and_refuses_a_name_twice() {
+    let dir = scratch("attach").unwrap();
+    let notes = dir.join("notes.txt");
+    std::fs::write(&notes, "Read me").unwrap();
+    let added = dir.join("added.pdf");
+    let line = stdout(&[
+        "attach",
+        "add",
+        HELLO,
+        "fixtures/mona_lisa.jpg",
+        notes.to_str().unwrap(),
+        "--description",
+        "for the record",
+        "-o",
+        added.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(line, format!("{}: 2 attachments added\n", added.display()));
+    let back = dir.join("back");
+    let rows = attachments(&added, &back).unwrap();
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["name"], "mona_lisa.jpg", "sorted by name");
+    assert_eq!(rows[0]["subtype"], "image/jpeg");
+    assert_eq!(rows[0]["description"], "for the record");
+    assert_eq!(rows[1]["name"], "notes.txt");
+    assert_eq!(rows[1]["subtype"], "text/plain");
+    assert_eq!(rows[1]["size"], 7);
+    assert_eq!(
+        std::fs::read(back.join("mona_lisa.jpg")).unwrap(),
+        std::fs::read(fixture("mona_lisa.jpg")).unwrap()
+    );
+    assert_eq!(std::fs::read(back.join("notes.txt")).unwrap(), b"Read me");
+
+    // --mime for one file overrides the guess; two files with it is refused.
+    let typed = dir.join("typed.pdf");
+    stdout(&[
+        "attach",
+        "add",
+        added.to_str().unwrap(),
+        "--mime",
+        "text/markdown",
+        "fixtures/bug_740166_expected.txt",
+        "--deterministic",
+        "-o",
+        typed.to_str().unwrap(),
+    ])
+    .unwrap();
+    let rows = attachments(&typed, &dir.join("back2")).unwrap();
+    assert_eq!(rows.as_array().map(Vec::len), Some(3));
+    assert_eq!(rows[0]["name"], "bug_740166_expected.txt");
+    assert_eq!(rows[0]["subtype"], "text/markdown");
+    let no = dir.join("no.pdf");
+    let err = refused(&[
+        "attach",
+        "add",
+        HELLO,
+        "--mime",
+        "text/plain",
+        notes.to_str().unwrap(),
+        "fixtures/mona_lisa.jpg",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("--mime names one type"), "{err}");
+    let err = refused(&[
+        "attach",
+        "add",
+        added.to_str().unwrap(),
+        notes.to_str().unwrap(),
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("already attached"), "{err}");
+
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn attach_remove_takes_the_names_out_and_refuses_one_that_is_not_there() {
+    let dir = scratch("attach-remove").unwrap();
+    let no = dir.join("no.pdf");
+    let fewer = dir.join("fewer.pdf");
+    let line = stdout(&[
+        "attach",
+        "remove",
+        WITH_FOUR,
+        "2.txt",
+        "4.txt",
+        "-o",
+        fewer.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        line,
+        format!("{}: 2 attachments removed\n", fewer.display())
+    );
+    let rows = attachments(&fewer, &dir.join("back3")).unwrap();
+    let names: Vec<&str> = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["1.txt", "3.txt"]);
+    let err = refused(&[
+        "attach",
+        "remove",
+        fewer.to_str().unwrap(),
+        "2.txt",
+        "-o",
+        no.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(err.contains("no attachment named \"2.txt\""), "{err}");
+    assert!(!no.exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn the_oracle_saves_what_we_attached_and_not_what_we_removed() {
+    let Some(bin) = oracle_bin() else {
+        return;
+    };
+    let dir = scratch("attach-oracle").unwrap();
+    let every_byte: Vec<u8> = (0..=255u8).collect::<Vec<u8>>().repeat(16);
+    std::fs::write(dir.join("bytes.bin"), &every_byte).unwrap();
+    stdout(&[
+        "attach",
+        "add",
+        WITH_FOUR,
+        dir.join("bytes.bin").to_str().unwrap(),
+        "-o",
+        dir.join("added.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    stdout(&[
+        "attach",
+        "remove",
+        dir.join("added.pdf").to_str().unwrap(),
+        "3.txt",
+        "-o",
+        dir.join("removed.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    // The exit status is not the verdict: pdfium_test reports the attachment
+    // feature itself as unsupported and exits non-zero, having written
+    // every file. The log and the files are.
+    let (_, log) = oracle(&bin, &dir, &["--save-attachments"], "removed.pdf").unwrap();
+    for name in ["1.txt", "2.txt", "4.txt", "bytes.bin"] {
+        assert!(
+            log.contains(&format!(
+                "Successfully wrote attachment removed.pdf.attachment.{name}"
+            )),
+            "{log}"
+        );
+    }
+    assert!(!log.contains("3.txt"), "removed: {log}");
+    assert_eq!(
+        std::fs::read(dir.join("removed.pdf.attachment.bytes.bin")).unwrap(),
+        every_byte
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
