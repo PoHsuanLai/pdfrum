@@ -122,6 +122,24 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Peers: `hayro`, `pdf-render` (render); `pdf-extract`, `pdf`, `hayro-interpret`, `pdf_oxide` (text); `lopdf`, `pdf` (parse/write); baselines `pdfium-render`, `mupdf`; MinerU-rs and Python MinerU (Markdown).
 - Axes: correctness against the oracle first, then speed, memory, cost of adoption, coverage matrix; one script under `benches/compare/` behind a `compare` feature; losses published.
 
+## Dead-code audit (user, 2026-09-05) — landed 2026-09-05
+
+- An external audit named five dead items, a dead forwarder, a duplicated
+  shading ramp, triplicated name constants and four `hex_value` copies. A
+  read-only agent verified each claim first; a second agent did the work in
+  a worktree, eight commits, board byte-identical. Landed: `debug_runs`,
+  `UndoStack::is_enabled`, `GlyphSource::gid_for_unicode`,
+  `EditDoc::next_object_number`, pdfrum-page's `ColorSteps`/`color_steps`
+  deleted; twelve names promoted to pdfrum-object's table with one
+  spelling (`EXT_G_STATE`), local copies gone from four crates; one
+  `pdfrum_common::hex_digit` for the five copies (the audit said four).
+- Two of the audit's claims were wrong and were left alone:
+  `pdfrum_parser::decoded_stream` has callers in pdfrum-edit's import;
+  `COLOR_TRANSFORM` is pdfrum-edit's alone.
+- `Doc.calculateNow` (`take_calculate_request`) is a missed wire, not dead
+  code: registered as item 6 of `docs/status/unwired-oracle-ports.md`
+  with the oracle lines; wiring it is three changes in the form pipeline.
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
