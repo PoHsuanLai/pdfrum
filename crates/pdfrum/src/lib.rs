@@ -94,7 +94,7 @@ pub use document::{
 };
 #[cfg(feature = "edit")]
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
-pub use error::{Error, Result};
+pub use error::{Error, ErrorCode, Result};
 #[cfg(feature = "edit")]
 pub use flatten::{FlattenMode, Flattened};
 #[cfg(feature = "forms")]
