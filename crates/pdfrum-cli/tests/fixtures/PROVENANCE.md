@@ -34,3 +34,12 @@ Each row says which command's expected output in `../expected/` it pins.
 | `bug_1484283.pdf` | 1.4 KB | Two revisions, a classic table then an update with a cross-reference stream and an object stream — `inspect revisions`, `inspect revision --rev 1`, `inspect xref` with an in-stream entry. |
 | `bigtable_mini.pdf` | 2.2 KB | A subset CFF program in `/FontFile3` — `extract fonts` lists it as `cff`. |
 | `bug_488948351.pdf` | 2.4 KB | A subset TrueType program in `/FontFile2` — `extract fonts` writes it as `.ttf`. |
+| `console_methods.pdf` | 903 B | A document script that calls the `console` methods and alerts once — `scripts run` prints `console_methods_expected.txt`, PDFium's own expected transcript, copied beside it. |
+| `bug_740166.pdf` | 1.2 KB | Four `util.printf` alerts — `scripts run` prints `bug_740166_expected.txt`; `--json` gives four `{line}` objects. |
+
+One fixture is ours, not PDFium's:
+
+| File | Size | What it exercises |
+|---|---|---|
+| `open_action_echo.pdf` | 1.2 KB | Written by hand (2026-09-05): two text fields, `source` and `echo`, and an `/OpenAction` script that copies `source` into `echo` with a `!` — `forms fill --scripts` writes the assignment back; the save Flate-encodes the script stream, which the action reader must decode. |
+

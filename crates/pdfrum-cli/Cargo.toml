@@ -17,6 +17,14 @@ path = "src/main.rs"
 # ones that matter, so the binary's are off.
 doc = false
 
+[features]
+# Off by default, as in the facade: the document's own JavaScript, run by a
+# pure-Rust engine (boa). It is about 137 more crates and 12 MB more binary
+# (stripped), and it executes script out of untrusted documents — a
+# different posture from rendering, which is why a default `pdfrum` has
+# neither the `scripts` command nor `forms fill --scripts`.
+javascript = ["pdfrum/javascript"]
+
 [lints]
 workspace = true
 

@@ -289,6 +289,12 @@ which is Rust syscall constants) and `cargo deny`:
 | `clap_complete` | `=4.6.9` | `pdfrum completions <shell>`, generated from the clap tree so it cannot drift from the parser. |
 | `clap_mangen` | `=0.3.3` | `pdfrum manpage -o DIR`, one roff page per command from the same tree. Brings `roff`, Rust only. |
 
+The command line's `javascript` feature (2026-09-05) is the facade's
+`javascript` feature forwarded — `boa` and the ~137 crates behind it, all
+pure Rust, already audited above — and adds no dependency of its own.
+Off by default, for the binary size (+12 MB stripped) and because it runs
+script out of untrusted documents.
+
 Three the design named and this table does not: **`viuer`** — its
 half-block path depends on `ansi_colours`, LGPL-3.0-or-later, which the
 allowlist above refuses, so the three picture protocols (kitty, iTerm2,
