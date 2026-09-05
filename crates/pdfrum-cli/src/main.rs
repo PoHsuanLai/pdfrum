@@ -54,19 +54,21 @@ enum Command {
     /// Summarize a document: pages, metadata, security, signatures, identity.
     Info {
         #[command(flatten)]
-        input: Input,
-        /// One JSON document instead of the text summary.
+        inputs: Inputs,
+        /// One JSON document instead of the text summary; an array of them
+        /// for several files.
         #[arg(long)]
         json: bool,
     },
     /// Report what the parser had to recover or drop, without touching the file.
     Doctor {
         #[command(flatten)]
-        input: Input,
-        /// One JSON document instead of the text report.
+        inputs: Inputs,
+        /// One JSON document instead of the text report; an array of them
+        /// for several files.
         #[arg(long)]
         json: bool,
-        /// Exit 3 when anything at all was recorded.
+        /// Exit 3 when anything at all was recorded, in any of the files.
         #[arg(long)]
         strict: bool,
         /// Also build every page and extract its text, so what only a page
@@ -94,22 +96,7 @@ enum Command {
         page: u32,
     },
     /// Find text, `grep`-style: every hit with its line and page.
-    Search {
-        /// What to look for.
-        #[arg(value_name = "TEXT")]
-        needle: String,
-        #[command(flatten)]
-        input: Input,
-        /// Match regardless of case.
-        #[arg(short, long)]
-        ignore_case: bool,
-        /// Pages to search, 1-based. All by default.
-        #[arg(long, value_name = "RANGE")]
-        pages: Option<String>,
-        /// One JSON document: an array of hits with page, offsets, line and boxes.
-        #[arg(long)]
-        json: bool,
-    },
+    Search(SearchArgs),
     /// Render pages to PNG files.
     Render {
         #[command(flatten)]
@@ -209,8 +196,8 @@ enum Command {
     /// hash that ignores timestamps and layout on disk.
     Hash {
         #[command(flatten)]
-        input: Input,
-        /// One JSON document.
+        inputs: Inputs,
+        /// One JSON document; an array of them for several files.
         #[arg(long)]
         json: bool,
     },
@@ -590,37 +577,64 @@ struct Input {
     file: PathBuf,
 }
 
+/// The documents a command reads when it takes several: one answer per
+/// file, a file that cannot be opened reported and skipped, exit 1 at the
+/// end if any was.
+#[derive(Args)]
+struct Inputs {
+    /// The PDF files; `-` reads one from stdin.
+    #[arg(value_name = "FILE", required = true)]
+    files: Vec<PathBuf>,
+}
+
+/// `search`'s arguments: `grep`'s, as far as a document has them.
+#[derive(Args)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "command-line switches: each is a flag a person types"
+)]
+struct SearchArgs {
+    /// What to look for.
+    #[arg(value_name = "TEXT")]
+    needle: String,
+    #[command(flatten)]
+    inputs: Inputs,
+    /// Match regardless of case.
+    #[arg(short, long)]
+    ignore_case: bool,
+    /// Pages to search, 1-based. All by default.
+    #[arg(long, value_name = "RANGE")]
+    pages: Option<String>,
+    /// Prefix every hit with its file, as `grep -H` does; the default when
+    /// more than one file is searched.
+    #[arg(short = 'H', long, conflicts_with = "no_filename")]
+    with_filename: bool,
+    /// Never prefix a hit with its file.
+    #[arg(long)]
+    no_filename: bool,
+    /// One JSON document: an array of hits with page, offsets, line and
+    /// boxes; for several files, an array of `{file, hits}`.
+    #[arg(long)]
+    json: bool,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let password = cli.password.as_deref();
     let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
     let outcome = match cli.command {
-        Command::Info { input, json } => cmd::info::run(&input.file, password, json, term),
+        Command::Info { inputs, json } => cmd::info::run(&inputs.files, password, json, term),
         Command::Doctor {
-            input,
+            inputs,
             json,
             strict,
             scan_all,
-        } => cmd::doctor::run(&input.file, password, json, strict, scan_all, term),
+        } => cmd::doctor::run(&inputs.files, password, json, strict, scan_all, term),
         Command::Preview { input, page, width } => {
             cmd::terminal::preview(&input.file, password, page, width, term)
         }
         Command::View { input, page } => cmd::terminal::view(&input.file, password, page, term),
-        Command::Search {
-            needle,
-            input,
-            ignore_case,
-            pages,
-            json,
-        } => cmd::terminal::search(
-            &input.file,
-            password,
-            &needle,
-            ignore_case,
-            pages.as_deref(),
-            json,
-            term,
-        ),
+        Command::Search(args) => run_search(&args, password, term),
         Command::Render {
             input,
             output,
@@ -676,20 +690,42 @@ fn main() -> ExitCode {
             json,
             term,
         }),
-        Command::Hash { input, json } => cmd::hash::run(&input.file, password, json, term),
+        Command::Hash { inputs, json } => cmd::hash::run(&inputs.files, password, json, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
         Command::Manpage { output } => cmd::shell::manpage(&output, term),
     };
     match outcome {
         Ok(code) => code,
         Err(err) => {
-            eprintln!(
-                "{}",
-                term.paint(term::Style::Error, &format!("pdfrum: {}", error_line(&err)))
-            );
+            out::error(term, &err);
             ExitCode::from(1)
         }
     }
+}
+
+fn run_search(
+    args: &SearchArgs,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
+    cmd::terminal::search(
+        &cmd::terminal::Search {
+            files: &args.inputs.files,
+            password,
+            needle: &args.needle,
+            ignore_case: args.ignore_case,
+            spec: args.pages.as_deref(),
+            with_filename: if args.with_filename {
+                Some(true)
+            } else if args.no_filename {
+                Some(false)
+            } else {
+                None
+            },
+            json: args.json,
+        },
+        term,
+    )
 }
 
 fn run_extract(
@@ -931,22 +967,4 @@ fn run_forms(what: Forms, password: Option<&str>, term: term::Term) -> anyhow::R
             term,
         ),
     }
-}
-
-/// The error's causes, outermost first, joined by `: ` — with a cause
-/// left out when the message above it already quotes it, which the
-/// library's errors do, so nothing is said twice.
-fn error_line(err: &anyhow::Error) -> String {
-    let mut line = String::new();
-    for cause in err.chain() {
-        let text = cause.to_string();
-        if line.contains(&text) {
-            continue;
-        }
-        if !line.is_empty() {
-            line.push_str(": ");
-        }
-        line.push_str(&text);
-    }
-    line
 }

@@ -8,7 +8,7 @@
 //!   only in timestamps, object order on disk or whitespace hash the same.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -16,6 +16,7 @@ use pdfrum::{Dict, Name, Object, Resolve};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::out::outln;
 use crate::term::Term;
 use crate::{out, syntax};
 
@@ -29,42 +30,57 @@ struct Report {
     objects: usize,
 }
 
-pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
-    let doc = out::open_quietly(file, password)?;
+pub fn run(files: &[PathBuf], password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+    let (reports, failed) = out::per_file(files, term, |file| {
+        let doc = out::open_quietly(file, password)?;
+        Ok(report(&doc, file))
+    });
+    if json {
+        out::documents(files, &reports)?;
+    } else {
+        for (i, report) in reports.iter().enumerate() {
+            if i > 0 {
+                outln!();
+            }
+            print(report, term);
+        }
+    }
+    Ok(out::exit(failed, ExitCode::SUCCESS))
+}
+
+fn report(doc: &pdfrum::Document, file: &Path) -> Report {
     // The document keeps the file's bytes whole, so the file hash is over
     // them — which is also what makes `-` work.
     let sha256 = hex(&Sha256::digest(doc.bytes()));
     let id = doc.id().map(|[a, b]| [hex(&a), hex(&b)]);
-    let (semantic, objects) = semantic(&doc);
-    let report = Report {
+    let (semantic, objects) = semantic(doc);
+    Report {
         file: file.display().to_string(),
         sha256,
         id,
         semantic,
         objects,
-    };
-    if json {
-        out::json(&report)?;
-    } else {
-        let id = report.id.as_ref().map(|[a, b]| {
-            if a == b {
-                a.clone()
-            } else {
-                format!("{a} (created)\n{b} (this revision)")
-            }
-        });
-        out::record(
-            term,
-            &[
-                ("file", Some(report.file.clone())),
-                ("file hash", Some(report.sha256.clone())),
-                ("document id", id),
-                ("content hash", Some(report.semantic.clone())),
-                ("objects", Some(report.objects.to_string())),
-            ],
-        );
     }
-    Ok(ExitCode::SUCCESS)
+}
+
+fn print(report: &Report, term: Term) {
+    let id = report.id.as_ref().map(|[a, b]| {
+        if a == b {
+            a.clone()
+        } else {
+            format!("{a} (created)\n{b} (this revision)")
+        }
+    });
+    out::record(
+        term,
+        &[
+            ("file", Some(report.file.clone())),
+            ("file hash", Some(report.sha256.clone())),
+            ("document id", id),
+            ("content hash", Some(report.semantic.clone())),
+            ("objects", Some(report.objects.to_string())),
+        ],
+    );
 }
 
 /// The semantic digest and how many objects went into it.

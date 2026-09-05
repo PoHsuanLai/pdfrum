@@ -2,7 +2,8 @@
 //! shares.
 
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
 use pdfrum::{Document, OpenOptions, Rect};
@@ -100,6 +101,72 @@ pub fn stem(file: &Path) -> String {
 /// A notice: `pdfrum: <file>: <what happened>` on stderr, one line.
 pub fn notice(file: &Path, what: &str) {
     eprintln!("pdfrum: {}: {what}", file.display());
+}
+
+/// An error: `pdfrum: <what failed>: <why>` on stderr, in `Error`.
+pub fn error(term: Term, err: &anyhow::Error) {
+    eprintln!(
+        "{}",
+        term.paint(Style::Error, &format!("pdfrum: {}", error_line(err)))
+    );
+}
+
+/// The error's causes, outermost first, joined by `: ` — with a cause
+/// left out when the message above it already quotes it, which the
+/// library's errors do, so nothing is said twice.
+pub fn error_line(err: &anyhow::Error) -> String {
+    let mut line = String::new();
+    for cause in err.chain() {
+        let text = cause.to_string();
+        if line.contains(&text) {
+            continue;
+        }
+        if !line.is_empty() {
+            line.push_str(": ");
+        }
+        line.push_str(&text);
+    }
+    line
+}
+
+/// `each` over several files the way `grep` goes: a file that fails is
+/// reported on stderr and the run continues with the next. Returns what
+/// the files that worked gave, and whether any failed — which is exit 1 at
+/// the end, after everything that could be answered was.
+pub fn per_file<T>(
+    files: &[PathBuf],
+    term: Term,
+    mut each: impl FnMut(&Path) -> Result<T>,
+) -> (Vec<T>, bool) {
+    let mut results = Vec::with_capacity(files.len());
+    let mut failed = false;
+    for file in files {
+        match each(file) {
+            Ok(result) => results.push(result),
+            Err(err) => {
+                error(term, &err);
+                failed = true;
+            }
+        }
+    }
+    (results, failed)
+}
+
+/// The JSON of a command given several files: the one document when one
+/// file was named, the array of per-file documents otherwise.
+pub fn documents<T: Serialize>(files: &[PathBuf], reports: &[T]) -> Result<()> {
+    if files.len() == 1 {
+        return match reports.first() {
+            Some(report) => json(report),
+            None => Ok(()),
+        };
+    }
+    json(&reports)
+}
+
+/// Exit 1 when a file among several failed, else `otherwise`.
+pub fn exit(failed: bool, otherwise: ExitCode) -> ExitCode {
+    if failed { ExitCode::from(1) } else { otherwise }
 }
 
 /// Where a writing command's result goes: the file named, or stdout for
