@@ -12,8 +12,12 @@ categories = ["text-processing", "parser-implementations"]
 # `include_bytes!`s it, so a build without it does not compile. The ICU
 # property dump it was generated *from* is the build script's input, not the
 # library's, and stays out of the package (see `tables/PROVENANCE.md`).
+# `tests/files/hello.pdf` is a doctest fixture: the crate-root and query
+# examples `include_bytes!` it, so a build from the package without it fails
+# to compile the documentation tests.
 include = [
     "src/**",
+    "tests/files/**",
     "tables/unicode.bin",
     "tables/unicode.manifest.json",
     "tables/PROVENANCE.md",
