@@ -102,11 +102,49 @@ the whole image.
 
 1. `Taps`/`Weight` in fixed point (pixel-identical only if the tap positions
    come out the same — the test is the board).
-2. `Unpacked` and `Converted` as row stages, `to_pixmap` rewritten on them
-   (still producing the full pixmap): the unpack pass disappears.
+2. `Converted` as a row stage, `to_pixmap` rewritten on it (still producing
+   the full pixmap): the per-pixel sampling entry points disappear.
+   *Narrowed while landing:* `Unpacked` and `Depth` moved to step 5 — see
+   below — because removing the `unpack` pass is a public API change in
+   crates this pass was not allowed to touch.
 3. `Narrowed` and `Shortened`, `reduce_to` rewritten to pull rows from
    `Converted`: the full-size RGBA copy and the two intermediates go.
 4. `Placement::Exact` and the nearest draw, gated on the board.
 
 Each step: `Ir` before/after on the guide and `vector_en_tem`, the ratchet,
 the board.
+
+## Step 5 — lazy `unpack`
+
+Deferred out of step 2 and not yet done. Worth **292 M `Ir`** on the guide
+(`unpack` inclusive, measured at step 1), which is the last large block of
+the image path this pass does not reach.
+
+`unpack` today widens every packed sample to eight bits per component in one
+pass over the whole image, and returns a `Pixels` that `ImageData` then owns.
+That is the pass to make lazy: `Unpacked` becomes a row stage driven by a
+`Depth::{One, Two, Four, Eight, Sixteen}`, sitting *before* `Converted`, and
+`ImageData` carries the still-packed bytes plus the geometry needed to walk
+them rather than a materialized `Pixels`.
+
+It could not land with step 2 because `Pixels` is a public enum and
+`ImageData::pixels` a public field, and four consumers outside this pass's
+crates read or build them:
+
+- `crates/pdfrum-page/src/build.rs:1845` and `:1886` —
+  `matches!(image.pixels, Pixels::Stencil(_))` to set `ImageObject::is_mask`.
+  Inside `pdfrum-page`, so this one is free to change with the rest.
+- `crates/pdfrum/src/edit.rs:452` — **constructs** an `ImageData` literal with
+  `pixels: Pixels::Gray8(Box::new([0]))` as the placeholder an edited image
+  carries until the file is saved.
+- `crates/pdfrum-cli/src/cmd/pages.rs:593`–`652` — matches `Pixels::Jpeg` and
+  `Pixels::Raw` and constructs both, for image extraction and replacement.
+
+Inside `image/` the same value is also read by `resolve_color_key`,
+`mask_plane`, `separate_mask` and `ImageData::byte_size` (the render cache's
+budget), all of which move with it.
+
+So the step is: make `Unpacked` and `Depth`, put them ahead of `Converted`,
+change `ImageData`/`Pixels` to carry packed samples, update those four
+consumers, and refresh the API snapshot baselines. It needs the facade and
+the CLI to be free, which they were not while this pass ran.
