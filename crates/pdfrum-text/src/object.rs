@@ -428,3 +428,38 @@ fn collect(objects: &[PageObject], next: &mut u32, out: &mut Vec<TextRun>) {
         }
     }
 }
+
+/// The flattened walk index of each *page-level* text object, ascending.
+///
+/// [`walk`] numbers every object it reaches, descending into forms; the
+/// page-global orientation guess counts only the objects the page itself
+/// lists (a form object is not a text object, so its contents never reach
+/// the mask). This reproduces `collect`'s numbering without building
+/// anything, so the guess can read the runs [`walk`] already built instead
+/// of building them a second time.
+#[must_use]
+pub fn top_level_text_indices(objects: &[PageObject]) -> Vec<ObjectIndex> {
+    let mut out = Vec::new();
+    let mut next = 0u32;
+    for object in objects {
+        let index = ObjectIndex(next);
+        next = next.saturating_add(1);
+        match object {
+            PageObject::Text(_) => out.push(index),
+            PageObject::Form(content) => next = skip(&content.object.objects, next),
+            PageObject::Path(_) | PageObject::Image(_) | PageObject::Shading(_) => {}
+        }
+    }
+    out
+}
+
+/// Advances the walk counter past a subtree without building anything.
+fn skip(objects: &[PageObject], mut next: u32) -> u32 {
+    for object in objects {
+        next = next.saturating_add(1);
+        if let PageObject::Form(content) = object {
+            next = skip(&content.object.objects, next);
+        }
+    }
+    next
+}

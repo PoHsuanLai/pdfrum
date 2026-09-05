@@ -8,8 +8,7 @@
 // direction of its own. (`docs/design/pdfrum-text.md` §1.4, §1.8.)
 
 use crate::object::TextRun;
-use kurbo::Rect;
-use pdfrum_page::{Page, PageObject};
+use pdfrum_page::Page;
 
 /// Which way a line of text runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -41,7 +40,7 @@ pub enum Orientation {
 /// - **The page dimensions truncate toward zero**, and so does twice the line
 ///   height, because both are `int32_t` in the C++.
 #[must_use]
-pub fn page_flow(page: &Page) -> Orientation {
+pub fn page_flow(page: &Page, runs: &[TextRun]) -> Orientation {
     let (width, height) = page.display_size();
     #[expect(
         clippy::cast_possible_truncation,
@@ -63,11 +62,20 @@ pub fn page_flow(page: &Page) -> Orientation {
     let (mut start_h, mut end_h) = (page_width, 0usize);
     let (mut start_v, mut end_v) = (page_height, 0usize);
 
-    for object in &page.objects {
-        let PageObject::Text(content) = object else {
-            continue;
+    let mut runs = runs.iter();
+    for index in crate::object::top_level_text_indices(&page.objects) {
+        // Both sequences are ascending in the same flattened numbering, so
+        // one forward scan pairs a page-level text object with the run
+        // `walk` already built for it. A text object with no font builds no
+        // run and is simply not found -- the same objects the old rebuild
+        // skipped, since it read `build`'s `None` as an empty rect.
+        let Some(run) = runs.find(|run| run.index.0 >= index.0) else {
+            break;
         };
-        let rect = object_rect(content);
+        if run.index != index {
+            continue;
+        }
+        let rect = run.rect;
         let clamp = |value: f64, limit: usize| -> usize {
             #[expect(
                 clippy::cast_possible_truncation,
@@ -125,12 +133,6 @@ pub fn page_flow(page: &Page) -> Orientation {
     } else {
         Orientation::Unknown
     }
-}
-
-/// The bounding box a text object reports, which is the transformed glyph
-/// extent, stroke-inflated when the render mode strokes.
-fn object_rect(content: &pdfrum_page::Content<pdfrum_page::TextObject>) -> Rect {
-    crate::object::build(content, crate::ObjectIndex(0)).map_or(Rect::ZERO, |run| run.rect)
 }
 
 /// The fraction of a mask's cells that are set over `start..end`, or zero for
@@ -216,12 +218,13 @@ mod tests {
     )]
 
     use super::*;
+    use kurbo::Rect;
 
     #[test]
     fn a_zero_sized_page_has_no_orientation() {
         let mut page = Page::empty();
         page.crop_box = Rect::ZERO;
-        assert_eq!(page_flow(&page), Orientation::Unknown);
+        assert_eq!(page_flow(&page, &[]), Orientation::Unknown);
     }
 
     #[test]
@@ -233,7 +236,7 @@ mod tests {
         // consequence matters because a page whose text lives entirely inside
         // form XObjects scans nothing and lands here.)
         let page = Page::empty();
-        assert_eq!(page_flow(&page), Orientation::Horizontal);
+        assert_eq!(page_flow(&page, &[]), Orientation::Horizontal);
     }
 
     #[test]
