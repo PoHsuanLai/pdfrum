@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Condvar, Mutex};
 
@@ -100,19 +101,21 @@ struct Frame {
     picture: Picture,
 }
 
-/// The bytes of a frame: kitty's are a PNG the pager stores in the
-/// terminal once and places by id; the others draw inline at the cursor
-/// (half-block rows carry their margin).
+/// The bytes of a frame: a PNG for the pixel protocols (kitty stores it
+/// once and places it by id; iTerm2 draws it inline, sized in cells), or
+/// half-block rows carrying their own margin.
 enum Picture {
-    Kitty(Vec<u8>),
-    Inline(Vec<u8>),
+    Png(Vec<u8>),
+    Halfblock(Vec<u8>),
 }
 
-/// Frames rendered so far, and a bell for the one being waited on.
+/// Frames rendered so far, a bell for the one being waited on, and the
+/// word to stop.
 #[derive(Default)]
 struct Cache {
     frames: Mutex<HashMap<Key, Result<Frame, String>>>,
     ready: Condvar,
+    stop: AtomicBool,
 }
 
 /// The page fits the screen at zoom 100 — the width less one column, the
@@ -173,10 +176,10 @@ fn render_frame(
             session,
         )
         .map_err(|e| e.to_string())?;
-    let picture = if graphics == Graphics::Kitty {
-        Picture::Kitty(pixmap.encode_png().map_err(|e| e.to_string())?)
+    let picture = if graphics == Graphics::Halfblock {
+        Picture::Halfblock(term::picture(&pixmap, graphics, layout.cols, layout.pad))
     } else {
-        Picture::Inline(term::picture(&pixmap, graphics, layout.cols, layout.pad))
+        Picture::Png(pixmap.encode_png().map_err(|e| e.to_string())?)
     };
     Ok(Frame { layout, picture })
 }
@@ -192,6 +195,9 @@ fn render_worker(doc: &Document, requests: &Receiver<Key>, cache: &Cache, graphi
             batch.push(key);
         }
         for key in batch {
+            if cache.stop.load(Ordering::Relaxed) {
+                return;
+            }
             let cached = cache
                 .frames
                 .lock()
@@ -242,7 +248,9 @@ impl Pager<'_> {
                 format!("  [/{}: n next]", self.needle)
             }
         );
-        let width = usize::from(cols);
+        // One cell short of the width: writing the last cell of the last
+        // row arms the terminal's pending wrap, and the next byte scrolls.
+        let width = usize::from(cols.saturating_sub(1));
         let line: String = text.chars().take(width).collect();
         execute!(stdout, cursor::MoveTo(0, row))?;
         write!(
@@ -278,8 +286,10 @@ impl Pager<'_> {
     ) -> Result<()> {
         use crossterm::{cursor, execute, terminal};
         execute!(stdout, terminal::BeginSynchronizedUpdate)?;
+        // The picture may be at most one row short of the status row.
+        let rows = frame.layout.rows.min(status_row);
         match &frame.picture {
-            Picture::Kitty(png) => {
+            Picture::Png(png) if self.term.graphics == Graphics::Kitty => {
                 let id = self.transmit(stdout, key, png)?;
                 if let Some(old) = self.placed.replace(id)
                     && old != id
@@ -288,21 +298,26 @@ impl Pager<'_> {
                     stdout.write_all(format!("\x1b_Ga=d,d=i,q=2,i={old}\x1b\\").as_bytes())?;
                 }
                 execute!(stdout, cursor::MoveTo(frame.layout.pad, 0))?;
-                stdout.write_all(&term::kitty_place(id))?;
+                stdout.write_all(&term::kitty_place(id, frame.layout.cols, rows))?;
             }
-            Picture::Inline(bytes) => {
-                let pad = if self.term.graphics == Graphics::Halfblock {
-                    0
-                } else {
-                    frame.layout.pad
-                };
-                execute!(stdout, cursor::MoveTo(pad, 0))?;
-                stdout.write_all(bytes)?;
+            Picture::Png(png) => {
+                execute!(stdout, cursor::MoveTo(frame.layout.pad, 0))?;
+                stdout.write_all(&term::iterm_cells(png, frame.layout.cols, rows))?;
+            }
+            Picture::Halfblock(bytes) => {
+                execute!(stdout, cursor::MoveTo(0, 0))?;
+                // Rows carry their margin; only as many as fit above the bar.
+                for row in bytes
+                    .split_inclusive(|&b| b == b'\n')
+                    .take(usize::from(rows))
+                {
+                    stdout.write_all(row)?;
+                }
             }
         }
         execute!(
             stdout,
-            cursor::MoveTo(0, frame.layout.rows.min(status_row)),
+            cursor::MoveTo(0, rows),
             terminal::Clear(terminal::ClearType::FromCursorDown)
         )?;
         execute!(stdout, terminal::EndSynchronizedUpdate)?;
@@ -329,7 +344,7 @@ impl Pager<'_> {
                 continue;
             }
             if let Some(Ok(Frame {
-                picture: Picture::Kitty(png),
+                picture: Picture::Png(png),
                 ..
             })) = frames.get(&key)
             {
@@ -464,62 +479,69 @@ pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Resu
         .context("cannot switch screens")?;
     let cache = Cache::default();
     let (requests, inbox) = mpsc::channel::<Key>();
+    // The sender lives inside the scope: dropping it closes the channel,
+    // which is what lets the render thread finish and the scope end.
     // Whatever happens below, the terminal comes back.
     let outcome = std::thread::scope(|scope| -> Result<()> {
+        let requests = requests;
         let (doc_ref, cache_ref, graphics) = (&doc, &cache, term.graphics);
         scope.spawn(move || render_worker(doc_ref, &inbox, cache_ref, graphics));
-        loop {
-            let (cols, rows) = term::size();
-            let key = Key {
-                page: pager.page,
-                zoom: pager.zoom,
-                cols,
-                rows,
-            };
-            // This page first, then the ones a keypress is likely to want.
-            let ahead: Vec<Key> = [key.page + 1, key.page.wrapping_sub(1), key.page + 2]
-                .into_iter()
-                .filter(|&p| p < count)
-                .map(|p| Key { page: p, ..key })
-                .collect();
-            for wanted in std::iter::once(key).chain(ahead.iter().copied()) {
-                let _ = requests.send(wanted);
-            }
-            let status_row = rows.saturating_sub(1);
-            wait_for(&cache, key, || {
-                pager.status(&mut stdout, cols, status_row, "  rendering")
-            })?;
-            {
-                let frames = cache
-                    .frames
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("the render thread panicked"))?;
-                match frames.get(&key) {
-                    Some(Ok(frame)) => pager.draw(&mut stdout, key, frame, status_row)?,
-                    Some(Err(e)) => {
-                        execute!(
-                            stdout,
-                            terminal::Clear(terminal::ClearType::All),
-                            cursor::MoveTo(0, 0)
-                        )?;
-                        write!(stdout, "cannot render page {}: {e}", key.page + 1)?;
+        let result = (|| -> Result<()> {
+            loop {
+                let (cols, rows) = term::size();
+                let key = Key {
+                    page: pager.page,
+                    zoom: pager.zoom,
+                    cols,
+                    rows,
+                };
+                // This page first, then the ones a keypress is likely to want.
+                let ahead: Vec<Key> = [key.page + 1, key.page.wrapping_sub(1), key.page + 2]
+                    .into_iter()
+                    .filter(|&p| p < count)
+                    .map(|p| Key { page: p, ..key })
+                    .collect();
+                for wanted in std::iter::once(key).chain(ahead.iter().copied()) {
+                    let _ = requests.send(wanted);
+                }
+                let status_row = rows.saturating_sub(1);
+                wait_for(&cache, key, || {
+                    pager.status(&mut stdout, cols, status_row, "  rendering")
+                })?;
+                {
+                    let frames = cache
+                        .frames
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("the render thread panicked"))?;
+                    match frames.get(&key) {
+                        Some(Ok(frame)) => pager.draw(&mut stdout, key, frame, status_row)?,
+                        Some(Err(e)) => {
+                            execute!(
+                                stdout,
+                                terminal::Clear(terminal::ClearType::All),
+                                cursor::MoveTo(0, 0)
+                            )?;
+                            write!(stdout, "cannot render page {}: {e}", key.page + 1)?;
+                        }
+                        None => {}
                     }
-                    None => {}
+                }
+                pager.status(&mut stdout, cols, status_row, "")?;
+                pager.prune(&mut stdout, &cache, key)?;
+                pager.transmit_ahead(&mut stdout, &cache, &ahead)?;
+                if let Event::Key(KeyEvent {
+                    code, modifiers, ..
+                }) = read()?
+                    && pager.keypress(code, modifiers, &mut stdout, status_row)?
+                {
+                    return Ok(());
                 }
             }
-            pager.status(&mut stdout, cols, status_row, "")?;
-            pager.prune(&mut stdout, &cache, key)?;
-            pager.transmit_ahead(&mut stdout, &cache, &ahead)?;
-            if let Event::Key(KeyEvent {
-                code, modifiers, ..
-            }) = read()?
-                && pager.keypress(code, modifiers, &mut stdout, status_row)?
-            {
-                return Ok(());
-            }
-        }
+        })();
+        cache.stop.store(true, Ordering::Relaxed);
+        drop(requests);
+        result
     });
-    drop(requests);
     let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
     let _ = terminal::disable_raw_mode();
     outcome?;

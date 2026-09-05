@@ -263,8 +263,27 @@ pub fn kitty_transmit(id: u32, png: &[u8]) -> Vec<u8> {
     kitty_chunks(png, &format!("a=t,f=100,q=2,i={id}"))
 }
 
-pub fn kitty_place(id: u32) -> Vec<u8> {
-    format!("\x1b_Ga=p,q=2,i={id}\x1b\\").into_bytes()
+/// Draw image `id` at the cursor, scaled into exactly `cols` by `rows`
+/// cells (`c=`, `r=`), and leave the cursor where it is (`C=1`) — so a
+/// picture can never run past the row it was given and scroll the screen.
+pub fn kitty_place(id: u32, cols: u16, rows: u16) -> Vec<u8> {
+    format!("\x1b_Ga=p,q=2,i={id},c={cols},r={rows},C=1\x1b\\").into_bytes()
+}
+
+/// iTerm2 inline image of `png`, sized in cells rather than pixels, so it
+/// fills the box it was laid out for and no more.
+pub fn iterm_cells(png: &[u8], cols: u16, rows: u16) -> Vec<u8> {
+    let mut out = Vec::with_capacity(png.len() * 4 / 3 + 64);
+    out.extend_from_slice(
+        format!(
+            "\x1b]1337;File=inline=1;size={};width={cols};height={rows};preserveAspectRatio=1:",
+            png.len()
+        )
+        .as_bytes(),
+    );
+    out.extend_from_slice(base64(png).as_bytes());
+    out.extend_from_slice(b"\x07");
+    out
 }
 
 pub fn kitty_delete(id: u32) -> Vec<u8> {
@@ -382,7 +401,9 @@ pub fn base64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Graphics, base64, halfblock, kitty, kitty_delete, kitty_place, kitty_transmit};
+    use super::{
+        Graphics, base64, halfblock, iterm_cells, kitty, kitty_delete, kitty_place, kitty_transmit,
+    };
     use pdfrum::Pixmap;
 
     #[test]
@@ -408,7 +429,15 @@ mod tests {
             stored.starts_with(b"\x1b_Ga=t,f=100,q=2,i=7,m=0;"),
             "{stored:?}"
         );
-        assert_eq!(kitty_place(7), b"\x1b_Ga=p,q=2,i=7\x1b\\");
+        assert_eq!(
+            kitty_place(7, 57, 40),
+            b"\x1b_Ga=p,q=2,i=7,c=57,r=40,C=1\x1b\\"
+        );
+        let cells = iterm_cells(b"png-bytes", 57, 40);
+        assert!(
+            cells.starts_with(b"\x1b]1337;File=inline=1;size=9;width=57;height=40;"),
+            "{cells:?}"
+        );
         assert_eq!(kitty_delete(7), b"\x1b_Ga=d,d=I,q=2,i=7\x1b\\");
         let h = String::from_utf8(halfblock(&pixmap, 2, 0)).unwrap();
         assert_eq!(
