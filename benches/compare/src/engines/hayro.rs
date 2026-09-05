@@ -18,15 +18,62 @@ use kurbo::{Affine, BezPath, Rect};
 use crate::engines::unsupported;
 use crate::model::{Ctx, Op, Output, Raster, Timed};
 
-fn load(path: &Path) -> Result<Pdf> {
+fn load(path: &Path, ctx: &Ctx<'_>) -> Result<Pdf> {
     let bytes = std::fs::read(path)?;
-    Pdf::new(bytes).map_err(|err| anyhow!("hayro: {err:?}"))
+    match ctx.password {
+        Some(password) => Pdf::new_with_password(bytes, password),
+        None => Pdf::new(bytes),
+    }
+    .map_err(|err| anyhow!("hayro: {err:?}"))
+}
+
+fn settings(ctx: &Ctx<'_>) -> RenderSettings {
+    let scale = ctx.scale() as f32;
+    RenderSettings {
+        x_scale: scale,
+        y_scale: scale,
+        width: None,
+        height: None,
+        bg_color: hayro::vello_cpu::color::palette::css::WHITE,
+    }
+}
+
+/// Every page on `threads` threads sharing one `Pdf`, each thread with its
+/// own `RenderCache` (which holds `Rc`s and cannot cross threads).
+pub fn render_all(path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
+    let pdf = load(path, ctx)?;
+    let pages = pdf.pages();
+    let count = pages.len();
+    let threads = threads.clamp(1, count.max(1));
+    let settings = settings(ctx);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|first| {
+                scope.spawn(move || {
+                    let cache = RenderCache::new();
+                    let interpreter = InterpreterSettings::default();
+                    for index in (first..count).step_by(threads) {
+                        if let Some(page) = pages.get(index) {
+                            hayro::render(page, &cache, &interpreter, &settings);
+                        }
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle
+                .join()
+                .map_err(|_| anyhow!("hayro: render thread panicked"))?;
+        }
+        Ok::<(), anyhow::Error>(())
+    })?;
+    Ok(count)
 }
 
 pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     match op {
         Op::Open => {
-            let (times_ms, pages) = ctx.measure(|| Ok(load(path)?.pages().len()))?;
+            let (times_ms, pages) = ctx.measure(|| Ok(load(path, ctx)?.pages().len()))?;
             Ok(Timed {
                 times_ms,
                 output: Output::Opened {
@@ -36,21 +83,14 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             })
         }
         Op::Render => {
-            let pdf = load(path)?;
+            let pdf = load(path, ctx)?;
             let page = pdf
                 .pages()
                 .first()
                 .ok_or_else(|| anyhow!("hayro: no pages"))?;
             let cache = RenderCache::new();
             let interpreter = InterpreterSettings::default();
-            let scale = ctx.scale() as f32;
-            let settings = RenderSettings {
-                x_scale: scale,
-                y_scale: scale,
-                width: None,
-                height: None,
-                bg_color: hayro::vello_cpu::color::palette::css::WHITE,
-            };
+            let settings = settings(ctx);
             let (times_ms, pixmap) =
                 ctx.measure(|| Ok(hayro::render(page, &cache, &interpreter, &settings)))?;
             Ok(Timed {
@@ -75,7 +115,7 @@ pub fn run_text(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     if op != Op::Text {
         return Err(unsupported("hayro-interpret", op));
     }
-    let pdf = load(path)?;
+    let pdf = load(path, ctx)?;
     let page = pdf
         .pages()
         .first()

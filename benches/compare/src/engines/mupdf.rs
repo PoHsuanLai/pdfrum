@@ -8,15 +8,39 @@ use mupdf::{Colorspace, Document, Matrix, TextExtractOptions};
 
 use crate::model::{Ctx, Op, Output, Raster, Timed};
 
-fn open(path: &Path) -> Result<Document> {
-    Document::open(path).map_err(|err| anyhow!("mupdf: {err}"))
+fn open(path: &Path, ctx: &Ctx<'_>) -> Result<Document> {
+    let mut doc = Document::open(path).map_err(|err| anyhow!("mupdf: {err}"))?;
+    if let Some(password) = ctx.password
+        && !doc
+            .authenticate(password)
+            .map_err(|err| anyhow!("mupdf: {err}"))?
+    {
+        return Err(anyhow!("mupdf: password rejected"));
+    }
+    Ok(doc)
+}
+
+/// Every page, one thread, through the wrapper's single context.
+pub fn render_all(path: &Path, ctx: &Ctx<'_>) -> Result<usize> {
+    let doc = open(path, ctx)?;
+    let count = doc.page_count().map_err(|err| anyhow!("mupdf: {err}"))?;
+    let scale = ctx.scale() as f32;
+    let matrix = Matrix::new_scale(scale, scale);
+    let colorspace = Colorspace::device_rgb();
+    for index in 0..count {
+        doc.load_page(index)
+            .map_err(|err| anyhow!("mupdf: {err}"))?
+            .to_pixmap(&matrix, &colorspace, false, true)
+            .map_err(|err| anyhow!("mupdf: {err}"))?;
+    }
+    Ok(count as usize)
 }
 
 pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     match op {
         Op::Open => {
             let (times_ms, pages) = ctx.measure(|| {
-                let doc = open(path)?;
+                let doc = open(path, ctx)?;
                 Ok(doc.page_count().map_err(|err| anyhow!("mupdf: {err}"))? as usize)
             })?;
             Ok(Timed {
@@ -28,7 +52,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             })
         }
         Op::Render => {
-            let doc = open(path)?;
+            let doc = open(path, ctx)?;
             let page = doc.load_page(0).map_err(|err| anyhow!("mupdf: {err}"))?;
             let scale = ctx.scale() as f32;
             let matrix = Matrix::new_scale(scale, scale);
@@ -55,7 +79,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             })
         }
         Op::Text => {
-            let doc = open(path)?;
+            let doc = open(path, ctx)?;
             let page = doc.load_page(0).map_err(|err| anyhow!("mupdf: {err}"))?;
             let (times_ms, text) = ctx.measure(|| {
                 page.text(TextExtractOptions::default())
