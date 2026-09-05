@@ -1,6 +1,6 @@
 #!/usr/bin/env nu
 # Time the PDFium oracle over the same fixtures `benches/` measures, so the
-# two columns in docs/status/M8.md describe the same work on the same files.
+# two columns in the internal working notes describe the same work on the same files.
 #
 # Usage: scripts/bench-oracle.nu [path-to-pdfium_test] [repeats] [rounds] [dir]
 #

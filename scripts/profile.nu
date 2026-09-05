@@ -14,7 +14,7 @@
 #             spellings `exact` and `vello` are still accepted by the binary:
 #             the crates were renamed `pdfrum-raster-exact` -> `-agg` and
 #             `-vello` -> `-vello-cpu`, and the aliases keep the commands in
-#             docs/status/M12*.md runnable.)
+#             the internal working notes runnable.)
 #   --warm    hold ONE `RenderSession` across every iteration instead of
 #             building a fresh one per iteration. This is the difference
 #             between the `render-cold-*` and `render-warm-*` criterion groups,
@@ -34,7 +34,7 @@
 #             about a third of a path-heavy render for the phase split, a few
 #             percent for the stage split, all of it `Instant::now()` pairs — so
 #             read shares from a `--walk` run and absolute milliseconds from a
-#             plain one. See docs/status/M12b-P2.md §3.
+#             plain one. See the internal working notes
 #
 # THE TWO ALTITUDES, AND WHY THE STAGE SPLIT EXISTS
 #
@@ -66,7 +66,7 @@
 # The gap is not small. `vector_en_tem` reports 34 ms plain and 6.2 ms under
 # `--sample`; 82% of the plain figure is the rebuild. An A/B of an engine change
 # run on the plain loop is therefore mostly an A/B of the parser, and
-# docs/status/M12b-P3.md §4 records one that produced a reproducible +5%
+# the internal working notes records one that produced a reproducible +5%
 # "regression" which survived a bisection and did not exist.
 #
 # **A/B engine work on `--sample`.** Use the plain loop when the page build is
@@ -90,7 +90,7 @@
 # repetition re-loads and re-renders the page while `CPDF_PageImageCache` and
 # the font database stay warm across all n. Dividing a cold pdfrum figure by
 # that column measures our worst case against their best one and calls the
-# quotient a speed ratio; docs/status/M12.md §1.8 is the correction, and it is
+# quotient a speed ratio; the internal working notes is the correction, and it is
 # what moved the published geomean from 3.58x to 0.97x with no code change.
 #
 # So: **every oracle-relative figure is taken with `--warm`.** Note what warm
@@ -117,8 +117,8 @@
 #
 # THE `forms` OP: WHAT IT MEASURES AND WHY IT IS THIS AND NOT `pdfrum-form`
 #
-# docs/status/M12.md §11 names `forms` at 3.35x warm as the milestone's largest
-# residue, and docs/status/M12b.md §9 records that no item since has re-measured
+# the internal working notes names `forms` at 3.35x warm as the milestone's largest
+# residue, and the internal working notes records that no item since has re-measured
 # it. Four ops existed and none of them could see inside that class: `render`
 # renders a forms document exactly as it renders any other, so it reproduces the
 # number without decomposing it.
