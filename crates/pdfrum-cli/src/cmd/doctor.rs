@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use pdfrum::{Diagnostic, Diagnostics, Severity};
+use pdfrum::{Diagnostic, Document, Severity};
 use serde::Serialize;
 
 use crate::out;
@@ -13,7 +13,7 @@ use crate::out::{Align, Table, outln};
 use crate::term::{Style, Term};
 
 #[derive(Serialize)]
-struct Report {
+pub struct Report {
     file: String,
     xref_rebuilt: bool,
     recovered: usize,
@@ -41,18 +41,9 @@ pub fn run(
 ) -> Result<ExitCode> {
     let (reports, failed) = out::per_file(files, term, |file| {
         let doc = out::open_quietly(file, password)?;
-        if scan_all {
-            // A page's own notices surface when it is built; text extraction
-            // builds every page and touches every font without rasterizing.
-            for page in doc.pages() {
-                drop(page.text());
-            }
-        }
-        let diags = doc.all_diagnostics();
-        Ok((report(&diags, &doc, file), !diags.is_empty()))
+        Ok(report(&doc, file, scan_all))
     });
-    let found = reports.iter().any(|(_, found)| *found);
-    let reports: Vec<&Report> = reports.iter().map(|(r, _)| r).collect();
+    let found = reports.iter().any(|r| !r.notices.is_empty());
     if json {
         out::documents(files, &reports)?;
     } else {
@@ -73,7 +64,17 @@ pub fn run(
     ))
 }
 
-fn report(diags: &Diagnostics, doc: &pdfrum::Document, file: &Path) -> Report {
+/// What the parser recorded for `doc`; `scan_all` builds every page first,
+/// so what only a page load would find is found now.
+pub fn report(doc: &Document, file: &Path, scan_all: bool) -> Report {
+    if scan_all {
+        // A page's own notices surface when it is built; text extraction
+        // builds every page and touches every font without rasterizing.
+        for page in doc.pages() {
+            drop(page.text());
+        }
+    }
+    let diags = doc.all_diagnostics();
     let mut entries: Vec<&Diagnostic> = diags.entries().iter().collect();
     // Offset order tells the story of the file front to back; the notices
     // without an offset are about the document as a whole and come first.

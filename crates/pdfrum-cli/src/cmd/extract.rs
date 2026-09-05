@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use pdfrum::{Document, LinkTarget};
+use pdfrum::{Document, LinkTarget, PageImage};
 use serde::Serialize;
 
 use crate::out::{self, Align, JsonRect, Table, out, outln};
@@ -15,19 +15,13 @@ use crate::term::{Style, Term};
 // ---- text -----------------------------------------------------------------
 
 #[derive(Serialize)]
-struct PageText {
+pub struct PageText {
     page: u32,
     text: String,
 }
 
-pub fn text(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    layout: bool,
-    json: bool,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// The text of the selected pages, one entry per page.
+pub fn page_texts(doc: &Document, spec: Option<&str>, layout: bool) -> Result<Vec<PageText>> {
     let selected = pages::select(spec, doc.page_count())?;
     let mut out_pages = Vec::with_capacity(selected.len());
     for index in selected {
@@ -43,6 +37,18 @@ pub fn text(
             },
         });
     }
+    Ok(out_pages)
+}
+
+pub fn text(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    layout: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let out_pages = page_texts(&doc, spec, layout)?;
     if json {
         out::json(&out_pages)?;
     } else {
@@ -64,7 +70,7 @@ pub fn text(
 // ---- words ----------------------------------------------------------------
 
 #[derive(Serialize)]
-struct WordRow {
+pub struct WordRow {
     page: u32,
     text: String,
     /// The word's box in page space, points, y-up.
@@ -84,14 +90,7 @@ struct WordRow {
 
 /// Every word on the selected pages in reading order, with its box, font
 /// and size: the shape an extraction or citation pipeline wants.
-pub fn words(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+pub fn word_rows(doc: &Document, spec: Option<&str>) -> Result<Vec<WordRow>> {
     let mut rows = Vec::new();
     for index in pages::select(spec, doc.page_count())? {
         let page = doc.page(index)?;
@@ -111,6 +110,18 @@ pub fn words(
             });
         }
     }
+    Ok(rows)
+}
+
+pub fn words(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = word_rows(&doc, spec)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -140,9 +151,22 @@ pub fn words(
 // ---- markdown -------------------------------------------------------------
 
 #[derive(Serialize)]
-struct PageMarkdown {
+pub struct PageMarkdown {
     page: u32,
     markdown: String,
+}
+
+/// The selected pages as Markdown, one entry per page.
+pub fn page_markdown(doc: &Document, spec: Option<&str>) -> Result<Vec<PageMarkdown>> {
+    let mut out_pages = Vec::new();
+    for index in pages::select(spec, doc.page_count())? {
+        let page = doc.page(index)?;
+        out_pages.push(PageMarkdown {
+            page: out::page_number(page.index()),
+            markdown: page.markdown(),
+        });
+    }
+    Ok(out_pages)
 }
 
 /// The pages as Markdown, one document, a horizontal rule between pages.
@@ -153,14 +177,7 @@ pub fn markdown(
     json: bool,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
-    let mut out_pages = Vec::new();
-    for index in pages::select(spec, doc.page_count())? {
-        let page = doc.page(index)?;
-        out_pages.push(PageMarkdown {
-            page: out::page_number(page.index()),
-            markdown: page.markdown(),
-        });
-    }
+    let out_pages = page_markdown(&doc, spec)?;
     if json {
         out::json(&out_pages)?;
     } else {
@@ -177,7 +194,7 @@ pub fn markdown(
 // ---- links ----------------------------------------------------------------
 
 #[derive(Serialize)]
-struct LinkRow {
+pub struct LinkRow {
     page: u32,
     rect: JsonRect,
     /// `page`, `uri`, `text` (a URL found in the text, not an annotation) or
@@ -189,14 +206,8 @@ struct LinkRow {
     uri: Option<String>,
 }
 
-pub fn links(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// The link annotations and the URLs in the text of the selected pages.
+pub fn link_rows(doc: &Document, spec: Option<&str>) -> Result<Vec<LinkRow>> {
     let mut rows = Vec::new();
     for index in pages::select(spec, doc.page_count())? {
         let page = doc.page(index)?;
@@ -228,6 +239,18 @@ pub fn links(
             }
         }
     }
+    Ok(rows)
+}
+
+pub fn links(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = link_rows(&doc, spec)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -271,24 +294,28 @@ fn page_url(file: &Path, page: u32) -> String {
 // ---- toc ------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct TocRow {
+pub struct TocRow {
     depth: usize,
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     page: Option<u32>,
 }
 
-pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
-    let rows: Vec<TocRow> = doc
-        .outline()
+/// The outline, one row per bookmark, in document order.
+pub fn toc_rows(doc: &Document) -> Vec<TocRow> {
+    doc.outline()
         .iter()
         .map(|b| TocRow {
             depth: b.depth(),
             title: b.title(),
             page: b.page_index().map(out::page_number),
         })
-        .collect();
+        .collect()
+}
+
+pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = toc_rows(&doc);
     if json {
         out::json(&rows)?;
     } else if rows.is_empty() {
@@ -309,7 +336,7 @@ pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resul
 // ---- attachments ----------------------------------------------------------
 
 #[derive(Serialize)]
-struct AttachmentRow {
+pub struct AttachmentRow {
     name: String,
     size: Option<usize>,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -320,14 +347,8 @@ struct AttachmentRow {
     written: Option<String>,
 }
 
-pub fn attachments(
-    file: &Path,
-    password: Option<&str>,
-    dir: Option<&Path>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// The embedded files, written into `dir` when one is given.
+pub fn attachment_rows(doc: &Document, dir: Option<&Path>) -> Result<Vec<AttachmentRow>> {
     let mut rows = Vec::new();
     for a in doc.attachments() {
         let data = a.data();
@@ -356,6 +377,18 @@ pub fn attachments(
             written,
         });
     }
+    Ok(rows)
+}
+
+pub fn attachments(
+    file: &Path,
+    password: Option<&str>,
+    dir: Option<&Path>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = attachment_rows(&doc, dir)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -384,7 +417,7 @@ pub fn attachments(
 // ---- annotations ----------------------------------------------------------
 
 #[derive(Serialize)]
-struct AnnotationRow {
+pub struct AnnotationRow {
     page: u32,
     subtype: String,
     rect: JsonRect,
@@ -399,14 +432,8 @@ struct AnnotationRow {
     modified: Option<String>,
 }
 
-pub fn annotations(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// Every annotation on the selected pages.
+pub fn annotation_rows(doc: &Document, spec: Option<&str>) -> Result<Vec<AnnotationRow>> {
     let mut rows = Vec::new();
     for index in pages::select(spec, doc.page_count())? {
         let page = doc.page(index)?;
@@ -424,6 +451,18 @@ pub fn annotations(
             });
         }
     }
+    Ok(rows)
+}
+
+pub fn annotations(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let rows = annotation_rows(&doc, spec)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -467,7 +506,7 @@ pub fn annotations(
 // ---- signatures -----------------------------------------------------------
 
 #[derive(Serialize)]
-struct SignatureRow {
+pub struct SignatureRow {
     sub_filter: Option<String>,
     reason: Option<String>,
     time: Option<String>,
@@ -516,7 +555,8 @@ pub fn signatures(file: &Path, password: Option<&str>, json: bool, term: Term) -
     Ok(ExitCode::SUCCESS)
 }
 
-fn signature_rows(doc: &Document) -> Vec<SignatureRow> {
+/// The signature fields, in document order.
+pub fn signature_rows(doc: &Document) -> Vec<SignatureRow> {
     doc.signatures()
         .iter()
         .map(|s| SignatureRow {
@@ -537,9 +577,9 @@ fn signature_rows(doc: &Document) -> Vec<SignatureRow> {
 const TINY: u32 = 4;
 
 #[derive(Serialize)]
-struct ImageRow {
+pub struct ImageRow {
     page: u32,
-    index: usize,
+    pub index: usize,
     /// The image `XObject`'s object number, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     object: Option<u32>,
@@ -555,25 +595,15 @@ struct ImageRow {
     written: Option<String>,
 }
 
-/// Every image on the selected pages; `-o DIR` writes them out, JPEG and
-/// JPEG 2000 data untouched, everything else decoded to PNG.
-pub fn images(
-    file: &Path,
-    password: Option<&str>,
+/// Every image on the selected pages, one row per picture with the picture
+/// beside it: the same `XObject` placed on ten pages is one image with ten
+/// uses, and only what has no object (an inline image) is listed per draw.
+/// `all` lists every draw, spacers included.
+pub fn image_rows(
+    doc: &Document,
     spec: Option<&str>,
-    dir: Option<&Path>,
     all: bool,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
-    if let Some(dir) = dir {
-        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    }
-    let stem = out::stem(file);
-    // One row per picture, not per draw: the same XObject placed on ten
-    // pages is one image with ten uses. Only what has no object (an
-    // inline image) is listed per draw.
+) -> Result<Vec<(ImageRow, PageImage)>> {
     let mut seen: Vec<(Option<pdfrum::ObjRef>, usize)> = Vec::new();
     let mut rows = Vec::new();
     let mut pictures = Vec::new();
@@ -608,15 +638,35 @@ pub fn images(
         }
     }
     for (row, image) in rows.iter_mut().zip(&pictures) {
-        let native = image
-            .raw
-            .as_ref()
-            .map(|r| (r.encoding.extension(), &r.data));
-        row.format = native.map_or("png", |(ext, _)| ext);
+        row.format = image.raw.as_ref().map_or("png", |r| r.encoding.extension());
+    }
+    Ok(rows.into_iter().zip(pictures).collect())
+}
+
+/// Every image on the selected pages; `-o DIR` writes them out, JPEG and
+/// JPEG 2000 data untouched, everything else decoded to PNG.
+pub fn images(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    dir: Option<&Path>,
+    all: bool,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let stem = out::stem(file);
+    let (mut rows, pictures): (Vec<ImageRow>, Vec<PageImage>) =
+        image_rows(&doc, spec, all)?.into_iter().unzip();
+    for (row, image) in rows.iter_mut().zip(&pictures) {
+        let native = image.raw.as_ref().map(|r| &r.data);
         if let Some(dir) = dir {
             let path = dir.join(format!("{stem}-{}.{}", row.index, row.format));
             match native {
-                Some((_, data)) => std::fs::write(&path, data).map_err(anyhow::Error::from),
+                Some(data) => std::fs::write(&path, data).map_err(anyhow::Error::from),
                 None => image.pixmap().save_png(&path).map_err(anyhow::Error::from),
             }
             .with_context(|| format!("cannot write {}", path.display()))?;
@@ -666,7 +716,7 @@ pub fn images(
 // ---- fonts ----------------------------------------------------------------
 
 #[derive(Serialize)]
-struct FontRow {
+pub struct FontRow {
     name: String,
     /// `type1`, `truetype`, `cff` or `opentype`.
     kind: &'static str,
@@ -676,19 +726,10 @@ struct FontRow {
     written: Option<String>,
 }
 
-/// The font programs embedded in the document; `-o DIR` writes each one
-/// out under its base name with the extension its format takes.
-pub fn fonts(
-    file: &Path,
-    password: Option<&str>,
-    dir: Option<&Path>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
-    if let Some(dir) = dir {
-        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    }
+/// The font programs embedded in the document, each written into `dir`
+/// under its base name with the extension its format takes when a
+/// directory is given.
+pub fn font_rows(doc: &Document, dir: Option<&Path>) -> Result<Vec<FontRow>> {
     let mut rows = Vec::new();
     for font in doc.embedded_fonts() {
         let written = match dir {
@@ -723,6 +764,21 @@ pub fn fonts(
             written,
         });
     }
+    Ok(rows)
+}
+
+pub fn fonts(
+    file: &Path,
+    password: Option<&str>,
+    dir: Option<&Path>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let rows = font_rows(&doc, dir)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {

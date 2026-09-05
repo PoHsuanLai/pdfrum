@@ -406,10 +406,40 @@ pub fn base64(bytes: &[u8]) -> String {
     out
 }
 
+/// The inverse of [`base64`]: standard alphabet, padding optional,
+/// whitespace ignored; `None` for any other character or a length that no
+/// encoding produces.
+pub fn unbase64(text: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0;
+    for c in text.bytes() {
+        let sextet = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            b' ' | b'\n' | b'\r' | b'\t' => continue,
+            _ => return None,
+        };
+        acc = (acc << 6) | u32::from(sextet);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push(u8::try_from((acc >> bits) & 0xff).ok()?);
+        }
+    }
+    // A single leftover sextet is a length no encoder produces.
+    (bits < 6).then_some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         Graphics, base64, halfblock, iterm_cells, kitty, kitty_delete, kitty_place, kitty_transmit,
+        unbase64,
     };
     use pdfrum::Pixmap;
 
@@ -420,6 +450,19 @@ mod tests {
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn unbase64_is_the_inverse_and_refuses_what_is_not_base64() {
+        for text in ["", "f", "fo", "foo", "foobar"] {
+            assert_eq!(unbase64(&base64(text.as_bytes())).unwrap(), text.as_bytes());
+        }
+        assert_eq!(unbase64("Zm9v YmFy\n").unwrap(), b"foobar");
+        assert_eq!(unbase64("Zg").unwrap(), b"f", "padding is optional");
+        let bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(unbase64(&base64(&bytes)).unwrap(), bytes);
+        assert!(unbase64("Zm9v!").is_none(), "not in the alphabet");
+        assert!(unbase64("Z").is_none(), "no encoding is one sextet long");
     }
 
     #[test]

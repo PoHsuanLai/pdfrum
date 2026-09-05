@@ -4,9 +4,33 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{RenderOptions, RenderSession, VelloCpuBackend};
+use pdfrum::{Document, Pixmap, RenderOptions, RenderSession, VelloCpuBackend};
 
 use crate::{out, pages};
+
+/// `scale` when it is a usable one: finite and positive.
+pub fn checked_scale(scale: f64) -> Result<f64> {
+    if !(scale.is_finite() && scale > 0.0) {
+        bail!("the resolution must be a positive number");
+    }
+    Ok(scale)
+}
+
+/// One page rendered at `scale` pixels per point, with or without its
+/// annotations, through `session` so glyphs and images are cached between
+/// pages.
+pub fn render_page(
+    doc: &Document,
+    index: u32,
+    scale: f64,
+    annotations: bool,
+    session: &mut RenderSession,
+) -> Result<Pixmap> {
+    let page = doc.page(index)?;
+    let mut options = RenderOptions::scaled(scale);
+    options.annotations = annotations;
+    Ok(page.render_on(&VelloCpuBackend::new(), &options, session)?)
+}
 
 /// Everything a render was asked for.
 pub struct Request<'a> {
@@ -21,9 +45,7 @@ pub struct Request<'a> {
 }
 
 pub fn run(req: &Request<'_>) -> Result<ExitCode> {
-    if !(req.scale.is_finite() && req.scale > 0.0) {
-        bail!("the resolution must be a positive number");
-    }
+    let scale = checked_scale(req.scale)?;
     let to_stdout = out::Sink::new(Path::new(req.output), "PNG")?.is_stdout();
     let doc = out::open(req.file, req.password)?;
     let selected = pages::select(req.pages, doc.page_count())?;
@@ -34,14 +56,10 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
         );
     }
     let stem = out::stem(req.file);
-    let backend = VelloCpuBackend::new();
-    let mut options = RenderOptions::scaled(req.scale);
-    options.annotations = req.annotations;
     let mut session = RenderSession::new();
     for index in selected {
-        let page = doc.page(index)?;
-        let pixmap = page.render_on(&backend, &options, &mut session)?;
-        let number = out::page_number(page.index());
+        let pixmap = render_page(&doc, index, scale, req.annotations, &mut session)?;
+        let number = index + 1;
         if to_stdout {
             out::write_bytes(&pixmap.encode_png()?);
             out::notice(
