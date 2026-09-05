@@ -158,6 +158,11 @@ enum Command {
         #[command(subcommand)]
         what: Attach,
     },
+    /// A mark on every page: text or a picture drawn over the content.
+    Stamp {
+        #[command(subcommand)]
+        what: Stamp,
+    },
     /// The document's /Info metadata: set or clear its keys. `info` shows them.
     Metadata {
         #[command(subcommand)]
@@ -484,6 +489,79 @@ enum Attach {
         #[command(flatten)]
         save: SaveArgs,
     },
+}
+
+#[derive(Subcommand)]
+enum Stamp {
+    /// Text over every page, in one of the standard 14 fonts.
+    Text {
+        #[command(flatten)]
+        input: Input,
+        /// The text.
+        #[arg(value_name = "TEXT")]
+        text: String,
+        #[command(flatten)]
+        mark: MarkArgs,
+        /// The text size in points.
+        #[arg(long, value_name = "PT", default_value_t = 36.0)]
+        size: f32,
+        /// The text colour as RRGGBB, black by default. (`--color` is the
+        /// terminal's, on every command.)
+        #[arg(long, value_name = "RRGGBB", default_value = "000000")]
+        rgb: String,
+        /// The face, one of the standard 14 by name: Helvetica,
+        /// Helvetica-Bold, Helvetica-Oblique, Helvetica-BoldOblique, the
+        /// same four of Courier, Times-Roman, Times-Bold, Times-Italic,
+        /// Times-BoldItalic, Symbol, ZapfDingbats.
+        #[arg(long, value_name = "NAME", default_value = "Helvetica")]
+        font: String,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// A JPEG or PNG over every page, its aspect kept.
+    Image {
+        #[command(flatten)]
+        input: Input,
+        /// The picture.
+        #[arg(value_name = "IMAGE")]
+        image: PathBuf,
+        /// Width in points; the picture's pixel width by default.
+        #[arg(long, value_name = "PT")]
+        width: Option<f64>,
+        #[command(flatten)]
+        mark: MarkArgs,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+/// Where and how a stamp is drawn.
+#[derive(Args)]
+struct MarkArgs {
+    /// Where on the page, as it is displayed.
+    #[arg(long, value_enum, default_value_t, value_name = "WHERE")]
+    position: cmd::stamp::Position,
+    /// 0 (invisible) to 1 (opaque).
+    #[arg(long, default_value_t = 1.0)]
+    opacity: f32,
+    /// Degrees counter-clockwise, turned about the stamp's own centre.
+    #[arg(
+        long,
+        value_name = "DEGREES",
+        default_value_t = 0.0,
+        allow_negative_numbers = true
+    )]
+    angle: f64,
+}
+
+impl MarkArgs {
+    fn mark(&self) -> cmd::stamp::Mark {
+        cmd::stamp::Mark {
+            position: self.position,
+            opacity: self.opacity,
+            angle: self.angle,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -848,6 +926,7 @@ fn main() -> ExitCode {
         Command::Extract { what } => run_extract(what, password, term),
         Command::Pages { what } => run_pages(what, password, term),
         Command::Attach { what } => run_attach(what, password, term),
+        Command::Stamp { what } => run_stamp(what, password, term),
         Command::Metadata { what } => run_metadata(what, password, term),
         Command::Forms { what } => run_forms(what, password, term),
         #[cfg(feature = "javascript")]
@@ -1205,6 +1284,53 @@ fn run_attach(what: Attach, password: Option<&str>, term: term::Term) -> anyhow:
             &names,
             &save.output,
             save.deterministic,
+            term,
+        ),
+    }
+}
+
+fn run_stamp(what: Stamp, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
+    match what {
+        Stamp::Text {
+            input,
+            text,
+            mark,
+            size,
+            rgb,
+            font,
+            save,
+        } => cmd::stamp::text(
+            &cmd::stamp::TextRequest {
+                file: &input.file,
+                password,
+                text: &text,
+                mark: mark.mark(),
+                type_: cmd::stamp::Type {
+                    size,
+                    color: &rgb,
+                    font: &font,
+                },
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
+        Stamp::Image {
+            input,
+            image,
+            width,
+            mark,
+            save,
+        } => cmd::stamp::image(
+            &cmd::stamp::ImageRequest {
+                file: &input.file,
+                password,
+                image: &image,
+                width,
+                mark: mark.mark(),
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
             term,
         ),
     }
