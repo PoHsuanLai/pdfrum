@@ -1,6 +1,5 @@
 //! `pdfrum render`: pages to PNG.
 
-use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -25,9 +24,10 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
     if !(req.scale.is_finite() && req.scale > 0.0) {
         bail!("the resolution must be a positive number");
     }
+    let to_stdout = out::Sink::new(Path::new(req.output), "PNG")?.is_stdout();
     let doc = out::open(req.file, req.password)?;
     let selected = pages::select(req.pages, doc.page_count())?;
-    if req.output == "-" && selected.len() != 1 {
+    if to_stdout && selected.len() != 1 {
         bail!(
             "`--output -` writes one page's PNG to stdout; {} pages were selected (use --pages)",
             selected.len()
@@ -42,11 +42,12 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
         let page = doc.page(index)?;
         let pixmap = page.render_on(&backend, &options, &mut session)?;
         let number = out::page_number(page.index());
-        if req.output == "-" {
-            let png = pixmap.encode_png()?;
-            std::io::stdout()
-                .write_all(&png)
-                .context("cannot write to stdout")?;
+        if to_stdout {
+            out::write_bytes(&pixmap.encode_png()?);
+            out::notice(
+                Path::new("-"),
+                &format!("page {number}, {} x {} px", pixmap.width(), pixmap.height()),
+            );
         } else {
             let path = req
                 .output

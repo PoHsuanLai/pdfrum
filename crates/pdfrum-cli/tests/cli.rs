@@ -1611,6 +1611,124 @@ fn a_dash_reads_the_document_from_stdin() {
     }
 }
 
+#[test]
+fn a_dash_output_writes_the_pdf_to_stdout_and_the_summary_to_stderr() {
+    // The chain from PLAN.md: slice to stdout, read it back from stdin.
+    let sliced = run(&[
+        "pages",
+        "slice",
+        "fixtures/hello_world_2_pages.pdf",
+        "--pages",
+        "1",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(sliced.status.success(), "{sliced:?}");
+    assert!(
+        sliced.stdout.starts_with(b"%PDF-"),
+        "the PDF and nothing else"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&sliced.stderr),
+        "pdfrum: -: 1 pages\n",
+        "the summary is a notice"
+    );
+    let text = run_with(&["extract", "text", "-"], &sliced.stdout, &[]).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&text.stdout),
+        "Hello, world!\nGoodbye, world!\n",
+        "page 1 alone, no form feed"
+    );
+    let info = run_with(&["info", "-", "--json"], &sliced.stdout, &[]).unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&info.stdout).unwrap();
+    assert_eq!(v["pages"], 1);
+}
+
+#[test]
+fn every_writing_command_takes_a_dash_output() {
+    let dir = scratch("dash-out").unwrap();
+    let data = dir.join("fill.json");
+    std::fs::write(&data, r#"{"Text Box": "x"}"#).unwrap();
+    let data = data.to_str().unwrap();
+    let commands: Vec<Vec<&str>> = vec![
+        vec![
+            "pages",
+            "merge",
+            "fixtures/hello_world_2_pages.pdf",
+            "fixtures/bookmarks.pdf",
+        ],
+        vec![
+            "pages",
+            "reorder",
+            "fixtures/hello_world_2_pages.pdf",
+            "--pages",
+            "2,1",
+        ],
+        vec!["pages", "create", "fixtures/mona_lisa.jpg"],
+        vec!["pages", "nup", "fixtures/bookmarks.pdf"],
+        vec!["pages", "booklet", "fixtures/hello_world_2_pages.pdf"],
+        vec!["forms", "fill", "fixtures/text_form.pdf", "--data", data],
+        vec!["forms", "flatten", "fixtures/text_form.pdf"],
+        vec!["repair", "fixtures/parser_rebuildxref_correct.pdf"],
+        vec!["optimize", "fixtures/bookmarks.pdf"],
+        vec![
+            "security",
+            "decrypt",
+            "--password",
+            "1234",
+            "fixtures/encrypted.pdf",
+        ],
+        vec![
+            "security",
+            "encrypt",
+            "fixtures/bookmarks.pdf",
+            "--owner-password",
+            "x",
+        ],
+        vec![
+            "inspect",
+            "revision",
+            "fixtures/bug_1484283.pdf",
+            "--rev",
+            "1",
+        ],
+    ];
+    for mut args in commands {
+        args.extend(["-o", "-"]);
+        let out = run(&args).unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        assert!(out.stdout.starts_with(b"%PDF-"), "{args:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("pdfrum: -: "), "{args:?}: {err}");
+    }
+    let png = run(&[
+        "render",
+        "--pages",
+        "1",
+        "fixtures/hello_world_2_pages.pdf",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(png.stdout.starts_with(b"\x89PNG"));
+    assert!(
+        String::from_utf8_lossy(&png.stderr).starts_with("pdfrum: -: page 1, "),
+        "{png:?}"
+    );
+    let split = run(&[
+        "pages",
+        "split",
+        "fixtures/hello_world_2_pages.pdf",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert_eq!(split.status.code(), Some(1), "split writes many files");
+    assert!(String::from_utf8_lossy(&split.stderr).contains("directory"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
 // ---- javascript (a feature, off by default) --------------------------------
 
 /// The transcript PDFium's own harness expects for a fixture, beside it.

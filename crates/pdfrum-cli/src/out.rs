@@ -4,7 +4,7 @@
 use std::io::IsTerminal;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use pdfrum::{Document, OpenOptions, Rect};
 use serde::Serialize;
 
@@ -95,6 +95,52 @@ pub fn stem(file: &Path) -> String {
     }
     file.file_stem()
         .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
+}
+
+/// A notice: `pdfrum: <file>: <what happened>` on stderr, one line.
+pub fn notice(file: &Path, what: &str) {
+    eprintln!("pdfrum: {}: {what}", file.display());
+}
+
+/// Where a writing command's result goes: the file named, or stdout for
+/// `-`. A command makes one first, so `-` on a terminal is refused before
+/// any work is done, produces its bytes through the facade's `write_*_to`
+/// twin of the save it wants, and hands them to [`Sink::finish`].
+pub struct Sink<'a> {
+    path: &'a Path,
+}
+
+impl<'a> Sink<'a> {
+    /// `kind` names what the bytes are, for the refusal: `PDF`, `PNG`.
+    pub fn new(path: &'a Path, kind: &str) -> Result<Self> {
+        if is_stdin(path) && std::io::stdout().is_terminal() {
+            bail!("refusing to write a {kind} to a terminal; give -o a path or pipe it");
+        }
+        Ok(Self { path })
+    }
+
+    /// Whether the bytes go to stdout.
+    pub fn is_stdout(&self) -> bool {
+        is_stdin(self.path)
+    }
+
+    /// Write the bytes, then say what was done: the summary line on stdout
+    /// for a file, or — when stdout is the file — the same words as a
+    /// notice on stderr, `pdfrum: -: 3 pages`.
+    pub fn finish(&self, term: Term, bytes: &[u8], what: &str, detail: Option<&str>) -> Result<()> {
+        if self.is_stdout() {
+            write_bytes(bytes);
+            match detail {
+                Some(d) if !d.is_empty() => notice(self.path, &format!("{what}, {d}")),
+                _ => notice(self.path, what),
+            }
+        } else {
+            std::fs::write(self.path, bytes)
+                .with_context(|| format!("cannot write {}", self.path.display()))?;
+            summary(term, self.path, what, detail);
+        }
+        Ok(())
+    }
 }
 
 /// Print `value` as one pretty JSON document.
