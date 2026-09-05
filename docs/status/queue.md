@@ -114,9 +114,14 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
 - Phase 4 — `pdfrum serve --stdio`: JSON-RPC over stdin/stdout, one parse
   per document, plus MCP tool listing; no new dependency.
-- Phase 5 — `metadata set`, `pages delete|rotate`, `attach add`, `stamp`;
-  signature verification scoped separately (CMS/X.509 in pure Rust is a
-  dependency decision first).
+- Phase 5, facade half — landed 2026-09-05 (a136e32): `DocEdit::set_metadata`,
+  `add_attachment` with options and `remove_attachment`, `stamp_text` /
+  `stamp_image`; found on the way and fixed: the text emitter transposed
+  `Tm` on write, and `write_pages_to` read the base rather than the
+  session's overlay. Board 0 rows moved. The CLI verbs (`metadata set`,
+  `pages delete|rotate`, `attach add`, `stamp`) follow once the command
+  tree is free; signature verification scoped separately (CMS/X.509 in
+  pure Rust is a dependency decision first).
 - Delegated to Claude agents in worktrees, one phase at a time because
   they share `main.rs`; Claude verifies (gate, board) and lands.
 
