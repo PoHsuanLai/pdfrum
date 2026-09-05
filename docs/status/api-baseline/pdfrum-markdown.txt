@@ -7,6 +7,7 @@ pub pdfrum_markdown::ast::Block::Heading::level: u8
 pub pdfrum_markdown::ast::Block::Heading::text: alloc::string::String
 pub pdfrum_markdown::ast::Block::Image
 pub pdfrum_markdown::ast::Block::Image::alt: alloc::string::String
+pub pdfrum_markdown::ast::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::ast::Block::List
 pub pdfrum_markdown::ast::Block::List::items: alloc::vec::Vec<alloc::string::String>
 pub pdfrum_markdown::ast::Block::List::ordered: bool
@@ -16,12 +17,16 @@ impl pdfrum_markdown::ast::Block
 pub fn pdfrum_markdown::ast::Block::text(&self) -> alloc::string::String
 pub fn pdfrum_markdown::ast::lead_in(&str) -> core::option::Option<(&str, &str)>
 pub mod pdfrum_markdown::heuristics
-pub fn pdfrum_markdown::heuristics::blocks(&[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
-pub fn pdfrum_markdown::heuristics::blocks_among(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
+pub fn pdfrum_markdown::heuristics::blocks(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::DrawnImage], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
+pub fn pdfrum_markdown::heuristics::blocks_among(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::DrawnImage], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
 pub fn pdfrum_markdown::heuristics::normalize(&str) -> alloc::string::String
 pub mod pdfrum_markdown::layout
 pub fn pdfrum_markdown::layout::layout(&[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::string::String
 pub mod pdfrum_markdown::lines
+pub struct pdfrum_markdown::lines::DrawnImage
+pub pdfrum_markdown::lines::DrawnImage::bbox: kurbo::rect::Rect
+pub pdfrum_markdown::lines::DrawnImage::index: usize
+pub pdfrum_markdown::lines::DrawnImage::mcid: core::option::Option<i64>
 pub struct pdfrum_markdown::lines::Line
 pub pdfrum_markdown::lines::Line::bbox: kurbo::rect::Rect
 pub pdfrum_markdown::lines::Line::bold: bool
@@ -37,6 +42,7 @@ pub fn pdfrum_markdown::lines::McidText::runs(&self, i64) -> &[pdfrum_markdown::
 pub struct pdfrum_markdown::lines::ObjectFacts
 impl pdfrum_markdown::lines::ObjectFacts
 pub fn pdfrum_markdown::lines::ObjectFacts::from_page(&pdfrum_page::page::Page) -> Self
+pub fn pdfrum_markdown::lines::ObjectFacts::images(&self) -> &[pdfrum_markdown::lines::DrawnImage]
 pub struct pdfrum_markdown::lines::Run
 pub pdfrum_markdown::lines::Run::bbox: kurbo::rect::Rect
 pub pdfrum_markdown::lines::Run::line: usize
@@ -49,8 +55,14 @@ pub fn pdfrum_markdown::lines::lines(&pdfrum_text::TextPage, &pdfrum_markdown::l
 pub fn pdfrum_markdown::lines::text_by_mcid(&[pdfrum_markdown::lines::Line]) -> pdfrum_markdown::lines::McidText
 pub mod pdfrum_markdown::render
 pub fn pdfrum_markdown::render::render(&[pdfrum_markdown::ast::Block]) -> alloc::string::String
+pub fn pdfrum_markdown::render::render_with_images(&[pdfrum_markdown::ast::Block], impl core::ops::function::Fn(usize) -> core::option::Option<alloc::string::String>) -> alloc::string::String
+pub mod pdfrum_markdown::running
+pub fn pdfrum_markdown::running::mask(&[(&[pdfrum_markdown::lines::Line], kurbo::rect::Rect)]) -> alloc::vec::Vec<alloc::vec::Vec<bool>>
 pub mod pdfrum_markdown::tagged
-pub fn pdfrum_markdown::tagged::blocks<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::structure::StructTree, &pdfrum_markdown::lines::McidText, &R) -> (alloc::vec::Vec<pdfrum_markdown::ast::Block>, std::collections::hash::set::HashSet<i64>)
+pub struct pdfrum_markdown::tagged::Drawn<'a>
+pub pdfrum_markdown::tagged::Drawn::images: &'a [pdfrum_markdown::lines::DrawnImage]
+pub pdfrum_markdown::tagged::Drawn::text: &'a pdfrum_markdown::lines::McidText
+pub fn pdfrum_markdown::tagged::blocks<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::structure::StructTree, pdfrum_markdown::tagged::Drawn<'_>, &R) -> (alloc::vec::Vec<pdfrum_markdown::ast::Block>, std::collections::hash::set::HashSet<i64>)
 pub enum pdfrum_markdown::Block
 pub pdfrum_markdown::Block::Code(alloc::string::String)
 pub pdfrum_markdown::Block::Heading
@@ -58,6 +70,7 @@ pub pdfrum_markdown::Block::Heading::level: u8
 pub pdfrum_markdown::Block::Heading::text: alloc::string::String
 pub pdfrum_markdown::Block::Image
 pub pdfrum_markdown::Block::Image::alt: alloc::string::String
+pub pdfrum_markdown::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::Block::List
 pub pdfrum_markdown::Block::List::items: alloc::vec::Vec<alloc::string::String>
 pub pdfrum_markdown::Block::List::ordered: bool
@@ -65,6 +78,10 @@ pub pdfrum_markdown::Block::Paragraph(alloc::string::String)
 pub pdfrum_markdown::Block::Table(alloc::vec::Vec<alloc::vec::Vec<alloc::string::String>>)
 impl pdfrum_markdown::ast::Block
 pub fn pdfrum_markdown::ast::Block::text(&self) -> alloc::string::String
+pub struct pdfrum_markdown::DrawnImage
+pub pdfrum_markdown::DrawnImage::bbox: kurbo::rect::Rect
+pub pdfrum_markdown::DrawnImage::index: usize
+pub pdfrum_markdown::DrawnImage::mcid: core::option::Option<i64>
 pub struct pdfrum_markdown::Line
 pub pdfrum_markdown::Line::bbox: kurbo::rect::Rect
 pub pdfrum_markdown::Line::bold: bool
@@ -76,8 +93,13 @@ pub pdfrum_markdown::Line::segments: alloc::vec::Vec<pdfrum_markdown::lines::Seg
 pub pdfrum_markdown::Line::text: alloc::string::String
 pub struct pdfrum_markdown::Options
 pub pdfrum_markdown::Options::rtl: bool
+pub struct pdfrum_markdown::PageInput<'a>
+pub pdfrum_markdown::PageInput::page: &'a pdfrum_page::page::Page
+pub pdfrum_markdown::PageInput::tree: core::option::Option<&'a pdfrum_doc::structure::StructTree>
+pub fn pdfrum_markdown::document_blocks<R: pdfrum_object::resolve::Resolve>(&[pdfrum_markdown::PageInput<'_>], &R, pdfrum_markdown::Options, &pdfrum_common::limits::Limits) -> alloc::vec::Vec<alloc::vec::Vec<pdfrum_markdown::ast::Block>>
 pub fn pdfrum_markdown::page_blocks<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, core::option::Option<&pdfrum_doc::structure::StructTree>, &R, pdfrum_markdown::Options, &pdfrum_common::limits::Limits) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
 pub fn pdfrum_markdown::page_layout<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, pdfrum_markdown::Options, &pdfrum_common::limits::Limits) -> alloc::string::String
 pub fn pdfrum_markdown::page_lines<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, pdfrum_markdown::Options, &pdfrum_common::limits::Limits) -> alloc::vec::Vec<pdfrum_markdown::lines::Line>
 pub fn pdfrum_markdown::page_markdown<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, core::option::Option<&pdfrum_doc::structure::StructTree>, &R, pdfrum_markdown::Options, &pdfrum_common::limits::Limits) -> alloc::string::String
 pub fn pdfrum_markdown::render(&[pdfrum_markdown::ast::Block]) -> alloc::string::String
+pub fn pdfrum_markdown::render_with_images(&[pdfrum_markdown::ast::Block], impl core::ops::function::Fn(usize) -> core::option::Option<alloc::string::String>) -> alloc::string::String

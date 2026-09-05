@@ -115,6 +115,15 @@ pub use pdfrum_form::AnnotId;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 #[cfg(feature = "markdown")]
 pub use pdfrum_markdown::Block;
+/// Rendering Markdown [`Block`]s: [`markdown::render`] as
+/// [`Page::markdown`] does it, and [`markdown::render_with_images`] with
+/// each [`Block::Image`] linked to a file the caller wrote — the pair a
+/// caller of [`Page::markdown_blocks`] or [`Document::markdown_blocks`]
+/// needs, and nothing else of the crate behind them.
+#[cfg(feature = "markdown")]
+pub mod markdown {
+    pub use pdfrum_markdown::{render, render_with_images};
+}
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
 /// — behind the default-off `script` feature.
