@@ -267,8 +267,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## M22 — `libpdfrum` (scoped 2026-09-05, PLAN.md M22) — NOT STARTED
 
-- Phase 1 owned handles on the facade (`page_owned`, `FormSession::owned`,
-  error codes); phase 2 `crates/pdfrum-capi` (cdylib + staticlib, cbindgen
+- ~~Phase 1 owned handles~~ — landed 2026-09-05: `Document::page_owned`/`pages_owned`
+  and `OwnedPage`, `FormSession::owned`/`owned_with_scripts` and
+  `OwnedFormSession`, `Error::code` → `ErrorCode` (`repr(u32)`, 1–9,
+  append-only); owned path within ±0.004% `Ir` of the borrowed one; phase 2 `crates/pdfrum-capi` (cdylib + staticlib, cbindgen
   header, cargo-c, the one `allow(unsafe_code)` crate under a written
   rule); phase 3 the C test in CI and the header under api-snapshot;
   phase 4 `pdfrum-wasm` on wasm-bindgen; phase 5 UniFFI/PyO3 on request.
