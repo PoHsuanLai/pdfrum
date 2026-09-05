@@ -1493,3 +1493,101 @@ fn completions_and_manual_pages_come_from_the_command_tree() {
     let count = std::fs::read_dir(&dir).unwrap().count();
     assert!(count > 40, "{count} pages");
 }
+
+// ---- javascript (a feature, off by default) --------------------------------
+
+/// The transcript PDFium's own harness expects for a fixture, beside it.
+#[cfg(feature = "javascript")]
+fn transcript_of(name: &str) -> std::io::Result<String> {
+    std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(format!("{name}_expected.txt")),
+    )
+}
+
+#[cfg(feature = "javascript")]
+#[test]
+fn scripts_run_prints_the_transcript_the_oracle_expects() {
+    for name in ["console_methods", "bug_740166"] {
+        let got = stdout(&[
+            "scripts",
+            "run",
+            &format!("fixtures/{name}.pdf"),
+            "--time",
+            "1700000000",
+        ])
+        .unwrap();
+        assert_eq!(got, transcript_of(name).unwrap(), "{name}");
+    }
+    let v = json(&[
+        "scripts",
+        "run",
+        fx("fixtures/bug_740166.pdf"),
+        "--time",
+        "1700000000",
+        "--json",
+    ])
+    .unwrap();
+    let lines = v.as_array().unwrap();
+    assert_eq!(lines.len(), 4);
+    assert_eq!(lines[0]["line"], "Alert: Values = 1 .9999 2");
+    let none = stdout(&["scripts", "run", fx("fixtures/hello_world_2_pages.pdf")]).unwrap();
+    assert_eq!(none, "no script output\n");
+}
+
+#[cfg(feature = "javascript")]
+#[test]
+fn forms_fill_scripts_writes_back_what_the_open_action_assigned() {
+    // `open_action_echo.pdf`'s open action copies `source` into `echo`
+    // with a `!` — through a Flate-encoded script stream once saved, which
+    // is the case a viewer meets and the one a raw read got wrong.
+    let dir = scratch("fill-scripts").unwrap();
+    let values = dir.join("values.json");
+    std::fs::write(&values, r#"{"source": "hi"}"#).unwrap();
+    let filled = dir.join("filled.pdf");
+    let line = stdout(&[
+        "forms",
+        "fill",
+        fx("fixtures/open_action_echo.pdf"),
+        "--data",
+        values.to_str().unwrap(),
+        "--scripts",
+        "-o",
+        filled.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(line.ends_with("1 field set, 1 by scripts\n"), "{line}");
+    let fields = json(&["forms", "dump", filled.to_str().unwrap(), "--json"]).unwrap();
+    let value = |name: &str| {
+        fields
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["name"] == name)
+            .map(|f| f["value"].clone())
+            .unwrap()
+    };
+    assert_eq!(value("source"), "hi");
+    assert_eq!(value("echo"), "hi!");
+    // Without --scripts the open action is not run and `echo` stays empty.
+    let plain = dir.join("plain.pdf");
+    stdout(&[
+        "forms",
+        "fill",
+        fx("fixtures/open_action_echo.pdf"),
+        "--data",
+        values.to_str().unwrap(),
+        "-o",
+        plain.to_str().unwrap(),
+    ])
+    .unwrap();
+    let fields = json(&["forms", "dump", plain.to_str().unwrap(), "--json"]).unwrap();
+    let echo = fields
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "echo")
+        .unwrap();
+    assert_eq!(echo["value"], "");
+}

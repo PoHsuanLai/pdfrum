@@ -59,6 +59,29 @@ per page, or a one-line summary for a written file), a fixed palette of
 colour roles that is off in a pipe and under `NO_COLOR`, sizes in human
 units, `no <things>` for an empty answer, and never an emoji.
 
+## JavaScript
+
+A default build runs no script. Build with the feature to get two more
+things:
+
+```sh
+cargo install --path crates/pdfrum-cli --features javascript
+pdfrum scripts run form.pdf --time 1700000000   # what the document's scripts said, one line each
+pdfrum forms fill form.pdf --data v.json --scripts -o out.pdf   # then run the open scripts and keep what they assigned
+```
+
+`scripts run` runs the document's open-time scripts and then opens every
+page the way a viewer does, and prints the transcript: every alert and
+console line, nothing added, so it can be diffed against PDFium's own
+expected files. `--time` freezes the scripts' clock. `forms fill
+--scripts` saves the values, then opens the saved file the same way and
+writes back whatever the scripts assigned to fields.
+
+The feature is the facade's `javascript` feature: a pure-Rust engine
+(boa) that is about 137 more crates and 12 MB more binary, and that
+executes script out of untrusted documents — which is why it is off by
+default, here as in the library.
+
 The crate is a client of the `pdfrum` facade only — what it can print is
 what `cargo add pdfrum` can reach. `pdfrum-tool` is a different binary: the
 oracle mirror the conformance harness diffs against `pdfium_test`, and not

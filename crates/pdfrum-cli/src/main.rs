@@ -147,6 +147,12 @@ enum Command {
         #[command(subcommand)]
         what: Forms,
     },
+    /// The document's own JavaScript, run the way a viewer runs it.
+    #[cfg(feature = "javascript")]
+    Scripts {
+        #[command(subcommand)]
+        what: Scripts,
+    },
     /// Open with recovery and write a clean, fully rewritten file.
     ///
     /// Opening is the repair: a wrong startxref, a bad stream length, a
@@ -382,6 +388,12 @@ enum Forms {
         /// A JSON file: `{"name": "text", "box": true}`.
         #[arg(long, value_name = "JSON", required = true)]
         data: PathBuf,
+        /// After saving, open the file the way a viewer would — the
+        /// document's scripts, then every page's formatters — and write
+        /// back what the scripts assigned to fields.
+        #[cfg(feature = "javascript")]
+        #[arg(long)]
+        scripts: bool,
         #[command(flatten)]
         save: SaveArgs,
     },
@@ -394,6 +406,24 @@ enum Forms {
         print: bool,
         #[command(flatten)]
         save: SaveArgs,
+    },
+}
+
+#[cfg(feature = "javascript")]
+#[derive(Subcommand)]
+enum Scripts {
+    /// Run the open-time scripts and every page's, and print what they
+    /// said: alerts and console lines, one per line.
+    Run {
+        #[command(flatten)]
+        input: Input,
+        /// Freeze the scripts' clock at this many seconds since the epoch,
+        /// so dates come out the same every run.
+        #[arg(long, value_name = "SECONDS")]
+        time: Option<u64>,
+        /// One JSON document: an array of `{line}`.
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -609,6 +639,8 @@ fn main() -> ExitCode {
         Command::Extract { what } => run_extract(what, password, term),
         Command::Pages { what } => run_pages(what, password, term),
         Command::Forms { what } => run_forms(what, password, term),
+        #[cfg(feature = "javascript")]
+        Command::Scripts { what } => run_scripts(what, password),
         Command::Repair { input, save } => cmd::file::rewrite(
             &input.file,
             password,
@@ -858,15 +890,30 @@ fn run_pages(what: Pages, password: Option<&str>, term: term::Term) -> anyhow::R
     }
 }
 
+#[cfg(feature = "javascript")]
+fn run_scripts(what: Scripts, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Scripts::Run { input, time, json } => cmd::scripts::run(&input.file, password, time, json),
+    }
+}
+
 fn run_forms(what: Forms, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
     match what {
         Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json, term),
-        Forms::Fill { input, data, save } => cmd::forms::fill(
+        Forms::Fill {
+            input,
+            data,
+            #[cfg(feature = "javascript")]
+            scripts,
+            save,
+        } => cmd::forms::fill(
             &input.file,
             password,
             &data,
             &save.output,
             save.deterministic,
+            #[cfg(feature = "javascript")]
+            scripts,
             term,
         ),
         Forms::Flatten { input, print, save } => cmd::forms::flatten(

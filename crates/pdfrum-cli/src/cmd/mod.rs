@@ -10,5 +10,7 @@ pub mod info;
 pub mod inspect;
 pub mod pages;
 pub mod render;
+#[cfg(feature = "javascript")]
+pub mod scripts;
 pub mod shell;
 pub mod terminal;

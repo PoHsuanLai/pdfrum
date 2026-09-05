@@ -11,6 +11,8 @@ use crate::cmd::pages::save_options;
 use crate::out;
 use crate::out::{Align, Table};
 use crate::term::{Style, Term};
+#[cfg(feature = "javascript")]
+use pdfrum::{Diagnostics, FormSession, ScriptConfig};
 
 #[derive(Serialize)]
 struct FieldRow {
@@ -106,6 +108,7 @@ pub fn fill(
     data: &Path,
     output: &Path,
     deterministic: bool,
+    #[cfg(feature = "javascript")] scripts: bool,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -129,13 +132,65 @@ pub fn fill(
     }
     doc.save_form(output, &form, &save_options(deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
-        term,
-        output,
-        &format!("{set} field{} set", if set == 1 { "" } else { "s" }),
-        None,
-    );
+    let what = format!("{set} field{} set", if set == 1 { "" } else { "s" });
+    #[cfg(feature = "javascript")]
+    if scripts {
+        let by_scripts = apply_open_scripts(output, password, deterministic)?;
+        out::summary(
+            term,
+            output,
+            &what,
+            Some(&format!("{by_scripts} by scripts")),
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    out::summary(term, output, &what, None);
     Ok(ExitCode::SUCCESS)
+}
+
+/// Open the saved file the way a viewer would — the document's open
+/// scripts, then every page, whose formatters run on load — and write
+/// back whatever the scripts assigned to fields. Scripts that threw are
+/// reported on stderr. The count is how many fields the scripts changed.
+#[cfg(feature = "javascript")]
+fn apply_open_scripts(file: &Path, password: Option<&str>, deterministic: bool) -> Result<usize> {
+    let saved = out::open_quietly(file, password)?;
+    let Some(mut form) = saved.form() else {
+        return Ok(0);
+    };
+    let mut session = FormSession::with_scripts(&saved, &ScriptConfig::wall_clock())
+        .with_context(|| format!("cannot start the script engine for {}", file.display()))?;
+    session.open_document();
+    for page in 0..saved.page_count() {
+        session.load_page(page);
+    }
+    session.honour_focus_requests();
+    let writes = session
+        .scripts_mut()
+        .map(pdfrum::ScriptCascade::drain_field_writes)
+        .unwrap_or_default();
+    for failure in session.script_failures(&mut Diagnostics::default()) {
+        eprintln!("pdfrum: {}", failure.line());
+    }
+    let mut applied = 0;
+    for (index, value) in writes {
+        let Some(name) = form
+            .fields()
+            .get(usize::try_from(index).unwrap_or(usize::MAX))
+            .map(|f| f.name().to_owned())
+        else {
+            continue;
+        };
+        if form.set(&name, value).is_ok() {
+            applied += 1;
+        }
+    }
+    if applied > 0 {
+        saved
+            .save_form(file, &form, &save_options(deterministic, saved.bytes()))
+            .with_context(|| format!("cannot write {}", file.display()))?;
+    }
+    Ok(applied)
 }
 
 /// Bake every page's annotations into its content.
