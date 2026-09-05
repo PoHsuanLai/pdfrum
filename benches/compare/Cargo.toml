@@ -1,0 +1,93 @@
+# pdfrum-compare — M21's comparative benchmark harness. A SEPARATE workspace,
+# deliberately not a member of the root one, on the same argument as fuzz/:
+# every peer engine here is a competing PDF implementation, two of them wrap
+# C (PDFium and MuPDF), and none of them may ever enter the tree that
+# `scripts/ci.nu`'s pure-Rust check walks. The empty `[workspace]` table is
+# what does the severing — without it cargo walks up to `../../Cargo.toml`
+# and adopts this package as a member. Do not delete it, and do not add
+# `benches/compare` to the root manifest's `members`.
+#
+# `pdfrum` is taken by path with its DEFAULT features, so it is measured
+# exactly as `cargo add pdfrum` delivers it. Every peer is optional and
+# behind a feature of its own name; the default set is the pure-Rust peers,
+# and the two C baselines are `--features c-engines` because they need a
+# clang (mupdf-sys runs bindgen and compiles MuPDF) and a `libpdfium.so`
+# (pdfium-render binds one at runtime; see docs/benchmarks/README.md).
+[workspace]
+
+[package]
+name = "pdfrum-compare"
+description = "pdfrum beside its peers: one corpus, one machine, one script, correctness before speed"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+# The workspace lints, minus the three STYLE.md §3 denies, for the reason
+# benches/Cargo.toml gives: a harness that cannot find its oracle should stop
+# and say so. `unsafe_code = "forbid"` is kept — the C engines are reached
+# through their safe wrappers only, which is the point of measuring them.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# A benchmark is arithmetic on pixel counts, byte counts and milliseconds;
+# the four cast lints would put an `#[allow]` on every other line.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+cast_possible_wrap = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[features]
+default = ["hayro", "pdf-extract", "lopdf", "pdf", "pdf_oxide"]
+hayro = ["dep:hayro", "dep:hayro-interpret", "dep:kurbo"]
+pdf-extract = ["dep:pdf-extract"]
+lopdf = ["dep:lopdf"]
+pdf = ["dep:pdf"]
+pdf_oxide = ["dep:pdf_oxide"]
+pdfium-render = ["dep:pdfium-render"]
+mupdf = ["dep:mupdf"]
+c-engines = ["pdfium-render", "mupdf"]
+
+[dependencies]
+# The subject. Default features, no more and no less than `cargo add pdfrum`.
+pdfrum = { path = "../../crates/pdfrum" }
+
+# Harness plumbing — the same pins the root workspace uses (DEPS.md "Tools &
+# tests only"), so the lock here agrees with the one there.
+anyhow = "=1.0.104"
+clap = { version = "=4.6.6", features = ["derive", "env"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+png = "=0.18.1"
+
+# Peers — DEPS.md "Benchmark peers" records each with its licence and
+# whether C is in its build. Versions are the ones PLAN.md §M21 names.
+hayro = { version = "=0.7.1", optional = true }
+hayro-interpret = { version = "=0.7.0", optional = true }
+# hayro's geometry vocabulary, needed to read a glyph's position out of its
+# Device callbacks. The same crate pdfrum uses, at the same major.
+kurbo = { version = "=0.13.1", optional = true }
+pdf-extract = { version = "=0.12.0", optional = true }
+lopdf = { version = "=0.44.0", optional = true }
+pdf = { version = "=0.10.0", optional = true }
+pdf_oxide = { version = "=0.3.77", optional = true, features = ["rendering"] }
+pdfium-render = { version = "=0.9.3", optional = true }
+# MuPDF's own "smaller build" recipe from its README: the PDF core and the
+# base-14 fonts, none of XPS/EPUB/HTML/JS/OCR. Compiling the vendored C takes
+# minutes; the reduced set is the one a Rust consumer who only reads PDF
+# would choose.
+mupdf = { version = "=0.8.0", optional = true, default-features = false, features = ["base14-fonts"] }
+
+[profile.release]
+debug = 1
