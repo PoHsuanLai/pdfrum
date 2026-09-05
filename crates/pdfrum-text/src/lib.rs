@@ -136,7 +136,7 @@ pub fn extract<R: Resolve>(
         return TextPage::default();
     }
     let runs = object::walk(&page.objects);
-    let page_flow = orientation::page_flow(page);
+    let page_flow = orientation::page_flow(page, &runs);
     let display = display_matrix(page);
 
     let mut builder = pipeline::Builder::new(&runs, page_flow, display, options.rtl, resolver);
