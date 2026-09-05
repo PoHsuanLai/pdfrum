@@ -1503,7 +1503,7 @@ the tables, the method and the script; a `--json` dump the tables are
 generated from; and the corpus rows where we lose listed as work items.
 
 
-## M22 — `libpdfrum`: the library for other languages  *(scoped 2026-09-05; the user asked for the traditional C `libpdfrum` first)*  — NOT STARTED
+## M22 — `libpdfrum`: the library for other languages  *(scoped 2026-09-05; the user asked for the traditional C `libpdfrum` first)*  — IN PROGRESS (items 1–3 landed 2026-09-05: owned handles cfadd53, `pdfrum-capi` 8d9acc8; item 4 in flight)
 
 The facade crate is the library; M22 gives it a C ABI, a header, and the
 bindings that stand on that ABI, so a program in any language can use it
