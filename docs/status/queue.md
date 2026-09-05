@@ -117,6 +117,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Delegated to Claude agents in worktrees, one phase at a time because
   they share `main.rs`; Claude verifies (gate, board) and lands.
 
+## M21 — comparative benchmarks (scoped 2026-09-05, PLAN.md M21) — NOT STARTED
+
+- Peers: `hayro`, `pdf-render` (render); `pdf-extract`, `pdf`, `hayro-interpret`, `pdf_oxide` (text); `lopdf`, `pdf` (parse/write); baselines `pdfium-render`, `mupdf`; MinerU-rs and Python MinerU (Markdown).
+- Axes: correctness against the oracle first, then speed, memory, cost of adoption, coverage matrix; one script under `benches/compare/` behind a `compare` feature; losses published.
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
