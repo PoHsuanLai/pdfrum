@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. **M12d MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md): it paid M12b's three engineering debts and, like M12b, had its premise corrected by measurement on two of three items. D1 gave shading/patch.rs its owner — one BezPath buffer per patch instead of one per cell, netted −22.7% / −25.2% / −18.5% on the three shading documents, control unmoved, byte-identical across 202 page hashes — and refuted cell-merging by counting (the longest same-colour run is 2, usually 1), so M12 §3.9's SIMD reopening condition stays unmet *with a reason*. D2 was owed one third of its brief: the glyph-spacing heuristic and the croscore fix were on main since 2026-08-29 (ba8662f, 10905fe) and never reverted — the scoreboard's timestamp merely predated them — so that story is withdrawn in place (d81ac68); its real work was the serif bit plus a fontdb name-ID divergence it found itself, both moving 0 of 1675 files and paid on the oracle comparison rather than on a number. D3's inherited digest was wrong about what image_en_fqa is (301 draws of a 2x2 RGB image carrying an /SMask, not 552 minified 1-bit masks), and correcting it is what located the cost: cold 679.7 → 158.7 ms (−76.7%), build −83.7%, image class cold geomean −14.5% on top of P1's −33.4%; on image_bug_718762 the brief's ordering hypothesis is refuted, to_pixmap is −10.4%, and the remaining ~360 ms is the upstream scaled-decode gap. Two cross-vendor Grok reviews (both MERGEABLE-WITH-NITS) landed three GPU should-fixes — a device leaked before the check that would refuse it, a documented TargetTooLarge never constructed with a 17 GiB allocation reachable behind it, and a device-loss panic hook — and the walk review's NaN finding was real but ran the opposite direction from its own reasoning. Conformance byte-identical after every commit; no dependency fact moved, verified mechanically. **M1 (ratchet re-baseline) and M2 (oracle side-by-side) are STILL OWED**, unpaid for a second milestone: load never dropped below ~7 and stood at 42 at close, with two unrelated python3 jobs at 450-490% CPU. Until M2 runs, every "versus PDFium" figure in this line dates from M12 — forms warm included, still 3.35x unmeasured. **M14 (form interaction) MET 2026-09-01, with three documented residues and a ten-item owed list** (docs/status/M14.md §"M14 close"): 191/191 assertions accounted for — 181 ported and passing, 10 not portable by construction with a reason each, and the 11 V8-gated recorded for M15 outside the denominator, the `121 + 70` derivation re-verified by enumerating every `TEST_F` including the 26 two-line declarations a single-line regex undercounts; form-events **25/30** from a 12/30 baseline, the five shortfalls being **two** named mechanisms — the open combo dropdown window (`bug_1372651` ×2, `bug_736695_2`; a second PWL window FFLDraw composites outside the widget's `/Rect`, no `SetPopup` here) and the erased scrollbar chrome (`scrollable_widgets1` ×2, by the brief's appendix ruling), with `bug_736695_3` recorded as passing only because SSIM cannot see a missed selection in a 150×15 box; the scoreboard moved **only upward**, 1636 → 1651 pass with fifteen rows crossing and none falling, two of them not form-events rows (`bug_725389.{in,pdf}`, one of the four items M5's tail named by mechanism, closed because form interaction and that tail item were one question about fonts), the other 1675 rows byte-identical and the board not re-committed; no new dependency, DEPS.md untouched and verified mechanically. The cross-vendor rule held with one recorded gap — Grok's account was exhausted (402) when the first `pdfrum-form` review was due, so a Claude reviewer did it; Grok reviewed block 2, the `pdfrum-doc` slice and block 4 and diagnosed `bug_736695_2`, and its findings ran **18 of 18 real, 0 dismissed**, two of them right about the defect and wrong about the fix in ways that would have made the pixels worse. Three premises were withdrawn in place rather than rewritten (the per-row residue table, the ascent/descent metric, the dashed focus rectangle), and the assertion port found nine defects no `.evt` fixture could reach. **Owed**: `pdfrum-font`'s `char_width` answering the base-14 table where the substituted face draws (`password`'s caret at column 189 against 199), LCD subpixel AA on live-edit text (91% of `focused_ltr`'s residue, `pdfrum-render`), the tint one count low (raster crates), the combo popup, the scrollbar chrome, and five smaller `pdfrum-doc`/`pdfrum-form` items. M13 (release) NOT STARTED — loop paused by user; it inherits M1, M2, and the filings and pins that were always the user's or upstream's.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. **M12d MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md): it paid M12b's three engineering debts and, like M12b, had its premise corrected by measurement on two of three items. D1 gave shading/patch.rs its owner — one BezPath buffer per patch instead of one per cell, netted −22.7% / −25.2% / −18.5% on the three shading documents, control unmoved, byte-identical across 202 page hashes — and refuted cell-merging by counting (the longest same-colour run is 2, usually 1), so M12 §3.9's SIMD reopening condition stays unmet *with a reason*. D2 was owed one third of its brief: the glyph-spacing heuristic and the croscore fix were on main since 2026-08-29 (ba8662f, 10905fe) and never reverted — the scoreboard's timestamp merely predated them — so that story is withdrawn in place (d81ac68); its real work was the serif bit plus a fontdb name-ID divergence it found itself, both moving 0 of 1675 files and paid on the oracle comparison rather than on a number. D3's inherited digest was wrong about what image_en_fqa is (301 draws of a 2x2 RGB image carrying an /SMask, not 552 minified 1-bit masks), and correcting it is what located the cost: cold 679.7 → 158.7 ms (−76.7%), build −83.7%, image class cold geomean −14.5% on top of P1's −33.4%; on image_bug_718762 the brief's ordering hypothesis is refuted, to_pixmap is −10.4%, and the remaining ~360 ms is the upstream scaled-decode gap. Two cross-vendor Grok reviews (both MERGEABLE-WITH-NITS) landed three GPU should-fixes — a device leaked before the check that would refuse it, a documented TargetTooLarge never constructed with a 17 GiB allocation reachable behind it, and a device-loss panic hook — and the walk review's NaN finding was real but ran the opposite direction from its own reasoning. Conformance byte-identical after every commit; no dependency fact moved, verified mechanically. **M1 (ratchet re-baseline) and M2 (oracle side-by-side) are STILL OWED**, unpaid for a second milestone: load never dropped below ~7 and stood at 42 at close, with two unrelated python3 jobs at 450-490% CPU. Until M2 runs, every "versus PDFium" figure in this line dates from M12 — forms warm included, still 3.35x unmeasured. **M14 (form interaction) MET 2026-09-01, with three documented residues and a ten-item owed list** (docs/status/M14.md §"M14 close"): 191/191 assertions accounted for — 181 ported and passing, 10 not portable by construction with a reason each, and the 11 V8-gated recorded for M15 outside the denominator, the `121 + 70` derivation re-verified by enumerating every `TEST_F` including the 26 two-line declarations a single-line regex undercounts; form-events **25/30** from a 12/30 baseline, the five shortfalls being **two** named mechanisms — the open combo dropdown window (`bug_1372651` ×2, `bug_736695_2`; a second PWL window FFLDraw composites outside the widget's `/Rect`, no `SetPopup` here) and the erased scrollbar chrome (`scrollable_widgets1` ×2, by the brief's appendix ruling), with `bug_736695_3` recorded as passing only because SSIM cannot see a missed selection in a 150×15 box; the scoreboard moved **only upward**, 1636 → 1651 pass with fifteen rows crossing and none falling, two of them not form-events rows (`bug_725389.{in,pdf}`, one of the four items M5's tail named by mechanism, closed because form interaction and that tail item were one question about fonts), the other 1675 rows byte-identical and the board not re-committed; no new dependency, DEPS.md untouched and verified mechanically. The cross-vendor rule held with one recorded gap — Grok's account was exhausted (402) when the first `pdfrum-form` review was due, so a Claude reviewer did it; Grok reviewed block 2, the `pdfrum-doc` slice and block 4 and diagnosed `bug_736695_2`, and its findings ran **18 of 18 real, 0 dismissed**, two of them right about the defect and wrong about the fix in ways that would have made the pixels worse. Three premises were withdrawn in place rather than rewritten (the per-row residue table, the ascent/descent metric, the dashed focus rectangle), and the assertion port found nine defects no `.evt` fixture could reach. **Owed**: `pdfrum-font`'s `char_width` answering the base-14 table where the substituted face draws (`password`'s caret at column 189 against 199), LCD subpixel AA on live-edit text (91% of `focused_ltr`'s residue, `pdfrum-render`), the tint one count low (raster crates), the combo popup, the scrollbar chrome, and five smaller `pdfrum-doc`/`pdfrum-form` items. M13 (release) NOT STARTED — loop paused by user; it inherits M1, M2, and the filings and pins that were always the user's or upstream's. **M21 MET 2026-09-06** (the comparison harness, three runs, five axes, losses published). **M23-M26 scoped 2026-09-06, none started** — the capabilities pass the user asked for after the benchmark round: M23 the canvas (drawing on a page without writing operators), M24 SVG export (a vector backend behind the existing `RenderDevice`), M25 SVG ingestion (`usvg` compiled into a Form XObject), M26 PDF/A (the checker first, veraPDF as its oracle, conversion to A-2b second). Typesetting and authoring stay declined; these four are vector interchange and programmatic drawing.
 **Oracle:** `$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** this repository
 
@@ -1457,7 +1457,7 @@ board. **Exit:** the five phases landed, and the three-command chain
 corpus guide.
 
 
-## M21 — Comparative benchmarks  *(scoped 2026-09-05; the user asked what to compare against to be convincing and informative)*  — NOT STARTED
+## M21 — Comparative benchmarks  *(scoped 2026-09-05; the user asked what to compare against to be convincing and informative)*  — MET 2026-09-06 (`docs/status/M21.md`, `docs/benchmarks/README.md`): the harness `benches/compare/`, three runs (two on the idle box `himmel`), all five axes, `--json` dumps under `docs/benchmarks/data/`, and the losses published per file in `docs/benchmarks/losses-explained.md`
 
 Numbers against the other Rust crates and the C engines they wrap, on one
 corpus, one machine, one script, published with the method. Convincing
@@ -1570,6 +1570,184 @@ decision to decline is therefore stated rather than implied: XFA is
 ~140k LOC of C++ (`xfa/` + `fxjs/xfa`), is deprecated by its own vendor, is
 disabled in Chrome, and its 35 files are 2% of the corpus. It stays out.
 Reopen only with a consumer who needs it, not a corpus that has it.
+
+## M23 — The canvas: drawing on a page without writing operators  *(scoped 2026-09-06; the user asked for a krilla-shaped stamping API)*  — NOT STARTED
+
+`pdfrum-edit` can already place an image, merge pages and rewrite objects,
+and the facade carries `ImageBuilder`, `PathBuilder` and `TextBuilder`. What
+it cannot do is the thing most callers actually want: put a watermark, a
+header rule or a branded line of text onto an existing page without
+hand-writing content-stream operators. M23 is that entry point, and nothing
+below `pdfrum-edit` changes.
+
+1. **`Canvas`, a retained drawing surface on a page.** `PageEdit::draw(|c|
+   ...)` hands a `Canvas` whose coordinate space is the page's, y-up in PDF
+   points with the crop box and rotation already composed in, so a caller
+   places things where they see them. Fills, strokes, rounded rectangles,
+   text at a point, an image at a rect, `save`/`restore`, `transform`,
+   `clip`. Geometry is `kurbo` and colour is `peniko`, the types the render
+   crate already speaks — no third vocabulary.
+2. **Text that embeds what it draws.** `Canvas::text` takes a font the
+   caller loaded through `DocEdit::embed_font` or `standard_font`, so the
+   glyphs it writes are subset and embedded by the machinery M-edit already
+   has. A caller who names a base-14 font gets it without an embed. Missing
+   glyphs are an error, not a silent blank.
+3. **One content stream, appended, not rewritten.** The canvas emits a
+   single stream appended to the page's `/Contents` array with a
+   `q`/`Q` around it, so the page's own graphics state cannot leak into the
+   drawing or the drawing into the page. Resources are merged into the
+   page's `/Resources` under fresh names that cannot collide.
+4. **Watermark and stamp as the worked examples.** `StampOptions` already
+   exists for the flattening path; M23's canvas is the general case beneath
+   it. The two shipped examples are a diagonal translucent watermark across
+   every page and a header rule with a page number, each under twenty lines
+   of caller code.
+
+Not in M23: layout. No line breaking, no text wrapping, no paragraph model,
+no measurement API beyond a single string's advance. A caller who needs
+layout is holding a typesetting problem and should bring their own layout
+to our `text`. That line is the same one the SPEC draws against authoring.
+
+**Rules:** no new dependency; the canvas holds no PDF knowledge that
+`pdfrum-edit` does not already have; every emitted stream round-trips
+through our own parser in a test, so we never write what we cannot read.
+**Exit:** the two examples run from a clean checkout, the pages they produce
+open in the oracle and in Acrobat without a repair prompt, the emitted
+streams re-parse, and `docs/design/canvas.md` states the coordinate space
+and the resource-merging rule.
+
+
+## M24 — SVG export: a vector backend for `pdfrum-render`  *(scoped 2026-09-06)*  — NOT STARTED
+
+Every backend we have rasterizes. `RenderDevice` does not: `fill_path`,
+`stroke_path`, `push_clip` and `push_layer` take `kurbo::BezPath`,
+`peniko` colours and blend modes, and glyphs reach the device as outlines
+above the hinting threshold. The vector information is already flowing
+through the trait; only the two ends of `RasterBackend` — `new_target`,
+`snapshot`, `finish` — insist on a `Pixmap`. M24 opens that end and writes
+one vector consumer.
+
+1. **A backend whose output is not pixels.** `RasterBackend`'s three
+   pixmap-typed methods become generic in what a backend produces, or a
+   sibling trait carries the vector case; whichever lands, the five existing
+   backends compile unchanged and their behaviour is byte-identical. This is
+   the only invasive part of M24 and it goes in its own commit, with the
+   conformance board byte-identical across it.
+2. **`crates/pdfrum-svg`.** A `RenderDevice` that accumulates SVG: paths as
+   `<path>` with the fill rule, clips as `<clipPath>`, layers as `<g>` with
+   `opacity` and `mix-blend-mode`, images as embedded data URIs, glyphs as
+   filled outlines. Output is a string or a writer, not a file, so a caller
+   composes it.
+3. **What SVG cannot say, said plainly.** Non-isolated and knockout
+   transparency groups (ISO 32000 §11.4.6) have no SVG equivalent; mesh
+   shadings (types 4-7) have none either. Each such subtree is rendered to a
+   pixmap by an ordinary raster backend and embedded as an image, and the
+   crate reports which regions it had to rasterize so a caller knows what
+   they got. A silent raster fallback is the failure mode to avoid.
+4. **Its own correctness story, because the board cannot score it.** The
+   conformance board compares our pixels to `pdfium_test`'s, and an SVG file
+   has none. M24's proof is a round trip: render the SVG with `resvg` at the
+   board's DPI and compare *that* pixmap to the oracle's PNG with the same
+   SSIM the board uses. The bar is deliberately below the raster board's —
+   `resvg` is a second engine with its own antialiasing — and the number is
+   published rather than negotiated.
+
+Not in M24: SVG as an input. That is M25.
+
+**Rules:** `resvg` is a dev-dependency of the test only and never enters the
+shipped tree; the pure-Rust check keeps passing; the raster board is
+byte-identical before and after the trait change, and that is the gate on
+item 1 landing at all.
+**Exit:** `pdfrum-svg` converts every file of `benches/corpus`, the round
+trip scores above the stated floor on each, the rasterized-region report is
+non-empty exactly where the file has a mesh shading or a non-isolated
+group, and `docs/design/svg.md` records the mapping and its limits.
+
+
+## M25 — SVG ingestion: vector assets into a page  *(scoped 2026-09-06)*  — NOT STARTED
+
+A caller with a logo has an SVG and does not want it blurry. M25 compiles
+SVG into a PDF Form XObject so it goes in as vector, and it is the mirror of
+M24 across the same geometry model.
+
+1. **`usvg` resolves the SVG; we compile its tree.** Parsing SVG properly is
+   a project — CSS, `use`, nested transforms, gradients, filters, text with
+   fonts — and `usvg` already does it, in pure Rust, producing a simple tree
+   of paths, groups and images. We walk that tree and emit content-stream
+   operators through `pdfrum-edit`. Writing our own SVG parser is declined
+   here in writing: it would be a second incomplete implementation of a
+   large specification for no gain.
+2. **A Form XObject, placed by the caller.** The result is
+   `/Subtype /Form` with its own `/BBox` and `/Resources`, so it is one
+   object placed at any transform on any number of pages, not a copy per
+   placement. `Canvas::draw_svg` (M23) is the placement API.
+3. **Text is outlines by default, embedded fonts on request.** An SVG's text
+   depends on fonts the PDF may not carry. The default converts text to
+   paths, which always renders; a caller who passes a font gets real text
+   with `DocEdit::embed_font` behind it.
+4. **What is declined, per feature, in the doc:** SVG filters (no PDF
+   equivalent short of rasterizing), animation, scripting, and foreign
+   objects. Each is reported to the caller rather than dropped silently.
+
+**Rules:** `usvg` is the first new runtime dependency of these four
+milestones and goes through DEPS.md with the pure-Rust check; the feature is
+off by default so a caller who does not want SVG does not pay for it.
+**Exit:** a corpus of SVGs (the `resvg` test suite subset) compiles into
+pages that render within the M24 round-trip floor of rendering the same SVG
+directly, unsupported features are reported not swallowed, and
+`docs/design/svg.md` gains the ingestion half.
+
+
+## M26 — PDF/A: the checker first, the conversion second  *(scoped 2026-09-06)*  — NOT STARTED
+
+Archival conformance is where institutions actually buy, and no Rust crate
+converts an existing document. It is also a specification with dozens of
+independent requirements, where claiming compliance you do not have is worse
+than offering nothing. So M26 is ordered deliberately: report before repair.
+
+1. **`Document::check_pdfa(level)` — the checker.** A report of every
+   requirement the document fails, each naming the clause and the object,
+   for PDF/A-1b and A-2b. The requirements are not a short list and the doc
+   enumerates them: fonts all embedded and subsettable; no encryption; no
+   JavaScript, no embedded audio or video, no launch actions; XMP metadata
+   present and carrying the PDF/A identification schema, consistent with the
+   document information dictionary; an OutputIntent with an embedded ICC
+   profile; every annotation's flags legal; no external content references;
+   no transparency at all for A-1; device-independent colour or an
+   OutputIntent that defines it.
+2. **veraPDF as the oracle, exactly as `pdfium_test` is the board's.**
+   Every check is scored against veraPDF's verdict on the same file, over
+   the corpus, and the disagreements are enumerated the way
+   `docs/status/` records oracle divergences — ours right, theirs right, or
+   not determined. A checker nobody has cross-examined is a claim, not a
+   result.
+3. **`Document::to_pdfa(level, policy)` — the conversion, scoped.** A-2b
+   first, because A-1's blanket ban on transparency makes many real
+   documents unconvertible without rasterizing. The pipeline: embed and
+   subset every font we can, strip JavaScript and the forbidden action and
+   annotation kinds, flatten form fields and annotations where they cannot
+   stay, write the XMP and the OutputIntent with a profile through the
+   `moxcms` we already carry, and rewrite colour into the intent's space.
+4. **Unconvertible is an answer.** A document with a font we cannot embed
+   because it is not embeddable, or transparency under A-1, cannot be
+   converted faithfully. `policy` says what to do — refuse, or rasterize the
+   offending page and say which — and the return value names every
+   compromise. Silent lossy conversion is the failure mode to avoid.
+
+Not in M26: PDF/A-1a or A-3a, which require a full logical structure tree and
+tagged reading order — that is its own milestone and it depends on a
+structure model we do not have. Not in M26: PDF/UA. Both are named here so
+their absence is a decision.
+
+**Rules:** the checker ships before the converter and is useful alone; no
+compliance claim without a veraPDF score behind it; `moxcms` is already in
+the tree and no new colour dependency is taken.
+**Exit:** `check_pdfa` agrees with veraPDF on a published corpus with the
+disagreements enumerated and adjudicated; `to_pdfa(A2b)` produces files
+veraPDF passes for the inputs it accepts and a named compromise list for the
+rest; `docs/design/pdfa.md` carries the requirement table and the oracle
+comparison.
+
 
 ## M13 — Release
 
