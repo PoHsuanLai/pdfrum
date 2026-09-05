@@ -186,7 +186,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   images near 1:1. The gap that matters is our own stretch and unpack
   path, about 2× PDFium's for the same pixels — that is the pass to make.
 
-## Image pipeline pass (scoped 2026-09-05 from the side-by-side with PDFium) — NOT STARTED
+## Image pipeline pass (scoped 2026-09-05 from the side-by-side with PDFium; design `docs/design/image-rows.md`, approved by the user) — NOT STARTED
 
 - Read side by side with the two callgrind profiles (ours 3.86 G, PDFium's
   1.96 G on the guide at 150 DPI). PDFium's image path is one fused loop:
