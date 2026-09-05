@@ -56,11 +56,13 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
             pixmap
                 .save_png(&path)
                 .with_context(|| format!("cannot write {path}"))?;
-            eprintln!(
-                "{path}: page {number}, {} x {} px",
-                pixmap.width(),
-                pixmap.height()
-            );
+            if !out::quiet() {
+                eprintln!(
+                    "{path}: page {number}, {} x {} px",
+                    pixmap.width(),
+                    pixmap.height()
+                );
+            }
         }
     }
     Ok(ExitCode::SUCCESS)
