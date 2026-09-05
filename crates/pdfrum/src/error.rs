@@ -65,6 +65,18 @@ pub enum Error {
     #[error("cannot extract text: {0}")]
     Text(#[from] pdfrum_text::Error),
 
+    /// A ceiling the caller set in [`Limits`](crate::Limits) was exceeded:
+    /// a render whose target has more pixels than
+    /// [`Limits::max_render_pixels`](crate::Limits::max_render_pixels)
+    /// allows.
+    ///
+    /// The one variant besides [`Error::WrongPassword`] a caller acts on
+    /// rather than reports: the payload says which cap and by how much, and
+    /// its message says what would satisfy it. Never produced by a default
+    /// `Limits`, whose ceilings are all off.
+    #[error(transparent)]
+    Limit(#[from] pdfrum_common::LimitExceeded),
+
     /// The filesystem refused a read or a write. Only the path-taking
     /// convenience methods ([`Document::open`](crate::Document::open),
     /// [`Document::save`](crate::Document::save)) can produce this; the
