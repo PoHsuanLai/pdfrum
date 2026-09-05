@@ -186,12 +186,38 @@ fn announced_graphics(term: &str) -> Graphics {
 
 /// The bytes that show `pixmap` in the terminal at its pixel size (kitty,
 /// iTerm2) or `columns` wide (half-blocks, two pixels per row of cells).
-pub fn picture(pixmap: &Pixmap, graphics: Graphics, columns: u16) -> Vec<u8> {
+/// Half-block rows start `pad` cells in; the pixel protocols draw at the
+/// cursor, so a caller places that itself.
+pub fn picture(pixmap: &Pixmap, graphics: Graphics, columns: u16, pad: u16) -> Vec<u8> {
     match graphics {
         Graphics::Off => Vec::new(),
         Graphics::Kitty => kitty(pixmap),
         Graphics::Iterm => iterm(pixmap),
-        Graphics::Halfblock => halfblock(pixmap, columns),
+        Graphics::Halfblock => halfblock(pixmap, columns, pad),
+    }
+}
+
+/// The size of one cell in pixels, when the terminal says (`kitty`,
+/// `WezTerm`, `Ghostty` and `iTerm2` do), else the common 8 by 16.
+#[derive(Debug, Clone, Copy)]
+pub struct Screen {
+    pub cell_width: f64,
+    pub cell_height: f64,
+}
+
+pub fn screen() -> Screen {
+    let (cell_width, cell_height) = crossterm::terminal::window_size()
+        .ok()
+        .filter(|w| w.width > 0 && w.height > 0 && w.columns > 0 && w.rows > 0)
+        .map_or((8.0, 16.0), |w| {
+            (
+                f64::from(w.width) / f64::from(w.columns),
+                f64::from(w.height) / f64::from(w.rows),
+            )
+        });
+    Screen {
+        cell_width,
+        cell_height,
     }
 }
 
@@ -202,24 +228,47 @@ fn kitty(pixmap: &Pixmap) -> Vec<u8> {
     let Ok(png) = pixmap.encode_png() else {
         return Vec::new();
     };
-    let encoded = base64(&png);
+    let mut out = kitty_chunks(&png, "a=T,f=100,q=2");
+    out.push(b'\n');
+    out
+}
+
+/// The PNG as chunked `_G` commands whose first carries `control`.
+fn kitty_chunks(png: &[u8], control: &str) -> Vec<u8> {
+    let encoded = base64(png);
     let mut out = Vec::with_capacity(encoded.len() + 64);
     let chunks: Vec<&[u8]> = encoded.as_bytes().chunks(4096).collect();
     for (i, chunk) in chunks.iter().enumerate() {
         let last = i + 1 == chunks.len();
-        let control = if i == 0 {
-            format!("a=T,f=100,q=2,m={}", u8::from(!last))
+        let head = if i == 0 {
+            format!("{control},m={}", u8::from(!last))
         } else {
             format!("m={}", u8::from(!last))
         };
         out.extend_from_slice(b"\x1b_G");
-        out.extend_from_slice(control.as_bytes());
+        out.extend_from_slice(head.as_bytes());
         out.push(b';');
         out.extend_from_slice(chunk);
         out.extend_from_slice(b"\x1b\\");
     }
-    out.push(b'\n');
     out
+}
+
+/// Kitty, in two steps so a page is sent once and shown many times:
+/// [`kitty_transmit`] stores `png` under `id` without drawing it,
+/// [`kitty_place`] draws the stored image at the cursor, and
+/// [`kitty_delete`] frees it. Placing is a few bytes; transmitting is the
+/// whole picture, so a pager transmits while it waits for a key.
+pub fn kitty_transmit(id: u32, png: &[u8]) -> Vec<u8> {
+    kitty_chunks(png, &format!("a=t,f=100,q=2,i={id}"))
+}
+
+pub fn kitty_place(id: u32) -> Vec<u8> {
+    format!("\x1b_Ga=p,q=2,i={id}\x1b\\").into_bytes()
+}
+
+pub fn kitty_delete(id: u32) -> Vec<u8> {
+    format!("\x1b_Ga=d,d=I,q=2,i={id}\x1b\\").into_bytes()
 }
 
 /// iTerm2 inline image: OSC 1337 `File=inline=1:` then the PNG in base64.
@@ -245,7 +294,7 @@ fn iterm(pixmap: &Pixmap) -> Vec<u8> {
 /// Half-blocks: each cell shows two pixels, the upper as the foreground of
 /// `▀` and the lower as its background, in 24-bit colour. The picture is
 /// scaled to `columns` cells wide by nearest-neighbour sampling.
-fn halfblock(pixmap: &Pixmap, columns: u16) -> Vec<u8> {
+fn halfblock(pixmap: &Pixmap, columns: u16, pad: u16) -> Vec<u8> {
     let (w, h) = (pixmap.width(), pixmap.height());
     if w == 0 || h == 0 || columns == 0 {
         return Vec::new();
@@ -271,12 +320,14 @@ fn halfblock(pixmap: &Pixmap, columns: u16) -> Vec<u8> {
         ]
     };
     let mut out = String::new();
+    let margin = " ".repeat(usize::from(pad));
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "cell coordinates scaled back to pixels, all inside the picture"
     )]
     for row in 0..rows {
+        out.push_str(&margin);
         let y_top = (f64::from(row) * 2.0 * step) as u32;
         let y_bottom = ((f64::from(row) * 2.0 + 1.0) * step) as u32;
         for col in 0..cols {
@@ -331,7 +382,7 @@ pub fn base64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Graphics, base64, halfblock, kitty};
+    use super::{Graphics, base64, halfblock, kitty, kitty_delete, kitty_place, kitty_transmit};
     use pdfrum::Pixmap;
 
     #[test]
@@ -352,13 +403,25 @@ mod tests {
             "one chunk for a tiny PNG"
         );
         assert!(k.ends_with(b"\x1b\\\n"));
-        let h = String::from_utf8(halfblock(&pixmap, 2)).unwrap();
+        let stored = kitty_transmit(7, b"png-bytes");
+        assert!(
+            stored.starts_with(b"\x1b_Ga=t,f=100,q=2,i=7,m=0;"),
+            "{stored:?}"
+        );
+        assert_eq!(kitty_place(7), b"\x1b_Ga=p,q=2,i=7\x1b\\");
+        assert_eq!(kitty_delete(7), b"\x1b_Ga=d,d=I,q=2,i=7\x1b\\");
+        let h = String::from_utf8(halfblock(&pixmap, 2, 0)).unwrap();
         assert_eq!(
             h.matches('\u{2580}').count(),
             2,
             "2 columns, one row of two-pixel cells"
         );
         assert!(h.contains("38;2;255;0;0m"));
-        assert!(super::picture(&pixmap, Graphics::Off, 10).is_empty());
+        assert!(super::picture(&pixmap, Graphics::Off, 10, 0).is_empty());
+        let padded = String::from_utf8(halfblock(&pixmap, 2, 3)).unwrap();
+        assert!(
+            padded.starts_with("   \x1b["),
+            "three cells of margin: {padded:?}"
+        );
     }
 }

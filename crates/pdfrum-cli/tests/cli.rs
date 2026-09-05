@@ -1282,7 +1282,11 @@ fn extract_images_folds_repeated_draws_and_leaves_spacers_out_unless_asked() {
     assert!(all.as_array().unwrap().iter().all(|r| r["uses"] == 1));
 
     let fqa = "../../../benches/corpus/image_en_fqa.pdf";
-    assert!(stdout(&["extract", "images", fqa]).unwrap().contains("no images"));
+    assert!(
+        stdout(&["extract", "images", fqa])
+            .unwrap()
+            .contains("no images")
+    );
     let spacers = json(&["extract", "images", fqa, "--all", "--json"]).unwrap();
     assert_eq!(spacers.as_array().unwrap().len(), 301);
     assert!(spacers.as_array().unwrap().iter().all(|r| r["width"] == 2));
@@ -1290,7 +1294,13 @@ fn extract_images_folds_repeated_draws_and_leaves_spacers_out_unless_asked() {
 
 #[test]
 fn inspect_object_hints_at_what_a_reference_is() {
-    let text = stdout(&["inspect", "object", fx("fixtures/hello_world_2_pages.pdf"), "1"]).unwrap();
+    let text = stdout(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "1",
+    ])
+    .unwrap();
     assert!(text.contains("/Pages 2 0 R  % Pages"), "{text}");
     let xref = stdout(&["inspect", "xref", fx("fixtures/bug_1484283.pdf")]).unwrap();
     assert!(xref.contains("/Root 1 0 R  % Catalog"), "{xref}");

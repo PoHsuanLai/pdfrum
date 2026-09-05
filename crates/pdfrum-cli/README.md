@@ -17,7 +17,7 @@ pdfrum extract attachments invoice.pdf -o attachments/
 pdfrum extract annotations reviewed.pdf
 pdfrum extract signatures signed.pdf
 pdfrum preview report.pdf --page 3           # the page, in the terminal
-pdfrum view report.pdf                        # a pager: j/k, /find, q
+pdfrum view report.pdf                        # a pager: pages pre-rendered, j/k or arrows, / find, +/- zoom, q
 pdfrum search -i "total due" invoice.pdf      # grep for a document
 pdfrum pages merge a.pdf b.pdf -o both.pdf
 pdfrum pages split both.pdf -o pages/          # one file per page

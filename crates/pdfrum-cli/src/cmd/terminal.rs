@@ -1,8 +1,11 @@
 //! The commands that need a terminal: `preview`, `view`, `search`.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Condvar, Mutex};
 
 use anyhow::{Context, Result, bail};
 use pdfrum::{Document, FindOptions, RenderOptions, RenderSession, VelloCpuBackend};
@@ -42,7 +45,7 @@ fn show(
         &RenderOptions::scaled(scale),
         session,
     )?;
-    let bytes = term::picture(&pixmap, term.graphics, columns);
+    let bytes = term::picture(&pixmap, term.graphics, columns, 0);
     let mut stdout = std::io::stdout().lock();
     stdout.write_all(&bytes).context("cannot write to stdout")?;
     stdout.flush().context("cannot write to stdout")?;
@@ -70,9 +73,366 @@ pub fn preview(
 
 // ---- view -----------------------------------------------------------------
 
-/// A pager: one page at a time, keys to move, `/` to search, `q` to leave.
+/// What one frame of the pager is: a page at a zoom on a screen of a size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Key {
+    page: u32,
+    zoom: u32,
+    cols: u16,
+    rows: u16,
+}
+
+/// Where a page lands on the screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Layout {
+    /// Points to pixels.
+    scale: f64,
+    /// The picture's width and height in cells.
+    cols: u16,
+    rows: u16,
+    /// The left margin that centres it.
+    pad: u16,
+}
+
+/// A rendered frame, ready for the terminal.
+struct Frame {
+    layout: Layout,
+    picture: Picture,
+}
+
+/// The bytes of a frame: kitty's are a PNG the pager stores in the
+/// terminal once and places by id; the others draw inline at the cursor
+/// (half-block rows carry their margin).
+enum Picture {
+    Kitty(Vec<u8>),
+    Inline(Vec<u8>),
+}
+
+/// Frames rendered so far, and a bell for the one being waited on.
+#[derive(Default)]
+struct Cache {
+    frames: Mutex<HashMap<Key, Result<Frame, String>>>,
+    ready: Condvar,
+}
+
+/// The page fits the screen at zoom 100 — the width less one column, the
+/// height less the status row — and sits in the middle.
+fn layout(page: (f64, f64), key: Key, screen: term::Screen, graphics: Graphics) -> Layout {
+    let (page_w, page_h) = (page.0.max(1.0), page.1.max(1.0));
+    let avail_cols = f64::from(key.cols.saturating_sub(1).max(10));
+    let avail_rows = f64::from(key.rows.saturating_sub(1).max(4));
+    let zoom = f64::from(key.zoom) / 100.0;
+    let (scale, cols, rows) = if graphics == Graphics::Halfblock {
+        // One pixel per column, two per row.
+        let fit = avail_cols.min(2.0 * avail_rows * page_w / page_h);
+        let columns = (fit * zoom).max(10.0).floor();
+        (
+            columns / page_w,
+            columns,
+            (columns * page_h / page_w / 2.0).ceil(),
+        )
+    } else {
+        let fit =
+            (avail_cols * screen.cell_width / page_w).min(avail_rows * screen.cell_height / page_h);
+        let scale = (fit * zoom).clamp(0.05, 8.0);
+        (
+            scale,
+            (page_w * scale / screen.cell_width).ceil(),
+            (page_h * scale / screen.cell_height).ceil(),
+        )
+    };
+    let cols = cols.min(f64::from(u16::MAX));
+    let rows = rows.min(f64::from(u16::MAX));
+    let pad = ((avail_cols - cols) / 2.0).max(0.0);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "cell counts: non-negative and bounded by the screen and the zoom cap"
+    )]
+    let (cols, rows, pad) = (cols as u16, rows as u16, pad as u16);
+    Layout {
+        scale,
+        cols,
+        rows,
+        pad,
+    }
+}
+
+fn render_frame(
+    doc: &Document,
+    key: Key,
+    graphics: Graphics,
+    session: &mut RenderSession,
+) -> Result<Frame, String> {
+    let page = doc.page(key.page).map_err(|e| e.to_string())?;
+    let layout = layout((page.width(), page.height()), key, term::screen(), graphics);
+    let pixmap = page
+        .render_on(
+            &VelloCpuBackend::new(),
+            &RenderOptions::scaled(layout.scale),
+            session,
+        )
+        .map_err(|e| e.to_string())?;
+    let picture = if graphics == Graphics::Kitty {
+        Picture::Kitty(pixmap.encode_png().map_err(|e| e.to_string())?)
+    } else {
+        Picture::Inline(term::picture(&pixmap, graphics, layout.cols, layout.pad))
+    };
+    Ok(Frame { layout, picture })
+}
+
+/// The render thread: takes requests as they come, in the order they were
+/// asked for, skips what is already cached, and rings the bell after each
+/// frame.
+fn render_worker(doc: &Document, requests: &Receiver<Key>, cache: &Cache, graphics: Graphics) {
+    let mut session = RenderSession::new();
+    while let Ok(first) = requests.recv() {
+        let mut batch = vec![first];
+        while let Ok(key) = requests.try_recv() {
+            batch.push(key);
+        }
+        for key in batch {
+            let cached = cache
+                .frames
+                .lock()
+                .map_or(true, |frames| frames.contains_key(&key));
+            if cached {
+                continue;
+            }
+            let frame = render_frame(doc, key, graphics, &mut session);
+            if let Ok(mut frames) = cache.frames.lock() {
+                frames.insert(key, frame);
+            }
+            cache.ready.notify_all();
+        }
+    }
+}
+
+/// The keys the pager answers to, for the status row.
+const KEYS: &str = "j/k next/prev  g/G first/last  +/- zoom  / find  q quit";
+
+/// The pager's state between keypresses.
+struct Pager<'a> {
+    doc: &'a Document,
+    count: u32,
+    page: u32,
+    /// Percent, so the arithmetic stays integral.
+    zoom: u32,
+    needle: String,
+    term: Term,
+    /// Kitty: the image id each frame was stored under, and the id on
+    /// screen now.
+    stored: HashMap<Key, u32>,
+    next_id: u32,
+    placed: Option<u32>,
+}
+
+impl Pager<'_> {
+    /// The status row: where we are, and what the keys do.
+    fn status(&self, stdout: &mut std::io::Stdout, cols: u16, row: u16, note: &str) -> Result<()> {
+        use crossterm::{cursor, execute};
+        let text = format!(
+            " page {}/{}  zoom {}%  {KEYS}{}{note}",
+            self.page + 1,
+            self.count,
+            self.zoom,
+            if self.needle.is_empty() {
+                String::new()
+            } else {
+                format!("  [/{}: n next]", self.needle)
+            }
+        );
+        let width = usize::from(cols);
+        let line: String = text.chars().take(width).collect();
+        execute!(stdout, cursor::MoveTo(0, row))?;
+        write!(
+            stdout,
+            "{}",
+            self.term.paint(Style::Bar, &format!("{line:<width$}"))
+        )?;
+        stdout.flush()?;
+        Ok(())
+    }
+
+    /// Kitty: send the picture to the terminal if it is not there yet, and
+    /// say which id it lives under.
+    fn transmit(&mut self, stdout: &mut std::io::Stdout, key: Key, png: &[u8]) -> Result<u32> {
+        if let Some(&id) = self.stored.get(&key) {
+            return Ok(id);
+        }
+        self.next_id += 1;
+        let id = self.next_id;
+        stdout.write_all(&term::kitty_transmit(id, png))?;
+        self.stored.insert(key, id);
+        Ok(id)
+    }
+
+    /// Draw one frame in place of the last: no clear of the whole screen,
+    /// one synchronized update, and only the rows below the picture wiped.
+    fn draw(
+        &mut self,
+        stdout: &mut std::io::Stdout,
+        key: Key,
+        frame: &Frame,
+        status_row: u16,
+    ) -> Result<()> {
+        use crossterm::{cursor, execute, terminal};
+        execute!(stdout, terminal::BeginSynchronizedUpdate)?;
+        match &frame.picture {
+            Picture::Kitty(png) => {
+                let id = self.transmit(stdout, key, png)?;
+                if let Some(old) = self.placed.replace(id)
+                    && old != id
+                {
+                    // Take the old placement down but keep its picture.
+                    stdout.write_all(format!("\x1b_Ga=d,d=i,q=2,i={old}\x1b\\").as_bytes())?;
+                }
+                execute!(stdout, cursor::MoveTo(frame.layout.pad, 0))?;
+                stdout.write_all(&term::kitty_place(id))?;
+            }
+            Picture::Inline(bytes) => {
+                let pad = if self.term.graphics == Graphics::Halfblock {
+                    0
+                } else {
+                    frame.layout.pad
+                };
+                execute!(stdout, cursor::MoveTo(pad, 0))?;
+                stdout.write_all(bytes)?;
+            }
+        }
+        execute!(
+            stdout,
+            cursor::MoveTo(0, frame.layout.rows.min(status_row)),
+            terminal::Clear(terminal::ClearType::FromCursorDown)
+        )?;
+        execute!(stdout, terminal::EndSynchronizedUpdate)?;
+        Ok(())
+    }
+
+    /// Kitty: while the terminal waits for a key, send the frames a
+    /// keypress is likely to want, so placing them later is instant.
+    fn transmit_ahead(
+        &mut self,
+        stdout: &mut std::io::Stdout,
+        cache: &Cache,
+        keys: &[Key],
+    ) -> Result<()> {
+        if self.term.graphics != Graphics::Kitty {
+            return Ok(());
+        }
+        let Ok(frames) = cache.frames.lock() else {
+            return Ok(());
+        };
+        let mut sent = 0;
+        for &key in keys {
+            if self.stored.contains_key(&key) {
+                continue;
+            }
+            if let Some(Ok(Frame {
+                picture: Picture::Kitty(png),
+                ..
+            })) = frames.get(&key)
+            {
+                self.transmit(stdout, key, png)?;
+                sent += 1;
+            }
+            if sent == 2 {
+                break;
+            }
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    /// Forget frames far from `key`, in the terminal too.
+    fn prune(&mut self, stdout: &mut std::io::Stdout, cache: &Cache, key: Key) -> Result<()> {
+        let far = |k: &Key| {
+            k.page.abs_diff(key.page) > 2
+                || k.zoom != key.zoom
+                || k.cols != key.cols
+                || k.rows != key.rows
+        };
+        if let Ok(mut frames) = cache.frames.lock()
+            && frames.len() > 8
+        {
+            frames.retain(|k, _| !far(k));
+        }
+        let gone: Vec<Key> = self.stored.keys().filter(|k| far(k)).copied().collect();
+        for k in gone {
+            if let Some(id) = self.stored.remove(&k) {
+                stdout.write_all(&term::kitty_delete(id))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// One keypress; `true` when it is time to leave.
+    fn keypress(
+        &mut self,
+        code: crossterm::event::KeyCode,
+        modifiers: crossterm::event::KeyModifiers,
+        stdout: &mut std::io::Stdout,
+        status_row: u16,
+    ) -> Result<bool> {
+        use crossterm::event::{KeyCode, KeyModifiers};
+        use crossterm::{cursor, execute};
+        let last = self.count - 1;
+        match code {
+            KeyCode::Char('q') | KeyCode::Esc => return Ok(true),
+            KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => return Ok(true),
+            KeyCode::Char('j' | ' ' | 'l')
+            | KeyCode::Down
+            | KeyCode::Right
+            | KeyCode::PageDown
+            | KeyCode::Enter => self.page = (self.page + 1).min(last),
+            KeyCode::Char('k' | 'b' | 'h') | KeyCode::Up | KeyCode::Left | KeyCode::PageUp => {
+                self.page = self.page.saturating_sub(1);
+            }
+            KeyCode::Char('g') | KeyCode::Home => self.page = 0,
+            KeyCode::Char('G') | KeyCode::End => self.page = last,
+            KeyCode::Char('+' | '=') => self.zoom = (self.zoom * 5 / 4).min(400),
+            KeyCode::Char('-') => self.zoom = (self.zoom * 4 / 5).max(25),
+            KeyCode::Char('0') => self.zoom = 100,
+            KeyCode::Char('/') => {
+                execute!(stdout, cursor::MoveTo(0, status_row))?;
+                self.needle = read_line(stdout, self.term, "/")?;
+                if let Some(hit) = find_from(self.doc, &self.needle, self.page, self.count) {
+                    self.page = hit;
+                }
+            }
+            KeyCode::Char('n') if !self.needle.is_empty() => {
+                let from = (self.page + 1) % self.count;
+                if let Some(hit) = find_from(self.doc, &self.needle, from, self.count) {
+                    self.page = hit;
+                }
+            }
+            _ => {}
+        }
+        Ok(false)
+    }
+}
+
+/// The frame for `key`, from the cache or after the worker rings; `waiting`
+/// runs once if there is a wait. The frame stays in the cache.
+fn wait_for(cache: &Cache, key: Key, mut waiting: impl FnMut() -> Result<()>) -> Result<()> {
+    let poisoned = || anyhow::anyhow!("the render thread panicked");
+    let mut frames = cache.frames.lock().map_err(|_| poisoned())?;
+    let mut told = false;
+    while !frames.contains_key(&key) {
+        if !told {
+            waiting()?;
+            told = true;
+        }
+        frames = cache.ready.wait(frames).map_err(|_| poisoned())?;
+    }
+    Ok(())
+}
+
+/// A pager: one page at a time, centred and fitted to the screen; the
+/// neighbouring pages render in the background so a keypress shows the
+/// next page from the cache rather than after a wait.
 pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Result<ExitCode> {
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, read};
+    use crossterm::event::{Event, KeyEvent, read};
     use crossterm::{cursor, execute, terminal};
 
     let doc = out::open(file, password)?;
@@ -86,78 +446,80 @@ pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Resu
     if term.graphics == Graphics::Off {
         bail!("this terminal shows no pictures; try `--graphics halfblock`");
     }
-    let mut page = start.clamp(1, count) - 1;
-    // Percent, so the arithmetic stays integral.
-    let mut zoom: u32 = 100;
-    let mut session = RenderSession::new();
-    let mut needle = String::new();
+    let mut pager = Pager {
+        doc: &doc,
+        count,
+        page: start.clamp(1, count) - 1,
+        zoom: 100,
+        needle: String::new(),
+        term,
+        stored: HashMap::new(),
+        next_id: 0,
+        placed: None,
+    };
 
     let mut stdout = std::io::stdout();
     terminal::enable_raw_mode().context("cannot put the terminal in raw mode")?;
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)
         .context("cannot switch screens")?;
+    let cache = Cache::default();
+    let (requests, inbox) = mpsc::channel::<Key>();
     // Whatever happens below, the terminal comes back.
-    let outcome = (|| -> Result<()> {
+    let outcome = std::thread::scope(|scope| -> Result<()> {
+        let (doc_ref, cache_ref, graphics) = (&doc, &cache, term.graphics);
+        scope.spawn(move || render_worker(doc_ref, &inbox, cache_ref, graphics));
         loop {
-            let (cols, _rows) = term::size();
-            execute!(
-                stdout,
-                terminal::Clear(terminal::ClearType::All),
-                cursor::MoveTo(0, 0)
-            )?;
-            let columns = u16::try_from(u32::from(cols.saturating_sub(1)) * zoom / 100)
-                .unwrap_or(u16::MAX)
-                .max(10);
-            show(&doc, page, term, columns, &mut session)?;
-            let status = format!(
-                "page {}/{count}  zoom {zoom}%  j/k next/prev  g/G first/last  +/- zoom  /find  q quit{}",
-                page + 1,
-                if needle.is_empty() {
-                    String::new()
-                } else {
-                    format!("  [/{needle}: n next]")
+            let (cols, rows) = term::size();
+            let key = Key {
+                page: pager.page,
+                zoom: pager.zoom,
+                cols,
+                rows,
+            };
+            // This page first, then the ones a keypress is likely to want.
+            let ahead: Vec<Key> = [key.page + 1, key.page.wrapping_sub(1), key.page + 2]
+                .into_iter()
+                .filter(|&p| p < count)
+                .map(|p| Key { page: p, ..key })
+                .collect();
+            for wanted in std::iter::once(key).chain(ahead.iter().copied()) {
+                let _ = requests.send(wanted);
+            }
+            let status_row = rows.saturating_sub(1);
+            wait_for(&cache, key, || {
+                pager.status(&mut stdout, cols, status_row, "  rendering")
+            })?;
+            {
+                let frames = cache
+                    .frames
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("the render thread panicked"))?;
+                match frames.get(&key) {
+                    Some(Ok(frame)) => pager.draw(&mut stdout, key, frame, status_row)?,
+                    Some(Err(e)) => {
+                        execute!(
+                            stdout,
+                            terminal::Clear(terminal::ClearType::All),
+                            cursor::MoveTo(0, 0)
+                        )?;
+                        write!(stdout, "cannot render page {}: {e}", key.page + 1)?;
+                    }
+                    None => {}
                 }
-            );
-            write!(stdout, "\r\n{}", term.paint(Style::Bar, &status))?;
-            stdout.flush()?;
+            }
+            pager.status(&mut stdout, cols, status_row, "")?;
+            pager.prune(&mut stdout, &cache, key)?;
+            pager.transmit_ahead(&mut stdout, &cache, &ahead)?;
             if let Event::Key(KeyEvent {
                 code, modifiers, ..
             }) = read()?
+                && pager.keypress(code, modifiers, &mut stdout, status_row)?
             {
-                match code {
-                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        return Ok(());
-                    }
-                    KeyCode::Char('j' | ' ')
-                    | KeyCode::Down
-                    | KeyCode::PageDown
-                    | KeyCode::Enter => {
-                        page = (page + 1).min(count - 1);
-                    }
-                    KeyCode::Char('k' | 'b') | KeyCode::Up | KeyCode::PageUp => {
-                        page = page.saturating_sub(1);
-                    }
-                    KeyCode::Char('g') | KeyCode::Home => page = 0,
-                    KeyCode::Char('G') | KeyCode::End => page = count - 1,
-                    KeyCode::Char('+' | '=') => zoom = (zoom * 5 / 4).min(400),
-                    KeyCode::Char('-') => zoom = (zoom * 4 / 5).max(25),
-                    KeyCode::Char('/') => {
-                        needle = read_line(&mut stdout, term, "/")?;
-                        if let Some(hit) = find_from(&doc, &needle, page, count) {
-                            page = hit;
-                        }
-                    }
-                    KeyCode::Char('n') if !needle.is_empty() => {
-                        if let Some(hit) = find_from(&doc, &needle, (page + 1) % count, count) {
-                            page = hit;
-                        }
-                    }
-                    _ => {}
-                }
+                return Ok(());
             }
         }
-    })();
+    });
+    drop(requests);
     let _ = execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen);
     let _ = terminal::disable_raw_mode();
     outcome?;
@@ -313,4 +675,40 @@ pub fn search(
     } else {
         ExitCode::SUCCESS
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Key, layout};
+    use crate::term::{Graphics, Screen};
+
+    #[test]
+    fn a_page_fits_the_screen_at_zoom_100_and_sits_in_the_middle() {
+        let screen = Screen {
+            cell_width: 10.0,
+            cell_height: 20.0,
+        };
+        let key = Key {
+            page: 0,
+            zoom: 100,
+            cols: 101,
+            rows: 41,
+        };
+        // A portrait page on a 100x40-cell screen (the last column and the
+        // status row are kept free): height is the limit, 40 rows of 20 px
+        // = 800 px for 842 pt -> scale 0.95, 566 px wide = 57 cells, so
+        // (100 - 57) / 2 = 21 cells of margin.
+        let l = layout((595.0, 842.0), key, screen, Graphics::Kitty);
+        assert!((l.scale - 800.0 / 842.0).abs() < 1e-9, "{}", l.scale);
+        assert_eq!((l.cols, l.rows, l.pad), (57, 40, 21));
+        // Half-blocks: one column per pixel, two rows per... two pixels per
+        // row, so 40 rows fit 80 px of height, 80 * 595 / 842 = 56 columns.
+        let l = layout((595.0, 842.0), key, screen, Graphics::Halfblock);
+        assert_eq!((l.cols, l.rows, l.pad), (56, 40, 22));
+        assert!((l.scale - 56.0 / 595.0).abs() < 1e-9, "{}", l.scale);
+        // Zooming in doubles the width and the margin goes.
+        let zoomed = Key { zoom: 200, ..key };
+        let l = layout((595.0, 842.0), zoomed, screen, Graphics::Kitty);
+        assert_eq!((l.cols, l.pad), (114, 0));
+    }
 }
