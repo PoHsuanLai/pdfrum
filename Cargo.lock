@@ -2000,6 +2000,7 @@ name = "pdfrum-markdown"
 version = "0.1.0"
 dependencies = [
  "kurbo",
+ "pdfrum",
  "pdfrum-common",
  "pdfrum-doc",
  "pdfrum-object",

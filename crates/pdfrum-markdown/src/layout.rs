@@ -113,6 +113,7 @@ mod tests {
             bbox: Rect::new(x, y, x + 50.0, y + 10.0),
             font_size: 10.0,
             bold: false,
+            bold_prefix: 0,
             mono: false,
             mcids: Vec::new(),
             segments: Vec::new(),

@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use crate::ast::Block;
+use crate::ast::{Block, lead_in};
 
 /// The blocks as Markdown, blank-line separated, ending in one newline.
 #[must_use]
@@ -20,7 +20,13 @@ pub fn render(blocks: &[Block]) -> String {
                 out.push('\n');
             }
             Block::Paragraph(text) => {
-                out.push_str(&escape(text.trim()));
+                // The lead-in's marks are the crate's own and stay; the
+                // text on either side is the page's and is escaped.
+                if let Some((lead, rest)) = lead_in(text.trim()) {
+                    let _ = write!(out, "**{}**{}", escape(lead), escape_inline(rest));
+                } else {
+                    out.push_str(&escape(text.trim()));
+                }
                 out.push('\n');
             }
             Block::List { ordered, items } => {
@@ -87,8 +93,18 @@ fn cell(text: &str) -> String {
 /// The few characters that would otherwise be read as markup at the start
 /// of a line or around a word.
 fn escape(text: &str) -> String {
+    escape_from(text, true)
+}
+
+/// [`escape`] for text that continues a line, where a leading `-` or `#`
+/// is not at the line's start.
+fn escape_inline(text: &str) -> String {
+    escape_from(text, false)
+}
+
+fn escape_from(text: &str, at_line_start: bool) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut at_line_start = true;
+    let mut at_line_start = at_line_start;
     for c in text.chars() {
         if at_line_start && matches!(c, '#' | '>' | '-' | '+' | '*') {
             out.push('\\');
@@ -119,6 +135,7 @@ mod tests {
                 text: "Intro".into(),
             },
             Block::Paragraph("Some *text* here.".into()),
+            Block::Paragraph("**Redaction** - Lets you *remove* text.".into()),
             Block::List {
                 ordered: true,
                 items: vec!["one".into(), "two".into()],
@@ -134,7 +151,7 @@ mod tests {
         ]);
         assert_eq!(
             md,
-            "## Intro\n\nSome \\*text\\* here.\n\n1. one\n2. two\n\n``\nlet a = `b`;\n``\n\n| h1 | h2 |\n| --- | --- |\n| a\\|b | c |\n\n![A chart](image)\n"
+            "## Intro\n\nSome \\*text\\* here.\n\n**Redaction** - Lets you \\*remove\\* text.\n\n1. one\n2. two\n\n``\nlet a = `b`;\n``\n\n| h1 | h2 |\n| --- | --- |\n| a\\|b | c |\n\n![A chart](image)\n"
                 .replace("``\nlet", "```\nlet")
                 .replace("`;\n``\n", "`;\n```\n")
         );
