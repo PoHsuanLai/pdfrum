@@ -103,9 +103,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## M20 — the CLI as a Unix citizen and an agent tool (scoped 2026-09-05, PLAN.md M20) — IN PROGRESS
 
-- Phase 1 — composition: `-` input everywhere, `-o -` on writers,
-  several files for `info|hash|doctor|search` with `file:page:` prefixes,
-  `--quiet`/`--verbose`, `PDFRUM_PASSWORD`, `--jsonl`.
+- ~~Phase 1 — composition~~ — landed 2026-09-05 (699700e, `docs/status/M20.md`):
+  `-` input everywhere, `-o -` on writers, several files for
+  `info|hash|doctor|search` with `file:page:` prefixes, `--quiet`/`--verbose`,
+  `PDFRUM_PASSWORD`, `--jsonl`; no facade gap.
+- ~~Phase 2, facade half~~ — `Page::words` landed 2026-09-05 (05ad806).
 - Phase 2 — `extract words --json` (facade `Page::words`), `inspect
   object --json`, `pdfrum schema <command>`.
 - Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
