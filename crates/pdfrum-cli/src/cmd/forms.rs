@@ -30,11 +30,11 @@ struct FieldRow {
     widgets: usize,
 }
 
-pub fn dump(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+pub fn dump(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let Some(form) = doc.form() else {
-        if json {
-            out::json(&Vec::<FieldRow>::new())?;
+        if json.is_on() {
+            out::items(&Vec::<FieldRow>::new(), json)?;
         } else {
             out::none("form fields");
         }
@@ -62,8 +62,8 @@ pub fn dump(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
             }
         })
         .collect();
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("form fields");
     } else {

@@ -268,6 +268,52 @@ pub fn json(value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 
+/// How a command whose answer is a list of items prints it: for people,
+/// as one JSON document (the array), or as one compact JSON object per
+/// line (`--jsonl`), which `jq -c`, `xargs` and `while read` take a line
+/// at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Json {
+    Off,
+    Document,
+    Lines,
+}
+
+impl Json {
+    /// From the `--json` and `--jsonl` flags, which clap keeps exclusive.
+    pub fn from_flags(json: bool, jsonl: bool) -> Self {
+        if jsonl {
+            Self::Lines
+        } else if json {
+            Self::Document
+        } else {
+            Self::Off
+        }
+    }
+
+    /// Whether anything but the human form was asked for.
+    pub fn is_on(self) -> bool {
+        self != Self::Off
+    }
+}
+
+/// The items of a list command in the JSON form asked for: the pretty
+/// array, or one compact object per line. Nothing for [`Json::Off`], which
+/// is the caller's human form.
+pub fn items<T: Serialize>(rows: &[T], mode: Json) -> Result<()> {
+    match mode {
+        Json::Off => Ok(()),
+        Json::Document => json(&rows),
+        Json::Lines => {
+            for row in rows {
+                let line = serde_json::to_string(row).context("cannot encode JSON")?;
+                write_all(format_args!("{line}\n"));
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Write to stdout, and treat a closed pipe as the reader being done rather
 /// than as a failure: `pdfrum extract text big.pdf | head` must exit 0 and
 /// quietly, the way every other Unix tool does.

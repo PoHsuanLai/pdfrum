@@ -256,17 +256,16 @@ enum Inspect {
     Xref {
         #[command(flatten)]
         input: Input,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        /// `--json`: the table with its trailer; `--jsonl`: one entry per line.
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// The incremental-update history: one row per saved revision.
     Revisions {
         #[command(flatten)]
         input: Input,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// The file as it stood at an earlier revision, written out whole.
     Revision {
@@ -286,9 +285,8 @@ enum Inspect {
         /// Pages to show, 1-based. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
 }
 
@@ -384,9 +382,8 @@ enum Forms {
     Dump {
         #[command(flatten)]
         input: Input,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// Set field values from a JSON object and save.
     Fill {
@@ -514,9 +511,8 @@ enum Extract {
         /// Pages to scan, 1-based. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// The outline (bookmarks) as an indented tree.
     Toc {
@@ -533,9 +529,8 @@ enum Extract {
         /// Write every attachment into this directory.
         #[arg(short, long, value_name = "DIR")]
         output: Option<PathBuf>,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// Annotations: highlights, notes, stamps, links, widgets.
     Annotations {
@@ -544,9 +539,8 @@ enum Extract {
         /// Pages to scan, 1-based. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// Digital signature fields: filter, reason, time, byte range.
     Signatures {
@@ -572,9 +566,8 @@ enum Extract {
         /// into one row or left out.
         #[arg(long)]
         all: bool,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
     /// Embedded font programs: list them, or write them into a directory.
     Fonts {
@@ -583,9 +576,8 @@ enum Extract {
         /// Write every font program into this directory.
         #[arg(short, long, value_name = "DIR")]
         output: Option<PathBuf>,
-        /// One JSON document.
-        #[arg(long)]
-        json: bool,
+        #[command(flatten)]
+        json: JsonArgs,
     },
 }
 
@@ -607,12 +599,26 @@ struct Inputs {
     files: Vec<PathBuf>,
 }
 
+/// The JSON forms of a command whose answer is a list of items.
+#[derive(Args)]
+struct JsonArgs {
+    /// One JSON document: the array of items.
+    #[arg(long)]
+    json: bool,
+    /// One compact JSON object per line, for `jq -c`, `xargs` and other
+    /// line-at-a-time tools.
+    #[arg(long, conflicts_with = "json")]
+    jsonl: bool,
+}
+
+impl JsonArgs {
+    fn mode(&self) -> out::Json {
+        out::Json::from_flags(self.json, self.jsonl)
+    }
+}
+
 /// `search`'s arguments: `grep`'s, as far as a document has them.
 #[derive(Args)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "command-line switches: each is a flag a person types"
-)]
 struct SearchArgs {
     /// What to look for.
     #[arg(value_name = "TEXT")]
@@ -632,10 +638,11 @@ struct SearchArgs {
     /// Never prefix a hit with its file.
     #[arg(long)]
     no_filename: bool,
-    /// One JSON document: an array of hits with page, offsets, line and
-    /// boxes; for several files, an array of `{file, hits}`.
-    #[arg(long)]
-    json: bool,
+    /// `--json`: an array of hits with page, offsets, line and boxes; for
+    /// several files, an array of `{file, hits}`. `--jsonl`: one hit per
+    /// line, with its `file` when the text form would name it.
+    #[command(flatten)]
+    json: JsonArgs,
 }
 
 fn main() -> ExitCode {
@@ -749,7 +756,7 @@ fn run_search(
             } else {
                 None
             },
-            json: args.json,
+            json: args.json.mode(),
         },
         term,
     )
@@ -771,16 +778,16 @@ fn run_extract(
             cmd::extract::markdown(&input.file, password, pages.as_deref(), json)
         }
         Extract::Links { input, pages, json } => {
-            cmd::extract::links(&input.file, password, pages.as_deref(), json, term)
+            cmd::extract::links(&input.file, password, pages.as_deref(), json.mode(), term)
         }
         Extract::Toc { input, json } => cmd::extract::toc(&input.file, password, json, term),
         Extract::Attachments {
             input,
             output,
             json,
-        } => cmd::extract::attachments(&input.file, password, output.as_deref(), json, term),
+        } => cmd::extract::attachments(&input.file, password, output.as_deref(), json.mode(), term),
         Extract::Annotations { input, pages, json } => {
-            cmd::extract::annotations(&input.file, password, pages.as_deref(), json, term)
+            cmd::extract::annotations(&input.file, password, pages.as_deref(), json.mode(), term)
         }
         Extract::Signatures { input, json } => {
             cmd::extract::signatures(&input.file, password, json, term)
@@ -797,14 +804,14 @@ fn run_extract(
             pages.as_deref(),
             output.as_deref(),
             all,
-            json,
+            json.mode(),
             term,
         ),
         Extract::Fonts {
             input,
             output,
             json,
-        } => cmd::extract::fonts(&input.file, password, output.as_deref(), json, term),
+        } => cmd::extract::fonts(&input.file, password, output.as_deref(), json.mode(), term),
     }
 }
 
@@ -856,15 +863,17 @@ fn run_inspect(
             generation,
             decode,
         } => cmd::inspect::object(&input.file, password, num, generation, decode, term),
-        Inspect::Xref { input, json } => cmd::inspect::xref(&input.file, password, json, term),
+        Inspect::Xref { input, json } => {
+            cmd::inspect::xref(&input.file, password, json.mode(), term)
+        }
         Inspect::Revisions { input, json } => {
-            cmd::inspect::revisions(&input.file, password, json, term)
+            cmd::inspect::revisions(&input.file, password, json.mode(), term)
         }
         Inspect::Revision { input, rev, output } => {
             cmd::inspect::revision(&input.file, password, rev, &output, term)
         }
         Inspect::Structure { input, pages, json } => {
-            cmd::inspect::structure(&input.file, password, pages.as_deref(), json, term)
+            cmd::inspect::structure(&input.file, password, pages.as_deref(), json.mode(), term)
         }
     }
 }
@@ -968,7 +977,7 @@ fn run_scripts(
 
 fn run_forms(what: Forms, password: Option<&str>, term: term::Term) -> anyhow::Result<ExitCode> {
     match what {
-        Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json, term),
+        Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json.mode(), term),
         Forms::Fill {
             input,
             data,
