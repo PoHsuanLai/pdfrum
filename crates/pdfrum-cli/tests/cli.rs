@@ -23,6 +23,32 @@ fn run(args: &[&str]) -> std::io::Result<Output> {
         .output()
 }
 
+/// [`run`] with bytes on stdin and extra environment variables.
+fn run_with(args: &[&str], stdin: &[u8], env: &[(&str, &str)]) -> std::io::Result<Output> {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
+        .args(args)
+        .envs(env.iter().copied())
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    if let Some(mut pipe) = child.stdin.take() {
+        pipe.write_all(stdin)?;
+    }
+    child.wait_with_output()
+}
+
+/// A fixture's bytes, for feeding stdin.
+fn fixture(name: &str) -> std::io::Result<Vec<u8>> {
+    std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name),
+    )
+}
+
 /// Stdout of a run that must succeed; the error names the exit code and
 /// carries stderr.
 fn stdout(args: &[&str]) -> Result<String, String> {
@@ -1492,6 +1518,97 @@ fn completions_and_manual_pages_come_from_the_command_tree() {
     );
     let count = std::fs::read_dir(&dir).unwrap().count();
     assert!(count > 40, "{count} pages");
+}
+
+// ---- M20 phase 1: composition ----------------------------------------------
+
+#[test]
+fn a_dash_reads_the_document_from_stdin() {
+    let bytes = fixture("two_signatures.pdf").unwrap();
+    let piped = run_with(&["info", "-"], &bytes, &[]).unwrap();
+    assert!(
+        piped.status.success(),
+        "{}",
+        String::from_utf8_lossy(&piped.stderr)
+    );
+    let piped = String::from_utf8(piped.stdout).unwrap();
+    let from_file = expected("info_two_signatures.txt").unwrap();
+    assert!(piped.starts_with("file         -\n"), "{piped}");
+    assert_eq!(
+        piped.lines().skip(1).collect::<Vec<_>>(),
+        from_file.lines().skip(1).collect::<Vec<_>>(),
+        "the same report but for the file line"
+    );
+
+    let text = run_with(
+        &["extract", "text", "-"],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(
+        String::from_utf8(text.stdout).unwrap(),
+        expected("text_hello_world_2_pages.txt").unwrap()
+    );
+
+    let locked = run_with(
+        &["info", "-", "--password", "1234", "--json"],
+        &fixture("encrypted.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert!(locked.status.success(), "{locked:?}");
+    let v: serde_json::Value = serde_json::from_slice(&locked.stdout).unwrap();
+    assert_eq!(v["file"], "-");
+    assert_eq!(v["encrypted"], true);
+    let refused = run_with(&["info", "-"], &fixture("encrypted.pdf").unwrap(), &[]).unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("cannot open -"),
+        "{refused:?}"
+    );
+
+    // `hash -` is the file's own hash: the bytes are the bytes.
+    let h = run_with(
+        &["hash", "-", "--json"],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&h.stdout).unwrap();
+    assert_eq!(
+        v["sha256"],
+        "67431cbec27df7cc86a57da5ff11b5151628fa93f661da79b9d272ec85bcdb03"
+    );
+
+    // Files derived from stdin are named after it.
+    let dir = scratch("stdin-render").unwrap();
+    let template = dir.join("{stem}-{n}.png");
+    let out = run_with(
+        &[
+            "render",
+            "--dpi",
+            "36",
+            "-o",
+            template.to_str().unwrap(),
+            "-",
+        ],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert!(dir.join("stdin-1.png").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    for verb in ["preview", "view"] {
+        let out = run_with(&[verb, "-"], &bytes, &[]).unwrap();
+        assert_eq!(out.status.code(), Some(1), "{verb} refuses stdin");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("give a path"),
+            "{out:?}"
+        );
+    }
 }
 
 // ---- javascript (a feature, off by default) --------------------------------

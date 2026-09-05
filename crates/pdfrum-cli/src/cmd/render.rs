@@ -33,10 +33,7 @@ pub fn run(req: &Request<'_>) -> Result<ExitCode> {
             selected.len()
         );
     }
-    let stem = req
-        .file
-        .file_stem()
-        .map_or_else(|| "page".to_owned(), |s| s.to_string_lossy().into_owned());
+    let stem = out::stem(req.file);
     let backend = VelloCpuBackend::new();
     let mut options = RenderOptions::scaled(req.scale);
     options.annotations = req.annotations;

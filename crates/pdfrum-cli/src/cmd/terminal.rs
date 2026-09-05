@@ -62,6 +62,9 @@ pub fn preview(
     width: Option<u16>,
     term: Term,
 ) -> Result<ExitCode> {
+    if out::is_stdin(file) {
+        bail!("preview draws on a terminal, and reads no document from stdin; give a path");
+    }
     let doc = out::open(file, password)?;
     if page == 0 || page > doc.page_count() {
         bail!("page {page} is not in 1..={}", doc.page_count());
@@ -450,6 +453,11 @@ pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Resu
     use crossterm::event::{Event, KeyEvent, read};
     use crossterm::{cursor, execute, terminal};
 
+    if out::is_stdin(file) {
+        bail!(
+            "view reads its keys from stdin, so the document cannot come from there; give a path"
+        );
+    }
     let doc = out::open(file, password)?;
     let count = doc.page_count();
     if count == 0 {

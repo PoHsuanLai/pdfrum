@@ -5,7 +5,7 @@ use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use pdfrum::{Document, Rect};
+use pdfrum::{Document, OpenOptions, Rect};
 use serde::Serialize;
 
 use crate::term::{Style, Term};
@@ -36,6 +36,9 @@ pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
 /// [`open`] without the notice — for `doctor`, whose whole output is the
 /// notices.
 pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
+    if is_stdin(file) {
+        return open_input(password);
+    }
     let first = match password {
         Some(password) => Document::open_with_password(file, password.as_bytes()),
         None => Document::open(file),
@@ -55,6 +58,43 @@ pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
         other => other,
     };
     doc.with_context(|| format!("cannot open {}", file.display()))
+}
+
+/// Whether `file` is `-`, the name every reading command gives stdin.
+pub fn is_stdin(file: &Path) -> bool {
+    file == Path::new("-")
+}
+
+/// The document on stdin, read whole: a PDF's cross-reference table is at
+/// its end, so there is nothing to stream.
+fn open_input(password: Option<&str>) -> Result<Document> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .lock()
+        .read_to_end(&mut bytes)
+        .context("cannot read stdin")?;
+    open_bytes(bytes, password).context("cannot open -")
+}
+
+/// A document from bytes already in hand — stdin, or a file this run wrote
+/// and reads back.
+pub fn open_bytes(bytes: Vec<u8>, password: Option<&str>) -> Result<Document> {
+    let options = OpenOptions {
+        password: password.map(|p| p.as_bytes().to_vec()),
+        ..OpenOptions::default()
+    };
+    Ok(Document::from_bytes_with(bytes.into(), &options)?)
+}
+
+/// The input's name without directory or extension, for the files a command
+/// derives from it (`{stem}-{n}.png`); `stdin` when the input was `-`.
+pub fn stem(file: &Path) -> String {
+    if is_stdin(file) {
+        return "stdin".to_owned();
+    }
+    file.file_stem()
+        .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
 }
 
 /// Print `value` as one pretty JSON document.
