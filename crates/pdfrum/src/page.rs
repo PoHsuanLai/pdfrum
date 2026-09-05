@@ -1,13 +1,13 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
-use pdfrum_common::{Diagnostics, LimitExceeded, Limits, PageIndex};
+use pdfrum_common::{Diagnostics, LimitExceeded, Limits, Operation, PageIndex};
 use pdfrum_object::{Name, Resolve, names};
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
 
 use crate::{
-    Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
-    Word,
+    Annotation, Document, Error, Pixmap, RasterBackend, RenderOptions, RenderSession, Result,
+    TextPage, Word,
 };
 
 /// One page of a [`Document`].
@@ -30,6 +30,11 @@ pub struct Page<'a> {
 
 impl<'a> Page<'a> {
     pub(crate) fn load(doc: &'a Document, index: PageIndex) -> Result<Page<'a>> {
+        // The per-page boundary: a walk over a document that has run out of
+        // time stops at the next page, whatever it was going to do with it.
+        doc.limits
+            .check_deadline(Operation::PageLoad)
+            .map_err(|limit| limit.on_page(index))?;
         let dict = doc.inner.page(index)?;
         let mut diags = Diagnostics::default();
         let (media_box, crop_box) = pdfrum_page::derive_boxes(
@@ -238,6 +243,7 @@ impl<'a> Page<'a> {
         ctx.decode_target = previous;
         PreparedPage {
             doc: self.doc,
+            index: self.index,
             graph: page,
             options: options.clone(),
         }
@@ -264,6 +270,12 @@ impl<'a> Page<'a> {
     /// own that it throws away afterwards; for a run over many pages, or when
     /// the text must be measured with the same fonts a render uses, use
     /// [`Page::text_on`].
+    ///
+    /// Cannot fail, so a [`Limits::deadline`] that has passed answers an
+    /// empty page and records
+    /// [`DiagKind::TimeLimitReached`](crate::DiagKind::TimeLimitReached) on
+    /// [`Document::all_diagnostics`]; the next [`Document::page`] refuses
+    /// with [`Error::Limit`].
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
@@ -407,7 +419,7 @@ impl<'a> Page<'a> {
 
     /// The page's content as Markdown blocks, in reading order — what
     /// [`Page::markdown`] renders, for a caller who wants to walk them or to
-    /// link each [`Block::Image`] to a file through
+    /// link each [`Block::Image`](crate::Block::Image) to a file through
     /// [`markdown::render_with_images`](crate::markdown::render_with_images).
     /// An image block's index is into [`Page::images`].
     #[cfg(feature = "markdown")]
@@ -733,6 +745,7 @@ impl From<pdfrum_page::Rotation> for Rotation {
 #[derive(Debug)]
 pub struct PreparedPage<'a> {
     doc: &'a Document,
+    index: PageIndex,
     graph: pdfrum_page::Page,
     options: RenderOptions,
 }
@@ -766,6 +779,7 @@ impl PreparedPage<'_> {
         let mut diags = Diagnostics::default();
         let render_session = pdfrum_render::RenderSession {
             caches: Some(&mut session.caches),
+            deadline: self.doc.limits.deadline.as_ref(),
             ..Default::default()
         };
         let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
@@ -780,7 +794,12 @@ impl PreparedPage<'_> {
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);
-        Ok(pixmap?)
+        pixmap.map_err(|error| match error {
+            // The engine does not know which page it drew; this is where the
+            // message learns it.
+            pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),
+            other => Error::Render(other),
+        })
     }
 }
 
