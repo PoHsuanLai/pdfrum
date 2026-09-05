@@ -201,10 +201,51 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
      vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
      plus the scaled JPEG decode once zune-jpeg has it).
-  5. Render losses by file: `vector_en_system.pdf` 0.960 (every peer >
-     0.98), `vector_tcpdf_009.pdf` 0.959, `image_en_fqa.pdf` 0.977,
-     `image_jpx_123.pdf` 0.987, `fx/path/transparent1.pdf` 0.984,
-     `fx/image/1_image.pdf` 0.986 — each a conformance row to chase.
+  5. Render losses by file — **diagnosed 2026-09-06, none fixed yet**
+     (`docs/status/pdfrum-render.md` "M21 losses"; every SSIM below
+     reproduced from `benches/compare` and unchanged by this pass):
+     - `fx/path/transparent1.pdf` 0.984 — **ours, fix identified.** The
+       fill+stroke knockout buffer does not knock out:
+       `draw_fill_stroke_knockout` (`paint.rs:296+`) fills then strokes
+       into a plain transparent target with source-over, where PDFium
+       seeds a backdrop copy and sets group knockout
+       (`cfx_renderdevice.cpp:806`, `:873-875`), so our translucent
+       stroke composites over its own fill. The oracle has 27 586 pink
+       and zero `#930000` pixels; we have 13 182 and 12 567, and
+       `0x93 = round(0.58 x 255)`. Needs a knockout-capable target on
+       `RasterBackend`, so it is a design change. A second defect at the
+       closepath seam (join versus cap in stroke expansion) is separate.
+     - `fx/image/1_image.pdf` 0.986 — **ours, fix identified.** A single
+       140x140 `/Interpolate false` image magnified 2.5x/4x, so the
+       oracle takes the `fabs(scale) < 1.0f` branch at
+       `cstretchengine.cpp:106` — nearest-neighbour at phase
+       `dest_pixel * scale + scale / 2` — where we produce filtered
+       greys. The 833x1250 vs 833x1249 size gap is a harness artifact
+       (`oracle.rs` passes a truncated `--scale=2.0833333333`) and
+       contributes nothing.
+     - `vector_en_system.pdf` 0.960 — **ours, undiagnosed.** 31
+       overlapping black `/SMask` images; we paint 21 801 fully-covered
+       pixels against 6 485, at both stack depths. Ruled out by
+       measurement: the `/Matte` un-premultiply, the separate-mask path
+       (forcing it *lowers* SSIM to 0.947), the pre-reduction, the
+       downsample kernel (box and nearest simulated within 1.5 % on the
+       real mask), and stencil inversion.
+     - `image_en_fqa.pdf` 0.977 — **ours, provisional, no oracle line.**
+       276 pairs of a 2x2 base under a large 1-bit `/SMask`, all through
+       `render_masked_image` at a ~4x downscale of a binary mask.
+       Probably one root cause with `vector_en_system.pdf`; re-measure
+       both together once either moves.
+     - `image_jpx_123.pdf` 0.987 — **neither ours nor an oracle bug.**
+       A numerical-accuracy difference in the JPEG 2000 decoder:
+       PDFium's bundled OpenJPEG (`mct.c:333-335`, `tcd.c:2350`,
+       round-half-to-even) against `hayro-jpeg2000`'s `mul_add` and
+       round-half-away-from-zero, with the residual earlier in the 9/7
+       inverse DWT. Measured as a systematic bias on 452 751 flat
+       pixels (G `+1.80`, B `-1.42`), so it is not resampling. The ICT
+       is specified in real arithmetic and both roundings are legal —
+       bucket it, do not chase it; the only useful action is filing the
+       measurement against `hayro-jpeg2000`.
+     - `vector_tcpdf_009.pdf` 0.959 — not investigated this pass.
   6. Text losses: `text_quick_start.pdf` 0.641 (dot leaders come out as
      separate lines against PDFium's one line), `text_tcpdf_055.pdf`
      0.953 where three peers are closer; nine FRC 8.2.4 pages where PDFium
