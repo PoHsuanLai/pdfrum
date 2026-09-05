@@ -77,9 +77,9 @@ for that property and a better one than a four-hundred-line diff nobody reads.
 
 ### What else is not here
 
-- **`#[doc(hidden)]` items.** `cargo public-api` omits them, so
-  `pdfrum_text::debug_runs` — which is `#[doc(hidden)]` — is absent. These
-  files measure the *documented* surface. That is the right measure for
+- **`#[doc(hidden)]` items.** `cargo public-api` omits them, so a hidden
+  item is absent however public its `pub` is. These files measure the
+  *documented* surface. That is the right measure for
   WP11, whose rule 3 prescribes `#[doc(hidden)]` as the remedy for oracle
   dump formats: applying the remedy is supposed to shrink the number.
 - **Non-default features, with one exception.** The default surface is what
