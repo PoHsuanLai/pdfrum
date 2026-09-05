@@ -9,7 +9,7 @@
 #
 # The full suite is `scripts/ci.nu`'s big sibling: 44 documents x eleven groups,
 # about an hour, and it is what `benches/baseline.json` and every table in
-# docs/status/M12.md are taken from. It is not a thing to run between two edits.
+# the internal working notes are taken from. It is not a thing to run between two edits.
 # This is: **eighteen documents, three per class**, at criterion's floor rather
 # than the suite's window, which lands in three to four minutes.
 #
