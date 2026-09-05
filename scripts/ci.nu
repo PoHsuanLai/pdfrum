@@ -71,7 +71,15 @@ def main [] {
     # `linux-raw-sys` is the name's other false positive: rustix's generated
     # Linux syscall constants, `build = false`, Rust sources only, reached
     # through `crossterm` for `pdfrum view`. Checked 2026-09-05 (DEPS.md).
-    let pure_rust_sys = [linux-raw-sys]
+    #
+    # `js-sys` is the third, and the `-sys` in it means something else again:
+    # it is wasm-bindgen's binding to the JavaScript *standard library*, not to
+    # a C one. There is nothing native to bind — the "foreign" side is the host
+    # engine, reached through wasm-bindgen's imports. It has no build script at
+    # all (checked 2026-09-05: no `build.rs` in the published crate), so there
+    # is nothing for it to compile even in principle. Reached through
+    # `crates/pdfrum-wasm` (M22 phase 4).
+    let pure_rust_sys = [linux-raw-sys js-sys]
     let native_build_crates = [cc cmake pkg-config bindgen]
 
     let forbidden = (^cargo tree -e normal --workspace --prefix none
@@ -129,6 +137,39 @@ def main [] {
         print --stderr "         see DEPS.md, \"Tools & tests only\""
     } else {
         ^./crates/pdfrum-capi/ctest/run.sh
+    }
+
+    # M22 phase 4: the WebAssembly binding, proved where it runs. A
+    # `#[wasm_bindgen]` export does not exist until a JavaScript runtime
+    # instantiates the module, so no host-target test can see one — the same
+    # argument the C test makes, in the other direction. These run on
+    # `wasm32-unknown-unknown` under Node, through `wasm-bindgen-test-runner`.
+    #
+    # `cd` into the crate is load-bearing: the runner is named in
+    # `crates/pdfrum-wasm/.cargo/config.toml`, and cargo reads a `.cargo/config.toml`
+    # relative to the *invocation* directory, not the manifest. Run from the
+    # root with `--manifest-path` the tests build and then fail to execute with
+    # "Exec format error", because cargo tries to run the `.wasm` itself.
+    #
+    # Node and the wasm target are tools, not dependencies (DEPS.md, "The web
+    # binding's tools"), so a contributor without either gets a printed note
+    # and the rest of the gate — the bargain `cargo deny` and the C test get
+    # above.
+    print "==> the WebAssembly tests (Node)"
+    let wasm_target = (^rustup target list --installed | lines | any {|t| $t == "wasm32-unknown-unknown" })
+    if (which node | is-empty) {
+        print --stderr "warning: node not installed; skipping the WebAssembly tests"
+    } else if not $wasm_target {
+        print --stderr "warning: the wasm32-unknown-unknown target is not installed;"
+        print --stderr "         skipping the WebAssembly tests"
+        print --stderr "         install with: rustup target add wasm32-unknown-unknown"
+    } else if (which wasm-bindgen-test-runner | is-empty) {
+        print --stderr "warning: wasm-bindgen-test-runner not installed; skipping the WebAssembly tests"
+        print --stderr "         install with: cargo install wasm-bindgen-cli --locked"
+    } else {
+        cd crates/pdfrum-wasm
+        ^cargo test --target wasm32-unknown-unknown
+        cd ../..
     }
 
     # The exemption above is only tolerable because it cannot reach an embedder

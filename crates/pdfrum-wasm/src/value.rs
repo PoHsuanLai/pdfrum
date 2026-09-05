@@ -13,6 +13,7 @@
 //! way. The handles — `Document`, `Page`, `Form`, `Cancel` — are the ones
 //! whose `free()` matters.
 
+use wasm_bindgen::Clamped;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// One rendered page: the pixels and the size they are in.
@@ -29,7 +30,12 @@ pub struct RenderResult {
     /// The height in pixels.
     pub height: u32,
     /// `width * height * 4` bytes, RGBA8, straight alpha, top-down.
-    pub data: Vec<u8>,
+    ///
+    /// A `Uint8ClampedArray` rather than a `Uint8Array`, because that is the
+    /// type `new ImageData(data, width, height)` requires: handing back the
+    /// plain array would make every caller copy it once more for no reason.
+    /// wasm-bindgen types the field from `Clamped<Vec<u8>>`.
+    pub data: Clamped<Vec<u8>>,
 }
 
 /// One word of a page's text, with where it sits and how it was set.
@@ -176,9 +182,9 @@ pub struct ImageInfo {
     #[wasm_bindgen(js_name = isMask)]
     pub is_mask: bool,
     /// `width * height * 4` bytes, RGBA8, straight alpha, top-down — the same
-    /// shape as [`RenderResult::data`], so the same `ImageData` line displays
-    /// it.
-    pub data: Vec<u8>,
+    /// `Uint8ClampedArray` shape as [`RenderResult::data`], so the same
+    /// `ImageData` line displays it.
+    pub data: Clamped<Vec<u8>>,
 }
 
 /// The one place `missing_docs` sees generated glue rather than our own items.

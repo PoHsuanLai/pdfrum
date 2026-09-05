@@ -12,7 +12,7 @@ license.workspace = true
 repository.workspace = true
 description = "The WebAssembly binding for pdfrum: open, render, extract and fill PDFs in a browser or Node"
 # Nothing `cargo add`s a cdylib. The published surface of this crate is the
-# npm package `pkg/` that `wasm-pack` builds from it.
+# npm package `pkg/` that `scripts/wasm-package.nu` builds from it.
 publish = false
 
 [lib]
@@ -73,5 +73,23 @@ workspace = true
 
 # The release profile this crate is built under lives at the workspace root as
 # `[profile.wasm]`, because cargo ignores a `[profile.*]` table in a member.
-# `wasm-pack build --profile wasm` is the build; the settings and the
-# measurement behind them are in the root manifest and docs/status/M22.md.
+# `scripts/wasm-package.nu` builds under it; the settings and the measurement
+# behind them are in the root manifest and docs/status/M22.md.
+
+# **The build is `scripts/wasm-package.nu`, not `wasm-pack`.** wasm-pack was
+# tried first and cannot drive this crate: it runs `wasm-opt` itself with a
+# hardcoded `-O` and no feature flags, which **fails on this module** — Rust's
+# `wasm32-unknown-unknown` emits bulk-memory (`memory.copy`, `memory.fill`) and
+# non-trapping float-to-int, and `wasm-opt`'s validator rejects both unless
+# told they are allowed. The flags cannot be supplied: wasm-pack reads
+# `[package.metadata.wasm-pack.profile.<name>]` only for the three profiles it
+# knows (`dev`, `release`, `profiling`), and this crate builds under the
+# workspace's own `wasm` profile, which has no such slot; under a custom
+# profile it consults no metadata at all. Both `wasm-opt = false` and a full
+# flag list were tried under both `.wasm` and `.release` and neither is read.
+#
+# So the script calls `cargo build`, `wasm-bindgen` and `wasm-opt` in turn —
+# three commands wasm-pack would have wrapped — which also lets it record the
+# size before and after the optimizer and check it against the budget. The
+# `.d.ts` is wasm-bindgen's own output either way; wasm-pack never generated
+# it.

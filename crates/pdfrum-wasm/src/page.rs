@@ -1,6 +1,7 @@
 //! The page handle: size, render, text, words, links, search, markdown,
 //! images.
 
+use wasm_bindgen::Clamped;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::error::{Failure, Result};
@@ -109,7 +110,7 @@ impl Page {
             // The facade's pixmap is premultiplied; `ImageData` is straight,
             // so the conversion happens here rather than being left to a
             // caller who would have to know it was needed.
-            data: pixmap.to_straight_rgba(),
+            data: Clamped(pixmap.to_straight_rgba()),
         })
     }
 
@@ -209,7 +210,7 @@ impl Page {
                 width: image.width,
                 height: image.height,
                 is_mask: image.is_mask,
-                data: image.pixmap().to_straight_rgba(),
+                data: Clamped(image.pixmap().to_straight_rgba()),
             })
             .collect()
     }

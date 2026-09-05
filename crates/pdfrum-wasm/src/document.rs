@@ -99,8 +99,9 @@ impl Document {
     ///
     /// # Errors
     ///
-    /// Throws with `.code === 6` for an index past the end, and with
-    /// `.code === 4` when the page's own objects cannot be read.
+    /// Throws with `.code === 4` for an index past the end, and for a page
+    /// whose own objects cannot be read: the facade reports both as a failure
+    /// to read the document.
     pub fn page(&self, index: u32) -> Result<Page> {
         Ok(Page::new(self.0.page_owned(index)?))
     }

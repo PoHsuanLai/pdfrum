@@ -40,18 +40,25 @@ fn thrown<T>(result: Result<T, impl Into<JsValue>>) -> JsValue {
     }
 }
 
-/// The `.code` a thrown `Error` carries, or `None` when it carries none.
+/// Asserts that a thrown `Error` carries the expected `.code`.
 ///
-/// The whole error contract in one helper: a caller reads `e.code`, and so
-/// does every test below, so that "throws with code N" is asserted the same
-/// way each time rather than by six variations on reflection.
-fn code_of(error: &JsValue) -> Option<u32> {
-    js_sys::Reflect::get(error, &JsValue::from_str("code"))
+/// The whole error contract in one helper, so "throws with code N" is checked
+/// the same way each time rather than by six variations on reflection.
+/// JavaScript has one number type, so the code arrives as an `f64` and the
+/// comparison is made there — every code this crate sets is a small whole
+/// number, which an `f64` represents exactly, so there is no rounding for a
+/// cast to hide.
+#[track_caller]
+fn assert_code(error: &JsValue, expected: u32) {
+    let code = js_sys::Reflect::get(error, &JsValue::from_str("code"))
         .ok()
-        .and_then(|code| code.as_f64())
-        // Every code this crate sets is a small non-negative integer, so the
-        // round trip through `f64` is exact.
-        .map(|code| code as u32)
+        .and_then(|code| code.as_f64());
+    assert_eq!(
+        code,
+        Some(f64::from(expected)),
+        "expected .code {expected}, message was {:?}",
+        message_of(error),
+    );
 }
 
 /// The message a thrown `Error` carries.
@@ -102,7 +109,7 @@ fn extracts_text_and_words() {
     let page = doc.page(0).expect("page 0");
 
     let text = page.text();
-    assert!(text.contains("Hello, world!"), "page 0's text was {text:?}",);
+    assert!(text.contains("Hello, world!"), "page 0's text was {text:?}");
 
     let words = page.words();
     assert!(!words.is_empty(), "page 0 has words");
@@ -146,12 +153,8 @@ fn a_wrong_password_throws_code_three() {
         ENCRYPTED,
         Some("not the password".to_owned()),
     ));
-    assert_eq!(
-        code_of(&error),
-        Some(3),
-        "WrongPassword is 3, the facade's own number: message was {:?}",
-        message_of(&error),
-    );
+    // WrongPassword is 3, the facade's own number.
+    assert_code(&error, 3);
     assert!(
         !message_of(&error).is_empty(),
         "the facade's message travels beside the code",
@@ -168,12 +171,8 @@ fn a_pixel_limit_throws_code_nine() {
     let page = doc.page(0).expect("page 0");
 
     let error = thrown(page.render(1.0, None));
-    assert_eq!(
-        code_of(&error),
-        Some(9),
-        "Limit is 9: message was {:?}",
-        message_of(&error),
-    );
+    // Limit is 9.
+    assert_code(&error, 9);
 }
 
 #[wasm_bindgen_test]
@@ -190,7 +189,8 @@ fn a_raised_cancel_flag_stops_a_render() {
     // a host's own `setTimeout` depends on.
     cancel.stop();
     let error = thrown(page.render(1.0, None));
-    assert_eq!(code_of(&error), Some(9), "a cancelled render reports Limit");
+    // A cancelled render reports Limit, the same code a pixel cap does.
+    assert_code(&error, 9);
 }
 
 #[wasm_bindgen_test]
@@ -199,7 +199,8 @@ fn a_bad_scale_is_rejected_as_an_argument() {
     let page = doc.page(0).expect("page 0");
     for scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
         let error = thrown(page.render(scale, None));
-        assert_eq!(code_of(&error), Some(100), "an argument failure is 100");
+        // An argument failure is 100.
+        assert_code(&error, 100);
     }
 }
 
@@ -207,9 +208,11 @@ fn a_bad_scale_is_rejected_as_an_argument() {
 fn an_index_past_the_end_throws() {
     let doc = Document::open(HELLO, None).expect("opens");
     let error = thrown(doc.page(99));
-    // The code is the facade's own for "the document is not what this needs";
-    // what matters to a caller is that it is answered rather than trapped.
-    assert!(code_of(&error).is_some(), "the failure carries a code");
+    // Read is 4 — the facade reports an index past the end as a failure to
+    // read the document ("no page at index 99"), not as a malformed one. The
+    // number is asserted rather than merely "some code", because a caller
+    // branching on it needs it to be the same one every time.
+    assert_code(&error, 4);
 }
 
 #[wasm_bindgen_test]
@@ -244,7 +247,7 @@ fn search_and_markdown_and_metadata_answer() {
 fn a_document_with_no_form_is_refused_at_the_open() {
     let doc = Document::open(HELLO, None).expect("opens");
     let error = thrown(Form::open(&doc));
-    assert_eq!(code_of(&error), Some(100));
+    assert_code(&error, 100);
 }
 
 #[wasm_bindgen_test]

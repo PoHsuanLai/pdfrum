@@ -207,9 +207,21 @@ debug = 1
 # both take it. The measurement behind the settings is in docs/status/M22.md.
 [profile.wasm]
 inherits = "release"
-# Optimize for size. Measured on the built module, before wasm-opt:
-# `opt-level = 3` 4.62 MiB, `"s"` 3.73 MiB, `"z"` 3.61 MiB.
-opt-level = "z"
+# Optimize for speed, which on this crate is *also* the smallest. Measured on
+# the shipped module — the `_bg.wasm` wasm-bindgen emits, after `wasm-opt -Oz`:
+#
+#   opt-level      raw        after bindgen   after wasm-opt -Oz
+#   3            5,650,552      5,097,256          4,827,012
+#   "s"          5,959,819      5,368,249          4,932,482
+#   "z"          6,040,761      5,409,739          4,982,040
+#
+# `3` wins at every stage, by 3% over `"z"` on the shipped artefact. That is
+# the opposite of the usual advice, and it was measured rather than assumed:
+# this crate's bulk is a rasterizer and three image codecs, whose inner loops
+# `z` refuses to unroll or vectorize and then pays for in call overhead and
+# spill code. No tie-break on render time was needed — `3` is both the
+# smallest and the fastest here.
+opt-level = 3
 # One codegen unit lets LLVM see the whole module.
 codegen-units = 1
 # Cross-crate inlining and dead-code elimination: the single largest win.
