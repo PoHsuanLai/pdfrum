@@ -158,12 +158,29 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
      mupdf 6.1, hayro 15.0 on the 44; 10.4 vs 4.1/3.4/5.4 on the sample)
      and cold render 3–9× the others — the image-rows pass is the first
      answer; per-session setup the second (see 3).
-  2. Text extraction 10× PDFium (0.58 ms vs 0.05 warm on the 44) — profile
-     `Page::text` the M18 way; the text page is built eagerly with boxes
-     for every character.
+  2. ~~Text extraction 10× PDFium~~ — first pass landed 2026-09-05
+     (b0592c1; `docs/status/text-perf.md`): `page_flow` built every text
+     object a second time, a bare CFF drew each glyph's outline to read an
+     advance (84% of `tcpdf_063`), `glyph_bbox` rebuilt `GlyphMetrics` per
+     glyph — `Face` gained `advances`/`boxes` caches keyed on `Gid`;
+     `tcpdf_063` 2.89 G → 0.31 G `Ir` (−89%), warm median 0.58 → 0.39 ms
+     (gap 11.6× → 7.8×), board byte-identical; dead-code sweep took
+     `TextRun::original_rect`. Left, in other crates: the page build is
+     39% of the text run (`build.rs` builds what no text consumer reads),
+     the font load 29% (`/ToUnicode` re-parsed per font per page — the
+     per-document font cache of item 3). The ratchet was measured for
+     `pdfrum-text` only (163 improved); a full workspace bench on an idle
+     box is owed before `ratchet update`.
   3. Parallel scaling flattens after 4 threads (39 → 71 → 75 pages/s;
-     hayro 70 → 156 → 167): each new `RenderSession` enumerates fonts —
-     share the font database and glyph caches across sessions.
+     hayro 70 → 156 → 167, mupdf 149 → 220 → 229): each new
+     `RenderSession` enumerates fonts — share the font database and glyph
+     caches across sessions. mupdf's row was re-measured threaded on
+     2026-09-05 (214c597) in MuPDF's own model — display lists recorded on
+     one thread, rasterized on N cloned contexts, 17.7% serial share — after
+     the user pointed out the "single-thread-only" label was wrong; only
+     PDFium is single-threaded. Its run was at load 20 against run 1's
+     30–40, said in the README; a whole run in one sitting is owed before
+     the speed columns are quoted.
   4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
      vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
      plus the scaled JPEG decode once zune-jpeg has it).
