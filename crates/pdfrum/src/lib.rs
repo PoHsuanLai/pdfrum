@@ -90,13 +90,14 @@ mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{
-    Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions, Revision,
+    Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions,
+    OpenOptionsBuilder, Revision, UnknownFontFileKind,
 };
 #[cfg(feature = "edit")]
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
-pub use error::{Error, ErrorCode, Result};
+pub use error::{Error, ErrorCode, Result, UnknownErrorCode};
 #[cfg(feature = "edit")]
-pub use flatten::{FlattenMode, Flattened};
+pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode};
 #[cfg(feature = "forms")]
 pub use form::{Field, FieldFlags, FieldKind, Form, UnknownField};
 #[cfg(feature = "forms")]
@@ -113,7 +114,8 @@ pub use outline::{Bookmark, Outline, OutlineIter};
 pub use owned_form::OwnedFormSession;
 pub use owned_page::OwnedPage;
 pub use page::{
-    ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage, Rotation,
+    ImageEncoding, LinkTarget, NotAQuarterTurn, Page, PageImage, PageLink, PreparedPage, RawImage,
+    Rotation, UnknownImageEncoding,
 };
 #[cfg(feature = "forms")]
 pub use pdfrum_form::AnnotId;
@@ -146,7 +148,7 @@ pub use pdfrum_form::script::{
 };
 #[cfg(feature = "javascript")]
 pub use pdfrum_form::{ScriptCascade, ScriptConfig, TranscriptLine};
-pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
+pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, RenderOptionsBuilder, TextAa};
 
 /// The rasterizer seam, re-exported so a caller can write
 /// [`Page::render_on`]'s bound without adding `pdfrum-render` to their
@@ -166,7 +168,7 @@ pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 
 /// What [`DocEdit::add_attachment`] writes beside the name and the bytes.
 #[cfg(feature = "edit")]
-pub use attach::AttachmentOptions;
+pub use attach::{AttachmentOptions, AttachmentOptionsBuilder};
 /// A `SystemTime` as the PDF date string [`AttachmentOptions::modified`] and
 /// [`Metadata`]'s two dates carry.
 #[cfg(feature = "edit")]
@@ -193,13 +195,13 @@ pub use pdfrum_raster_vello::VelloBackend as VelloGpuBackend;
 #[cfg(feature = "vello-cpu")]
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 #[cfg(feature = "edit")]
-pub use save::{DocEdit, SaveOptions, Update};
+pub use save::{DocEdit, SaveOptions, SaveOptionsBuilder, UnknownUpdate, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
 /// A mark on every page: what [`DocEdit::stamp_text`] and
 /// [`DocEdit::stamp_image`] draw, and where.
 #[cfg(feature = "edit")]
-pub use stamp::{StampOptions, StampPosition};
+pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
 
 /// The things a page draws, as the interpreter produced them.
 ///

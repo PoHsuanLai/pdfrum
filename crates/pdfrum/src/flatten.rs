@@ -25,6 +25,57 @@ pub enum Flattened {
     NothingToDo,
 }
 
+/// The error [`FlattenMode`]'s [`FromStr`](std::str::FromStr) returns.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("not a flatten mode: {0}")]
+pub struct UnknownFlattenMode(String);
+
+impl std::fmt::Display for FlattenMode {
+    /// `display` or `print`, which round-trip through
+    /// [`FromStr`](std::str::FromStr).
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::FlattenMode::Print.to_string(), "print");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            FlattenMode::Display => "display",
+            FlattenMode::Print => "print",
+        })
+    }
+}
+
+impl std::str::FromStr for FlattenMode {
+    type Err = UnknownFlattenMode;
+
+    /// The inverse of [`Display`](std::fmt::Display) — what a `--mode` flag
+    /// parses.
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownFlattenMode`] for anything but `display` and `print`.
+    fn from_str(s: &str) -> core::result::Result<FlattenMode, UnknownFlattenMode> {
+        match s {
+            "display" => Ok(FlattenMode::Display),
+            "print" => Ok(FlattenMode::Print),
+            other => Err(UnknownFlattenMode(other.to_owned())),
+        }
+    }
+}
+
+impl std::fmt::Display for Flattened {
+    /// What happened, for a log line: `flattened` or `nothing to do`.
+    ///
+    /// No [`FromStr`](std::str::FromStr) pairs with it — this is an outcome
+    /// a call reports, never a value a caller writes down.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Flattened::Done => "flattened",
+            Flattened::NothingToDo => "nothing to do",
+        })
+    }
+}
+
 impl DocEdit<'_> {
     /// The annotations flatten draws for `mode`, in `/Annots` order: pop-ups
     /// and hidden ones never; for display every non-invisible one, for print
