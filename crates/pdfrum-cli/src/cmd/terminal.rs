@@ -618,7 +618,7 @@ pub struct Search<'a> {
     /// `-H` (`Some(true)`), `--no-filename` (`Some(false)`), or neither: a
     /// hit names its file when more than one file is searched.
     pub with_filename: Option<bool>,
-    pub json: bool,
+    pub json: out::Json,
 }
 
 /// One file's hits: the JSON shape when several files are searched.
@@ -626,6 +626,14 @@ pub struct Search<'a> {
 struct FileHits {
     file: String,
     hits: Vec<Hit>,
+}
+
+/// One hit with its file, for `--jsonl` when the text form would name it.
+#[derive(Serialize)]
+struct NamedHit<'a> {
+    file: &'a str,
+    #[serde(flatten)]
+    hit: &'a Hit,
 }
 
 /// `grep` for documents: every hit with its line, the page it is on, and
@@ -640,7 +648,19 @@ pub fn search(req: &Search<'_>, term: Term) -> Result<ExitCode> {
     let (found, failed) = out::per_file(req.files, term, |file| {
         let doc = out::open(file, req.password)?;
         let hits = find(&doc, req.needle, options, req.spec)?;
-        if !req.json {
+        if req.json == out::Json::Lines {
+            // As each file is done, like the text form.
+            if named {
+                let file = file.display().to_string();
+                let lines: Vec<NamedHit<'_>> = hits
+                    .iter()
+                    .map(|hit| NamedHit { file: &file, hit })
+                    .collect();
+                out::items(&lines, req.json)?;
+            } else {
+                out::items(&hits, req.json)?;
+            }
+        } else if !req.json.is_on() {
             // Printed as each file is done, as `grep` does, so a long
             // list of files answers as it goes.
             let prefix = if named {
@@ -662,7 +682,7 @@ pub fn search(req: &Search<'_>, term: Term) -> Result<ExitCode> {
         })
     });
     let any = found.iter().any(|f| !f.hits.is_empty());
-    if req.json {
+    if req.json == out::Json::Document {
         // One file is the array of hits it always was; several files, or
         // a file asked for by name, are per-file documents.
         match found.as_slice() {

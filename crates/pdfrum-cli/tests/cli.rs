@@ -1948,6 +1948,81 @@ fn the_password_comes_from_the_environment_when_the_flag_is_absent() {
     assert!(!text.contains("s3cret"), "{text}");
 }
 
+/// Every line parses as one JSON object, and together they are what
+/// `--json` gives as an array.
+fn jsonl_matches_json(args: &[&str]) -> Result<(), String> {
+    let mut lines_args = args.to_vec();
+    lines_args.push("--jsonl");
+    let text = stdout(&lines_args)?;
+    let lines: Vec<serde_json::Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).map_err(|e| format!("{args:?}: {l}: {e}")))
+        .collect::<Result<_, _>>()?;
+    if lines.iter().any(|l| !l.is_object()) {
+        return Err(format!("{args:?}: a line is not an object: {text}"));
+    }
+    let mut json_args = args.to_vec();
+    json_args.push("--json");
+    let array = json(&json_args)?;
+    if array.as_array().map(Vec::as_slice) != Some(lines.as_slice()) {
+        return Err(format!(
+            "{args:?}: --jsonl and --json disagree\n{text}\n{array}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn jsonl_prints_one_object_per_line_on_every_list_command() {
+    for args in [
+        vec!["search", "world", "fixtures/hello_world_2_pages.pdf"],
+        vec!["extract", "links", "fixtures/annots_action_handling.pdf"],
+        vec!["extract", "annotations", "fixtures/annotiter.pdf"],
+        vec!["extract", "images", "fixtures/rotated_image.pdf"],
+        vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        vec![
+            "extract",
+            "attachments",
+            "fixtures/embedded_attachments_with_desc.pdf",
+        ],
+        vec!["inspect", "revisions", "fixtures/bug_1484283.pdf"],
+        vec!["inspect", "structure", "fixtures/tagged_actual_text.pdf"],
+        vec!["forms", "dump", "fixtures/text_form.pdf"],
+    ] {
+        jsonl_matches_json(&args).unwrap();
+    }
+    // `inspect xref --json` is the table with its trailer; `--jsonl` is its
+    // entries, one per line.
+    let lines = stdout(&["inspect", "xref", "fixtures/bug_1484283.pdf", "--jsonl"]).unwrap();
+    assert_eq!(lines.lines().count(), 6, "{lines}");
+    let first: serde_json::Value = serde_json::from_str(lines.lines().next().unwrap()).unwrap();
+    assert!(first["object"].is_number(), "{first}");
+    // Nothing found is no lines at all, and exit 0.
+    let none = stdout(&["forms", "dump", "fixtures/bookmarks.pdf", "--jsonl"]).unwrap();
+    assert!(none.is_empty(), "{none:?}");
+    // Several files: each hit names its file.
+    let two = stdout(&[
+        "search",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--jsonl",
+    ])
+    .unwrap();
+    let hit: serde_json::Value = serde_json::from_str(two.lines().next().unwrap()).unwrap();
+    assert_eq!(hit["file"], "fixtures/hello_world_2_pages.pdf");
+    assert_eq!(hit["page"], 1);
+    let both = run(&[
+        "extract",
+        "links",
+        "fixtures/weblinks.pdf",
+        "--json",
+        "--jsonl",
+    ])
+    .unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
+}
+
 // ---- javascript (a feature, off by default) --------------------------------
 
 /// The transcript PDFium's own harness expects for a fixture, beside it.

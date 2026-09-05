@@ -117,7 +117,7 @@ pub fn links(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -152,8 +152,8 @@ pub fn links(
             }
         }
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("links");
     } else {
@@ -248,7 +248,7 @@ pub fn attachments(
     file: &Path,
     password: Option<&str>,
     dir: Option<&Path>,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -280,8 +280,8 @@ pub fn attachments(
             written,
         });
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("attachments");
     } else {
@@ -327,7 +327,7 @@ pub fn annotations(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -348,8 +348,8 @@ pub fn annotations(
             });
         }
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("annotations");
     } else {
@@ -487,7 +487,7 @@ pub fn images(
     spec: Option<&str>,
     dir: Option<&Path>,
     all: bool,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -547,8 +547,8 @@ pub fn images(
             row.written = Some(path.display().to_string());
         }
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("images");
     } else {
@@ -606,7 +606,7 @@ pub fn fonts(
     file: &Path,
     password: Option<&str>,
     dir: Option<&Path>,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -647,8 +647,8 @@ pub fn fonts(
             written,
         });
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("fonts");
     } else {
