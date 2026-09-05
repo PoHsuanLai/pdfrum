@@ -99,7 +99,7 @@ impl PixmapRequest {
         width: u32,
         height: u32,
     ) -> Self {
-        let is_stencil = matches!(image.pixels, pdfrum_page::Pixels::Stencil(_));
+        let is_stencil = image.samples.is_stencil();
         Self {
             stencil_color: if is_stencil {
                 stencil_color
@@ -226,13 +226,15 @@ fn render_empty() -> Pixmap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pdfrum_page::{ImageData, Pixels};
+    use pdfrum_page::{ImageData, Pixels, Samples};
 
     fn gray(width: u32, height: u32) -> ImageData {
         ImageData {
             width,
             height,
-            pixels: Pixels::Gray8(vec![0u8; (width as usize) * (height as usize)].into()),
+            samples: Samples::Whole(Pixels::Gray8(
+                vec![0u8; (width as usize) * (height as usize)].into(),
+            )),
             mask: None,
             matte: None,
             interpolate: false,
@@ -244,12 +246,12 @@ mod tests {
         ImageData {
             width,
             height,
-            pixels: Pixels::Stencil(pdfrum_page::BitImage {
+            samples: Samples::Whole(Pixels::Stencil(pdfrum_page::BitImage {
                 width,
                 height,
                 row_bytes,
                 bits: vec![0u8; row_bytes * (height as usize)],
-            }),
+            })),
             mask: None,
             matte: None,
             interpolate: false,

@@ -131,7 +131,7 @@ fn first_image(bytes: &[u8]) -> (u32, u32, String, bool) {
     for object in &objects.objects {
         if let pdfrum::PageObject::Image(image) = object {
             let data = &image.object.image;
-            let kind = match &data.pixels {
+            let kind = match &data.samples.to_pixels() {
                 pdfrum_page::Pixels::Stencil(_) => "Stencil",
                 pdfrum_page::Pixels::Gray8(_) => "Gray8",
                 pdfrum_page::Pixels::Rgb8(_) => "Rgb8",
@@ -318,8 +318,9 @@ fn rgba_samples_round_trip_with_their_alpha_in_an_smask() {
             _ => None,
         })
         .expect("an image object");
-    let pdfrum_page::Pixels::Rgb8(rgb) = &placed.pixels else {
-        panic!("expected eight-bit RGB, got {:?}", placed.pixels);
+    let decoded = placed.samples.to_pixels();
+    let pdfrum_page::Pixels::Rgb8(rgb) = &decoded else {
+        panic!("expected eight-bit RGB, got {decoded:?}");
     };
     assert_eq!(
         rgb.as_ref(),
@@ -364,8 +365,9 @@ fn gray_samples_round_trip_unchanged() {
             _ => None,
         })
         .expect("an image object");
-    let pdfrum_page::Pixels::Gray8(grey) = &placed.pixels else {
-        panic!("expected eight-bit grey, got {:?}", placed.pixels);
+    let decoded = placed.samples.to_pixels();
+    let pdfrum_page::Pixels::Gray8(grey) = &decoded else {
+        panic!("expected eight-bit grey, got {decoded:?}");
     };
     assert_eq!(grey.as_ref(), &pixels);
 }

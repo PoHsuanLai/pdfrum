@@ -1858,7 +1858,7 @@ impl<R: Resolve> Interp<'_, R> {
             }
             image
         };
-        let is_mask = matches!(image.pixels, crate::image::Pixels::Stencil(_));
+        let is_mask = image.samples.is_stencil();
         let object = ImageObject {
             image,
             // The unit square transformed by the current matrix.
@@ -1899,7 +1899,7 @@ impl<R: Resolve> Interp<'_, R> {
         let Ok(data) = decoded else {
             return;
         };
-        let is_mask = matches!(data.pixels, crate::image::Pixels::Stencil(_));
+        let is_mask = data.samples.is_stencil();
         let object = ImageObject {
             image: Arc::new(data),
             matrix: self.state.ctm,

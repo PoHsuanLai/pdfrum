@@ -1126,51 +1126,85 @@ mod tests {
     /// at 4:1 on grey would be an accident.
     #[test]
     fn the_fused_reduction_is_the_two_call_one() {
-        use pdfrum_page::{ImageData, Pixels};
+        use pdfrum_page::{ImageData, Pixels, Samples};
 
-        let kinds = |w: u32, h: u32| -> Vec<(&'static str, Pixels)> {
+        let kinds = |w: u32, h: u32| -> Vec<(&'static str, Samples)> {
             let n = (w * h) as usize;
-            vec![
-                (
-                    "gray",
-                    Pixels::Gray8(
-                        (0..n)
-                            .map(|i| u8::try_from(i * 37 % 251).unwrap_or(0))
-                            .collect(),
+            // Every packed depth as well as every whole representation: the
+            // packed arms are the ones `Unpacked` drives, and they have to
+            // reduce to the same bytes the widened form did.
+            let packed = |bpc: u32, components: usize, seed: usize| -> Samples {
+                let depth = pdfrum_page::Depth::new(bpc).expect("a real depth");
+                let pitch = (w as usize * components * bpc as usize).div_ceil(8);
+                let data: Box<[u8]> = (0..pitch * h as usize)
+                    .map(|i| u8::try_from(i * seed % 251).unwrap_or(0))
+                    .collect();
+                Samples::Packed(pdfrum_page::Packed::new(
+                    data,
+                    depth,
+                    components,
+                    pitch,
+                    w,
+                    h,
+                    &pdfrum_page::ColorSpace::DeviceGray,
+                    None,
+                ))
+            };
+            let mut v: Vec<(&'static str, Samples)> = vec![
+                ("packed-1", packed(1, 1, 31)),
+                ("packed-2", packed(2, 1, 41)),
+                ("packed-4", packed(4, 1, 43)),
+                ("packed-8", packed(8, 1, 47)),
+                ("packed-16", packed(16, 1, 59)),
+                ("packed-rgb8", packed(8, 3, 61)),
+                ("packed-cmyk8", packed(8, 4, 67)),
+            ];
+            v.extend(
+                vec![
+                    (
+                        "gray",
+                        Pixels::Gray8(
+                            (0..n)
+                                .map(|i| u8::try_from(i * 37 % 251).unwrap_or(0))
+                                .collect(),
+                        ),
                     ),
-                ),
-                (
-                    "rgb",
-                    Pixels::Rgb8(
-                        (0..n * 3)
-                            .map(|i| u8::try_from(i * 53 % 251).unwrap_or(0))
-                            .collect(),
+                    (
+                        "rgb",
+                        Pixels::Rgb8(
+                            (0..n * 3)
+                                .map(|i| u8::try_from(i * 53 % 251).unwrap_or(0))
+                                .collect(),
+                        ),
                     ),
-                ),
-                (
-                    "cmyk",
-                    Pixels::Cmyk8(
-                        (0..n * 4)
-                            .map(|i| u8::try_from(i * 29 % 251).unwrap_or(0))
-                            .collect(),
+                    (
+                        "cmyk",
+                        Pixels::Cmyk8(
+                            (0..n * 4)
+                                .map(|i| u8::try_from(i * 29 % 251).unwrap_or(0))
+                                .collect(),
+                        ),
                     ),
-                ),
-                (
-                    "indexed",
-                    Pixels::Indexed {
-                        indices: (0..n)
-                            .map(|i| u8::try_from(i * 17 % 256).unwrap_or(0))
-                            .collect(),
-                        palette: (0..=255u8)
-                            .map(|v| pdfrum_page::Rgb {
-                                r: f32::from(v) / 255.0,
-                                g: f32::from(255 - v) / 255.0,
-                                b: 0.25,
-                            })
-                            .collect(),
-                    },
-                ),
-            ]
+                    (
+                        "indexed",
+                        Pixels::Indexed {
+                            indices: (0..n)
+                                .map(|i| u8::try_from(i * 17 % 256).unwrap_or(0))
+                                .collect(),
+                            palette: (0..=255u8)
+                                .map(|v| pdfrum_page::Rgb {
+                                    r: f32::from(v) / 255.0,
+                                    g: f32::from(255 - v) / 255.0,
+                                    b: 0.25,
+                                })
+                                .collect(),
+                        },
+                    ),
+                ]
+                .into_iter()
+                .map(|(name, p)| (name, Samples::Whole(p))),
+            );
+            v
         };
 
         for (w, h, dw, dh) in [
@@ -1181,11 +1215,11 @@ mod tests {
             (100, 7, 7, 1),
             (5, 3, 4, 2),
         ] {
-            for (name, pixels) in kinds(w, h) {
+            for (name, samples) in kinds(w, h) {
                 let image = ImageData {
                     width: w,
                     height: h,
-                    pixels,
+                    samples,
                     mask: None,
                     matte: None,
                     interpolate: false,
@@ -1202,21 +1236,21 @@ mod tests {
     /// path too — the one kind whose pixels are not its samples.
     #[test]
     fn the_fused_reduction_carries_a_stencils_colour() {
-        use pdfrum_page::{BitImage, ImageData, Pixels};
+        use pdfrum_page::{BitImage, ImageData, Pixels, Samples};
 
         let (w, h) = (16_u32, 16_u32);
         let row_bytes = (w as usize).div_ceil(8);
         let image = ImageData {
             width: w,
             height: h,
-            pixels: Pixels::Stencil(BitImage {
+            samples: Samples::Whole(Pixels::Stencil(BitImage {
                 width: w,
                 height: h,
                 row_bytes,
                 bits: (0..row_bytes * h as usize)
                     .map(|i| u8::try_from(i * 73 % 256).unwrap_or(0))
                     .collect(),
-            }),
+            })),
             mask: None,
             matte: None,
             interpolate: false,
