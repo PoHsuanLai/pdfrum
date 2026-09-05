@@ -187,6 +187,51 @@ mod tests {
         assert!((last_input - 0.996_093_75).abs() < 1e-6);
     }
 
+    /// The same rule, through a real function: a linear gray ramp's last
+    /// entry is `255/256`, which rounds to 254 — a `STEPS - 1` divisor would
+    /// sample `t_max` and land on 255.
+    #[test]
+    fn the_last_entry_is_sampled_at_255_over_256_not_at_t_max() {
+        use kurbo::Point;
+        use pdfrum_common::{Diagnostics, Limits};
+        use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+        use pdfrum_page::{Axial, ColorSpace, FunctionCache, Geometry, Shading};
+
+        let dict = Dict::from_pairs([
+            (Name::from("FunctionType"), Object::Int(2)),
+            (
+                Name::from("Domain"),
+                Object::Array(Array::of([Object::Int(0), Object::Int(1)])),
+            ),
+            (Name::from("N"), Object::Int(1)),
+        ]);
+        let gray = FunctionCache::new()
+            .load(
+                &Object::Dict(dict),
+                &NoResolve,
+                &Limits::default(),
+                &mut Diagnostics::default(),
+            )
+            .expect("a type 2 function");
+        let shading = Shading {
+            geometry: Geometry::Axial(Axial {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(1.0, 0.0),
+                t_min: 0.0,
+                t_max: 1.0,
+                extend_start: false,
+                extend_end: false,
+            }),
+            space: std::sync::Arc::new(ColorSpace::DeviceGray),
+            functions: Box::new([gray]),
+            background: None,
+            bbox: None,
+        };
+        let ramp = ColorSteps::sample(&shading, 0.0, 1.0, 255).expect("samples");
+        assert_eq!(ramp.entry(0).map(|c| c.r), Some(0));
+        assert_eq!(ramp.entry(STEPS - 1).map(|c| c.r), Some(254));
+    }
+
     #[test]
     fn axial_index_truncates() {
         let r = ramp();
