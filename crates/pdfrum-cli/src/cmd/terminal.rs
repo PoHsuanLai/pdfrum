@@ -597,7 +597,7 @@ fn read_line(stdout: &mut std::io::Stdout, term: Term, prompt: &str) -> Result<S
 // ---- search ---------------------------------------------------------------
 
 #[derive(Serialize)]
-struct Hit {
+pub struct Hit {
     page: u32,
     /// The hit's character range in the page's text.
     start: usize,
@@ -701,7 +701,7 @@ pub fn search(req: &Search<'_>, term: Term) -> Result<ExitCode> {
 }
 
 /// Every hit of `needle` on the selected pages.
-fn find(
+pub fn find(
     doc: &Document,
     needle: &str,
     options: FindOptions,
