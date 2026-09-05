@@ -1,2 +1,3 @@
-revision 1   xref @466        table    633 bytes
-revision 2   xref @1036       stream   1399 bytes
+REV   XREF  KIND      SIZE
+  1   @466  table    633 B
+  2  @1036  stream  1.4 KB

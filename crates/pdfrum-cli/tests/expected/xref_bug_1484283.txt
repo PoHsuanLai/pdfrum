@@ -1,11 +1,15 @@
-fixtures/bug_1484283.pdf: 6 objects
-trailer <<
-  /Root 1 0 R
-  /Size 7
->>
-     1   0  @15
-     2   0  in 5 0 R [0]
-     3   0  @157
-     4   0  @633
-     5   0  @873
-     6   0  @1036
+file     fixtures/bug_1484283.pdf
+objects  6
+xref     as written
+trailer
+  <<
+    /Root 1 0 R
+    /Size 7
+  >>
+OBJ  GEN  PLACE
+  1    0  @15
+  2    0  in 5 0 R [0]
+  3    0  @157
+  4    0  @633
+  5    0  @873
+  6    0  @1036

@@ -1,4 +1,5 @@
-page 1    uri   69.00 338.00 180.00 358.00   https://cs.chromium.org/
-page 1    page  69.00 305.00 180.00 325.00   page 2
-page 1    other 69.00 270.00 180.00 290.00   (action)
-page 1    other 69.00 235.00 180.00 255.00   (action)
+PAGE  KIND   RECT                        TARGET
+   1  uri    69.00 338.00 180.00 358.00  https://cs.chromium.org/
+   1  page   69.00 305.00 180.00 325.00  page 2
+   1  other  69.00 270.00 180.00 290.00  action
+   1  other  69.00 235.00 180.00 255.00  action

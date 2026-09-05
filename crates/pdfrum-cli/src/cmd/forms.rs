@@ -9,7 +9,8 @@ use serde::Serialize;
 
 use crate::cmd::pages::save_options;
 use crate::out;
-use crate::out::outln;
+use crate::out::{Align, Table};
+use crate::term::{Style, Term};
 
 #[derive(Serialize)]
 struct FieldRow {
@@ -27,13 +28,13 @@ struct FieldRow {
     widgets: usize,
 }
 
-pub fn dump(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn dump(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let Some(form) = doc.form() else {
         if json {
             out::json(&Vec::<FieldRow>::new())?;
         } else {
-            outln!("no interactive form");
+            out::none("form fields");
         }
         return Ok(ExitCode::SUCCESS);
     };
@@ -61,7 +62,16 @@ pub fn dump(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode>
         .collect();
     if json {
         out::json(&rows)?;
+    } else if rows.is_empty() {
+        out::none("form fields");
     } else {
+        let mut table = Table::new(&[
+            ("NAME", Align::Left),
+            ("KIND", Align::Left),
+            ("VALUE", Align::Left),
+            ("OPTIONS", Align::Left),
+            ("FLAGS", Align::Left),
+        ]);
         for r in &rows {
             let mut flags = Vec::new();
             if r.read_only {
@@ -75,22 +85,15 @@ pub fn dump(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode>
                 Some(false) => "[ ]".to_owned(),
                 None => r.value.clone(),
             };
-            outln!(
-                "{:<32} {:<12} {value}{}{}",
-                r.name,
-                r.kind,
-                if r.options.is_empty() {
-                    String::new()
-                } else {
-                    format!("  options: {}", r.options.join(" | "))
-                },
-                if flags.is_empty() {
-                    String::new()
-                } else {
-                    format!("  ({})", flags.join(", "))
-                }
-            );
+            table.row(vec![
+                term.paint(Style::Ident, &r.name),
+                r.kind.clone(),
+                value,
+                r.options.join(" | "),
+                flags.join(", "),
+            ]);
         }
+        table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -103,6 +106,7 @@ pub fn fill(
     data: &Path,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let Some(mut form) = doc.form() else {
@@ -125,10 +129,11 @@ pub fn fill(
     }
     doc.save_form(output, &form, &save_options(deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: {set} field{} set",
-        output.display(),
-        if set == 1 { "" } else { "s" }
+    out::summary(
+        term,
+        output,
+        &format!("{set} field{} set", if set == 1 { "" } else { "s" }),
+        None,
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -140,6 +145,7 @@ pub fn flatten(
     print: bool,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let mode = if print {
@@ -156,10 +162,14 @@ pub fn flatten(
     }
     edit.save(output, &save_options(deterministic, doc.bytes()))
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!(
-        "{}: {flattened} of {} pages had something to flatten",
-        output.display(),
-        doc.page_count()
+    out::summary(
+        term,
+        output,
+        "flattened",
+        Some(&format!(
+            "{flattened} of {} pages had something to flatten",
+            doc.page_count()
+        )),
     );
     Ok(ExitCode::SUCCESS)
 }

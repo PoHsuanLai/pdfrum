@@ -10,7 +10,7 @@ use clap::{Command, CommandFactory};
 use clap_complete::Shell;
 
 use crate::Cli;
-use crate::out::outln;
+use crate::term::Term;
 
 pub fn completions(shell: Shell) -> ExitCode {
     let mut command = Cli::command();
@@ -23,7 +23,7 @@ pub fn completions(shell: Shell) -> ExitCode {
 
 /// One roff page per command, `pdfrum.1`, `pdfrum-extract.1`,
 /// `pdfrum-extract-text.1` and so on, into `dir`.
-pub fn manpage(dir: &Path) -> Result<ExitCode> {
+pub fn manpage(dir: &Path, term: Term) -> Result<ExitCode> {
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     let mut command = Cli::command();
     // Building fills in each subcommand's display name, `pdfrum-extract`,
@@ -31,7 +31,7 @@ pub fn manpage(dir: &Path) -> Result<ExitCode> {
     command.build();
     let mut written = 0;
     write_tree(dir, &command, "pdfrum", &mut written)?;
-    outln!("{}: {written} manual pages", dir.display());
+    crate::out::summary(term, dir, &format!("{written} manual pages"), None);
     Ok(ExitCode::SUCCESS)
 }
 

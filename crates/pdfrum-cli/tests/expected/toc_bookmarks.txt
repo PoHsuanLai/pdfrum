@@ -1,6 +1,7 @@
+TITLE                                PAGE
 A Good Beginning
 Open Middle
-  Open Middle Descendant  p.1
+  Open Middle Descendant                1
 A Good Closed Ending
   A Good Closed Ending Descendant
   A Good Closed Ending Descendant 2

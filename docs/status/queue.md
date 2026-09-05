@@ -70,6 +70,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   the crate, `Page::markdown` / `Page::layout_text` behind `markdown`,
   `extract markdown`, `extract text --layout`; tagged tier plus typography,
   unclaimed text never lost.
+- ~~Output style~~ — landed 2026-09-05 after the user's first walk-through
+  (`docs/design/cli-style.md`): four layout forms, a fixed colour palette,
+  one wording for empty answers, human sizes, no emoji; every printer
+  rewritten onto `out::{record, Table, heading, summary, none}`.
 - ~~Phase 5 — forensics and polish~~ — landed 2026-09-05 (`docs/status/M19.md`):
   `security encrypt` (R6, round-trip through our parser and `pdfium_test
   --password`), `extract images|fonts`, `inspect

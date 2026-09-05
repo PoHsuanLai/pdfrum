@@ -12,7 +12,7 @@ use pdfrum::{Encryption, Permissions, SaveOptions, Update};
 
 use crate::cmd::pages::save_options;
 use crate::out;
-use crate::out::outln;
+use crate::term::Term;
 
 /// `repair` and `optimize` share this: open with recovery, rewrite whole.
 ///
@@ -24,6 +24,7 @@ pub fn rewrite(
     output: &Path,
     deterministic: bool,
     verb: &str,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open_quietly(file, password)?;
     let before = doc.bytes().len();
@@ -35,19 +36,23 @@ pub fn rewrite(
         .with_context(|| format!("cannot write {}", output.display()))?;
     let after = std::fs::metadata(output).map_or(0, |m| m.len());
     let notices = doc.all_diagnostics().len();
-    outln!(
-        "{}: {verb} {} -> {} bytes{}",
-        output.display(),
-        before,
-        after,
-        if notices > 0 {
-            format!(
-                "; {notices} notice{} recovered on open",
-                if notices == 1 { "" } else { "s" }
-            )
-        } else {
-            String::new()
-        }
+    out::summary(
+        term,
+        output,
+        verb,
+        Some(&format!(
+            "{} -> {}{}",
+            out::bytes(before as u64),
+            out::bytes(after as u64),
+            if notices > 0 {
+                format!(
+                    "; {notices} notice{} recovered on open",
+                    if notices == 1 { "" } else { "s" }
+                )
+            } else {
+                String::new()
+            }
+        )),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -91,7 +96,7 @@ pub fn parse_allow(text: &str) -> Result<Permissions> {
 
 /// `security encrypt`: AES-256 (revision 6) under two passwords. An
 /// encrypted input is refused: decrypt it first, then encrypt the result.
-pub fn encrypt(req: &EncryptRequest<'_>) -> Result<ExitCode> {
+pub fn encrypt(req: &EncryptRequest<'_>, term: Term) -> Result<ExitCode> {
     let doc = out::open(req.file, req.password)?;
     if doc.is_encrypted() {
         bail!(
@@ -118,14 +123,15 @@ pub fn encrypt(req: &EncryptRequest<'_>) -> Result<ExitCode> {
     };
     doc.save_with(req.output, &options)
         .with_context(|| format!("cannot write {}", req.output.display()))?;
-    outln!(
-        "{}: encrypted (AES-256){}",
-        req.output.display(),
-        if req.user_password.is_empty() {
-            "; opens without a password, the owner password unlocks it"
+    out::summary(
+        term,
+        req.output,
+        "encrypted",
+        Some(if req.user_password.is_empty() {
+            "AES-256; opens without a password, the owner password unlocks it"
         } else {
-            ""
-        }
+            "AES-256"
+        }),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -136,6 +142,7 @@ pub fn decrypt(
     password: Option<&str>,
     output: &Path,
     deterministic: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     if !doc.is_encrypted() {
@@ -148,6 +155,6 @@ pub fn decrypt(
     };
     doc.save_with(output, &options)
         .with_context(|| format!("cannot write {}", output.display()))?;
-    outln!("{}: decrypted", output.display());
+    out::summary(term, output, "decrypted", None);
     Ok(ExitCode::SUCCESS)
 }

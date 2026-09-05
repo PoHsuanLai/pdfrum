@@ -53,6 +53,12 @@ on stderr, never on stdout. `--json` output has `snake_case` keys that do
 not change between releases. Exit codes: 0, 1 on error, 2 for a usage
 mistake, 3 from `doctor --strict`.
 
+Human output follows `docs/design/cli-style.md`: one of four forms (a
+record of key/value lines, a table with an uppercase header row, sections
+per page, or a one-line summary for a written file), a fixed palette of
+colour roles that is off in a pipe and under `NO_COLOR`, sizes in human
+units, `no <things>` for an empty answer, and never an emoji.
+
 The crate is a client of the `pdfrum` facade only — what it can print is
 what `cargo add pdfrum` can reach. `pdfrum-tool` is a different binary: the
 oracle mirror the conformance harness diffs against `pdfium_test`, and not
