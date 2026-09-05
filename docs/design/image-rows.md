@@ -16,6 +16,9 @@ materializes the whole source as RGBA (`pdfrum-render/src/image.rs`
 `to_pixmap`), allocates two more full-height buffers in `reduce_to`, and
 then the backend resamples the result a second time. Like for like on the
 guide: ~3.65 G `Ir` against PDFium's ~0.99 G for the same pixels.
+(mupdf measured on the same harness basis sits between the two; the
+three-engine table is under "Cold start, measured again" in
+`docs/status/queue.md`.)
 
 ## The shape
 

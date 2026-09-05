@@ -228,6 +228,25 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   G (8%); a scaled decode saves little here because the guide draws its
   images near 1:1. The gap that matters is our own stretch and unpack
   path, about 2× PDFium's for the same pixels — that is the pass to make.
+- **mupdf on the same basis (user request, 2026-09-05).** All three
+  engines through the benchmark harness's own in-process path
+  (`pdfrum-compare throughput --threads 1`, every page of the guide at
+  150 DPI, callgrind, one pass = half of the two the command makes), so
+  the numbers are like for like even though they differ from the
+  `profile`/`pdfium_test` pair above:
+
+  | per pass, `Ir` | pdfrum (vello-cpu) | PDFium (`libpdfium.so`) | mupdf 0.8 |
+  |---|---|---|---|
+  | total, 11 pages | 7.43 G | 2.87 G | 3.92 G |
+  | image path | 3.6 G: `to_pixmap` 1.32 G, `reduce_to` 1.67 G, `decode_image` 0.63 G, plus vello's image paint 0.63 G | 2.18 G `CPDF_ImageRenderer::Start`: `CStretchEngine` 1.72 G, `CPDF_DIB::GetScanline` 0.37 G | 2.62 G `fz_draw_fill_image`: `fz_scale_pixmap_cached` 1.22 G, `fz_decomp_image_from_stream` 1.24 G, `fz_paint_image` 0.18 G |
+  | of which JPEG | inside `decode_image` | 0.21 G libjpeg-turbo | 0.86 G IJG libjpeg (`jpeg_idct_16x16` 0.41 G) |
+  | text | glyph path inside the 2.84 G rasterize | 0.17 G | 0.09 G |
+
+  Reading: mupdf's scaler is the cheapest of the three (1.22 G against
+  PDFium's 1.72 G and our 3.0 G of `to_pixmap` + `reduce_to`) but it pays
+  for it with the slow IJG decoder, so its image path lands between ours
+  and PDFium's; the 2× that the image-rows pass targets holds against both
+  C engines.
 
 ## Image pipeline pass (scoped 2026-09-05 from the side-by-side with PDFium; design `docs/design/image-rows.md`, approved by the user) — NOT STARTED
 
@@ -265,15 +284,23 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   it (zune-image #434), which cuts `decode_dct`'s 293 M on downscaled
   JPEGs and changes pixels.
 
-## M22 — `libpdfrum` (scoped 2026-09-05, PLAN.md M22) — NOT STARTED
+## M22 — `libpdfrum` (scoped 2026-09-05, PLAN.md M22) — IN PROGRESS
 
 - ~~Phase 1 owned handles~~ — landed 2026-09-05: `Document::page_owned`/`pages_owned`
   and `OwnedPage`, `FormSession::owned`/`owned_with_scripts` and
   `OwnedFormSession`, `Error::code` → `ErrorCode` (`repr(u32)`, 1–9,
-  append-only); owned path within ±0.004% `Ir` of the borrowed one; phase 2 `crates/pdfrum-capi` (cdylib + staticlib, cbindgen
-  header, cargo-c, the one `allow(unsafe_code)` crate under a written
-  rule); phase 3 the C test in CI and the header under api-snapshot;
-  phase 4 `pdfrum-wasm` on wasm-bindgen; phase 5 UniFFI/PyO3 on request.
+  append-only); owned path within ±0.004% `Ir` of the borrowed one.
+- ~~Phases 2 and 3, `crates/pdfrum-capi`~~ — landed 2026-09-05 (8d9acc8):
+  `libpdfrum.{so,a}` with 54 functions over ten opaque handles, `pdfrum.h`
+  from cbindgen under `scripts/capi-header.nu` (declared vs exported
+  symbols, drift fails the gate), the one `allow(unsafe_code)` crate under
+  the rule in `docs/design/capi.md`, cargo-c install with `pkg-config`, the
+  C test in `scripts/ci.nu` (44 checks; 8 threads render one shared
+  document, pixmaps identical). The C test caught what no Rust gate could:
+  `pdfrum_page` as both a typedef and a function shadows the type in C's
+  one namespace — the accessor is `pdfrum_document_page`.
+- Phase 4 `pdfrum-wasm` on wasm-bindgen — IN PROGRESS 2026-09-05; phase 5
+  UniFFI/PyO3 on request.
 - Facts checked 2026-09-05: the facade already `cargo check`s on
   `wasm32-unknown-unknown` with vello-cpu, tinyskia, agg, codecs-all,
   forms, edit, markdown; only `javascript` fails (boa's getrandom wants
