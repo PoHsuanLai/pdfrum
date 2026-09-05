@@ -268,7 +268,7 @@ impl ScanKey {
 /// Font directories do not change under a running process, and a scan reads
 /// every face they hold to describe it — 0.2 s on a host with 1 183 faces
 /// (2026-09-05), and on the oracle's hermetic `test_fonts` 33 MB of reads
-/// costing ~12 ms of kernel time (2026-09-06, `docs/status/cold-start.md`).
+/// costing ~12 ms of kernel time (measured 2026-09-06).
 /// The host scan was already cached here; a `--font-dir` scan was not, and
 /// paid that again per substituted font.
 ///

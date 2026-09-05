@@ -164,7 +164,7 @@ flow.
 - Public API of every crate fits in one `lib.rs` re-export block a reviewer
   can read in one screen. Internal modules named by domain (`xref`, `lexer`,
   `shading`), never `util`, `helpers`, `common`, `misc`.
-- The committed `docs/status/api-baseline/` snapshots **are** the public API.
+- The committed `docs/api-baseline/` snapshots **are** the public API.
   A drift against them is the review: `./scripts/api-snapshot.nu check` is
   the gate, and an intended change is `./scripts/api-snapshot.nu update`
   run deliberately — a change to the baseline is a change to what
@@ -192,7 +192,7 @@ flow.
     dead however complete it makes the type look; let the test count another
     way.
   - **It ports oracle behaviour we reach no other way** — then it is a *missed
-    wire*, not dead code. File it in `docs/status/unwired-oracle-ports.md`
+    wire*, not dead code. Record it in `docs/issues-to-file.md`
     with both citations and name that file in the attribute's `reason`. This
     is the only shape of suppression the tree keeps; an attribute whose
     reason does not cite the registry is a decision not yet taken.

@@ -98,7 +98,6 @@ impl Default for XEntry {
 /// — which re-inserted every key of every section while walking `/Prev` — at
 /// a further 24%: **52% of open spent in the container alone**, for a load
 /// that writes each object's entry once per section naming it.
-/// `docs/status/open-pass.md` has the before and after.
 ///
 /// What the vector removes is the per-entry cost. What it keeps is every
 /// rule about which entry wins, unchanged and applied in the same order.

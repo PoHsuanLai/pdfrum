@@ -108,9 +108,9 @@ pub mod scanline;
 // exists, because the walk calls its entry points unconditionally and they
 // compile to empty inline functions with the feature off, but its forty-five
 // reporting items are part of the instrument rather than of the crate a
-// `cargo add pdfrum-render` reaches —
-// `docs/status/api-baseline/README.md:103` says exactly that where it
-// declines to snapshot the feature. Its own docs make the STYLE.md §1
+// `cargo add pdfrum-render` reaches, which is why the committed API
+// snapshots deliberately do not cover the `profiling` feature.
+// Its own docs make the STYLE.md §1
 // argument for the thread-local, and it holds.
 #[cfg(feature = "profiling")]
 pub mod walkprofile;

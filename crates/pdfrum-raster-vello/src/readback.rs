@@ -185,7 +185,7 @@ fn read_texture(
     // thread. So the wait must be a poll-then-check loop and must never be a
     // blocking receive: a `recv()` would park the only thread that can make
     // the callback happen. This is where the host actually waits for the GPU
-    // — the honest cost `docs/status/M12c.md` §8 measures.
+    // — and the honest place to account for the GPU backend's latency.
     match block::poll_until(device, || rx.try_recv().ok()) {
         Some(true) => {}
         Some(false) => return Err(Error::Readback("buffer map failed".to_owned())),

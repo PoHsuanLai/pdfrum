@@ -8,7 +8,6 @@
 // matrix. The extraction heuristics want the *typeset* view: one character
 // code per glyph, the text-space x each one sits at, the adjustment that
 // followed it, and the object's bounding box.
-// (`docs/design/pdfrum-text.md` §4.2.)
 //
 // Deriving that here rather than storing it in the page crate is the Q2
 // resolution: it is a pure function of data the page crate already publishes,

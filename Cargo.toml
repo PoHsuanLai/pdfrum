@@ -117,7 +117,7 @@ tiny-skia = "=0.12.0"
 # without them the crate is an encoder with no way to rasterize.
 #
 # The version is 0.10.0 and it resolves **wgpu 29**, not the wgpu 30 PLAN.md
-# §M12c predicted (docs/status/M12c.md §1). That matters beyond a pin: device
+# §M12c predicted. That matters beyond a pin: device
 # injection only typechecks against the exact wgpu a `Renderer` was built
 # with, so the backend re-exports vello's own `wgpu` and an embedder must hand
 # it a device from *that* one. There is no vello release against wgpu 30
@@ -192,7 +192,7 @@ criterion = { version = "=0.5.1", default-features = false, features = ["cargo_b
 # M12: a release build carries line tables so `scripts/profile.nu` names
 # functions instead of addresses. `debug = 1` is line-tables-plus-frame-info,
 # not full DWARF locals — it changes no code the optimizer emits, costs only
-# binary size and link time, and without it every profile in docs/status/M12.md
+# binary size and link time, and without it every profile in the internal working notes
 # would have had to be taken against a separate build that is not the one
 # `cargo bench` measures. Benchmarks and profiles now describe the same binary.
 [profile.release]
@@ -204,7 +204,7 @@ debug = 1
 # only the web binding wants — `opt-level = "z"` and `lto` cost native build
 # time and native speed that nothing else in this workspace is asking to
 # spend. `wasm-pack build --profile wasm` and `cargo build --profile wasm`
-# both take it. The measurement behind the settings is in docs/status/M22.md.
+# both take it. The measurement behind the settings is in the internal working notes.
 [profile.wasm]
 inherits = "release"
 # Optimize for speed, which on this crate is *also* the smallest. Measured on

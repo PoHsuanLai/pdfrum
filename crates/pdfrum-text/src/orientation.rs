@@ -5,7 +5,7 @@
 // Two guesses, one global and one per object. The global one is made once
 // before any character is emitted and is the fallback whenever the per-object
 // one cannot decide — which is often, because a one-glyph object has no
-// direction of its own. (`docs/design/pdfrum-text.md` §1.4, §1.8.)
+// direction of its own.
 
 use crate::object::TextRun;
 use pdfrum_page::Page;

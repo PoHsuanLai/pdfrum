@@ -531,9 +531,9 @@ impl RenderDevice for VelloDevice {
         // chosen once for the whole render (`RenderParams::antialiasing_method`)
         // and there is no aliasing-threshold knob of the kind `vello_cpu`
         // exposes. `Off` and `FullCover` therefore come out antialiased, which
-        // is a *stated* Tier C divergence rather than an oversight — see
-        // `docs/status/M12c.md` §5.1 for what it costs and why the alternative
-        // (thresholding on readback) would be worse.
+        // is a *stated* Tier C divergence rather than an oversight: the
+        // alternative, thresholding coverage on readback, would cost a second
+        // full-target pass and still not match the CPU backends' edge rule.
         let _ = aa;
         let Brush::Solid(color) = brush else {
             // An image brush reaches the device through `draw_image`; there is

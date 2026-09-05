@@ -59,7 +59,7 @@ impl<'a> Split<'a> {
 /// a fuzzer that is allowed to allocate a gigabyte finds OOMs, not bugs, and
 /// libFuzzer's `-rss_limit_mb` would kill the process on an input that is
 /// behaving exactly as designed. 1 MiB is the ceiling the filters brief
-/// (`docs/status/pdfrum-filters.md`) asks fuzz targets to use. Every other
+/// asks fuzz targets to use. Every other
 /// field keeps its production value, because those *are* the limits under
 /// test.
 #[must_use]

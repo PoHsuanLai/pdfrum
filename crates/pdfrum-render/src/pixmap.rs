@@ -51,7 +51,7 @@ impl Pixmap {
         // buffer twice, and at A4/150 DPI that is 8.7 MB of `memset` per
         // target with nothing to show for it. The doubling `extend_from_within`
         // keeps the write bulk — a per-pixel loop here measured *slower* than
-        // the two `memset`s it replaced (`docs/status/render-pass.md` §1).
+        // the two `memset`s it replaced.
         let len = (width as usize)
             .saturating_mul(height as usize)
             .saturating_mul(4);

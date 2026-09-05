@@ -94,7 +94,7 @@ pub struct DctImage {
 #[must_use]
 #[allow(
     dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
+    reason = "unwired: no decode path asks for reduced resolution yet"
 )]
 pub fn scale_denominator(levels: u8) -> u32 {
     1u32 << levels.min(3)
@@ -105,7 +105,7 @@ pub fn scale_denominator(levels: u8) -> u32 {
 #[must_use]
 #[allow(
     dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
+    reason = "unwired: no decode path asks for reduced resolution yet"
 )]
 pub fn scaled_size(dimension: u32, denominator: u32) -> u32 {
     if denominator == 0 {
@@ -123,7 +123,7 @@ pub fn scaled_size(dimension: u32, denominator: u32) -> u32 {
 #[must_use]
 #[allow(
     dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
+    reason = "unwired: no decode path asks for reduced resolution yet"
 )]
 pub fn allows_reduced_resolution(width: u32, height: u32, max_h: u32, max_v: u32) -> bool {
     let h_mcu = max_h.saturating_mul(8);
