@@ -3263,11 +3263,15 @@ the published ones exactly.
 verified oracle line, and no engine change was landed, so every "after" equals
 its "before". The two fixes that are ready to write are called out as such.
 
-> **Superseded in part, 2026-09-06.** Both files marked "ours — fix
-> identified" are now fixed; see "The two fixes, landed" at the end of this
-> section. One diagnosis below is **corrected** there rather than merely
-> extended: `fx/image/1_image.pdf` was not a filter-selection defect at all.
-> The table's SSIMs are the pre-fix numbers and are kept as the baseline.
+> **Superseded in part, 2026-09-06.** Four of the six rows are now fixed.
+> The two marked "ours — fix identified" landed first ("The two fixes,
+> landed"); the two `/SMask` rows landed after them ("The last two, fixed
+> 2026-09-06 — and neither was the mask"), both at the end of this section.
+> **Three** diagnoses below are *corrected* there rather than extended:
+> `fx/image/1_image.pdf` was not a filter-selection defect,
+> `vector_en_system.pdf` was not a mask defect at all, and
+> `image_en_fqa.pdf` did not share a root cause with it. The table's SSIMs
+> are the pre-fix numbers and are kept as the baseline.
 
 | file | SSIM | cause | oracle line | ruling |
 |---|---|---|---|---|
@@ -3567,3 +3571,134 @@ question `image_en_fqa.pdf` asks one axis larger, and the two should still be
 re-measured together.
 
 **Ruling: ours, mechanism narrowed to mask edge coverage, not fixed.**
+
+### The last two, fixed 2026-09-06 — and neither was the mask
+
+Both remaining "ours" rows are closed. **The two diagnoses above are
+superseded rather than extended**: neither file's loss was the mask-edge
+coverage they converged on, and the two were never the same question. The
+numbers are `benches/compare`'s basis — page 1 at 150 DPI against
+`pdfium_test --png --scale=2.0833333333`, the SSIM from
+`conformance/src/ssim.rs` — with the pre-fix values reproduced exactly
+before anything changed.
+
+| file | before | after | commit |
+|---|---|---|---|
+| `vector_en_system.pdf` | 0.959968 | **0.998275** | `b65f89e` |
+| `image_en_fqa.pdf` | 0.976895 | **0.999671** | `4667301` |
+
+#### `vector_en_system.pdf` — the images were never involved
+
+One measurement settles it. Rebuilding the page's content stream with
+**every `cm ... /Image Do` removed** and rendering what is left reproduces
+the loss to the pixel: SSIM 0.9588 against the whole page's 0.9600,
+102 976 pixels of `#054696` against the oracle's 59 227, the same
+48 378-pixel excess the section above measured. The 31 `/SMask`ed images
+contribute nothing to it, and the alpha-cap argument — correct as far as it
+went — was answering a question the file does not ask.
+
+`#054696` is not an image colour at all. The base samples are pure black
+and the mask peaks at 102, so a single image can only ever paint grey: the
+isolated first image scores **0.999849** and tops out at 41 % coverage,
+matching the oracle's histogram bucket for bucket. `#054696` is
+`0.0196 0.275 0.588 RG` — the stroke colour of the page's 53 `S`
+operators, which trace 1 984 closed glyph outlines at `1 w` in 16 406
+Bézier segments.
+
+**The cause is in the path builder, and it is a conflated type.**
+`PointKind` carried "how this point continues the path" and "this point
+closes the subpath" in one enum, so `close_path` marked a closing point by
+*rewriting its kind* to `CloseLine`. Every outline here is a run of `c`s
+ending exactly on its own `m`, so `h` takes the branch that flags the last
+point — and that point is the **third control point of a curve**. Rewriting
+it turned the curve into a straight line and stranded its first two control
+points in `build_path`'s `pending` buffer, where the *next* subpath's first
+curve point completed a bogus triple: a curve sweeping from one glyph back
+to the previous one, stroked at 1 w. Cut to the two subpaths that first
+show it, coverage is 94.16 in the oracle and 273.60 here, and the extra ink
+is a single long diagonal.
+
+Upstream never had the conflation. `CPDF_StreamContentParser::Handle_ClosePath`
+(`core/fpdfapi/page/cpdf_streamcontentparser.cpp:971-981`) sets
+`path_points_.back().close_figure_ = true` — a flag *beside*
+`CFX_Path::Point::Type`, not a value of it. `PathPoint { at, kind, closes }`
+now keeps the same split, `build_path` applies `closes` after the point's
+own segment is emitted, and each subpath boundary drops whatever control
+points the previous one left incomplete.
+
+The blast radius is much wider than one file, because the pattern —
+outline, close, next outline — is what every traced glyph and every vector
+logo produces: **45 board rows moved up and none moved down**, three from
+fail to pass (`corpus/fx/path/path_7.pdf`,
+`corpus/third_party/tcpdf/example_058.pdf`, `resources/linearized.pdf`),
+with `corpus/fx/text/en_system.pdf` 0.954028 -> 0.997432 and
+`corpus/fx/path/path_3.pdf` 0.990261 -> 0.999802. It also took
+`fx/path/transparent1.pdf` 0.986748 -> 0.989951, which is part of the
+closepath-seam residual the knockout fix left open.
+
+#### `image_en_fqa.pdf` — the mask, but the geometry rather than the kernel
+
+This one *is* the mask, and the reduction kernel was never the problem.
+The destination was.
+
+`CPDF_ImageRenderer::GetUnitRect` (`cpdf_imagerenderer.cpp:658-664`) takes
+`image_matrix_.GetUnitRect().GetOuterRect()` and `GetDimensionsFromUnitRect`
+(`:667-698`) derives the destination extent from that **integer** rect, so
+`CStretchEngine`'s `scale` is `src_len / integer_dest_len` counted from the
+integer `left`/`top`. That is as true of the box-filter loop at
+`cstretchengine.cpp:136` as of the magnification branch at `:106` — the
+citation the section above correctly identified as the applicable one. Only
+the kernel differs between them; the grid does not.
+
+`Placement::Snapped` already recorded this for magnification and was
+explicitly restricted away from reductions, on the reasoning that
+`reduce_to` had "already applied the taps". The measurement shows why that
+reasoning does not close: snapping a *placement* leaves the pixels alone,
+and our reduction had already chosen a different destination, because
+`reduced_len` rounds the fractional footprint **up**. Instrumenting the
+draws gives, for the largest mask, `1572x85` over a `393.1291 x 21.2379`
+footprint reduced to `394 x 22` and placed at `(0.4837, 0.6594)` at a
+residual scale of `0.9978` — the same pixel count as upstream's, on a
+grid offset from it by half a pixel, which the backend's bilinear kernel
+then had to resolve. One resample too many, and each one spreads a mask
+edge by a pixel. 276 draws of it is the diffuse text-shaped fringe.
+
+`SnappedReduction` makes the size and the origin one decision: reduce to
+the integer rect's own extent, place at its origin, and `placement_for`
+answers `Placement::Exact` — the nearest sampler, one texel per pixel, no
+phase left to get wrong. Restricted to an axis-aligned, unmirrored,
+two-axis reduction; a mirrored axis would need the pixmap flipped as well
+as placed, and a single-axis reduction still needs the other axis's
+fractional scale.
+
+Exactly **one** board row moves and none moves down:
+`corpus/fx/text/en_fqa.pdf` 0.920807 -> 0.996551.
+
+#### What the M21 table now looks like
+
+| file | SSIM | ruling |
+|---|---|---|
+| `fx/path/transparent1.pdf` | 0.991918 | fixed (`5ba19cd`); closepath-seam residual open |
+| `fx/image/1_image.pdf` | 0.999858 | fixed (`322ab67`) |
+| `vector_en_system.pdf` | 0.998275 | fixed (`b65f89e`) — a path-builder defect, not a mask one |
+| `vector_tcpdf_009.pdf` | — | still not investigated |
+| `image_en_fqa.pdf` | 0.999671 | fixed (`4667301`) |
+| `image_jpx_123.pdf` | 0.987 | neither — upstream numerics; bucket it |
+
+#### One thing found and not fixed
+
+`/Matte` is read from the **base image's** dictionary
+(`crates/pdfrum-page/src/image/mod.rs:486`), but PDF 1.7 §11.6.5.3 puts it
+on the `/SMask`'s, which is where `vector_en_system.pdf` has it and where
+PDFium reads it from: `CPDF_DIB::StartLoadMask`
+(`core/fpdfapi/page/cpdf_dib.cpp:832`) takes
+`mask->GetDict()->GetArrayFor("Matte")` — the *mask's* dictionary — while
+checking it against the **base's** component count and colour space, which
+is what our own `matte_color` already does with the wrong array. It then
+reaches the renderer as `loader_->MatteColor()` and is consumed at
+`cpdf_imagerenderer.cpp:294-313`. So we apply no matte on that file at
+all. It changes nothing there — the samples and the matte are both black,
+which makes `matte_source` the identity, exactly as the section above
+established — so it is invisible on this corpus and was left alone rather
+than fixed blind. It needs a file whose matte is not black to be worth
+touching, and there is none on the board.
