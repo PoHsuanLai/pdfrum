@@ -516,7 +516,9 @@ is unchanged.
   test.
 - *No `bitflags` crate* — stands; see §6 below.
 - *No fourth trait seam* — stands. Nothing here proposes one.
-- *No builder ladders* — stands.
+- ~~*No builder ladders* — stands.~~ **Superseded for the public API surface
+  by §D (user ruling, 2026-09-06).** Still stands for internal and
+  engine-side construction.
 - *No hiding escape hatches* — stands, and is **clarified**: an escape hatch
   may name a sibling-crate type, and §A.5's test 1 exempts it. The amendment
   narrows the exemption to methods documented as escape hatches in their first
@@ -2176,7 +2178,9 @@ a regression.
   and apply at save, so `Document` stays `Sync`. No `Rc<RefCell<_>>` graph.
 - **Config structs with `Default` + struct-update syntax.** `OpenOptions`,
   `RenderOptions`, `SaveOptions`, `SessionConfig`, `PathBuilder`. STYLE.md
-  §4 forbids builder ladders; keep that.
+  §4 forbids builder ladders; ~~keep that.~~ **superseded by §D
+  (2026-09-06): the config struct stays and a builder may be added beside it
+  on a public options type.**
 - **Enums for closed sets.** `Rotation`, `ColorMode`, `TextAa`, `FieldKind`,
   `Subtype`, `Update`, `UpdateKind`, `Placement`.
 - **One `Error`, domain variants, `thiserror`, `#[non_exhaustive]`.** Inner
@@ -2242,7 +2246,9 @@ as public API.
 - **No `bitflags` crate.** Closed decision; see §6.
 - **No fourth trait seam.** `RenderDevice`, `Resolve`, `Cascade` stay the
   list. Chrome stays values the host pulls.
-- **No builder ladders** for options. Struct update is the style.
+- ~~**No builder ladders** for options. Struct update is the style.~~
+  **Superseded by §D (2026-09-06):** struct update remains the style and the
+  guaranteed path; a builder may be added beside it on a public options type.
 - **No hiding escape hatches.** `parser()` / `objects()` / `dict()` /
   `graph()` stay. They become *complete*: every type they mention is
   re-exported, or they are clearly marked as “you now depend on crate X”.
@@ -3745,3 +3751,92 @@ that WP13 must test for:**
 
 That is the library PLAN.md described. The work above is what is left
 between here and there.
+
+---
+
+## D. Amendment, 2026-09-06 — builders on the public surface, and the standard traits
+
+Two rulings, one pass. §D.1 supersedes the "no builder ladders" line wherever
+it appears above (§A.8's stands-list, §5 WP-preamble, §A.9's non-goals); §D.2
+records what the C-COMMON-TRAITS sweep added and, more usefully, what it
+deliberately did not.
+
+### D.1 Builders, scoped to the public API surface
+
+**The user ruled 2026-09-06:** *"we can update it. this should only be the api
+surface tho."* STYLE.md §4 is amended in place to match, and the three places
+this document reaffirmed the old rule are struck through above.
+
+The rule, restated:
+
+- The config struct with `Default` and public fields **stays**, and
+  struct-update syntax keeps working. A builder is **added sugar, never a
+  replacement** — the surface is snapshot-gated, and a caller writing
+  `RenderOptions { transform, ..Default::default() }` must still compile.
+- A builder may be added on a **public, user-facing** options type when
+  several settings are commonly chosen together, when they are chosen
+  conditionally, or when a setter wants an `impl Into` / `impl AsRef` the
+  struct field itself cannot have.
+- **Internal and engine-side construction keeps the old rule.**
+  `pdfrum_render::RenderOptions` — the engine type with the seven
+  oracle-named negative bools — is a *different type with a different
+  audience*, as §A.3 already records, and gets no builder.
+
+Five landed, one was declined:
+
+| Type | Builder | Why |
+|---|---|---|
+| `RenderOptions` | yes | Seven fields, and the two most-used (`scale`, `grayscale`) are shorthands a struct-update caller writes out by hand. |
+| `StampOptions` | yes | Seven scalar fields, routinely set three or four at a time. |
+| `SaveOptions` | yes | Six fields, three of them `Option`; `.version(v)` and `.encrypt(e)` drop a `Some`. |
+| `AttachmentOptions` | yes | Three `Option<String>` fields; `impl Into<String>` removes a `Some(…into())` at every call site. |
+| `OpenOptions` | yes | Only two fields — but one is `Option<Vec<u8>>`, and `.password("secret")` taking `impl AsRef<[u8]>` is the whole reason. |
+| `SessionConfig` | **no** | Defined in `pdfrum-form`, re-exported rather than facade-owned, and a platform-conventions knob set a host fills in once at startup — not a per-call options struct. Struct update reads better on it, and a builder there would be the member-crate half of the surface the ruling deliberately did not scope. |
+
+`PathBuilder`, `TextBuilder` and `ImageBuilder` were already builders and are
+untouched: they build *page content*, not options, and their staging is real.
+
+### D.2 The standard trait surface (C-COMMON-TRAITS)
+
+Added, all on facade-defined types:
+
+- `Display` + `FromStr`, with a round-trip test per variant, on
+  `Rotation` (degrees: `"90"`), `ImageEncoding`, `FontFileKind`,
+  `FlattenMode`, `StampPosition`, `Update`. Each `FromStr` gets its own named
+  error type rather than a shared one, so a caller matches on what actually
+  failed.
+- `Display` alone on `Flattened` (an outcome a call reports; nobody writes one
+  down) and on `ErrorCode` (the domain word — deliberately *not* the number,
+  and never a repeat of `Debug`).
+- `TryFrom<u32>` on `ErrorCode`, the fallible inverse of the existing
+  `From<ErrorCode> for u32`. `TryFrom` and not `From` because the enum is
+  `#[non_exhaustive]` and almost every `u32` names nothing — §3's "`From`
+  never lies".
+
+Deliberately **not** implemented, which is the more useful half of the list:
+
+| Type | Trait withheld | Reason |
+|---|---|---|
+| `RenderOptions`, `StampOptions` | `Eq`, `Hash` | Interior `f64`/`f32` (`transform`, `angle`, `opacity`, `font_size`). `Hash` on a float is a trap and `Eq` on one is a lie; `PartialEq` is already there and is the honest bound. |
+| `RenderOptions`, `SaveOptions`, … | `Display` | A config struct has no single human rendering. `Debug` is the right answer and duplicating it would violate the "must not duplicate `Debug`" rule outright. |
+| `Rotation`, `FontFileKind`, `ImageEncoding`, `StampPosition`, `FlattenMode` | `Ord`, `PartialOrd` | No meaningful order. `Rotation` looks orderable — 0 < 90 < 180 — but a rotation is a cyclic group element, not a magnitude, and sorting pages by it means nothing. `PageIndex` and `PdfVersion`, which *are* magnitudes, already have `Ord` in `pdfrum-common`. |
+| `Flattened`, `ErrorCode` | `FromStr` | Outcomes and codes travel outward only. A parser with no caller is dead surface. |
+| `Document`, `Form`, `FormSession`, `DocEdit`, `Page` | `Clone`, `Default`, `PartialEq` | Handles over borrowed or uniquely-owned state. A `Default` `Document` would be a nonsense value, and equality on two open files is not a question with an answer. |
+| `Attachment`, `Annotation`, `Bookmark`, `Field`, `Signature` | `PartialEq`, `Hash` | Borrowed views into a document, not values. Equality would compare the view, not the thing viewed. |
+| `PageImage` | `PartialEq`, `Eq` | Holds an `Arc<ImageData>`; comparing decoded pixels on `==` is a cost no caller asked for. `RawImage`, which is plain bytes, does have both. |
+| every facade type | `AsRef`, `Borrow` | Nothing here is a wrapper a caller would want to borrow *through*. `AsRef` is for `String`/`&str`-shaped pairs; inventing one would be mechanical derivation of the kind this pass is meant to avoid. |
+| the options structs | `IntoIterator` | Not collection-shaped. `Outline` has it, which is the one facade type that is. |
+
+`#[non_exhaustive]` decisions: `Error`, `ErrorCode` and `Metadata` already
+carry it and keep it — all three are certain to grow. The new `FromStr` error
+structs do **not** get it: each is a single closed fact ("this string was not
+one of the four"), a caller has a legitimate reason to construct one in a
+test, and adding a field later would be a new type rather than a variant. The
+value enums (`Rotation`, `FlattenMode`, `Update`, `StampPosition`) stay
+exhaustive because each is a **closed set fixed by the PDF format**, not by
+this library — there is no fifth quarter turn — and STYLE.md §1's "avoid `_ =>`
+arms on our own enums" depends on callers being able to match them
+exhaustively. `ImageEncoding` and `FontFileKind` are the two that could
+argue for it, since a new codec or font-program key is conceivable; they stay
+exhaustive for now, and adding a variant to either is deliberately a breaking
+change so the decision is taken rather than absorbed.

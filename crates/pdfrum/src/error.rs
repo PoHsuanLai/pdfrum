@@ -150,6 +150,73 @@ impl From<ErrorCode> for u32 {
     }
 }
 
+/// The error [`ErrorCode`]'s [`TryFrom<u32>`] returns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("no error code numbered {0}")]
+pub struct UnknownErrorCode(pub u32);
+
+impl ErrorCode {
+    /// The domain word the code stands for, as [`Display`](std::fmt::Display)
+    /// writes it.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            ErrorCode::Io => "io",
+            ErrorCode::Open => "open",
+            ErrorCode::WrongPassword => "wrong-password",
+            ErrorCode::Read => "read",
+            ErrorCode::Render => "render",
+            ErrorCode::Doc => "doc",
+            ErrorCode::Save => "save",
+            ErrorCode::Text => "text",
+            ErrorCode::Limit => "limit",
+        }
+    }
+}
+
+impl std::fmt::Display for ErrorCode {
+    /// The domain word, not the number and not the failing error's own
+    /// message — [`Error`]'s [`Display`](std::fmt::Display) says what went
+    /// wrong, this says which family it belongs to.
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::ErrorCode::WrongPassword.to_string(), "wrong-password");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// The number back, for a header or a wire format that carried one.
+///
+/// Fallible, and so [`TryFrom`] rather than [`From`]: the enum is
+/// `#[non_exhaustive]` and most `u32`s name no code.
+///
+/// ```
+/// use pdfrum::ErrorCode;
+///
+/// assert_eq!(ErrorCode::try_from(9), Ok(ErrorCode::Limit));
+/// assert!(ErrorCode::try_from(0).is_err());
+/// ```
+impl TryFrom<u32> for ErrorCode {
+    type Error = UnknownErrorCode;
+
+    fn try_from(n: u32) -> core::result::Result<ErrorCode, UnknownErrorCode> {
+        match n {
+            1 => Ok(ErrorCode::Io),
+            2 => Ok(ErrorCode::Open),
+            3 => Ok(ErrorCode::WrongPassword),
+            4 => Ok(ErrorCode::Read),
+            5 => Ok(ErrorCode::Render),
+            6 => Ok(ErrorCode::Doc),
+            7 => Ok(ErrorCode::Save),
+            8 => Ok(ErrorCode::Text),
+            9 => Ok(ErrorCode::Limit),
+            other => Err(UnknownErrorCode(other)),
+        }
+    }
+}
+
 impl Error {
     /// The error's stable code — see [`ErrorCode`].
     ///

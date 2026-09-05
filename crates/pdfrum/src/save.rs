@@ -70,6 +70,172 @@ pub enum Update {
     Incremental,
 }
 
+/// Builds a [`SaveOptions`] a setting at a time.
+///
+/// Sugar over the struct-update syntax, which still works. Every method
+/// consumes and returns the builder; [`build`](Self::build) hands back the
+/// options.
+///
+/// ```
+/// use pdfrum::{SaveOptions, Update};
+///
+/// let options = SaveOptions::builder()
+///     .update(Update::Incremental)
+///     .subset_new_fonts(true)
+///     .build();
+///
+/// assert_eq!(options, SaveOptions {
+///     update: Update::Incremental,
+///     subset_new_fonts: true,
+///     ..SaveOptions::default()
+/// });
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[must_use]
+pub struct SaveOptionsBuilder(SaveOptions);
+
+impl SaveOptionsBuilder {
+    /// Rewrite the file or append to it — [`SaveOptions::update`].
+    ///
+    /// ```
+    /// use pdfrum::{SaveOptions, Update};
+    ///
+    /// let options = SaveOptions::builder().update(Update::Incremental).build();
+    /// ```
+    pub fn update(mut self, update: Update) -> Self {
+        self.0.update = update;
+        self
+    }
+
+    /// Append after the original bytes — [`Update::Incremental`].
+    ///
+    /// ```
+    /// let options = pdfrum::SaveOptions::builder().incremental().build();
+    /// assert_eq!(options.update, pdfrum::Update::Incremental);
+    /// ```
+    pub fn incremental(self) -> Self {
+        self.update(Update::Incremental)
+    }
+
+    /// The version to declare in the header — [`SaveOptions::version`].
+    ///
+    /// ```
+    /// use pdfrum::{PdfVersion, SaveOptions};
+    ///
+    /// let options = SaveOptions::builder().version(PdfVersion::PDF_1_7).build();
+    /// assert_eq!(options.version, Some(PdfVersion::PDF_1_7));
+    /// ```
+    pub fn version(mut self, version: PdfVersion) -> Self {
+        self.0.version = Some(version);
+        self
+    }
+
+    /// Write an encrypted document out in the clear —
+    /// [`SaveOptions::remove_security`].
+    ///
+    /// ```
+    /// let options = pdfrum::SaveOptions::builder().remove_security(true).build();
+    /// assert!(options.remove_security);
+    /// ```
+    pub fn remove_security(mut self, remove: bool) -> Self {
+        self.0.remove_security = remove;
+        self
+    }
+
+    /// Subset the fonts this save writes as new —
+    /// [`SaveOptions::subset_new_fonts`].
+    ///
+    /// ```
+    /// let options = pdfrum::SaveOptions::builder().subset_new_fonts(true).build();
+    /// assert!(options.subset_new_fonts);
+    /// ```
+    pub fn subset_new_fonts(mut self, subset: bool) -> Self {
+        self.0.subset_new_fonts = subset;
+        self
+    }
+
+    /// Where the trailer's fresh `/ID` bytes come from —
+    /// [`SaveOptions::id_source`].
+    ///
+    /// ```
+    /// use pdfrum::{IdSource, SaveOptions};
+    ///
+    /// // A fixed seed makes the same input save to the same bytes.
+    /// let options = SaveOptions::builder().id_source(IdSource::Fixed([0; 16])).build();
+    /// ```
+    pub fn id_source(mut self, id_source: IdSource) -> Self {
+        self.0.id_source = id_source;
+        self
+    }
+
+    /// Encrypt an unencrypted document on the way out —
+    /// [`SaveOptions::encrypt`].
+    pub fn encrypt(mut self, encryption: Encryption) -> Self {
+        self.0.encrypt = Some(encryption);
+        self
+    }
+
+    /// The options as built.
+    ///
+    /// ```
+    /// let options = pdfrum::SaveOptions::builder().build();
+    /// assert_eq!(options, pdfrum::SaveOptions::default());
+    /// ```
+    #[must_use]
+    pub fn build(self) -> SaveOptions {
+        self.0
+    }
+}
+
+impl SaveOptions {
+    /// A builder starting from the defaults.
+    ///
+    /// ```
+    /// let options = pdfrum::SaveOptions::builder().incremental().build();
+    /// ```
+    pub fn builder() -> SaveOptionsBuilder {
+        SaveOptionsBuilder::default()
+    }
+}
+
+/// The error [`Update`]'s [`FromStr`](std::str::FromStr) returns.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("not an update mode: {0}")]
+pub struct UnknownUpdate(String);
+
+impl std::fmt::Display for Update {
+    /// `rewrite` or `incremental`, which round-trip through
+    /// [`FromStr`](std::str::FromStr).
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::Update::Incremental.to_string(), "incremental");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Update::Rewrite => "rewrite",
+            Update::Incremental => "incremental",
+        })
+    }
+}
+
+impl std::str::FromStr for Update {
+    type Err = UnknownUpdate;
+
+    /// The inverse of [`Display`](std::fmt::Display) — what a `--update`
+    /// flag parses.
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownUpdate`] for anything but `rewrite` and `incremental`.
+    fn from_str(s: &str) -> core::result::Result<Update, UnknownUpdate> {
+        match s {
+            "rewrite" => Ok(Update::Rewrite),
+            "incremental" => Ok(Update::Incremental),
+            other => Err(UnknownUpdate(other.to_owned())),
+        }
+    }
+}
+
 impl Document {
     /// Writes the document to `path`.
     ///
