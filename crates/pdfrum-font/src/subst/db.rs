@@ -13,6 +13,7 @@ use super::charset::{Charset, PitchFamily};
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use super::probe::{FaceProbe, ProbeError};
 use super::style::{style_bits, tt_normalize};
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use read_fonts::TableProvider;
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use skrifa::MetadataProvider;

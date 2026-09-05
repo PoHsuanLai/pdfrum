@@ -48,7 +48,7 @@ const WANTED: [Tag; 2] = [Tag(*b"name"), Tag(*b"OS/2")];
 
 /// A four-byte sfnt table tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct Tag(pub [u8; 4]);
+pub(super) struct Tag([u8; 4]);
 
 /// Why a file could not be probed.
 ///
