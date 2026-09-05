@@ -1729,6 +1729,141 @@ fn every_writing_command_takes_a_dash_output() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+#[test]
+fn info_hash_and_doctor_take_several_files_and_go_on_past_a_bad_one() {
+    assert_eq!(
+        stdout(&[
+            "info",
+            "fixtures/two_signatures.pdf",
+            "fixtures/bookmarks.pdf"
+        ])
+        .unwrap(),
+        expected("info_two_files.txt").unwrap(),
+        "one record per file, a blank line between"
+    );
+    let v = json(&[
+        "info",
+        "fixtures/two_signatures.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["file"], "fixtures/two_signatures.pdf");
+    assert_eq!(v[1]["file"], "fixtures/bookmarks.pdf");
+    assert_eq!(v[1]["pages"], 2);
+    let one = json(&["info", "fixtures/bookmarks.pdf", "--json"]).unwrap();
+    assert!(one.is_object(), "one file stays one document");
+
+    let v = json(&[
+        "hash",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v.as_array().map(Vec::len), Some(2));
+    assert_eq!(v[0]["objects"], 7);
+
+    // A missing file is reported and the rest are still answered; exit 1.
+    let out = run(&[
+        "hash",
+        "fixtures/nonesuch.pdf",
+        "fixtures/hello_world_2_pages.pdf",
+    ])
+    .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("nonesuch.pdf"));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).starts_with("file          fixtures/hello_world"),
+        "{out:?}"
+    );
+
+    let strict = run(&[
+        "doctor",
+        "--strict",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/parser_rebuildxref_correct.pdf",
+    ])
+    .unwrap();
+    assert_eq!(strict.status.code(), Some(3), "any file with notices");
+    let text = String::from_utf8_lossy(&strict.stdout);
+    assert!(
+        text.starts_with("file   fixtures/hello_world_2_pages.pdf\nstate  clean\n\nfile"),
+        "{text}"
+    );
+    let v = json(&[
+        "doctor",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/parser_rebuildxref_correct.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[1]["recovered"], 4);
+}
+
+#[test]
+fn search_names_the_file_for_several_files_like_grep() {
+    let two = run(&[
+        "search",
+        "-i",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert!(two.status.success(), "{two:?}");
+    let text = String::from_utf8_lossy(&two.stdout);
+    assert!(
+        text.starts_with("fixtures/hello_world_2_pages.pdf:page 1:Hello, world!\n"),
+        "{text}"
+    );
+    assert_eq!(text.lines().count(), 4);
+    let quiet = stdout(&[
+        "search",
+        "world",
+        "--no-filename",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert!(quiet.starts_with("page 1:"), "{quiet}");
+    let named = stdout(&["search", "-H", "world", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert!(
+        named.starts_with("fixtures/hello_world_2_pages.pdf:page 1:"),
+        "{named}"
+    );
+
+    let none = run(&[
+        "search",
+        "nonesuch",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert_eq!(none.status.code(), Some(1), "no file had a hit");
+    let bad = run(&[
+        "search",
+        "world",
+        "fixtures/nonesuch.pdf",
+        "fixtures/hello_world_2_pages.pdf",
+    ])
+    .unwrap();
+    assert_eq!(bad.status.code(), Some(1), "hits, but a file failed");
+    assert!(String::from_utf8_lossy(&bad.stdout).contains(":page 1:"));
+
+    let v = json(&[
+        "search",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["file"], "fixtures/hello_world_2_pages.pdf");
+    assert_eq!(v[0]["hits"].as_array().map(Vec::len), Some(4));
+    assert_eq!(v[1]["hits"].as_array().map(Vec::len), Some(0));
+}
+
 // ---- javascript (a feature, off by default) --------------------------------
 
 /// The transcript PDFium's own harness expects for a fixture, beside it.

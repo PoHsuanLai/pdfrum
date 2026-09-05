@@ -1,7 +1,7 @@
 //! `pdfrum doctor`: what the parser recovered or dropped, without saving.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -9,7 +9,7 @@ use pdfrum::{Diagnostic, Diagnostics, Severity};
 use serde::Serialize;
 
 use crate::out;
-use crate::out::{Align, Table};
+use crate::out::{Align, Table, outln};
 use crate::term::{Style, Term};
 
 #[derive(Serialize)]
@@ -32,33 +32,45 @@ struct Notice {
 }
 
 pub fn run(
-    file: &Path,
+    files: &[PathBuf],
     password: Option<&str>,
     json: bool,
     strict: bool,
     scan_all: bool,
     term: Term,
 ) -> Result<ExitCode> {
-    let doc = out::open_quietly(file, password)?;
-    if scan_all {
-        // A page's own notices surface when it is built; text extraction
-        // builds every page and touches every font without rasterizing.
-        for page in doc.pages() {
-            drop(page.text());
+    let (reports, failed) = out::per_file(files, term, |file| {
+        let doc = out::open_quietly(file, password)?;
+        if scan_all {
+            // A page's own notices surface when it is built; text extraction
+            // builds every page and touches every font without rasterizing.
+            for page in doc.pages() {
+                drop(page.text());
+            }
+        }
+        let diags = doc.all_diagnostics();
+        Ok((report(&diags, &doc, file), !diags.is_empty()))
+    });
+    let found = reports.iter().any(|(_, found)| *found);
+    let reports: Vec<&Report> = reports.iter().map(|(r, _)| r).collect();
+    if json {
+        out::documents(files, &reports)?;
+    } else {
+        for (i, report) in reports.iter().enumerate() {
+            if i > 0 {
+                outln!();
+            }
+            print(report, term);
         }
     }
-    let diags = doc.all_diagnostics();
-    let report = report(&diags, &doc, file);
-    if json {
-        out::json(&report)?;
-    } else {
-        print(&report, term);
-    }
-    Ok(if strict && !diags.is_empty() {
-        ExitCode::from(3)
-    } else {
-        ExitCode::SUCCESS
-    })
+    Ok(out::exit(
+        failed,
+        if strict && found {
+            ExitCode::from(3)
+        } else {
+            ExitCode::SUCCESS
+        },
+    ))
 }
 
 fn report(diags: &Diagnostics, doc: &pdfrum::Document, file: &Path) -> Report {

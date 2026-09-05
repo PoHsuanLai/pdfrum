@@ -1,0 +1,16 @@
+file         fixtures/two_signatures.pdf
+version      1.7
+pages        1
+page size    200.00 x 300.00 pt
+security     none
+document id  none
+signatures   ETSI.CAdES.detached; signed D:20200624093114+02'00'
+             ETSI.CAdES.detached; signed D:20200624093118+02'00'
+
+file         fixtures/bookmarks.pdf
+version      1.7
+pages        2
+page size    612.00 x 792.00 pt
+security     none
+document id  none
+outline      6 entries
