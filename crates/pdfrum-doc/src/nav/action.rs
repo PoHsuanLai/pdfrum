@@ -345,14 +345,22 @@ impl Action {
     /// The script this action runs.
     ///
     /// The `Option` distinguishes "no `/JS` at all" from "a `/JS` that
-    /// decodes to nothing", which callers rely on. A stream's script decodes
-    /// its **raw**, still-encoded bytes.
+    /// decodes to nothing", which callers rely on. A stream's script is its
+    /// **decoded** bytes — through its `/Filter` chain, as
+    /// `CPDF_Stream::GetUnicodeText` reads it (`LoadAllDataFiltered`,
+    /// `cpdf_stream.cpp:171-175`) — then read as PDF text. A saved file
+    /// commonly Flate-encodes the stream, and the script must survive that.
     #[must_use]
     pub fn javascript<R: Resolve>(&self, r: &R) -> Option<String> {
         let value = self.dict.get(names::JS, r).map(|v| v.get().clone())?;
         match value {
             Object::Str(text) => Some(decode_text(&text.bytes).into_owned()),
-            Object::Stream(stream) => Some(decode_text(stream.data.as_bytes()).into_owned()),
+            Object::Stream(stream) => {
+                let mut diags = Diagnostics::default();
+                let decoded =
+                    pdfrum_filters::decode_chain(&stream, 0, r, &Limits::default(), &mut diags);
+                Some(decode_text(&decoded.data).into_owned())
+            }
             _ => None,
         }
     }
@@ -450,7 +458,32 @@ pub fn additional_action<R: Resolve>(
 #[cfg(test)]
 mod tests {
     use super::{AActionType, Action, ActionKind};
-    use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, PdfString, Stream};
+
+    #[test]
+    fn a_flate_encoded_script_stream_is_decoded_before_it_is_read() {
+        let source = b"this.getField('echo').value = 'hi!';";
+        let encoded = pdfrum_filters::encode_flate(source);
+        let dict = Dict::from_pairs([
+            (
+                Name::from("Filter"),
+                Object::Name(Name::from("FlateDecode")),
+            ),
+            (
+                Name::from("Length"),
+                Object::Int(i64::try_from(encoded.len()).unwrap()),
+            ),
+        ]);
+        let stream = Stream::new(dict, ByteSpan::from(encoded));
+        let action = action(&[
+            ("S", Object::Name(Name::from("JavaScript"))),
+            ("JS", Object::Stream(Box::new(stream))),
+        ]);
+        assert_eq!(
+            action.javascript(&NoResolve).as_deref(),
+            Some("this.getField('echo').value = 'hi!';")
+        );
+    }
 
     fn action(pairs: &[(&str, Object)]) -> Action {
         Action::new(Dict::from_pairs(
