@@ -156,3 +156,23 @@ locked.pdf: encrypted, AES-256, print allowed
 3. Paint only through `Term::paint(Style, …)`; never write an escape.
 4. Carry a `--json` twin with the same facts.
 5. Pin the text output in `tests/expected/` and the JSON keys in a test.
+
+## 8. The session
+
+`pdfrum serve --stdio` is the commands as JSON-RPC 2.0 methods, one
+request and one response per line. The rules that keep it one tool:
+
+- **A method is a command.** Its params are the command's flags under
+  the same names, its result is the command's `--json` document exactly;
+  a method with a shape of its own (`render`, `image`, the writers) is
+  listed with that shape in `rpc::methods` and printed by `pdfrum schema
+  serve`. A command that gains `--json` gains a method, and a method
+  gains an entry in the table and a run in `tests/serve.rs`.
+- **Stdout is the wire.** Responses and nothing else; notices are off,
+  and `--verbose` logs to stderr only.
+- **A method writes no file.** Bytes go back as `bytes_base64`; a
+  picture as `png_base64`. The rows that carry `written` on the command
+  line never do here.
+- **An error is the CLI's line under a code.** `-32602` when the request
+  is wrong, `-32000` when the work failed, the message `pdfrum: …` as
+  `out::error_line` builds it — no second wording of any mistake.
