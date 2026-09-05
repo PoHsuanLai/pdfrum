@@ -207,7 +207,9 @@ pub use pdfrum_font::SubstitutionOptions;
 /// selection and link queries over them.
 ///
 /// Returned by [`Page::text`].
-pub use pdfrum_text::{CharBox, CharIndex, FindOptions, IndexMap, TextIndex, TextPage, WebLink};
+pub use pdfrum_text::{
+    CharBox, CharIndex, FindOptions, IndexMap, TextIndex, TextPage, WebLink, Word,
+};
 
 /// A link annotation, and where it points.
 ///

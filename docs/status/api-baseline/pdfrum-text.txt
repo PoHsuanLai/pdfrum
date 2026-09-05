@@ -69,18 +69,22 @@ impl core::fmt::Display for pdfrum_text::TextIndex
 pub fn pdfrum_text::TextIndex::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_text::TextPage
 pub pdfrum_text::TextPage::chars: alloc::vec::Vec<pdfrum_text::CharBox>
+pub pdfrum_text::TextPage::fonts: alloc::collections::btree::map::BTreeMap<pdfrum_text::ObjectIndex, alloc::string::String>
 pub pdfrum_text::TextPage::runs: pdfrum_text::IndexMap
 pub pdfrum_text::TextPage::search_text: alloc::vec::Vec<char>
 impl pdfrum_text::TextPage
 pub fn pdfrum_text::TextPage::char(&self, pdfrum_text::CharIndex) -> core::result::Result<&pdfrum_text::CharBox, pdfrum_text::Error>
 pub fn pdfrum_text::TextPage::char_count(&self) -> usize
 pub fn pdfrum_text::TextPage::find<'a>(&'a self, &str, pdfrum_text::FindOptions) -> impl core::iter::traits::iterator::Iterator<Item = core::ops::range::Range<pdfrum_text::TextIndex>> + 'a
+pub fn pdfrum_text::TextPage::font_name(&self, pdfrum_text::CharIndex) -> core::option::Option<&str>
 pub fn pdfrum_text::TextPage::index_at(&self, kurbo::point::Point, kurbo::size::Size) -> core::option::Option<pdfrum_text::CharIndex>
 pub fn pdfrum_text::TextPage::rects(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::vec::Vec<kurbo::rect::Rect>
 pub fn pdfrum_text::TextPage::slice(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::string::String
 pub fn pdfrum_text::TextPage::text_in_rect(&self, kurbo::rect::Rect) -> alloc::string::String
 pub fn pdfrum_text::TextPage::text_of_object(&self, pdfrum_text::ObjectIndex) -> alloc::string::String
 pub fn pdfrum_text::TextPage::web_links(&self) -> alloc::vec::Vec<pdfrum_text::WebLink>
+impl pdfrum_text::TextPage
+pub fn pdfrum_text::TextPage::words(&self) -> alloc::vec::Vec<pdfrum_text::Word>
 impl core::fmt::Display for pdfrum_text::TextPage
 pub fn pdfrum_text::TextPage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_text::TextRun
@@ -109,5 +113,11 @@ pub fn pdfrum_text::TextRun::scaled_char_width(&self, pdfrum_cmap::ids::CharCode
 pub struct pdfrum_text::WebLink
 pub pdfrum_text::WebLink::range: core::ops::range::Range<pdfrum_text::CharIndex>
 pub pdfrum_text::WebLink::url: alloc::string::String
+pub struct pdfrum_text::Word
+pub pdfrum_text::Word::font: core::option::Option<alloc::string::String>
+pub pdfrum_text::Word::range: core::ops::range::Range<pdfrum_text::CharIndex>
+pub pdfrum_text::Word::rect: kurbo::rect::Rect
+pub pdfrum_text::Word::size: f64
+pub pdfrum_text::Word::text: alloc::string::String
 pub fn pdfrum_text::extract<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, &pdfrum_text::ExtractOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_text::TextPage
 pub fn pdfrum_text::words(&pdfrum_page::page::Page) -> alloc::vec::Vec<alloc::string::String>

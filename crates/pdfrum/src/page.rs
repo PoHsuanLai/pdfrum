@@ -7,6 +7,7 @@ use pdfrum_parser::PageDict;
 
 use crate::{
     Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
+    Word,
 };
 
 /// One page of a [`Document`].
@@ -270,6 +271,28 @@ impl<'a> Page<'a> {
     #[must_use]
     pub fn text(&self) -> TextPage {
         self.text_on(&mut RenderSession::default())
+    }
+
+    /// The page's words in reading order, each with its box, its font and its
+    /// size — the shape an extraction or citation pipeline wants.
+    ///
+    /// A view over [`Page::text`]: the text page is extracted once and split
+    /// on whitespace, so a word's [`range`](Word::range) indexes that page's
+    /// characters and its [`rect`](Word::rect) is in the same page space
+    /// [`TextPage::rects`] and [`PageLink::rect`] use. See
+    /// [`TextPage::words`] for the rules.
+    ///
+    /// ```
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let words = doc.page(0)?.words();
+    /// let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
+    /// assert_eq!(texts, ["Hello,", "world!", "Goodbye,", "world!"]);
+    /// assert!(words[0].rect.x1 <= words[1].rect.x0);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn words(&self) -> Vec<Word> {
+        self.text().words()
     }
 
     /// [`Page::text`] reusing a caller-owned [`RenderSession`], so a run over
