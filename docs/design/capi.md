@@ -235,3 +235,19 @@ diffing against a `cinstall` output.
 The empty `capi` feature in `Cargo.toml` exists because `cargo cbuild` passes
 `--features capi` and fails on a manifest without it. It gates nothing: the C
 ABI is what this crate is, not something a feature adds.
+
+### The library's two names
+
+The shipped library is `libpdfrum`, and `-lpdfrum` is what a consumer writes.
+The Rust *lib target* is `pdfrum_capi`, and must differ from the facade's
+`pdfrum`: two lib targets of one name in a workspace break `cargo test --doc`
+(two `--extern pdfrum` candidates, E0464) and `cargo doc --workspace` (both
+would write `doc/pdfrum/`). Cargo offers `doc = false` for the second, and it is
+the wrong trade — it silences the collision by turning this crate's rustdoc gate
+off, which was confirmed by planting a broken link and watching it pass. So the
+target is renamed and the gate stays real.
+
+A plain `cargo build` therefore emits `libpdfrum_capi.so`; `cargo cinstall`
+emits `libpdfrum.so`, taking the name from
+`[package.metadata.capi.library]`. `ctest/run.sh` and `scripts/capi-header.nu`
+link or read whichever is present, preferring the shipped name.

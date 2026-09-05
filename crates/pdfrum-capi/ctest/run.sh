@@ -42,8 +42,18 @@ if [ "${1:-}" = "--build-only" ]; then
     exit 0
 fi
 
-if [ ! -f "$lib/libpdfrum.so" ]; then
-    echo "error: $lib/libpdfrum.so is not there." >&2
+# A plain `cargo build` names the artefact after the *lib target*, which is
+# `pdfrum_capi` — the Rust crate name has to differ from the facade's, or the
+# workspace's docs and doctests collide (see the manifest). The **shipped**
+# artefact is `libpdfrum.so`: that name comes from
+# `[package.metadata.capi.library]`, is what `cargo cinstall` lays down, and is
+# what `-lpdfrum` finds. So link whichever is here, preferring the shipped name.
+if [ -f "$lib/libpdfrum.so" ]; then
+    linkname=pdfrum
+elif [ -f "$lib/libpdfrum_capi.so" ]; then
+    linkname=pdfrum_capi
+else
+    echo "error: neither $lib/libpdfrum.so nor $lib/libpdfrum_capi.so is there." >&2
     echo "       build it with: cargo build -p pdfrum-capi --release" >&2
     exit 1
 fi
@@ -59,7 +69,7 @@ echo "==> $cc -std=c11 -Wall -Werror"
 "$cc" -std=c11 -Wall -Werror \
     -I "$crate/include" \
     "$here/test.c" \
-    -L "$lib" -lpdfrum -lm -lpthread \
+    -L "$lib" "-l$linkname" -lm -lpthread \
     -o "$out"
 
 echo "==> $out"

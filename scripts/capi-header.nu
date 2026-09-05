@@ -90,15 +90,25 @@ def exported [lib: string]: nothing -> list<string> {
 }
 
 # The release cdylib, or a message saying how to build it.
+#
+# Two names, because a plain `cargo build` names the artefact after the lib
+# target (`pdfrum_capi`, which has to differ from the facade's `pdfrum` or the
+# workspace's docs and doctests collide) while `cargo cinstall` ships it as
+# `libpdfrum.so`. Either is the same library and exports the same symbols.
 def library []: nothing -> string {
     let target = ($env.CARGO_TARGET_DIR? | default 'target')
-    let lib = ($target | path join release libpdfrum.so)
-    if not ($lib | path exists) {
-        print --stderr $"error: ($lib) is not there."
+    let candidates = [
+        ($target | path join release libpdfrum.so)
+        ($target | path join release libpdfrum_capi.so)
+    ]
+    let found = ($candidates | where {|p| $p | path exists })
+    if ($found | is-empty) {
+        print --stderr "error: no built libpdfrum shared library. Looked for:"
+        $candidates | each {|p| print --stderr $"  ($p)" } | ignore
         print --stderr "       build it with: cargo build -p pdfrum-capi --release"
         exit 1
     }
-    $lib
+    $found | first
 }
 
 # Regenerate the committed header.
