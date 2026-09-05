@@ -139,6 +139,11 @@ locked.pdf: encrypted, AES-256, print allowed
   fix it, the message names it.
 - A usage mistake is clap's message and exit 2. `doctor --strict` exits 3
   when it found anything. `diff` exits 1 when the documents differ.
+- A limit the run set is exit 4: `--max-pixels` or `--time-limit` refused
+  the work, and the line is the library's `Error::Limit` message — the
+  cap, the size, what would satisfy it — under `pdfrum: `. Distinct from
+  1 so a script can tell a refused job from a broken file; over several
+  files it outranks 1, as it does for one.
 
 ## 6. Links and pictures
 
@@ -174,5 +179,6 @@ request and one response per line. The rules that keep it one tool:
   picture as `png_base64`. The rows that carry `written` on the command
   line never do here.
 - **An error is the CLI's line under a code.** `-32602` when the request
-  is wrong, `-32000` when the work failed, the message `pdfrum: …` as
-  `out::error_line` builds it — no second wording of any mistake.
+  is wrong, `-32000` when the work failed, `-32001` when a limit refused
+  it (exit 4's twin), the message `pdfrum: …` as `out::error_line` builds
+  it — no second wording of any mistake.
