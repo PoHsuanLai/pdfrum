@@ -62,7 +62,10 @@ graphics-state stack.
 All of D1–D22 are implemented as the brief specifies, including the two
 pixel-visible quirks the orchestrator ruled must be ported verbatim: the
 shading LUT's sample-at-`i/256`, index-at-`s*255` off-by-one (D16) and the
-sampled function's negative-index wrap to the *top* cell (D12). The two C++
+sampled function's negative-index wrap to the *top* cell (D12). The LUT
+itself is `pdfrum-render`'s `shading::steps` — the rasterizers' one — and
+the copy this crate carried behind `Shading::color_steps`, which nothing
+reached, went with the 2026-09-05 dead-code audit. The two C++
 bugs the brief declines (D7's stale transfer output, D18's mesh-bbox counter
 mutation) are not ported.
 
