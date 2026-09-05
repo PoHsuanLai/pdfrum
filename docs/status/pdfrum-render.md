@@ -3519,3 +3519,51 @@ differently.
 13 200 -> 27 335 against the oracle's 27 586. The residual 0.41 % is the
 independent closepath-seam defect recorded above, which is untouched and
 still open.
+
+### `vector_en_system.pdf` — measured against the oracle's own image dump
+
+Not fixed. What follows narrows it and, unlike the hypotheses the section
+above already killed, is measured against the C reference the tree uses for
+decode diffing (SPEC §12): `pdfium_test --save-rendered-images`, which writes
+each embedded image **as rendered on the page**.
+
+**The source alpha caps at 102 and neither engine's per-image output exceeds
+it.** Decoding `/SMask` object 10 (484x228, `DeviceGray`, 8 bpc, no `/Decode`)
+gives `min 0, max 102, mean 6.96`, with zero samples above 102 — the file
+simply contains no alpha above 40 %. The oracle's 31 rendered images agree
+exactly: across all 861 399 pixels of them, **zero** are alpha 255 and the
+maximum alpha is **102**, over pure black `(0, 0, 0)` samples with alpha
+running 1..102 continuously.
+
+That is decisive about the arithmetic, because compositing alpha-102 layers
+over one another **cannot reach 255**: `1 - 0.6^n` is 243/255 at the stack
+depth of 6 this page reaches, and still only 254 at depth 11. So no correct
+composite of these images saturates, and every fully-saturated pixel is
+excess by construction.
+
+Measured on the page at 150 DPI, we paint `#054696` at **102 976** pixels
+against the oracle's **59 227**. Splitting our 48 378 excess by what the
+oracle has at those same pixels separates two populations:
+
+- **~35 000 near-identical blues** — `(6,71,150)`, `(7,71,150)`,
+  `(8,72,151)`, one to three levels from ours. Rounding, not a defect.
+- **11 991 pixels where the oracle is near-white** (`(255,255,255)` or the
+  page's `(243,241,226)`) — ink where the oracle lays none. This is the
+  defect.
+
+**Its shape names the mechanism: it is an edge fringe, not misplaced ink.**
+Those 11 991 pixels form **1 039 connected components with a median size of
+3 pixels**, spread over 1 118 rows and 1 066 columns — they trace every glyph
+outline rather than filling any region. And 66 % of the whole 48 378-pixel
+excess is 8-adjacent to a pixel the oracle also inks.
+
+So the excess is a one-pixel spread at the boundary of every masked image,
+repeated 31 times and amplified where the boxes overlap — consistent with the
+section above's finding that the excess is present at *both* stack depths.
+That points at the mask's coverage at its edges — how a mask sample's
+footprint is resolved where it meets a zero sample — and away from the alpha
+composite itself, which the cap measurement exonerates. It is the same
+question `image_en_fqa.pdf` asks one axis larger, and the two should still be
+re-measured together.
+
+**Ruling: ours, mechanism narrowed to mask edge coverage, not fixed.**
