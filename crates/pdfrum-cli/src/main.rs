@@ -14,6 +14,7 @@
 mod cmd;
 mod out;
 mod pages;
+mod schema;
 mod syntax;
 mod term;
 
@@ -220,6 +221,13 @@ enum Command {
         /// One JSON document; an array of them for several files.
         #[arg(long)]
         json: bool,
+    },
+    /// The JSON shape a command's `--json` prints: an example with every
+    /// key. Without a command, the list of commands that have one.
+    Schema {
+        /// The command as words: `extract words`, `inspect object`.
+        #[arg(value_name = "COMMAND")]
+        command: Vec<String>,
     },
     /// Shell completions, generated from this command tree.
     Completions {
@@ -753,6 +761,7 @@ fn main() -> ExitCode {
             term,
         }),
         Command::Hash { inputs, json } => cmd::hash::run(&inputs.files, password, json, term),
+        Command::Schema { command } => schema::run(&command, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
         Command::Manpage { output } => cmd::shell::manpage(&output, term),
     };
