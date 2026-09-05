@@ -313,6 +313,36 @@ workspace the ban walks, and 0.5 measures the same thing.
 SSIM is hand-rolled in the harness (~60 lines) — the ratchet metric must
 never shift under a dependency update.
 
+## Benchmark peers (M21) — never in any tree of ours
+
+The comparative benchmark, `benches/compare/`, links the competing engines
+PLAN.md §M21 names so they can be measured beside pdfrum on one corpus
+against one oracle. They are dependencies of **that crate only**, which is
+its own workspace (an empty `[workspace]` table, the same severing `fuzz/`
+uses), not a member of the root one — so `scripts/ci.nu`'s `cargo tree
+--workspace` never sees them, `cargo add pdfrum` never gets them, and the
+"Explicitly rejected" paragraph below still holds for every published crate.
+Each peer sits behind a cargo feature of its own name; the default set is
+the pure-Rust ones, and the two C baselines are `--features c-engines`.
+`benches/compare/deny.toml` carries the root allowlist plus the exceptions
+this table records, with comments; the root `deny.toml` is untouched.
+
+| Crate | Version | Licence | C in the build | Why it is measured |
+|---|---|---|---|---|
+| `hayro` + `hayro-interpret` | `=0.7.1` / `=0.7.0` | Apache-2.0 OR MIT | none | The closest pure-Rust rasterizer, and the interpreter under it. `hayro-interpret` has no text API; the harness assembles text from its glyph stream and labels the row as such. |
+| `pdf-extract` | `=0.12.0` | MIT | none | The most-downloaded pure-Rust text extractor (it drags a second `lopdf`, 0.42, and through it the unmaintained `ttf-parser` 0.25 — RUSTSEC-2026-0192, ignored in the benchmark `deny.toml` only). |
+| `lopdf` | `=0.44.0` | MIT | none | The object-level reader/writer most Rust code uses; open + object walk, and its own `extract_text`. |
+| `pdf` (pdf-rs) | `=0.10.0` | MIT | none | The typed object model; open + page walk. No text or render API (pdf-rs's renderer, `pdf-render` 1.0-beta, is a commercial-licence fork and is not measured). |
+| `pdf_oxide` | `=0.3.77`, feature `rendering` | MIT OR Apache-2.0 | none | Claims "5x faster, 100% pass on 3830 files"; open, render, text. Its `rendering` feature brings `tiny-skia`, `fast_image_resize`, `fontdb` 0.23 and a second `hayro-jpeg2000`/`hayro-jbig2`. |
+| `pdfium-render` | `=0.9.3` | MIT OR Apache-2.0 | **PDFium itself**, bound at runtime through `libloading`; nothing compiled, but the `libpdfium.so` it needs is C++. `bindgen` optional and off. | The C baseline that is also our oracle, through the wrapper a crates.io user gets. Needs a `libpdfium.so`: the run records "not run, needs libpdfium" without one. |
+| `mupdf` + `mupdf-sys` | `=0.8.0`, `default-features = false`, `base14-fonts` | **AGPL-3.0** | **yes**: `mupdf-sys` compiles the vendored MuPDF with `cc` and generates bindings with `bindgen` (needs a clang). | The other C engine every comparison is asked about. AGPL is why it is a baseline in a table and could never be a dependency; benchmark-only exception in `benches/compare/deny.toml`. |
+
+The harness itself uses the same plumbing crates the root workspace already
+admits (`anyhow`, `clap` with `env`, `serde`, `serde_json`, `png`) at the same
+pins, plus `kurbo` to read glyph positions out of hayro's `Device` callbacks.
+`docs/benchmarks/README.md` is the method; the numbers are under
+`docs/benchmarks/data/`.
+
 ## Performance ring (Phase 2) — admission by measurement
 
 User ruling 2026-08-30: perf deps are welcome **only if measurably worth it**.

@@ -1,0 +1,104 @@
+[
+  {
+    "engine": "pdfrum",
+    "version": "0.1.0",
+    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a58f791ade9594178/crates/pdfrum\" }",
+    "license": "MIT OR Apache-2.0",
+    "crates": 88,
+    "native_build_crates": [],
+    "clean_build_secs": 16.486991139,
+    "stripped_bytes": 1119032,
+    "unsafe_in_crate": 4,
+    "unsafe_in_tree": 6932
+  },
+  {
+    "engine": "hayro",
+    "version": "0.7.1",
+    "dependency": "hayro = \"=0.7.1\"",
+    "license": "Apache-2.0 OR MIT",
+    "crates": 72,
+    "native_build_crates": [],
+    "clean_build_secs": 19.179479045,
+    "stripped_bytes": 1520440,
+    "unsafe_in_crate": 1,
+    "unsafe_in_tree": 7691
+  },
+  {
+    "engine": "pdf-extract",
+    "version": "0.12.0",
+    "dependency": "pdf-extract = \"=0.12.0\"",
+    "license": "MIT",
+    "crates": 60,
+    "native_build_crates": [],
+    "clean_build_secs": 23.466315863,
+    "stripped_bytes": 2178776,
+    "unsafe_in_crate": 0,
+    "unsafe_in_tree": 2523
+  },
+  {
+    "engine": "lopdf",
+    "version": "0.44.0",
+    "dependency": "lopdf = \"=0.44.0\"",
+    "license": "MIT",
+    "crates": 68,
+    "native_build_crates": [],
+    "clean_build_secs": 18.965710201,
+    "stripped_bytes": 1188512,
+    "unsafe_in_crate": 0,
+    "unsafe_in_tree": 3609
+  },
+  {
+    "engine": "pdf",
+    "version": "0.10.0",
+    "dependency": "pdf = \"=0.10.0\"",
+    "license": "MIT",
+    "crates": 66,
+    "native_build_crates": [],
+    "clean_build_secs": 8.985925026,
+    "stripped_bytes": 1877744,
+    "unsafe_in_crate": 7,
+    "unsafe_in_tree": 2288
+  },
+  {
+    "engine": "pdf_oxide",
+    "version": "0.3.77",
+    "dependency": "pdf_oxide = \"=0.3.77\"",
+    "license": "MIT OR Apache-2.0",
+    "crates": 138,
+    "native_build_crates": [],
+    "clean_build_secs": 54.002235018,
+    "stripped_bytes": 3631536,
+    "unsafe_in_crate": 73,
+    "unsafe_in_tree": 7672
+  },
+  {
+    "engine": "pdfium-render",
+    "version": "0.9.3",
+    "dependency": "pdfium-render = \"=0.9.3\"",
+    "license": "MIT OR Apache-2.0",
+    "crates": 25,
+    "native_build_crates": [],
+    "clean_build_secs": 13.863185598,
+    "stripped_bytes": 2823864,
+    "unsafe_in_crate": 16704,
+    "unsafe_in_tree": 18475
+  },
+  {
+    "engine": "mupdf",
+    "version": "0.8.0",
+    "dependency": "mupdf = { version = \"=0.8.0\", default-features = false, features = [\"base14-fonts\"] }",
+    "license": "AGPL-3.0",
+    "crates": 12,
+    "native_build_crates": [
+      "bindgen",
+      "cc",
+      "clang-sys",
+      "mupdf-sys",
+      "pkg-config"
+    ],
+    "clean_build_secs": 19.701575339,
+    "stripped_bytes": 5010176,
+    "unsafe_in_crate": 787,
+    "unsafe_in_tree": 1884
+  }
+]
