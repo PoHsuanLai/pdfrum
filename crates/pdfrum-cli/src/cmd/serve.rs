@@ -14,9 +14,10 @@ use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::path::Path;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
-use pdfrum::{Document, FindOptions, Rect, RenderSession};
+use pdfrum::{Deadline, Document, FindOptions, Limits, Rect, RenderSession};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
@@ -31,6 +32,53 @@ pub struct Options {
     pub mcp: bool,
     /// How many documents may be open at once.
     pub max_docs: usize,
+    /// The ceilings every `open` starts from, `--max-pixels` and
+    /// `--time-limit`; a request's `limits` override them per document.
+    pub limits: DocLimits,
+}
+
+/// The two ceilings a document can be opened under. The budget is armed at
+/// the open, not when the session starts: a session runs for as long as
+/// its host does, and a document's work is what has a budget.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocLimits {
+    /// The most pixels a render may have.
+    pub max_pixels: Option<u64>,
+    /// The budget from the open, in milliseconds on the wire.
+    #[serde(rename = "time_limit_ms", default, with = "millis")]
+    pub time_limit: Option<Duration>,
+}
+
+impl DocLimits {
+    /// `self` with every ceiling `over` sets: the request's over the
+    /// session's.
+    fn or(self, over: DocLimits) -> DocLimits {
+        DocLimits {
+            max_pixels: over.max_pixels.or(self.max_pixels),
+            time_limit: over.time_limit.or(self.time_limit),
+        }
+    }
+
+    /// The facade's `Limits`, the deadline armed now.
+    pub fn armed(self) -> Limits {
+        Limits {
+            max_render_pixels: self.max_pixels,
+            deadline: self.time_limit.map(Deadline::after),
+            ..Limits::default()
+        }
+    }
+}
+
+/// `time_limit_ms` on the wire as a `Duration` in the struct.
+mod millis {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Duration>, D::Error> {
+        Ok(Option::<u64>::deserialize(d)?.map(Duration::from_millis))
+    }
 }
 
 /// The MCP protocol revision this server answers `initialize` with.
@@ -50,6 +98,8 @@ struct Session {
     max_docs: usize,
     /// The `--password`, for an `open` without one.
     password: Option<String>,
+    /// The `--max-pixels` and `--time-limit`, for an `open` without its own.
+    limits: DocLimits,
     /// One render cache for the session: glyphs and images survive between
     /// pages and documents.
     render: RenderSession,
@@ -68,6 +118,7 @@ pub fn run(options: &Options, password: Option<&str>) -> Result<ExitCode> {
         next_id: 0,
         max_docs: options.max_docs,
         password: password.map(str::to_owned),
+        limits: options.limits,
         render: RenderSession::new(),
         stopping: false,
     };
@@ -172,6 +223,7 @@ struct OpenParams {
     file: Option<String>,
     bytes_base64: Option<String>,
     password: Option<String>,
+    limits: Option<DocLimits>,
 }
 
 #[derive(Deserialize)]
@@ -494,6 +546,7 @@ impl Session {
             )));
         }
         let password = p.password.as_deref().or(self.password.as_deref());
+        let limits = self.limits.or(p.limits.unwrap_or_default()).armed();
         let (name, doc) = match (p.file, p.bytes_base64) {
             (Some(file), None) if out::is_stdin(Path::new(&file)) => {
                 return Err(Error::invalid_params(
@@ -501,13 +554,15 @@ impl Session {
                 ));
             }
             (Some(file), None) => {
-                let doc = failed(out::open(Path::new(&file), password))?;
+                let doc = failed(out::open_with(Path::new(&file), password, &limits))?;
                 (file, doc)
             }
             (None, Some(text)) => {
                 let bytes = unbase64(&text)
                     .ok_or_else(|| Error::invalid_params("bytes_base64 is not base64"))?;
-                let doc = failed(out::open_bytes(bytes, password).context("cannot open -"))?;
+                let doc = failed(
+                    out::open_bytes_with(bytes, password, &limits).context("cannot open -"),
+                )?;
                 ("-".to_owned(), doc)
             }
             _ => {
@@ -923,7 +978,7 @@ mod tests {
     use pdfrum::RenderSession;
     use serde_json::json;
 
-    use super::{Session, tool_result, tools};
+    use super::{DocLimits, Session, tool_result, tools};
     use crate::rpc::{self, METHOD_NOT_FOUND};
 
     fn session() -> Session {
@@ -932,6 +987,7 @@ mod tests {
             next_id: 0,
             max_docs: 16,
             password: None,
+            limits: DocLimits::default(),
             render: RenderSession::new(),
             stopping: false,
         }
