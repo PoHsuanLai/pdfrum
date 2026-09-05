@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use pdfrum::{
-    BuildContext, Document, RenderOptions, RenderSession, SubstitutionOptions, VelloCpuBackend,
+    Document, RenderOptions, RenderSession, SubstitutionOptions, VelloCpuBackend,
 };
 
 use crate::model::{Ctx, Op, Output, Raster, Timed};
@@ -18,20 +18,22 @@ fn open(path: &Path, ctx: &Ctx<'_>) -> Result<Document> {
 
 /// A session whose font substitution reads the oracle's hermetic directory,
 /// so a non-embedded font resolves to the same face on both sides. The knob
-/// is the facade's public `BuildContext::with_substitution`; without a
+/// is the facade's public `BuildContext::substitution`; without a
 /// `--font-dir` the session is the plain default.
-fn session(ctx: &Ctx<'_>) -> RenderSession {
-    match ctx.font_dir {
-        Some(dir) => RenderSession {
-            build: BuildContext::with_substitution(SubstitutionOptions {
-                font_dirs: vec![dir.to_path_buf()],
-                croscore_font_names: true,
-                ..SubstitutionOptions::default()
-            }),
-            ..RenderSession::default()
-        },
-        None => RenderSession::new(),
+///
+/// Built from the document either way, so every session over one document
+/// shares its loaded fonts: the fonts a parallel render meets are parsed once
+/// for the run rather than once per thread.
+fn session(doc: &Document, ctx: &Ctx<'_>) -> RenderSession {
+    let mut session = doc.render_session();
+    if let Some(dir) = ctx.font_dir {
+        session.build.substitution = SubstitutionOptions {
+            font_dirs: vec![dir.to_path_buf()],
+            croscore_font_names: true,
+            ..SubstitutionOptions::default()
+        };
     }
+    session
 }
 
 /// Every page on `threads` threads sharing one `Document` (`Sync`), each
@@ -48,7 +50,7 @@ pub fn render_all(path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
                 let options = &options;
                 scope.spawn(move || -> Result<()> {
                     let backend = VelloCpuBackend::new();
-                    let mut session = session(ctx);
+                    let mut session = session(doc, ctx);
                     for index in (first..pages).step_by(threads) {
                         doc.page(index as u32)?
                             .render_on(&backend, options, &mut session)?;
@@ -87,7 +89,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             let page = doc.page(0)?;
             let backend = VelloCpuBackend::new();
             let options = RenderOptions::scaled(ctx.scale());
-            let mut session = session(ctx);
+            let mut session = session(&doc, ctx);
             let (times_ms, pixmap) =
                 ctx.measure(|| Ok(page.render_on(&backend, &options, &mut session)?))?;
             Ok(Timed {
@@ -103,7 +105,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
         Op::Text => {
             let doc = open(path, ctx)?;
             let page = doc.page(0)?;
-            let mut session = session(ctx);
+            let mut session = session(&doc, ctx);
             let (times_ms, text) = ctx.measure(|| Ok(page.text_on(&mut session).to_string()))?;
             Ok(Timed {
                 times_ms,

@@ -162,6 +162,7 @@ impl core::fmt::Debug for pdfrum_font::Face
 pub fn pdfrum_font::Face::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_font::FontCache
 impl pdfrum_font::FontCache
+pub fn pdfrum_font::FontCache::get_or_load<F>(&self, pdfrum_object::object::ObjRef, F) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>> where F: core::ops::function::FnOnce() -> core::option::Option<pdfrum_font::Font>
 pub fn pdfrum_font::FontCache::new() -> Self
 pub struct pdfrum_font::FontFlags(_)
 impl pdfrum_font::FontFlags

@@ -467,7 +467,7 @@ impl<'a> Page<'a> {
         pdfrum_markdown::Options,
         Diagnostics,
     ) {
-        let mut ctx = BuildContext::new();
+        let mut ctx = self.context();
         ctx.decode_target = images;
         let graph = self.build(&mut ctx);
         let mut diags = Diagnostics::default();
@@ -491,7 +491,7 @@ impl<'a> Page<'a> {
     /// in a format worth keeping as it is (JPEG, JPEG 2000, JBIG2, CCITT).
     #[must_use]
     pub fn images(&self) -> Vec<PageImage> {
-        let mut ctx = BuildContext::new();
+        let mut ctx = self.context();
         let graph = self.build(&mut ctx);
         let mut out = Vec::new();
         collect_images(&graph.objects, &self.doc.inner, &mut out);
@@ -525,7 +525,7 @@ impl<'a> Page<'a> {
     /// [`Page`] is visible at the call site.
     #[must_use]
     pub fn objects(&self) -> pdfrum_page::Page {
-        self.build(&mut BuildContext::new())
+        self.build(&mut self.context())
     }
 
     /// Interpret the content stream into a page-object graph.
@@ -534,6 +534,17 @@ impl<'a> Page<'a> {
     /// than logic: `/Contents` is a stream or an array of streams, and the
     /// array's members are joined with one space each — including after the
     /// last, which is what terminates a stream ending mid-token.
+    /// A fresh build context sharing the document's loaded fonts.
+    ///
+    /// The colour-space, function and image caches start empty — those are a
+    /// run's own — but the fonts are the document's, so a caller that builds
+    /// this page twice, or two pages once each, parses each font once.
+    fn context(&self) -> BuildContext {
+        let mut ctx = BuildContext::new();
+        ctx.fonts = self.doc.fonts();
+        ctx
+    }
+
     fn build(&self, ctx: &mut BuildContext) -> pdfrum_page::Page {
         use crate::profile::{Stage, stage};
 
