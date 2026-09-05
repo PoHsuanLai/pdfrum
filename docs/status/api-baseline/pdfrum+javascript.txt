@@ -308,10 +308,12 @@ pub fn pdfrum::FormSession<'a>::mouse_move(&mut self, impl core::convert::Into<p
 pub fn pdfrum::FormSession<'a>::mouse_up(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::mouse_wheel(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, (i32, i32), pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::new(&'a pdfrum::Document) -> pdfrum::FormSession<'a>
+pub fn pdfrum::FormSession<'a>::open_document(&mut self)
 pub fn pdfrum::FormSession<'a>::page_closed(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
 pub fn pdfrum::FormSession<'a>::page_opened(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
 pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
+pub fn pdfrum::FormSession<'a>::script_failures(&mut self, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_form::script::ScriptFailure>
 pub fn pdfrum::FormSession<'a>::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scripts_mut(&mut self) -> core::option::Option<&mut pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
