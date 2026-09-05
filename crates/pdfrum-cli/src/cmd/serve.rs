@@ -292,6 +292,112 @@ struct MergeParams {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct MetadataParams {
+    doc: u64,
+    title: Option<String>,
+    author: Option<String>,
+    subject: Option<String>,
+    keywords: Option<String>,
+    creator: Option<String>,
+    #[serde(default)]
+    clear: Vec<String>,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeleteParams {
+    doc: u64,
+    pages: String,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RotateParams {
+    doc: u64,
+    pages: Option<String>,
+    by: i32,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AttachAddParams {
+    doc: u64,
+    name: String,
+    bytes_base64: String,
+    description: Option<String>,
+    mime: Option<String>,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AttachRemoveParams {
+    doc: u64,
+    names: Vec<String>,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+/// The mark of a stamp — `position`, `opacity`, `angle` — as both stamps
+/// take them, `position` parsed as the command line parses `--position`.
+fn mark(
+    position: Option<&str>,
+    opacity: Option<f32>,
+    angle: Option<f64>,
+) -> Result<cmd::stamp::Mark, Error> {
+    let position = match position {
+        Some(name) => <cmd::stamp::Position as clap::ValueEnum>::from_str(name, false)
+            .map_err(|_| {
+                Error::invalid_params(format!(
+                    "position {name:?} is not one of center, top-left, top-right, bottom-left, bottom-right"
+                ))
+            })?,
+        None => cmd::stamp::Position::Center,
+    };
+    Ok(cmd::stamp::Mark {
+        position,
+        opacity: opacity.unwrap_or(1.0),
+        angle: angle.unwrap_or(0.0),
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StampTextParams {
+    doc: u64,
+    text: String,
+    position: Option<String>,
+    opacity: Option<f32>,
+    angle: Option<f64>,
+    size: Option<f32>,
+    color: Option<String>,
+    font: Option<String>,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StampImageParams {
+    doc: u64,
+    image_base64: String,
+    width: Option<f64>,
+    position: Option<String>,
+    opacity: Option<f32>,
+    angle: Option<f64>,
+    #[serde(default)]
+    deterministic: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ToolCall {
     name: String,
     #[serde(default)]
@@ -343,6 +449,13 @@ impl Session {
             }),
             "pages.slice" => self.slice(params),
             "pages.merge" => self.merge(params),
+            "metadata.set" => self.metadata_set(params),
+            "pages.delete" => self.delete(params),
+            "pages.rotate" => self.rotate(params),
+            "attach.add" => self.attach_add(params),
+            "attach.remove" => self.attach_remove(params),
+            "stamp.text" => self.stamp_text(params),
+            "stamp.image" => self.stamp_image(params),
             _ => Err(Error::method_not_found(method)),
         }
     }
@@ -596,6 +709,136 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let (bytes, count) = failed(cmd::pages::merge_bytes(&base.doc, &others, p.deterministic))?;
         Ok(json!({"pages": count, "bytes_base64": base64(&bytes)}))
+    }
+
+    // ---- the verbs that edit ------------------------------------------------
+
+    fn metadata_set(&self, params: Value) -> Result<Value, Error> {
+        let p: MetadataParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        let changes = cmd::metadata::Changes {
+            title: p.title,
+            author: p.author,
+            subject: p.subject,
+            keywords: p.keywords,
+            creator: p.creator,
+            clear: p.clear,
+        };
+        let (metadata, set, cleared) = cmd::metadata::apply(open.doc.metadata(), &changes)
+            .map_err(|e| Error::invalid_params(out::error_line(&e)))?;
+        let bytes = failed(cmd::metadata::set_bytes(
+            &open.doc,
+            &metadata,
+            p.deterministic,
+        ))?;
+        Ok(json!({
+            "keys_set": set,
+            "keys_cleared": cleared,
+            "bytes_base64": base64(&bytes),
+        }))
+    }
+
+    fn delete(&self, params: Value) -> Result<Value, Error> {
+        let p: DeleteParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        let (gone, left) = cmd::pages::deletion(&open.doc, &p.pages)
+            .map_err(|e| Error::invalid_params(out::error_line(&e)))?;
+        let bytes = failed(cmd::pages::delete_bytes(&open.doc, &gone, p.deterministic))?;
+        Ok(json!({"deleted": gone.len(), "pages": left, "bytes_base64": base64(&bytes)}))
+    }
+
+    fn rotate(&self, params: Value) -> Result<Value, Error> {
+        let p: RotateParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        selection(&open.doc, p.pages.as_deref())?;
+        cmd::pages::parse_turn(p.by).map_err(|e| Error::invalid_params(out::error_line(&e)))?;
+        let (bytes, turned) = failed(cmd::pages::rotate_bytes(
+            &open.doc,
+            p.pages.as_deref(),
+            p.by,
+            p.deterministic,
+        ))?;
+        Ok(json!({"pages": turned, "bytes_base64": base64(&bytes)}))
+    }
+
+    fn attach_add(&self, params: Value) -> Result<Value, Error> {
+        let p: AttachAddParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        if p.name.trim().is_empty() {
+            return Err(Error::invalid_params("name is empty"));
+        }
+        let bytes = unbase64(&p.bytes_base64)
+            .ok_or_else(|| Error::invalid_params("bytes_base64 is not base64"))?;
+        let item = cmd::attach::NewAttachment {
+            name: p.name,
+            bytes,
+            description: p.description,
+            mime: p.mime,
+            modified: None,
+        };
+        let bytes = failed(cmd::attach::add_bytes(
+            &open.doc,
+            std::slice::from_ref(&item),
+            p.deterministic,
+        ))?;
+        Ok(json!({"added": 1, "bytes_base64": base64(&bytes)}))
+    }
+
+    fn attach_remove(&self, params: Value) -> Result<Value, Error> {
+        let p: AttachRemoveParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        if p.names.is_empty() {
+            return Err(Error::invalid_params(
+                "names must name at least one attachment",
+            ));
+        }
+        let (bytes, removed) = failed(cmd::attach::remove_bytes(
+            &open.doc,
+            &p.names,
+            p.deterministic,
+        ))?;
+        Ok(json!({"removed": removed, "bytes_base64": base64(&bytes)}))
+    }
+
+    fn stamp_text(&self, params: Value) -> Result<Value, Error> {
+        let p: StampTextParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        let invalid = |e: anyhow::Error| Error::invalid_params(out::error_line(&e));
+        let text = cmd::stamp::checked_text(&p.text).map_err(invalid)?;
+        let type_ = cmd::stamp::Type {
+            size: p.size.unwrap_or(36.0),
+            color: p.color.as_deref().unwrap_or("000000"),
+            font: p.font.as_deref().unwrap_or("Helvetica"),
+        };
+        let mark = mark(p.position.as_deref(), p.opacity, p.angle)?;
+        let options = cmd::stamp::options(mark, Some(type_)).map_err(invalid)?;
+        let (bytes, pages) = failed(cmd::stamp::text_bytes(
+            &open.doc,
+            text,
+            &options,
+            p.deterministic,
+        ))?;
+        Ok(json!({"pages": pages, "bytes_base64": base64(&bytes)}))
+    }
+
+    fn stamp_image(&self, params: Value) -> Result<Value, Error> {
+        let p: StampImageParams = self::params(params)?;
+        let open = doc_of(&self.docs, p.doc)?;
+        let invalid = |e: anyhow::Error| Error::invalid_params(out::error_line(&e));
+        let mark = mark(p.position.as_deref(), p.opacity, p.angle)?;
+        let options = cmd::stamp::options(mark, None).map_err(invalid)?;
+        let image = unbase64(&p.image_base64)
+            .ok_or_else(|| Error::invalid_params("image_base64 is not base64"))?;
+        let decoded = cmd::pages::decode_bytes(image, "image_base64").map_err(invalid)?;
+        let width = cmd::stamp::checked_width(p.width, &decoded).map_err(invalid)?;
+        let (bytes, pages) = failed(cmd::stamp::image_bytes(
+            &open.doc,
+            &decoded,
+            width,
+            &options,
+            p.deterministic,
+        ))?;
+        Ok(json!({"pages": pages, "bytes_base64": base64(&bytes)}))
     }
 
     // ---- MCP ----------------------------------------------------------------

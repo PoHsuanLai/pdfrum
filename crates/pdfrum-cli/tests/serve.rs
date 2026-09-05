@@ -396,6 +396,164 @@ fn bytes_go_in_and_files_come_out_as_the_command_line_writes_them() {
     assert_eq!(hash["sha256"].as_str().map(str::len), Some(64));
 }
 
+/// A written file's bytes as the command line writes them for `args`
+/// with `--deterministic -o -`.
+fn cli_bytes(args: &[&str]) -> std::io::Result<Vec<u8>> {
+    let out = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
+        .args(args)
+        .args(["--deterministic", "-o", "-"])
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+        .output()?;
+    if !out.status.success() {
+        return Err(std::io::Error::other(
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        ));
+    }
+    Ok(out.stdout)
+}
+
+#[test]
+fn the_verbs_hand_the_file_back_as_the_command_line_writes_it() {
+    let mona = fixture("mona_lisa.jpg").unwrap();
+    let (replies, code, stderr) = serve(
+        &["--stdio"],
+        &[
+            open(1, HELLO),
+            request(
+                2,
+                "pages.rotate",
+                &json!({"doc": 1, "by": 90, "deterministic": true}),
+            ),
+            request(
+                3,
+                "metadata.set",
+                &json!({"doc": 1, "title": "T", "author": "A", "clear": ["keywords"], "deterministic": true}),
+            ),
+            request(
+                4,
+                "pages.delete",
+                &json!({"doc": 1, "pages": "2", "deterministic": true}),
+            ),
+            request(
+                5,
+                "attach.add",
+                &json!({"doc": 1, "name": "notes.txt", "bytes_base64": "UmVhZCBtZQ=="}),
+            ),
+            request(
+                6,
+                "stamp.text",
+                &json!({"doc": 1, "text": "DRAFT", "position": "bottom-right", "opacity": 0.5}),
+            ),
+            request(
+                7,
+                "stamp.image",
+                &json!({"doc": 1, "image_base64": base64(&mona), "width": 40}),
+            ),
+            open(8, "fixtures/embedded_attachments_with_desc.pdf"),
+            request(9, "attach.remove", &json!({"doc": 2, "names": ["2.txt", "4.txt"]})),
+        ],
+    )
+    .unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    let bytes_of = |id: u64| -> Vec<u8> {
+        let text = result(&replies, id).unwrap()["bytes_base64"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(text.starts_with("JVBERi"), "{id}: %PDF");
+        text.into_bytes()
+    };
+    // The same bytes the command line writes for the same request.
+    let turned = result(&replies, 2).unwrap();
+    assert_eq!(turned["pages"], 2);
+    assert_eq!(
+        turned["bytes_base64"],
+        base64(&cli_bytes(&["pages", "rotate", HELLO, "--by", "90"]).unwrap())
+    );
+    let set = result(&replies, 3).unwrap();
+    assert_eq!(
+        (&set["keys_set"], &set["keys_cleared"]),
+        (&json!(2), &json!(1))
+    );
+    assert_eq!(
+        set["bytes_base64"],
+        base64(
+            &cli_bytes(&[
+                "metadata", "set", HELLO, "--title", "T", "--author", "A", "--clear", "keywords"
+            ])
+            .unwrap()
+        )
+    );
+    let fewer = result(&replies, 4).unwrap();
+    assert_eq!((&fewer["deleted"], &fewer["pages"]), (&json!(1), &json!(1)));
+    assert_eq!(
+        fewer["bytes_base64"],
+        base64(&cli_bytes(&["pages", "delete", HELLO, "--pages", "2"]).unwrap())
+    );
+    assert_eq!(result(&replies, 5).unwrap()["added"], 1);
+    assert_eq!(result(&replies, 6).unwrap()["pages"], 2);
+    assert_eq!(result(&replies, 7).unwrap()["pages"], 2);
+    assert_eq!(result(&replies, 9).unwrap()["removed"], 2);
+    for id in [5, 6, 7, 9] {
+        bytes_of(id);
+    }
+}
+
+#[test]
+fn a_wrong_verb_request_is_refused_before_any_work() {
+    let (replies, code, stderr) = serve(
+        &["--stdio"],
+        &[
+            open(1, HELLO),
+            open(2, "fixtures/embedded_attachments_with_desc.pdf"),
+            request(3, "pages.delete", &json!({"doc": 1, "pages": "1-end"})),
+            request(4, "pages.rotate", &json!({"doc": 1, "by": 45})),
+            request(5, "metadata.set", &json!({"doc": 1, "clear": ["date"]})),
+            request(6, "metadata.set", &json!({"doc": 1})),
+            request(
+                7,
+                "stamp.text",
+                &json!({"doc": 1, "text": "x", "position": "middle"}),
+            ),
+            request(
+                8,
+                "stamp.text",
+                &json!({"doc": 1, "text": "x", "font": "Arial"}),
+            ),
+            request(
+                9,
+                "stamp.image",
+                &json!({"doc": 1, "image_base64": "UmVhZCBtZQ=="}),
+            ),
+            request(
+                10,
+                "attach.add",
+                &json!({"doc": 1, "name": "x", "bytes_base64": "*"}),
+            ),
+            request(11, "attach.remove", &json!({"doc": 2, "names": ["9.txt"]})),
+        ],
+    )
+    .unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    for (id, what) in [
+        (3, "every page"),
+        (4, "--by takes"),
+        (5, "not a metadata key"),
+        (6, "nothing to change"),
+        (7, "position \"middle\""),
+        (8, "standard 14"),
+        (9, "not a JPEG or PNG"),
+        (10, "not base64"),
+    ] {
+        let (code, message) = error(&replies, id).unwrap();
+        assert_eq!(code, -32602, "{id}: {message}");
+        assert!(message.contains(what), "{id}: {message}");
+    }
+    let (code, message) = error(&replies, 11).unwrap();
+    assert_eq!(code, -32000, "a name the document lacks: {message}");
+    assert!(message.contains("no attachment named"), "{message}");
+}
+
 /// Every key at every depth of `v`.
 fn keys(v: &Value, into: &mut Vec<String>) {
     match v {
@@ -469,6 +627,25 @@ fn schema_runs() -> Vec<(&'static str, Value)> {
             json!({"doc": 12, "pages": "1", "crop": [0, 0, 100, 100]}),
         ),
         ("pages.merge", json!({"docs": [12, 4]})),
+        (
+            "metadata.set",
+            json!({"doc": 12, "title": "T", "clear": ["author"], "deterministic": true}),
+        ),
+        ("pages.delete", json!({"doc": 12, "pages": "1"})),
+        ("pages.rotate", json!({"doc": 12, "pages": "1", "by": 90})),
+        (
+            "attach.add",
+            json!({"doc": 12, "name": "notes.txt", "bytes_base64": "UmVhZCBtZQ==", "description": "d", "mime": "text/plain"}),
+        ),
+        ("attach.remove", json!({"doc": 5, "names": ["1.txt"]})),
+        (
+            "stamp.text",
+            json!({"doc": 12, "text": "DRAFT", "position": "top-left", "opacity": 0.5, "angle": 30, "size": 12, "color": "ff0000", "font": "Courier"}),
+        ),
+        (
+            "stamp.image",
+            json!({"doc": 12, "image_base64": base64(&fixture("mona_lisa.jpg").unwrap_or_default()), "width": 50, "position": "bottom-right"}),
+        ),
         ("close", json!({"doc": 12})),
     ]
 }
@@ -518,6 +695,29 @@ fn every_result_has_only_the_keys_its_schema_shows() {
         );
         assert_eq!(m["tool"].is_string(), method != "shutdown");
         assert_eq!(m["params"]["type"], "object");
+    }
+}
+
+#[test]
+fn the_verbs_are_tools_too() {
+    let (replies, code, stderr) = serve(
+        &["--stdio", "--mcp"],
+        &[request(1, "tools/list", &json!({}))],
+    )
+    .unwrap();
+    assert_eq!(code, 0, "{stderr}");
+    let tools = result(&replies, 1).unwrap()["tools"].as_array().unwrap();
+    let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    for verb in [
+        "metadata_set",
+        "pages_delete",
+        "pages_rotate",
+        "attach_add",
+        "attach_remove",
+        "stamp_text",
+        "stamp_image",
+    ] {
+        assert!(names.contains(&verb), "{verb} is not a tool: {names:?}");
     }
 }
 

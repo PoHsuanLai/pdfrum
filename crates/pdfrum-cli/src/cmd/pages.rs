@@ -228,13 +228,9 @@ pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
 
 // ---- delete ---------------------------------------------------------------
 
-/// `doc` without the selected pages, as the bytes of a saved file: how many
-/// were deleted, and how many are left. Deleting every page is refused.
-pub fn delete_bytes(
-    doc: &Document,
-    spec: &str,
-    deterministic: bool,
-) -> Result<(Vec<u8>, usize, u32)> {
+/// The pages `spec` deletes from `doc`, sorted and deduplicated, and how
+/// many are left. Deleting every page is refused.
+pub fn deletion(doc: &Document, spec: &str) -> Result<(Vec<u32>, u32)> {
     let count = doc.page_count();
     let mut gone = pages::select(Some(spec), count)?;
     gone.sort_unstable();
@@ -243,11 +239,17 @@ pub fn delete_bytes(
     if left == 0 {
         bail!("deleting every page leaves nothing; `pages slice` keeps some");
     }
+    Ok((gone, left))
+}
+
+/// `doc` without `gone` — [`deletion`]'s pages — as the bytes of a saved
+/// file.
+pub fn delete_bytes(doc: &Document, gone: &[u32], deterministic: bool) -> Result<Vec<u8>> {
     let mut edit = doc.edit();
     edit.delete_pages(gone.iter().copied())?;
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
-    Ok((bytes, gone.len(), left))
+    Ok(bytes)
 }
 
 /// Drop the selected pages; the rest keep their order.
@@ -261,7 +263,9 @@ pub fn delete(
 ) -> Result<ExitCode> {
     let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
-    let (bytes, deleted, left) = delete_bytes(&doc, spec, deterministic)?;
+    let (gone, left) = deletion(&doc, spec)?;
+    let bytes = delete_bytes(&doc, &gone, deterministic)?;
+    let deleted = gone.len();
     sink.finish(
         term,
         &bytes,

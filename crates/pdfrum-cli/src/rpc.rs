@@ -256,6 +256,9 @@ pub fn methods() -> Vec<Method> {
     all.extend(extract());
     all.extend(inspect());
     all.extend(writers());
+    all.extend(edits());
+    all.extend(attachments());
+    all.extend(stamps());
     all
 }
 
@@ -617,6 +620,215 @@ fn writers() -> Vec<Method> {
                 deterministic(),
             ],
             json!({"pages": 5, "bytes_base64": BASE64}),
+        ),
+    ]
+}
+
+/// The mark a stamp shares between text and picture: where and how.
+fn mark() -> Vec<Param> {
+    vec![
+        param(
+            "position",
+            json!({
+                "type": "string",
+                "description": "where on the page as displayed; center by default",
+                "enum": ["center", "top-left", "top-right", "bottom-left", "bottom-right"],
+            }),
+            false,
+        ),
+        param(
+            "opacity",
+            typed("number", "0 (invisible) to 1 (opaque, the default)"),
+            false,
+        ),
+        param(
+            "angle",
+            typed(
+                "number",
+                "degrees counter-clockwise about the stamp's centre; 0 by default",
+            ),
+            false,
+        ),
+    ]
+}
+
+/// A string param.
+fn text(what: &str) -> Value {
+    typed("string", what)
+}
+
+/// The verbs that edit the document's metadata and pages.
+fn edits() -> Vec<Method> {
+    vec![
+        method(
+            "metadata.set",
+            "set or clear /Info keys and get the file back; a key not named is kept",
+            vec![
+                doc(),
+                param("title", text("the title; empty removes the key"), false),
+                param("author", text("the author"), false),
+                param("subject", text("the subject"), false),
+                param("keywords", text("the keywords, as one string"), false),
+                param(
+                    "creator",
+                    text("the application the content came from"),
+                    false,
+                ),
+                param(
+                    "clear",
+                    json!({
+                        "type": "array",
+                        "description": "keys to remove: title, author, subject, keywords, creator, producer, created, modified",
+                        "items": {"type": "string"},
+                    }),
+                    false,
+                ),
+                deterministic(),
+            ],
+            json!({"keys_set": 2, "keys_cleared": 1, "bytes_base64": BASE64}),
+        ),
+        method(
+            "pages.delete",
+            "drop some pages and get the file back; the rest keep their order",
+            vec![
+                doc(),
+                param(
+                    "pages",
+                    text("pages to delete, 1-based: `3`, `1-5`, `2,7,10-end`"),
+                    true,
+                ),
+                deterministic(),
+            ],
+            json!({"deleted": 2, "pages": 9, "bytes_base64": BASE64}),
+        ),
+        method(
+            "pages.rotate",
+            "turn pages from where each one stands and get the file back",
+            vec![
+                doc(),
+                pages(),
+                param(
+                    "by",
+                    json!({
+                        "type": "integer",
+                        "description": "degrees clockwise, added to the page's own rotation",
+                        "enum": [90, 180, 270, -90],
+                    }),
+                    true,
+                ),
+                deterministic(),
+            ],
+            json!({"pages": 3, "bytes_base64": BASE64}),
+        ),
+    ]
+}
+
+/// The verbs that put attachments in and take them out.
+fn attachments() -> Vec<Method> {
+    vec![
+        method(
+            "attach.add",
+            "attach a file and get the document back",
+            vec![
+                doc(),
+                param("name", text("the attachment's name"), true),
+                param("bytes_base64", text("the file's bytes in base64"), true),
+                param(
+                    "description",
+                    text("the text a viewer shows beside the name"),
+                    false,
+                ),
+                param(
+                    "mime",
+                    text("the MIME type; guessed from the name's extension by default"),
+                    false,
+                ),
+                deterministic(),
+            ],
+            json!({"added": 1, "bytes_base64": BASE64}),
+        ),
+        method(
+            "attach.remove",
+            "take attachments out by name and get the document back",
+            vec![
+                doc(),
+                param(
+                    "names",
+                    json!({
+                        "type": "array",
+                        "description": "the names, as `attachments` lists them",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                    }),
+                    true,
+                ),
+                deterministic(),
+            ],
+            json!({"removed": 1, "bytes_base64": BASE64}),
+        ),
+    ]
+}
+
+/// The two stamps.
+fn stamps() -> Vec<Method> {
+    vec![
+        method(
+            "stamp.text",
+            "draw text over every page and get the file back",
+            [
+                vec![doc(), param("text", text("the text"), true)],
+                mark(),
+                vec![
+                    param(
+                        "size",
+                        typed("number", "the text size in points; 36 by default"),
+                        false,
+                    ),
+                    param(
+                        "color",
+                        text("the text colour as RRGGBB; black by default"),
+                        false,
+                    ),
+                    param(
+                        "font",
+                        text("one of the standard 14 by name; Helvetica by default"),
+                        false,
+                    ),
+                    deterministic(),
+                ],
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            json!({"pages": 11, "bytes_base64": BASE64}),
+        ),
+        method(
+            "stamp.image",
+            "draw a JPEG or PNG over every page and get the file back",
+            [
+                vec![
+                    doc(),
+                    param(
+                        "image_base64",
+                        text("the picture's bytes in base64, JPEG or PNG"),
+                        true,
+                    ),
+                    param(
+                        "width",
+                        typed(
+                            "number",
+                            "width in points, the aspect kept; the pixel width by default",
+                        ),
+                        false,
+                    ),
+                ],
+                mark(),
+                vec![deterministic()],
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            json!({"pages": 11, "bytes_base64": BASE64}),
         ),
     ]
 }

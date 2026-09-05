@@ -109,8 +109,9 @@ pub struct Type<'a> {
     pub font: &'a str,
 }
 
-/// The facade's options from what was typed, every value checked.
-fn options(mark: Mark, text: Option<Type<'_>>) -> Result<StampOptions> {
+/// The facade's options from what was typed, every value checked; `text`
+/// is the text stamp's own fields, `None` for a picture.
+pub fn options(mark: Mark, text: Option<Type<'_>>) -> Result<StampOptions> {
     if !(0.0..=1.0).contains(&mark.opacity) {
         bail!(
             "--opacity is 0 (invisible) to 1 (opaque), not {}",
@@ -137,44 +138,51 @@ fn options(mark: Mark, text: Option<Type<'_>>) -> Result<StampOptions> {
     Ok(options)
 }
 
-/// `doc` with `text` drawn over every page, as the bytes of a saved file,
-/// and how many pages that is.
-pub fn text_bytes(
-    doc: &Document,
-    text: &str,
-    mark: Mark,
-    type_: Type<'_>,
-    deterministic: bool,
-) -> Result<(Vec<u8>, u32)> {
+/// The stamp text, checked: not blank.
+pub fn checked_text(text: &str) -> Result<&str> {
     if text.trim().is_empty() {
         bail!("the stamp text is empty");
     }
-    let options = options(mark, Some(type_))?;
+    Ok(text)
+}
+
+/// The `--width` of a picture stamp, checked: positive, and the picture's
+/// own pixel width when not given.
+pub fn checked_width(width: Option<f64>, image: &Decoded) -> Result<f64> {
+    let width = width.unwrap_or(f64::from(image.width));
+    if !(width.is_finite() && width > 0.0) {
+        bail!("--width must be a positive number of points");
+    }
+    Ok(width)
+}
+
+/// `doc` with `text` drawn over every page as `options` say, as the bytes
+/// of a saved file, and how many pages that is.
+pub fn text_bytes(
+    doc: &Document,
+    text: &str,
+    options: &StampOptions,
+    deterministic: bool,
+) -> Result<(Vec<u8>, u32)> {
     let mut edit = doc.edit();
-    edit.stamp_text(text, &options)?;
+    edit.stamp_text(text, options)?;
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
     Ok((bytes, doc.page_count()))
 }
 
-/// `doc` with `image` drawn over every page, `width` points wide (its
-/// pixel width by default) with its aspect kept, as the bytes of a saved
-/// file, and how many pages that is.
+/// `doc` with `image` drawn over every page, `width` points wide with its
+/// aspect kept, as the bytes of a saved file, and how many pages that is.
 pub fn image_bytes(
     doc: &Document,
     image: &Decoded,
-    width: Option<f64>,
-    mark: Mark,
+    width: f64,
+    options: &StampOptions,
     deterministic: bool,
 ) -> Result<(Vec<u8>, u32)> {
-    let options = options(mark, None)?;
-    let width = width.unwrap_or(f64::from(image.width));
-    if !(width.is_finite() && width > 0.0) {
-        bail!("--width must be a positive number of points");
-    }
     let mut edit = doc.edit();
     let embedded = pages::embed(&mut edit, image)?;
-    edit.stamp_image(&embedded, width, &options)?;
+    edit.stamp_image(&embedded, width, options)?;
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
     Ok((bytes, doc.page_count()))
@@ -193,9 +201,11 @@ pub struct TextRequest<'a> {
 
 /// `stamp text`: the text over every page.
 pub fn text(req: &TextRequest<'_>, term: Term) -> Result<ExitCode> {
+    let text = checked_text(req.text)?;
+    let options = options(req.mark, Some(req.type_))?;
     let sink = out::Sink::new(req.output, "PDF")?;
     let doc = out::open(req.file, req.password)?;
-    let (bytes, pages) = text_bytes(&doc, req.text, req.mark, req.type_, req.deterministic)?;
+    let (bytes, pages) = text_bytes(&doc, text, &options, req.deterministic)?;
     sink.finish(term, &bytes, &stamped(pages), None)?;
     Ok(ExitCode::SUCCESS)
 }
@@ -213,10 +223,12 @@ pub struct ImageRequest<'a> {
 
 /// `stamp image`: a JPEG or PNG over every page.
 pub fn image(req: &ImageRequest<'_>, term: Term) -> Result<ExitCode> {
+    let options = options(req.mark, None)?;
     let sink = out::Sink::new(req.output, "PDF")?;
     let decoded = pages::decode(req.image)?;
+    let width = checked_width(req.width, &decoded)?;
     let doc = out::open(req.file, req.password)?;
-    let (bytes, pages) = image_bytes(&doc, &decoded, req.width, req.mark, req.deterministic)?;
+    let (bytes, pages) = image_bytes(&doc, &decoded, width, &options, req.deterministic)?;
     sink.finish(term, &bytes, &stamped(pages), None)?;
     Ok(ExitCode::SUCCESS)
 }
