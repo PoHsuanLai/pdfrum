@@ -123,9 +123,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `add_attachment` with options and `remove_attachment`, `stamp_text` /
   `stamp_image`; found on the way and fixed: the text emitter transposed
   `Tm` on write, and `write_pages_to` read the base rather than the
-  session's overlay. Board 0 rows moved. The CLI verbs (`metadata set`,
-  `pages delete|rotate`, `attach add`, `stamp`) follow once the command
-  tree is free; signature verification scoped separately (CMS/X.509 in
+  session's overlay. Board 0 rows moved. The CLI verbs landed 2026-09-05
+  (f8ca04c): `metadata set`, `pages delete|rotate`, `attach add|remove`,
+  `stamp text|image`, each with a session twin; the stamps take no
+  `--pages` because the facade's `stamp_*` stamp every page (a fill to
+  add); signature verification scoped separately (CMS/X.509 in
   pure Rust is a dependency decision first).
 - Delegated to Claude agents in worktrees, one phase at a time because
   they share `main.rs`; Claude verifies (gate, board) and lands.
