@@ -5,7 +5,7 @@ WHY THIS EXISTS AS A SCRIPT AND NOT AS A PARAGRAPH
 
 M12b P3 had to decide whether to re-baseline `benches/baseline.json`, and one
 baseline entry was expected to come back above its band for a reason that has
-nothing to do with the code (see `docs/status/M12b-P3.md` §4 and §9). Raising an
+nothing to do with the code. Raising an
 entry for that reason can be legitimate; raising one *because it is the last
 thing standing between you and a successful `ratchet update`* never is, and the
 two are indistinguishable in a status document written afterwards.

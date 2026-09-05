@@ -29,7 +29,7 @@ locations are cited below; both are the same bytes:
 where
 `$R = ~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f`
 and `$V` is the unpack directory
-`/tmp/claude-1002/-mnt-data2-pdfium/ede35de1-5746-41fa-ab05-706565ff2804/scratchpad/crates`.
+a scratch directory outside the repo.
 `vello_common-0.2.0`, `peniko-0.6.1` and `color-0.3.3` were additionally
 materialised under `$R` by cargo when the probe crate was built, so
 `$R/vello_common-0.2.0/src/encode.rs:494` etc. also resolve. `vello_cpu`'s own

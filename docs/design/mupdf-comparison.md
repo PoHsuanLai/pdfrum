@@ -28,7 +28,6 @@ The anchor is the inclusive count on
 
 ```sh
 cd benches/compare
-CARGO_TARGET_DIR=/mnt/data2/r13921098/cargo-target/m21 \
   cargo build --release --features c-engines
 valgrind --tool=callgrind --callgrind-out-file=<scratch>/cg.<file>.<engine> \
   <target>/release/pdfrum-compare child --engine pdfrum|mupdf --op render \
@@ -264,7 +263,7 @@ see §3.5. This is also the one page where vello beats agg (§1.2).
 | `render::imagecache.rs` | 55,235,480 | `fz_end_group` | 115,661,395 |
 
 Per the brief this page's cold-start image cost is already recorded in
-`docs/status/queue.md` §"Cold start, measured again" and is not re-measured:
+the open work list (`docs/issues-to-file.md`) and is not re-measured:
 7.43 G for us against mupdf's 3.92 G over eleven pages, our image path 3.6 G
 against mupdf's 2.62 G. What the *warm* profile adds is that once the image
 is in `RenderedImageCache` (`crates/pdfrum-render/src/imagecache.rs:56-100`)
@@ -768,7 +767,7 @@ than assumed — see 8.3.
 §0's method exactly: `benches/compare` `child`, `--warm 4` minus `--warm 0`
 divided by 4, inclusive count on `engines::pdfrum::run`, compare binary
 rebuilt from this worktree into
-`/mnt/data2/r13921098/cargo-target/u8kernel-cmp`. The F32 column was re-taken
+a separate target directory. The F32 column was re-taken
 here rather than copied from §0, and it reproduces §0 within 0.4% on every
 page — and reproduces `pack` = **478,367,460** and `unpack` =
 **120,926,385** *byte for byte* on the four pages §1.1 names, which is the

@@ -74,7 +74,7 @@ workspace = true
 # The release profile this crate is built under lives at the workspace root as
 # `[profile.wasm]`, because cargo ignores a `[profile.*]` table in a member.
 # `scripts/wasm-package.nu` builds under it; the settings and the measurement
-# behind them are in the root manifest and docs/status/M22.md.
+# behind them are in the root manifest and the internal working notes.
 
 # **The build is `scripts/wasm-package.nu`, not `wasm-pack`.** wasm-pack was
 # tried first and cannot drive this crate: it runs `wasm-opt` itself with a

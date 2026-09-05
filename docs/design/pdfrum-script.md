@@ -4,12 +4,12 @@
 are *raised*, not decided.
 
 **Sources read:** PLAN.md §M15 (settled decisions, four-step order), PLAN.md
-§M14 + docs/status/M14.md (what the event model became, and what the `Cascade`
+§M14 (what the event model became, and what the `Cascade`
 seam *shipped* as, which is not what §M14 planned), docs/design/pdfrum-form.md
 (the structural model for this document), STYLE.md (binding; §2b's closed seam
 list and its 2026-09-01 invert-versus-expose clause), SPEC.md §10 and §15,
-DEPS.md, docs/status/M14-gaps.md, and the C++ oracle at
-`/mnt/data2/pdfium/pdfium-c++` — `fxjs/` entire, `fpdfsdk/cpdfsdk_*`,
+DEPS.md, and the read-only PDFium checkout used as the behaviour oracle —
+`fxjs/` entire, `fpdfsdk/cpdfsdk_*`,
 `testing/resources/javascript/`, `testing/tools/`.
 
 **Three C++ file names PLAN.md and the task brief both use do not exist in this
@@ -44,7 +44,7 @@ this document may change it without a `[spec]` note here.** Read §1 and stop.
 > vocabulary is named accordingly.** §1.2 called for
 > `crates/pdfrum-form/src/af/`; what landed is **`crates/pdfrum-script`**, a
 > workspace member depending on `thiserror` and nothing else. The full
-> reasoning is in `docs/reviews/claude-review-af-library.md`; in short, §1.2's
+> reasoning is in an internal code review; in short, §1.2's
 > requirement is a *list of things the library must not reach*, and a separate
 > crate turns that list into a compile error rather than something a reviewer
 > has to check by reading `use` lines. The crate also carries `util.printf`,
@@ -81,7 +81,7 @@ this document may change it without a `[spec]` note here.** Read §1 and stop.
 > case-insensitive match and a case-sensitive divide. The user ruled that
 > asymmetry a defect rather than behaviour, so `SimpleOp::parse` is
 > case-insensitive throughout. Five further oracle defects were corrected the
-> same way; `docs/status/M15.md` § "`AF*`: where we diverge from the oracle on
+> same way; the internal working notes § "`AF*`: where we diverge from the oracle on
 > purpose" lists all six with citations, and the two golden assertions the
 > corrections cost.
 >
@@ -1364,7 +1364,7 @@ escalated rather than quietly written off.
 
 ### 6.4 The 11 V8-gated embeddertests
 
-M14 recorded them, outside its denominator, at docs/status/M14.md §"Bucket 2"
+M14 recorded them, outside its denominator, at the internal working notesM14.md §"Bucket 2"
 and brief §4.1 — exactly the contents of the single `#ifdef PDF_ENABLE_V8` block
 at `fpdf_formfill_embeddertest.cpp:1132-1361`:
 
@@ -1594,5 +1594,5 @@ array runs no calculation at all**, however many fields carry `/AA /C`
 - **Whether the appearance generator can draw a formatted value.**
   `CommitOutcome::display` exists and nothing consumes it (§4.5). The change in
   `pdfrum-doc::ap::widget` is small in principle and adjacent to `LiveInput`,
-  which docs/status/M14-gaps.md's closing note warns is delicate — read that
+  which the internal working notesM14-gaps.md's closing note warns is delicate — read that
   note before touching it.

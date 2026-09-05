@@ -27,7 +27,7 @@ Trim, do not strip.
   stays. At most one example per *type* or primary method.
 - **`//` next to code is out of scope.** It is not cargo docs (8.9k lines,
   0.08 per code line).
-- **Design briefs and `docs/status/` keep the diary.** Dates, “we considered
+- **Design briefs and `the internal working notes` keep the diary.** Dates, “we considered
   const generics,” `foo.cpp:123` — those already have a home. They do not
   belong in `///`.
 
@@ -142,14 +142,14 @@ A “line” is a rustdoc source line (`/// …`), not a rendered paragraph.
 
 | Cut from rustdoc | Goes to |
 |---|---|
-| “Added 2026-09-02, replacing `Backend`…” | git / `docs/status/pdfrum-facade.md` |
+| “Added 2026-09-02, replacing `Backend`…” | git / the internal working notes |
 | “Const generics were considered and rejected…” | `docs/design/` of that crate |
 | `cpdf_*.cpp:309`, `pdfium_test paints`, `FFLDraw` | `docs/design/pdfrum-*.md` (already there) |
 | STYLE.md section numbers in a public item | STYLE.md |
 | The rayon doctest on the crate page and the one on `RenderSession` | keep **one** of the two (the `par_iter` + one-session-per-worker form); the crate page's `BuildContext` variant is already gone |
 | Essay on every `render_*` / `with_config*` twin | one sentence + `see Page::render` / `see FormSession::new` |
 | “This crate composes, it does not compute” plus the member-crate tour | README “The facade”; crate page keeps one sentence and the escape-hatch links |
-| M15 fixture counts, `this.getField` not built, PLAN.md §M15 | `docs/status/M15.md`; crate page: “`script` is off by default; the `Doc`/`Field` object model is incomplete” |
+| M15 fixture counts, `this.getField` not built, PLAN.md §M15 | the internal working notes; crate page: “`script` is off by default; the `Doc`/`Field` object model is incomplete” |
 | Why a `Mutex` rather than a `RefCell` on `Document` | a `//` on the field — it is an implementation constraint, not a host contract |
 
 ### The sibling rule
@@ -379,8 +379,7 @@ WP1–3 are the production-ready bar for `docs.rs/pdfrum`. WP4–5 are the
 same bar for anyone who clicks through to a member crate. WP6 freezes it.
 
 > **WP1–WP4 landed 2026-09-03** as `2685dd0`, `45d4b5c`, `dc7a810`,
-> `76f72a5` (Grok Build's crate-page trim, finished and landed by a Claude
-> agent after Grok's balance ran out). §8 before → after: crate `//!`
+> `76f72a5` (the crate-page trim). §8 before → after: crate `//!`
 > 201 → **50**; facade items over the cap 24 → **0** with no exception
 > needed; doctest blocks 49 → **24** (§4 and §6 said 51 — two of the 98
 > fence lines were ```` ```text ```` and not doctests); provenance hits
@@ -473,7 +472,7 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > should inherit. Beyond `Added 20…` / `cpdf_` / `CPDF_` / `FPDF_` /
 > `pdfium_test` / `.cpp:`, rustdoc must not name our internal phases or
 > internal documents either — on docs.rs nobody knows what `M12`, `WP7`,
-> `§A.11`, `docs/status/M12.md`, `PLAN.md §M15` or `SPEC.md §8` mean. The
+> `§A.11`, the internal working notes, `PLAN.md §M15` or `SPEC.md §8` mean. The
 > grep, over `///` / `//!` lines only:
 >
 > ```

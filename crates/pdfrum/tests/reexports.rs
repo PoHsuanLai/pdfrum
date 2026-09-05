@@ -15,10 +15,10 @@
 //! names the type. That is the whole point — the surface it guards is one a
 //! runtime assertion cannot reach.
 //!
-//! The list is derived from `docs/status/api-baseline/pdfrum.txt`, mechanically:
+//! The list is derived from `docs/api-baseline/pdfrum.txt`, mechanically:
 //!
 //! ```text
-//! grep -vE '^pub use pdfrum::' docs/status/api-baseline/pdfrum.txt \
+//! grep -vE '^pub use pdfrum::' docs/api-baseline/pdfrum.txt \
 //!   | grep -oE 'pdfrum_[a-z0-9_]+::[A-Za-z0-9_:]*[A-Za-z0-9_]' | sort -u
 //! ```
 //!

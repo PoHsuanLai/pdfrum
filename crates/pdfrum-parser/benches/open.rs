@@ -10,7 +10,7 @@
 //! It is the widest-spread group in the suite (an 8% band against the render
 //! groups' 3–4%) for a plain reason: most of these documents open in tens of
 //! microseconds, which is short enough that a scheduler tick is visible in the
-//! median. `docs/status/M12.md` §2 has the measured distribution.
+//! median. the internal working notes has the measured distribution.
 //!
 //! # Through the facade
 //!
@@ -56,7 +56,7 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; docs/status/M12.md §2 has the
+        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

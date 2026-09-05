@@ -464,7 +464,7 @@ impl read_fonts::model::pen::OutlinePen for Collector {
 /// Elementwise comparison with a one-font-unit tolerance.
 ///
 /// The tolerance is not slop, it is a **known and deliberate divergence**
-/// (recorded in `docs/status/pdfrum-type1.md`). `read-fonts` reproduces
+/// (recorded in the internal working notes). `read-fonts` reproduces
 /// FreeType's fixed-point pipeline bit for bit: in the unscaled case it
 /// multiplies by 1/64, discards the low 10 bits, and shifts back — which
 /// quantizes every unscaled coordinate to a whole font unit. We keep the

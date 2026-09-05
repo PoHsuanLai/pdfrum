@@ -12,7 +12,7 @@
 // is still pushed to the character list. In the C++ that lockstep is a
 // convention: three sites push to both containers, two pop both, one
 // reverses both. `Line` makes it an invariant instead, so the two cannot
-// drift apart by accident. (`docs/design/pdfrum-text.md` §1.10, §1.10b.)
+// drift apart by accident.
 //
 // The staging text is `Vec<u32>`, not a `String`: it legitimately holds the
 // `0xFFFE` charcode-zero placeholder and lone zeroes that the final string

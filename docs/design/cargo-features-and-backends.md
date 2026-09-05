@@ -3,7 +3,7 @@
 **Status:** Landed 2026-09-04 (`893e153`..), with the deviations noted at the end  
 **Date:** 2026-09-04  
 **Scope:** `pdfrum`, `pdfrum-form`, `pdfrum-tool`, `pdfrum-render`, `pdfrum-page`, `pdfrum-doc`, `pdfrum-edit`, `pdfrum-font`, `pdfrum-filters`, `benches`, and CI scripts  
-**Related Documents:** [STYLE.md](file:///home/r13921098/pdfium/pdfrum/STYLE.md), [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md), [PLAN.md](file:///home/r13921098/pdfium/pdfrum/PLAN.md), [docs/design/idiomatic-api.md](file:///home/r13921098/pdfium/pdfrum/docs/design/idiomatic-api.md)
+**Related Documents:** [STYLE.md](STYLE.md), [DEPS.md](DEPS.md), [docs/design/idiomatic-api.md](docs/design/idiomatic-api.md)
 
 ---
 
@@ -67,17 +67,17 @@ This document specifies a unified architecture for Cargo features, backend selec
 
 ### 2.1 The Audit
 A codebase-wide audit reveals:
-* In [`crates/pdfrum/src/`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src), **there is not a single call to `rayon`**.
+* In [`crates/pdfrum/src/`](crates/pdfrum/src), **there is not a single call to `rayon`**.
 * The library spawns no threads and builds no thread pools.
-* [`Document`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/document.rs#L38) and [`Page`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/page.rs#L12) are `Send + Sync` because their internal fields use standard library sync primitives (`std::sync::Mutex`, `std::sync::Arc`).
+* [`Document`](crates/pdfrum/src/document.rs#L38) and [`Page`](crates/pdfrum/src/page.rs#L12) are `Send + Sync` because their internal fields use standard library sync primitives (`std::sync::Mutex`, `std::sync::Arc`).
 * `rayon` is only used in:
-  1. [`crates/pdfrum/tests/facade.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/tests/facade.rs#L946) to verify that `pages.par_iter()` renders identical pixels to serial iteration.
-  2. [`crates/pdfrum/examples/parallel-render.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/examples/parallel-render.rs#L27) to demonstrate multi-threaded batch rendering.
+  1. [`crates/pdfrum/tests/facade.rs`](crates/pdfrum/tests/facade.rs#L946) to verify that `pages.par_iter()` renders identical pixels to serial iteration.
+  2. [`crates/pdfrum/examples/parallel-render.rs`](crates/pdfrum/examples/parallel-render.rs#L27) to demonstrate multi-threaded batch rendering.
 
 ### 2.2 The Action
 * Move `rayon.workspace = true` from `[dependencies]` to `[dev-dependencies]` in `crates/pdfrum/Cargo.toml`.
 * Embedders in async Tokio runtimes, single-threaded CLI tools, or WASM workers are no longer forced to compile `rayon`, `crossbeam`, and thread-pool machinery.
-* The promise in [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md#L178) ("data-parallel fits; engine itself stays single-threaded per page") is realized with zero cost to consumers.
+* The promise in [DEPS.md](DEPS.md#L178) ("data-parallel fits; engine itself stays single-threaded per page") is realized with zero cost to consumers.
 
 ---
 
@@ -85,7 +85,7 @@ A codebase-wide audit reveals:
 
 ### 3.1 Facade Feature Matrix
 
-In [`crates/pdfrum/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/Cargo.toml):
+In [`crates/pdfrum/Cargo.toml`](crates/pdfrum/Cargo.toml):
 
 ```toml
 [features]
@@ -215,32 +215,32 @@ pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 
 ### 3.4 Preserving the GPU Isolation Guarantee
 
-[DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md#L90) enforces that default builds contain zero `wgpu` or platform graphics driver dependencies.
+[DEPS.md](DEPS.md#L90) enforces that default builds contain zero `wgpu` or platform graphics driver dependencies.
 * `vello-gpu` is **never in `default`**.
-* [`scripts/check-no-wgpu.nu`](file:///home/r13921098/pdfium/pdfrum/scripts/check-no-wgpu.nu) inspects default dependency closures and will continue to pass unconditionally.
+* [`scripts/check-no-wgpu.nu`](scripts/check-no-wgpu.nu) inspects default dependency closures and will continue to pass unconditionally.
 
 ---
 
 ## 4. Subsystem & Codec Deep Dive
 
 ### 4.1 Subsystems: `edit` and `forms`
-* **`edit`:** Gates [`pdfrum-edit`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-edit/Cargo.toml) and [`subsetter`](file:///home/r13921098/pdfium/pdfrum/Cargo.toml#L118). Gating this removes the entire font-subsetting engine, CFF/TrueType table writers, and document serialization routines from read-only binaries.
-* **`forms`:** Gates [`pdfrum-form`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-form/Cargo.toml). Disabling this removes widget layout calculations, focus rings, keystroke undo stacks, and popup controllers. Note: `javascript = ["forms", "pdfrum-form/javascript"]` ensures JavaScript cascades always have form widgets to operate on.
+* **`edit`:** Gates [`pdfrum-edit`](crates/pdfrum-edit/Cargo.toml) and [`subsetter`](Cargo.toml#L118). Gating this removes the entire font-subsetting engine, CFF/TrueType table writers, and document serialization routines from read-only binaries.
+* **`forms`:** Gates [`pdfrum-form`](crates/pdfrum-form/Cargo.toml). Disabling this removes widget layout calculations, focus rings, keystroke undo stacks, and popup controllers. Note: `javascript = ["forms", "pdfrum-form/javascript"]` ensures JavaScript cascades always have form widgets to operate on.
 
 ### 4.2 Specialized Codecs (`codecs-all`, `jpx`, `jbig2`, `ccitt`)
-In [`pdfrum-page`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-page/Cargo.toml#L39-L43) and [`pdfrum-filters`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-filters/Cargo.toml#L19-L22):
+In [`pdfrum-page`](crates/pdfrum-page/Cargo.toml#L39-L43) and [`pdfrum-filters`](crates/pdfrum-filters/Cargo.toml#L19-L22):
 * `miniz_oxide` (Flate) and `zune-jpeg` (DCT/JPEG) remain unconditional dependencies because over 99% of PDF files rely on them for text streams and photos.
 * `hayro-jpeg2000` (`jpx`), `hayro-jbig2` (`jbig2`), and `hayro-ccitt` (`ccitt`) are gated under individual features and bundled under `codecs-all`.
 * If a disabled format is encountered in a PDF stream, the engine records a non-fatal diagnostic (`Diagnostic::UnsupportedFilter` / `UnsupportedCodec`) and renders the remainder of the page gracefully, consistent with `pdfrum`'s damage-recovery philosophy.
 
 ### 4.3 Platform: `system-fonts`
-* In [`pdfrum-font/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-font/Cargo.toml#L32), `fontdb` is configured with `default-features = false`.
+* In [`pdfrum-font/Cargo.toml`](crates/pdfrum-font/Cargo.toml#L32), `fontdb` is configured with `default-features = false`.
 * Feature `system-fonts = ["fontdb/fs", "fontdb/memmap2"]` (default on).
 * In WASM environments where filesystem scanning and memory-mapped files are unsupported, turning off `system-fonts` falls back to the embedded Foxit Base-14 font data shipped directly inside `pdfrum-font`.
 
 ### 4.4 Ergonomic Utility: `png`
 * Adds optional dependency `png = { workspace = true, optional = true }`.
-* Exposes methods on [`Pixmap`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-render/src/pixmap.rs):
+* Exposes methods on [`Pixmap`](crates/pdfrum-render/src/pixmap.rs):
   ```rust
   #[cfg(feature = "png")]
   impl Pixmap {
@@ -278,7 +278,7 @@ This presents two architectural problems:
 
 We structure the rendering surface around explicit backend passing:
 
-#### On [`Page`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/page.rs#L107):
+#### On [`Page`](crates/pdfrum/src/page.rs#L107):
 
 ```rust
 impl<'a> Page<'a> {
@@ -303,7 +303,7 @@ impl<'a> Page<'a> {
 }
 ```
 
-#### On [`PreparedPage`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/page.rs#L520):
+#### On [`PreparedPage`](crates/pdfrum/src/page.rs#L520):
 
 ```rust
 impl<'a> PreparedPage<'a> {
@@ -345,15 +345,15 @@ impl<'a> PreparedPage<'a> {
 
 | Manifest | Changes |
 | :--- | :--- |
-| [`crates/pdfrum/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/Cargo.toml) | 1. Add `default = ["vello-cpu", "edit", "forms", "system-fonts", "codecs-all"]`<br>2. Add `vello-cpu`, `tinyskia`, `agg`, `vello-gpu`<br>3. Add `edit`, `forms`, `system-fonts`, `codecs-all`, `jpx`, `jbig2`, `ccitt`, `png`<br>4. Rename `script` $\rightarrow$ `javascript = ["forms", "pdfrum-form/javascript"]`<br>5. Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]`<br>6. Move `rayon` from `[dependencies]` to `[dev-dependencies]`<br>7. Mark `pdfrum-raster-*`, `pdfrum-form`, `pdfrum-edit`, and `png` optional |
-| [`crates/pdfrum-form/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-form/Cargo.toml) | Rename `script` $\rightarrow$ `javascript = ["dep:boa_engine", "dep:pdfrum-script"]` |
-| [`crates/pdfrum-tool/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-tool/Cargo.toml) | Rename `script` $\rightarrow$ `javascript = ["dep:pdfrum-form", "pdfrum-form/javascript", "pdfrum/javascript"]` |
-| [`crates/pdfrum-render/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-render/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling"]` |
-| [`crates/pdfrum-page/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-page/Cargo.toml) | 1. Rename `walk-profile` $\rightarrow$ `profiling = []`<br>2. Add optional dependencies: `hayro-jpeg2000` (`jpx`), `hayro-jbig2` (`jbig2`) |
-| [`crates/pdfrum-filters/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-filters/Cargo.toml) | Add optional dependency: `hayro-ccitt` (`ccitt`) |
-| [`crates/pdfrum-font/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-font/Cargo.toml) | Add `system-fonts = ["fontdb/fs", "fontdb/memmap2"]` |
-| [`crates/pdfrum-doc/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-doc/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling"]` |
-| [`benches/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/benches/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-render/profiling", "pdfrum/profiling"]` |
+| [`crates/pdfrum/Cargo.toml`](crates/pdfrum/Cargo.toml) | 1. Add `default = ["vello-cpu", "edit", "forms", "system-fonts", "codecs-all"]`<br>2. Add `vello-cpu`, `tinyskia`, `agg`, `vello-gpu`<br>3. Add `edit`, `forms`, `system-fonts`, `codecs-all`, `jpx`, `jbig2`, `ccitt`, `png`<br>4. Rename `script` $\rightarrow$ `javascript = ["forms", "pdfrum-form/javascript"]`<br>5. Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]`<br>6. Move `rayon` from `[dependencies]` to `[dev-dependencies]`<br>7. Mark `pdfrum-raster-*`, `pdfrum-form`, `pdfrum-edit`, and `png` optional |
+| [`crates/pdfrum-form/Cargo.toml`](crates/pdfrum-form/Cargo.toml) | Rename `script` $\rightarrow$ `javascript = ["dep:boa_engine", "dep:pdfrum-script"]` |
+| [`crates/pdfrum-tool/Cargo.toml`](crates/pdfrum-tool/Cargo.toml) | Rename `script` $\rightarrow$ `javascript = ["dep:pdfrum-form", "pdfrum-form/javascript", "pdfrum/javascript"]` |
+| [`crates/pdfrum-render/Cargo.toml`](crates/pdfrum-render/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling"]` |
+| [`crates/pdfrum-page/Cargo.toml`](crates/pdfrum-page/Cargo.toml) | 1. Rename `walk-profile` $\rightarrow$ `profiling = []`<br>2. Add optional dependencies: `hayro-jpeg2000` (`jpx`), `hayro-jbig2` (`jbig2`) |
+| [`crates/pdfrum-filters/Cargo.toml`](crates/pdfrum-filters/Cargo.toml) | Add optional dependency: `hayro-ccitt` (`ccitt`) |
+| [`crates/pdfrum-font/Cargo.toml`](crates/pdfrum-font/Cargo.toml) | Add `system-fonts = ["fontdb/fs", "fontdb/memmap2"]` |
+| [`crates/pdfrum-doc/Cargo.toml`](crates/pdfrum-doc/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-page/profiling"]` |
+| [`benches/Cargo.toml`](benches/Cargo.toml) | Rename `walk-profile` $\rightarrow$ `profiling = ["pdfrum-render/profiling", "pdfrum/profiling"]` |
 
 ---
 
@@ -406,27 +406,27 @@ let pixmap = page.render(&backend, &options)?;
 ```
 
 * **Doc examples:**
-  * [`crates/pdfrum/src/lib.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/lib.rs#L9-L14) (Lines 9, 292)
-  * [`crates/pdfrum/src/page.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/page.rs#L132) (Lines 132, 136, 504)
-  * [`crates/pdfrum/src/render.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/render.rs#L99) (Line 99)
-  * [`crates/pdfrum/src/session.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/session.rs#L40) (Line 40)
+  * [`crates/pdfrum/src/lib.rs`](crates/pdfrum/src/lib.rs#L9-L14) (Lines 9, 292)
+  * [`crates/pdfrum/src/page.rs`](crates/pdfrum/src/page.rs#L132) (Lines 132, 136, 504)
+  * [`crates/pdfrum/src/render.rs`](crates/pdfrum/src/render.rs#L99) (Line 99)
+  * [`crates/pdfrum/src/session.rs`](crates/pdfrum/src/session.rs#L40) (Line 40)
 * **Examples:**
-  * [`crates/pdfrum/examples/render-to-png.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/examples/render-to-png.rs#L53) (Line 53)
+  * [`crates/pdfrum/examples/render-to-png.rs`](crates/pdfrum/examples/render-to-png.rs#L53) (Line 53)
 * **Integration Tests:**
-  * [`crates/pdfrum/tests/facade.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/tests/facade.rs): 26 call sites.
-  * [`crates/pdfrum/tests/flatten.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/tests/flatten.rs): Lines 34, 163, 173.
-  * [`crates/pdfrum/tests/prepared_page.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/tests/prepared_page.rs): Lines 64, 65 (`one_to_one.render(&backend)`).
-  * [`crates/pdfrum/tests/reexports.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/tests/reexports.rs): Tests for backend exports.
+  * [`crates/pdfrum/tests/facade.rs`](crates/pdfrum/tests/facade.rs): 26 call sites.
+  * [`crates/pdfrum/tests/flatten.rs`](crates/pdfrum/tests/flatten.rs): Lines 34, 163, 173.
+  * [`crates/pdfrum/tests/prepared_page.rs`](crates/pdfrum/tests/prepared_page.rs): Lines 64, 65 (`one_to_one.render(&backend)`).
+  * [`crates/pdfrum/tests/reexports.rs`](crates/pdfrum/tests/reexports.rs): Tests for backend exports.
 
 ---
 
 ### 6.3 Scripts & Baselines
 
-1. **[`scripts/check-no-boa.nu`](file:///home/r13921098/pdfium/pdfrum/scripts/check-no-boa.nu)**:
+1. **[`scripts/check-no-boa.nu`](scripts/check-no-boa.nu)**:
    * Update lines 4, 31, 33, 121, 126, 127, 129: change `--features script` $\rightarrow$ `--features javascript`.
-2. **[`scripts/profile.nu`](file:///home/r13921098/pdfium/pdfrum/scripts/profile.nu)**:
+2. **[`scripts/profile.nu`](scripts/profile.nu)**:
    * Update line 203: change `--features walk-profile` $\rightarrow$ `--features profiling`.
-3. **[`scripts/api-snapshot.nu`](file:///home/r13921098/pdfium/pdfrum/scripts/api-snapshot.nu)**:
+3. **[`scripts/api-snapshot.nu`](scripts/api-snapshot.nu)**:
    * Line 117: Update `FEATURED` entry:
      ```nu
      const FEATURED = [
@@ -434,8 +434,8 @@ let pixmap = page.render(&backend, &options)?;
      ]
      ```
 4. **Baseline Snapshots**:
-   * Move `docs/status/api-baseline/pdfrum+script.txt` $\rightarrow$ `docs/status/api-baseline/pdfrum+javascript.txt`.
-   * Update `docs/status/api-baseline/pdfrum.txt` to reflect the updated signature of `Page::render`.
+   * Move `docs/api-baseline/pdfrum+script.txt` $\rightarrow$ `docs/api-baseline/pdfrum+javascript.txt`.
+   * Update `docs/api-baseline/pdfrum.txt` to reflect the updated signature of `Page::render`.
 
 ---
 
@@ -453,7 +453,7 @@ To maintain git bisectability and keep CI green at every intermediate commit, th
 1. Update manifests in `pdfrum-form`, `pdfrum`, and `pdfrum-tool`.
 2. Replace `cfg(feature = "script")` with `cfg(feature = "javascript")` in library sources, tests, and tool CLI.
 3. Update `scripts/check-no-boa.nu` and `scripts/api-snapshot.nu`.
-4. Rename `docs/status/api-baseline/pdfrum+script.txt` $\rightarrow$ `pdfrum+javascript.txt`.
+4. Rename `docs/api-baseline/pdfrum+script.txt` $\rightarrow$ `pdfrum+javascript.txt`.
 5. **Verification:** `nu scripts/check-no-boa.nu` and `cargo test --workspace --features javascript`.
 
 ### Work Package 3: Demote `rayon` to `[dev-dependencies]`
@@ -462,10 +462,10 @@ To maintain git bisectability and keep CI green at every intermediate commit, th
 3. **Verification:** `cargo tree -p pdfrum -e normal` contains zero `rayon` crates; `cargo test -p pdfrum` still passes.
 
 ### Work Package 4: Backend & Subsystem Feature Gating
-1. Update [`crates/pdfrum/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/Cargo.toml):
+1. Update [`crates/pdfrum/Cargo.toml`](crates/pdfrum/Cargo.toml):
    * Add optional backend dependencies (`vello-cpu`, `tinyskia`, `agg`, `vello-gpu`).
    * Add optional subsystem dependencies (`edit`, `forms`, `system-fonts`, `codecs-all`, `png`).
-2. Update [`crates/pdfrum/src/lib.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/lib.rs) with `#[cfg(feature = "...")]` re-exports for backend structs and subsystem types.
+2. Update [`crates/pdfrum/src/lib.rs`](crates/pdfrum/src/lib.rs) with `#[cfg(feature = "...")]` re-exports for backend structs and subsystem types.
 3. Update child crate manifests (`pdfrum-font`, `pdfrum-page`, `pdfrum-filters`) with optional codec/font flags.
 4. Add tests in `crates/pdfrum/tests/reexports.rs` confirming that each backend is available when its feature is enabled.
 5. **Verification:**

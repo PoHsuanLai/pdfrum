@@ -13,7 +13,7 @@
 //!
 //! # The two conventions, and why there have to be two
 //!
-//! This is the correction `docs/status/M12.md` §1.7 asked for in writing and
+//! This is the correction the internal working notes asked for in writing and
 //! §1.8 now records. Until it landed, the suite had one render group and it
 //! measured the wrong thing against the oracle:
 //!
@@ -228,7 +228,7 @@ mod group {
     criterion_group! {
         name = benches;
         // The settings are the ratchet's noise band, and they are chosen rather
-        // than defaulted — docs/status/M12.md §2 has the measurement behind them.
+        // than defaulted — the internal working notes has the measurement behind them.
         //
         // 50 samples over a 5-second window with a 2-second warm-up: measured
         // run-to-run spread under 3% on every group, and a full run in about

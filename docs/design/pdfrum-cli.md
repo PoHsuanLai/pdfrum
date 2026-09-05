@@ -1,13 +1,13 @@
 # Design Specification: `pdfrum-cli` — Modern, Terminal-Native PDF Power Tool
 
-**Status:** Scoped 2026-09-04 (§9); PLAN.md M19. Not started.  
+**Status:** Implemented.  
 **Date:** 2026-09-04  
 **Scope:** `crates/pdfrum-cli`, `crates/pdfrum-markdown`, `crates/pdfrum-tool`, `Cargo.toml`, `DEPS.md`  
-**Related Documents:** [PLAN.md](file:///home/r13921098/pdfium/pdfrum/PLAN.md), [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md), [STYLE.md](file:///home/r13921098/pdfium/pdfrum/STYLE.md), [docs/design/cargo-features-and-backends.md](file:///home/r13921098/pdfium/pdfrum/docs/design/cargo-features-and-backends.md), [docs/design/idiomatic-api.md](file:///home/r13921098/pdfium/pdfrum/docs/design/idiomatic-api.md)  
+**Related Documents:** [DEPS.md](DEPS.md), [STYLE.md](STYLE.md), [docs/design/cargo-features-and-backends.md](docs/design/cargo-features-and-backends.md), [docs/design/idiomatic-api.md](docs/design/idiomatic-api.md)  
 **Reference Implementations:**  
-* MinerU-rs Native Text Heuristics: [`/home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs)  
-* MinerU-rs Markdown Block Renderer: [`/home/r13921098/MinerU-rs/crates/mineru-render/src/markdown.rs`](file:///home/r13921098/MinerU-rs/crates/mineru-render/src/markdown.rs)  
-* MinerU-rs Document AST Types: [`/home/r13921098/MinerU-rs/crates/mineru-types/src/document.rs`](file:///home/r13921098/MinerU-rs/crates/mineru-types/src/document.rs)
+* MinerU-rs Native Text Heuristics: `MinerU-rs/crates/mineru-pdf/src/text.rs` (MinerU-rs, a separate private checkout)  
+* MinerU-rs Markdown Block Renderer: `MinerU-rs/crates/mineru-render/src/markdown.rs` (MinerU-rs, a separate private checkout)  
+* MinerU-rs Document AST Types: `MinerU-rs/crates/mineru-types/src/document.rs` (MinerU-rs, a separate private checkout)
 
 ---
 
@@ -22,15 +22,15 @@ Because `pdfrum` is a full-stack, pure-Rust PDF engine implementing both **Chrom
 This document specifies the architecture, dependencies, command taxonomy, and terminal-native capabilities for **`pdfrum-cli`**:
 * **Modern Terminal Experience:** Inline page graphics via Kitty APC, iTerm2 OSC 1337, Sixel, and TrueColor half-blocks (`▀`) via [`viuer`](https://crates.io/crates/viuer); clickable in-terminal hyperlinks via **OSC 8**; colored semantic styling; and responsive Unicode tables via [`comfy-table`](https://crates.io/crates/comfy-table).
 * **Developer & Scripting First:** First-class `--json` serialization on all inspection/extraction commands; seamless Unix pipeline integration (`is_terminal()` streaming for stdin/stdout).
-* **Strict Oracle Separation:** Preserves [`crates/pdfrum-tool`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-tool) for Tier A byte-for-byte conformance diffing against Google's C++ `pdfium_test`, establishing `pdfrum-cli` as the human- and pipeline-facing command-line tool.
-* **Pure-Rust & Supply Chain Integrity:** Complies strictly with [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md) and [STYLE.md](file:///home/r13921098/pdfium/pdfrum/STYLE.md): zero `-sys` crates, zero C/C++ compilation, and `unsafe_code = "forbid"`.
+* **Strict Oracle Separation:** Preserves [`crates/pdfrum-tool`](crates/pdfrum-tool) for Tier A byte-for-byte conformance diffing against Google's C++ `pdfium_test`, establishing `pdfrum-cli` as the human- and pipeline-facing command-line tool.
+* **Pure-Rust & Supply Chain Integrity:** Complies strictly with [DEPS.md](DEPS.md) and [STYLE.md](STYLE.md): zero `-sys` crates, zero C/C++ compilation, and `unsafe_code = "forbid"`.
 
 ---
 
 ## 1. Architectural Boundary: Oracle Mirror vs. User CLI
 
 ### 1.1 The Role of `crates/pdfrum-tool`
-As documented in [`crates/pdfrum-tool/Cargo.toml`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-tool/Cargo.toml#L48-L53) and [`options.rs`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-tool/src/options.rs#L3-L9), `pdfrum-tool` is an internal differential testing harness:
+As documented in [`crates/pdfrum-tool/Cargo.toml`](crates/pdfrum-tool/Cargo.toml#L48-L53) and [`options.rs`](crates/pdfrum-tool/src/options.rs#L3-L9), `pdfrum-tool` is an internal differential testing harness:
 * It parses arguments by hand to replicate C++ `std::stringstream` extraction semantics (`--pages=3-5`).
 * It exits with code 0 on malformed input to mirror `pdfium_test`'s exit convention.
 * It prints raw unencoded bitmap MD5 hashes (`MD5:<path>:<hash>`) rather than standard file hashes.
@@ -46,7 +46,7 @@ As documented in [`crates/pdfrum-tool/Cargo.toml`](file:///home/r13921098/pdfium
 
 ## 2. Dependency Audit & Supply Chain Compliance
 
-In accordance with [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md), all dependencies must be pure Rust with zero C/C++ build dependencies.
+In accordance with [DEPS.md](DEPS.md), all dependencies must be pure Rust with zero C/C++ build dependencies.
 
 ### 2.1 Proposed Manifest for `crates/pdfrum-cli/Cargo.toml`
 
@@ -123,7 +123,7 @@ anyhow.workspace = true
 
 ### 3.1 Inline Graphics & Protocol Negotiation
 
-`pdfrum` renders pages to an in-memory premultiplied RGBA [`Pixmap`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-render/src/pixmap.rs). To display pages in the terminal:
+`pdfrum` renders pages to an in-memory premultiplied RGBA [`Pixmap`](crates/pdfrum-render/src/pixmap.rs). To display pages in the terminal:
 
 1. **Conversion**: The pixmap is converted to straight RGBA via `pixmap.to_straight_rgba()` and wrapped in `image::RgbaImage::from_raw(width, height, bytes)`.
 2. **Display via `viuer`**:
@@ -162,7 +162,7 @@ Standard PDF tools (PDFium, Adobe Acrobat, Poppler) inject three sources of rand
 2. **Font Subset Prefixes**: The 6-letter subset prefix (e.g. `ABCDEF+Roboto`) is drawn randomly.
 3. **Timestamps**: `/CreationDate` and `/ModDate` stamp the live system clock.
 
-`pdfrum` solves this at the engine level through [`IdSource::Fixed`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum-edit/src/write/id.rs#L55):
+`pdfrum` solves this at the engine level through [`IdSource::Fixed`](crates/pdfrum-edit/src/write/id.rs#L55):
 * **The `--deterministic` Flag**: When specified on commands that serialize PDFs (`pages merge`, `pages split`, `pages nup`, `forms fill`, `repair`), seeds `/ID` and font prefixes from a SHA-256 hash of the input document content.
 * **`SOURCE_DATE_EPOCH` Support**: Automatically respects the Linux standard [`SOURCE_DATE_EPOCH`](https://reproducible-builds.org/docs/source-date-epoch/) environment variable, clamping `/CreationDate` and `/ModDate` for bit-for-bit identical builds in Nix, Debian, and Bazel CI pipelines.
 * **Identity Verification in `info`**: Exposes the document's permanent ID (`ID[0]`) versus revision ID (`ID[1]`). When `ID[0] == ID[1]`, the document is certified as its original, unmodified generation; when `ID[0] != ID[1]`, the file has been modified and re-saved at least once.
@@ -204,7 +204,7 @@ Summarizes metadata, page geometry, encryption, conformance flags, outlines, dig
   * **Identity State**: Displays ISO 32000 permanent `/ID[0]` vs modifying `/ID[1]`, classifying whether the file is `Pristine / Original` or `Modified / Resaved`.
 
 #### `pdfrum doctor` (or `lint`) — Non-Destructive Health & Recovery Forensics
-Leverages `pdfrum`'s unique damage-tolerance diagnostics channel ([`doc.all_diagnostics()`](file:///home/r13921098/pdfium/pdfrum/crates/pdfrum/src/document.rs#L328)) to audit and inspect broken or malformed PDFs **without mutating or re-saving the file**:
+Leverages `pdfrum`'s unique damage-tolerance diagnostics channel ([`doc.all_diagnostics()`](crates/pdfrum/src/document.rs#L328)) to audit and inspect broken or malformed PDFs **without mutating or re-saving the file**:
 * **Capabilities**:
   * Reports exact byte offsets of every defect (e.g. `startxref` corruption, stream `/Length` mismatch, dropped dictionary keys, corrupted CMaps).
   * Distinguishes between `Severity::Recovered` (safe, clean recovery) and `Severity::Suspicious` (dropped data, malformed structures, potential polyglots or exploit vectors).
@@ -348,25 +348,25 @@ Rather than embedding markdown conversion logic inside `pdfrum-cli`, markdown ex
 
 ### 5.2 Reference Implementation: Non-ML Heuristics from `MinerU-rs`
 
-`pdfrum-markdown` directly adapts the proven non-ML geometric and typographical algorithms from [`MinerU-rs`](file:///home/r13921098/MinerU-rs), replacing its C++ `libpdfium.so` dependency with `pdfrum`'s pure-Rust glyph pipeline:
+`pdfrum-markdown` directly adapts the proven non-ML geometric and typographical algorithms from `MinerU-rs` (MinerU-rs, a separate private checkout), replacing its C++ `libpdfium.so` dependency with `pdfrum`'s pure-Rust glyph pipeline:
 
 * **Glyph Deduplication & Shadow Removal**:
-  * Reference: [`mineru-pdf/src/text.rs:554-655`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs#L554-L655)
+  * Reference: `mineru-pdf/src/text.rs:554-655` (MinerU-rs, a separate private checkout)
   * Filters faux-bold duplicate glyphs within `NEAR_IDENTICAL_CHAR_BBOX_TOLERANCE` (1.0 pt) and rigid diagonal translation shadows (`OFFSET_DUPLICATE_CHAR_BBOX_TOLERANCE` 2.5 pt with $\ge 45\%$ area overlap).
 * **Adaptive Inter-Char Spacing**:
-  * Reference: [`mineru-pdf/src/text.rs:369-387`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs#L369-L387)
+  * Reference: `mineru-pdf/src/text.rs:369-387` (MinerU-rs, a separate private checkout)
   * Dynamically computes `median_char_width` per line, inserting spaces when gaps exceed `0.25 * median_width`. Automatically scales across large headers and small footnotes.
 * **Ligatures & Soft-Hyphen Normalization**:
-  * Reference: [`mineru-pdf/src/text.rs:389-404`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs#L389-L404)
+  * Reference: `mineru-pdf/src/text.rs:389-404` (MinerU-rs, a separate private checkout)
   * Normalizes typography ligatures (`ﬁ` $\rightarrow$ `fi`, `ﬀ` $\rightarrow$ `ff`) and de-hyphenates line-break wraps.
 * **Margin Noise Filtering (Header/Footer Stripping)**:
-  * Reference: [`mineru-render/src/markdown.rs:64-75`](file:///home/r13921098/MinerU-rs/crates/mineru-render/src/markdown.rs#L64-L75)
+  * Reference: `mineru-render/src/markdown.rs:64-75` (MinerU-rs, a separate private checkout)
   * Strips repeating running headers, footers, and isolated page numbers in top/bottom 8% margin bands to preserve narrative flow.
 * **Typographical Heading Level Inference**:
-  * Reference: [`mineru-pdf/src/text.rs:105-114`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs#L105-L114) and [`mineru-render/src/markdown.rs:53-63`](file:///home/r13921098/MinerU-rs/crates/mineru-render/src/markdown.rs#L53-L63)
+  * Reference: `mineru-pdf/src/text.rs:105-114` (MinerU-rs, a separate private checkout) and `mineru-render/src/markdown.rs:53-63` (MinerU-rs, a separate private checkout)
   * Computes body font size mode/median across the document; maps $\ge 1.6\times$ to `# H1`, $\ge 1.3\times$ to `## H2`, and bold body text to `### H3`.
 * **Block AST Representation**:
-  * Reference: [`mineru-types/src/document.rs`](file:///home/r13921098/MinerU-rs/crates/mineru-types/src/document.rs)
+  * Reference: `mineru-types/src/document.rs` (MinerU-rs, a separate private checkout)
   * Models pages as an ordered sequence of semantic blocks (`Heading`, `Paragraph`, `Table`, `List`, `CodeBlock`, `Image`).
 
 ### 5.3 Internal Architecture of `crates/pdfrum-markdown`
@@ -492,7 +492,7 @@ gantt
 * Implement `pdfrum extract text`:
   * Standard extraction, `--layout` column reflow, and `--json` character bounding boxes.
 * Build `crates/pdfrum-markdown`:
-  * Port non-ML heuristics from `MinerU-rs` ([`mineru-pdf/src/text.rs`](file:///home/r13921098/MinerU-rs/crates/mineru-pdf/src/text.rs)): glyph dedup, median-spacing, margin exclusion, font-size heading ratios.
+  * Port non-ML heuristics from `MinerU-rs` (`mineru-pdf/src/text.rs` (MinerU-rs, a separate private checkout)): glyph dedup, median-spacing, margin exclusion, font-size heading ratios.
   * Connect to ISO 32000 Tagged PDF `StructTree` in `pdfrum-doc`.
   * Wire `pdfrum extract markdown` to emit clean GFM Markdown with tables and headers.
 * Implement `pdfrum extract links`:
@@ -545,7 +545,7 @@ gantt
 ## 9. Scope review (2026-09-04) — what the tree already has, what it lacks, what changes
 
 Checked against `main` at `5142672`. The sections above are the vision; this
-section is what PLAN.md M19 is scheduled from. Where they differ, this wins.
+section is the scoped version. Where they differ, this wins.
 
 ### 9.1 Library support, command by command
 
@@ -572,9 +572,9 @@ other.
 | `pages booklet` | — | page-order permutation for saddle-stitch + 2-up, ~40 lines over `n_page_to_one` |
 | `forms dump/fill/flatten` | `Form::{fields, set, set_checked}`, `Document::save_form`, `FormSession` (+ `javascript`), `DocEdit::flatten` (M17) | nothing |
 | `repair` | opening *is* the recovery; `Document::save` in full mode rewrites from the trailer and garbage-collects unreachable objects (`write/mod.rs` "The garbage collection is the point") | nothing — `repair` = open + full save, and says so in its help |
-| `optimize` | the same full save (prune, re-flate) | **linearization does not exist** (PLAN.md M16, post-1.0). `optimize` ships without Fast Web View; the flag appears when M16 lands, not before (no dead options) |
+| `optimize` | the same full save (prune, re-flate) | **linearization does not exist** (post-1.0). `optimize` ships without Fast Web View; the flag appears when M16 lands, not before (no dead options) |
 | `security decrypt` | `SaveOptions::remove_security` | nothing |
-| `security encrypt` | the writer re-enciphers under an **existing** handler only (`encrypt.rs`); `pdfrum-crypt` verifies passwords, does not generate `/O` `/U` `/OE` `/UE` `/Perms` | encrypt-on-save of an unencrypted document. No oracle (`pdfium_test` cannot do it); spec-driven from ISO 32000-2 §7.6.4 (R6, AES-256 only — RC4/R4 is not worth writing new). PLAN.md M13 listed this as post-1.0; **kept as an M19 phase-5 library item (user, 2026-09-05)**. Test: round trip — our parser accepts user and owner password, the oracle renders the encrypted output byte-identical to the plaintext input, empty user password pinned |
+| `security encrypt` | the writer re-enciphers under an **existing** handler only (`encrypt.rs`); `pdfrum-crypt` verifies passwords, does not generate `/O` `/U` `/OE` `/UE` `/Perms` | encrypt-on-save of an unencrypted document. No oracle (`pdfium_test` cannot do it); spec-driven from ISO 32000-2 §7.6.4 (R6, AES-256 only — RC4/R4 is not worth writing new). Once listed as post-1.0; **kept as a phase-5 library item**. Test: round trip — our parser accepts user and owner password, the oracle renders the encrypted output byte-identical to the plaintext input, empty user password pinned |
 | `inspect object/xref` | `Document::fetch`, `Document::parser().xref()/trailer()` | an `ObjRef` display of a parsed object (the writer's serializer already prints objects; re-use it) |
 | `inspect revisions` | the parser walks the `/Prev` chain at load | expose the chain: `(offset, object count, whether xref stream)` per revision; "revision N as a file" is the input truncated at that revision's `%%EOF`, valid for incremental files only |
 | `inspect structure` | `pdfrum_doc::StructTree` (+ `pdfrum-tool --show-structure`) | facade re-export of the structure tree (also the markdown crate's Tier 1 input) |

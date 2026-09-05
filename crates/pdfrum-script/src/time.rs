@@ -101,7 +101,7 @@ fn trunc_i32(x: f64) -> i32 {
 // The only leap year the oracle's unit test checks is 1972, which both
 // spellings agree on, which is why it has survived. pdf.js delegates to the
 // JavaScript `Date` object (util.js `_scand`) and so gets this right.
-// docs/status/M15.md lists the golden assertions this puts out of reach.
+// Following the correct rule puts the oracle's leap-year goldens out of reach.
 #[must_use]
 pub fn is_leap_year(year: i32) -> bool {
     year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
@@ -211,7 +211,8 @@ pub fn day_from_time(t: f64) -> i32 {
 // directly rather than deriving it, so every date `util.printd` formats with
 // `dddd` or `ddd` comes out "Sunday" or "Sun" whatever day it actually fell
 // on. pdf.js reads `oDate.getDay()` (util.js `printd`) and prints the real
-// weekday. docs/status/M15.md lists the affected goldens.
+// weekday, and so do we, which puts the oracle's `dddd`/`ddd` goldens out of
+// reach.
 #[must_use]
 pub fn weekday_from_time(dt: f64) -> i32 {
     /// 1970-01-01 was a Thursday, four days after Sunday.
@@ -655,7 +656,8 @@ pub fn parse_date_using_format(value: &str, format: &str, now_ms: f64) -> (Conve
 // typed `31/12/85` therefore lands in 2085 rather than 1985, which no user
 // entering a birth date expects. pdf.js applies the documented pivot at
 // util.js:372-376 (`n < 50 → +2000`, else `n < 100 → +1900`), matching
-// Acrobat. docs/status/M15.md lists what this puts out of reach.
+// Acrobat, and so do we, which puts the oracle's two-digit-year goldens out
+// of reach.
 #[must_use]
 pub fn expand_two_digit_year(year: i32) -> i32 {
     /// Years below this belong to the current century.
@@ -676,7 +678,8 @@ pub fn expand_two_digit_year(year: i32) -> i32 {
 // :535 then decide the meridiem with the same `nHour > 12` and so label noon
 // `am`. pdf.js uses `1 + ((hours + 11) % 12)` with `hours < 12 ? "am" : "pm"`
 // (util.js:240-247), which is the ordinary convention and what Acrobat
-// documents. docs/status/M15.md lists the affected goldens.
+// documents, and so do we, which puts the oracle's midnight/noon goldens out
+// of reach.
 fn hour_on_twelve_hour_clock(hour: i32) -> i32 {
     1 + (hour + 11).rem_euclid(12)
 }

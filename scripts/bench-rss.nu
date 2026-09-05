@@ -218,9 +218,9 @@ def main [
     if $worst.ratio <= 1.5 {
         print "MET on every document."
     } else if $geo <= 1.5 {
-        print $"MET on the geometric mean; ($worst.document) exceeds it. See docs/status/M12.md."
+        print $"MET on the geometric mean; ($worst.document) exceeds it."
     } else {
-        print "NOT MET. See docs/status/M12.md."
+        print "NOT MET."
     }
 
     rm --recursive --force $work

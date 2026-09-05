@@ -55,7 +55,7 @@ conformance scoreboard.
 It also has no per-primitive antialiasing control — vello picks one mode for a
 whole render — so `AntiAlias::Off` and `AntiAlias::FullCover` come out
 antialiased here where the CPU backends threshold them. That is a documented
-divergence, measured in `docs/status/M12c.md` §7, not an oversight.
+divergence, measured in the internal working notes, not an oversight.
 
 ## The cost model
 
@@ -65,5 +65,5 @@ transparency group, a soft mask, each tiling-pattern cell — becomes a texture
 allocation, a GPU dispatch and a host stall waiting for the readback. A page
 that is one big scene wins; a page built from many small offscreen targets
 loses, for a structural reason rather than a tuning one.
-`docs/status/M12c.md` §8 has the measured crossover and says which corpus
+the internal working notes has the measured crossover and says which corpus
 documents fall on which side.

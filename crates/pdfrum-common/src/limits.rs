@@ -114,7 +114,7 @@ pub struct Limits {
     // fourth is ours. What they do **not** bound is heap growth and regex
     // backtracking, which no `RuntimeLimits` field covers — and which a
     // V8-enabled PDFium does not bound either, measured rather than assumed
-    // (`docs/status/data/v8probe/REPORT.md`). So pdfrum is bounded where the
+    // by a probe run against a V8-enabled build. So pdfrum is bounded where the
     // oracle hangs, and unbounded only where the oracle is too. A host
     // running untrusted documents in a shared process applies an external
     // wall-clock and RSS cap, which is the only thing that works for either.
