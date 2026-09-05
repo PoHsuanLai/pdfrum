@@ -29,7 +29,17 @@ use clap_complete::Shell;
 struct Cli {
     /// Password for an encrypted document. Either the user or the owner
     /// password opens it; the permissions reported are the ones it grants.
-    #[arg(short, long, global = true, value_name = "PASSWORD")]
+    /// Read from `PDFRUM_PASSWORD` when the flag is absent, so it need not
+    /// land in the shell's history; the flag wins when both are set. With
+    /// neither, a terminal is asked for one once, silently.
+    #[arg(
+        short,
+        long,
+        global = true,
+        value_name = "PASSWORD",
+        env = "PDFRUM_PASSWORD",
+        hide_env_values = true
+    )]
     password: Option<String>,
 
     /// Colour in the output: on when stdout is a terminal, unless `NO_COLOR`.
