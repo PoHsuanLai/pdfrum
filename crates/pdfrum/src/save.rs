@@ -1,19 +1,20 @@
 //! Writing documents back out.
 
+use std::borrow::Cow;
 use std::io::Write;
 use std::path::Path;
+use std::time::SystemTime;
 
 #[cfg(feature = "forms")]
 use pdfrum_common::Diagnostics;
 use pdfrum_common::{PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
-#[cfg(feature = "forms")]
-use pdfrum_object::Object;
+use pdfrum_object::{Dict, ObjRef, Object, Resolve, names};
 
 #[cfg(feature = "forms")]
 use crate::Form;
 use crate::{
-    Document, EmbeddedFont, EmbeddedImage, FontEncoding, PageEdit, PixelFormat, Result,
+    Document, EmbeddedFont, EmbeddedImage, FontEncoding, Metadata, PageEdit, PixelFormat, Result,
     StandardFont,
 };
 
@@ -304,6 +305,7 @@ impl Document {
         DocEdit {
             doc: self,
             inner: EditDoc::new(&self.inner),
+            stamp_mod_date: false,
         }
     }
 }
@@ -317,9 +319,139 @@ impl Document {
 pub struct DocEdit<'a> {
     pub(crate) doc: &'a Document,
     pub(crate) inner: EditDoc<'a>,
+    /// Whether [`DocEdit::set_metadata`] was called, so a save that is not
+    /// reproducible stamps `/ModDate` with its own time.
+    stamp_mod_date: bool,
+}
+
+impl<'a> DocEdit<'a> {
+    /// The objects as the save writes them: the session's, with `/ModDate`
+    /// stamped when a metadata edit asked for the save's own time and
+    /// `options` do not ask for a reproducible file.
+    ///
+    /// A stamped save works on a clone so the session itself never carries a
+    /// date it did not set; the clone shares its objects and costs one map.
+    fn for_save(&self, options: &SaveOptions) -> Cow<'_, EditDoc<'a>> {
+        if !self.stamp_mod_date || matches!(options.id_source, IdSource::Fixed(_)) {
+            return Cow::Borrowed(&self.inner);
+        }
+        let mut inner = self.inner.clone();
+        pdfrum_edit::set_info_entry(
+            &mut inner,
+            names::MOD_DATE,
+            Some(&pdfrum_edit::pdf_date(SystemTime::now())),
+        );
+        Cow::Owned(inner)
+    }
 }
 
 impl DocEdit<'_> {
+    /// Replace the document's `/Info` metadata (ISO 32000-1 §14.3.3).
+    ///
+    /// Every field of `metadata` is written as a PDF text string —
+    /// `PDFDocEncoding` when it fits, UTF-16BE behind a byte-order mark when
+    /// it does not — and a `None` or empty field removes its key, so the saved
+    /// `/Info` holds exactly what the value holds. Start from
+    /// [`Document::metadata`] to change one key and keep the rest. A document
+    /// without an `/Info` gains one.
+    ///
+    /// `/ModDate` is the one key the save may overwrite: a save whose
+    /// [`SaveOptions::id_source`] is [`IdSource::Random`] — the default —
+    /// stamps the time of the save, while a reproducible save
+    /// ([`IdSource::Fixed`]) writes `modification_date` as given, so the same
+    /// input saves to the same bytes.
+    ///
+    /// The catalog's XMP `/Metadata` stream is not touched. A document that
+    /// carries both will have the two disagree after this; rewriting the
+    /// packet is not something this crate does.
+    ///
+    /// ```
+    /// use pdfrum::{Document, SaveOptions};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut metadata = doc.metadata();
+    /// metadata.title = Some("Hello".into());
+    /// metadata.author = Some("Ann".into());
+    ///
+    /// let mut edit = doc.edit();
+    /// edit.set_metadata(&metadata);
+    /// let mut bytes = Vec::new();
+    /// edit.write_to(&mut bytes, &SaveOptions::default())?;
+    ///
+    /// let saved = Document::from_bytes(bytes.into())?;
+    /// assert_eq!(saved.metadata().title.as_deref(), Some("Hello"));
+    /// assert!(saved.metadata().modification_date.is_some(), "stamped by the save");
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn set_metadata(&mut self, metadata: &Metadata) {
+        let entries = [
+            (names::TITLE, &metadata.title),
+            (names::AUTHOR, &metadata.author),
+            (names::SUBJECT, &metadata.subject),
+            (names::KEYWORDS, &metadata.keywords),
+            (names::CREATOR, &metadata.creator),
+            (names::PRODUCER, &metadata.producer),
+            (names::CREATION_DATE, &metadata.creation_date),
+            (names::MOD_DATE, &metadata.modification_date),
+        ];
+        for (key, value) in entries {
+            pdfrum_edit::set_info_entry(&mut self.inner, key, value.as_deref());
+        }
+        self.stamp_mod_date = true;
+    }
+
+    /// A page's dictionary as the session's edits leave it, with the
+    /// reference the writer replaces and the resources the page reaches.
+    ///
+    /// Read through the overlay, not the base, so an earlier edit of the same
+    /// page — a rotation, a stamp — is what a later content rewrite builds on.
+    /// `None` for a page written inline in its parent's `/Kids`, which has no
+    /// object to replace.
+    fn page_state(&self, index: PageIndex) -> Result<Option<(ObjRef, Dict, Dict)>> {
+        let page = self.doc.inner.page(index)?;
+        let Some(reference) = page.reference else {
+            return Ok(None);
+        };
+        let dict = self
+            .inner
+            .fetch(reference)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_dict)
+            .cloned()
+            .unwrap_or_else(|| page.dict.clone());
+        let resources = dict
+            .dict(names::RESOURCES, &self.inner)
+            .or_else(|| {
+                page.inherited(names::RESOURCES, &self.inner)?
+                    .resolve(&self.inner)
+                    .ok()?
+                    .as_dict()
+                    .cloned()
+            })
+            .unwrap_or_default();
+        Ok(Some((reference, dict, resources)))
+    }
+
+    /// Turn one page edit into replacement objects on the session.
+    ///
+    /// `shared` is [`pdfrum_edit::shared_objects`] over the session, computed
+    /// once by the caller for however many pages it applies.
+    pub(crate) fn apply_page(
+        &mut self,
+        page: &PageEdit,
+        shared: &pdfrum_edit::ShareCounts,
+    ) -> Result<()> {
+        let Some((reference, dict, resources)) = self.page_state(page.index())? else {
+            // Rather than half-apply the change, leave the page as it was.
+            return Ok(());
+        };
+        let Some(rewrite) = pdfrum_edit::regenerate(page.graph(), &resources, &self.inner) else {
+            return Ok(());
+        };
+        pdfrum_edit::apply_rewrite(&mut self.inner, reference, &dict, &rewrite, shared);
+        Ok(())
+    }
     /// Import `pages` of `source` as a contiguous run at `at` (past the end
     /// appends), in the order given, duplicates included. Objects two
     /// imported pages share are copied once.
@@ -635,21 +767,9 @@ impl DocEdit<'_> {
     ) -> Result<()> {
         let shared = pdfrum_edit::shared_objects(&self.inner);
         for page in pages {
-            let Some(rewrite) =
-                pdfrum_edit::regenerate(page.graph(), &page.resources(self.doc), &self.doc.inner)
-            else {
-                continue;
-            };
-            let Some(reference) = self.doc.inner.page(page.index())?.reference else {
-                // A page written inline in its parent's `/Kids` has no object
-                // to replace, so its content cannot be rewritten. Rather than
-                // half-apply the change, leave the page as it was.
-                continue;
-            };
-            let dict = self.doc.inner.page(page.index())?.dict;
-            pdfrum_edit::apply_rewrite(&mut self.inner, reference, &dict, &rewrite, &shared);
+            self.apply_page(page, &shared)?;
         }
-        write_edit(&self.inner, options, out)
+        write_edit(&self.for_save(options), options, out)
     }
 
     /// Write the document with this session's new objects and no page edits.
@@ -671,7 +791,7 @@ impl DocEdit<'_> {
     ///
     /// As [`Document::save`].
     pub fn write_to(&self, out: &mut impl Write, options: &SaveOptions) -> Result<()> {
-        write_edit(&self.inner, options, out)
+        write_edit(&self.for_save(options), options, out)
     }
 }
 
@@ -699,9 +819,9 @@ fn write_edit(edit: &EditDoc<'_>, options: &SaveOptions, out: &mut impl Write) -
 
 #[cfg(feature = "forms")]
 /// A copy of `dict` with `key` set, keeping every other entry in place.
-fn set_key(dict: &pdfrum_object::Dict, key: &str, value: Object) -> pdfrum_object::Dict {
+fn set_key(dict: &Dict, key: &str, value: Object) -> Dict {
     let key = pdfrum_object::Name::from(key);
-    let mut out = pdfrum_object::Dict::new();
+    let mut out = Dict::new();
     let mut replaced = false;
     for (existing, held) in dict.iter() {
         if *existing == key {
