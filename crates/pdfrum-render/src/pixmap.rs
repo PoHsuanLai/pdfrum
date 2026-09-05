@@ -46,9 +46,30 @@ impl Pixmap {
     /// A pixmap of the given size, every pixel set to `color`.
     #[must_use]
     pub fn filled(width: u32, height: u32, color: peniko::Color) -> Self {
-        let mut this = Self::new(width, height);
-        this.fill(color);
-        this
+        // Built in one pass rather than `new` + `fill`: a zeroing allocation
+        // followed by a full overwrite writes every byte of a page-sized
+        // buffer twice, and at A4/150 DPI that is 8.7 MB of `memset` per
+        // target with nothing to show for it. The doubling `extend_from_within`
+        // keeps the write bulk — a per-pixel loop here measured *slower* than
+        // the two `memset`s it replaced (`docs/status/render-pass.md` §1).
+        let len = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(4);
+        let px = premultiply(color);
+        let mut data = Vec::with_capacity(len);
+        if len >= 4 {
+            data.extend_from_slice(&px);
+            while data.len() * 2 <= len {
+                data.extend_from_within(..);
+            }
+            let rest = len - data.len();
+            data.extend_from_within(..rest);
+        }
+        Self {
+            width,
+            height,
+            data,
+        }
     }
 
     /// Wrap an existing premultiplied RGBA8 buffer.
