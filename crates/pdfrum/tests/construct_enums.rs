@@ -7,7 +7,7 @@
 //! re-exported, `Argb` was not, and there was no expression a
 //! `cargo add pdfrum` caller could write that produced the variant.
 //!
-//! The list is derived from `docs/status/api-baseline/pdfrum.txt` and
+//! The list is derived from `docs/api-baseline/pdfrum.txt` and
 //! `pdfrum+javascript.txt`, not by hand:
 //!
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
@@ -711,7 +711,7 @@ fn snapshot_variant_count() -> usize {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut total = 0;
     for &(file, path, _) in SNAPSHOT_ENUMS {
-        let text = std::fs::read_to_string(root.join("docs/status/api-baseline").join(file))
+        let text = std::fs::read_to_string(root.join("docs/api-baseline").join(file))
             .expect("api-baseline snapshot is readable");
         let prefix = format!("pub {path}::");
         let mut collecting = false;
