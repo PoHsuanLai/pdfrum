@@ -1456,6 +1456,52 @@ board. **Exit:** the five phases landed, and the three-command chain
 `pages slice … -o - | pdfrum extract words - --json | jq` working on the
 corpus guide.
 
+
+## M21 — Comparative benchmarks  *(scoped 2026-09-05; the user asked what to compare against to be convincing and informative)*  — NOT STARTED
+
+Numbers against the other Rust crates and the C engines they wrap, on one
+corpus, one machine, one script, published with the method. Convincing
+means correctness is measured beside speed — a fast wrong answer is not a
+result — and informative means every axis a person choosing a crate would
+ask about, not only the one we win.
+
+**Who to compare.** Grouped by what the crate does, since no other crate
+does everything this one does:
+
+| Axis | Pure-Rust peers | C-engine baselines |
+|---|---|---|
+| Render pages to pixels | `hayro` 0.7 (pure-Rust rasterizer, the closest peer), `pdf-render` 1.0-beta | `pdfium-render` 0.9 (PDFium, our oracle), `mupdf` 0.8 |
+| Extract text | `pdf-extract` 0.12, `pdf` (pdf-rs) 0.10, `hayro-interpret`, `pdf_oxide` 0.3 (claims "5x faster, 100% pass on 3830 files" — a claim to test) | `pdfium-render`, `mupdf` |
+| Open, parse, walk objects | `lopdf` 0.44, `pdf` 0.10, `pdf_oxide` | `pdfium-render` |
+| Write and edit (merge, fill, save) | `lopdf`, `pdf-writer`/`printpdf` (write only) | `mupdf`, `pdfium-render` |
+| Markdown from a PDF | `MinerU-rs` (the user's port), and the Python MinerU as the reference | — |
+
+**What to measure**, each on the PDFium corpus (`testing/corpus` + `testing/resources`, ~1750 files) and `benches/corpus`:
+1. **Correctness first**: render SSIM/pixel-diff against `pdfium_test`'s
+   PNG at the same DPI; text extraction against PDFium's `_expected.txt`
+   (exact and normalized); files that fail to open, panic, or time out
+   (robustness), with the count per crate.
+2. **Speed**: open (parse + catalog), render per page at 150 DPI, text per
+   page, save after a merge — medians and p95 via `criterion`/`hyperfine`,
+   single-threaded, on an idle box (load noted), cold and warm.
+3. **Memory**: peak RSS per file class (`/usr/bin/time -v`), the ten
+   largest corpus files called out.
+4. **Cost of adoption**: crates in the tree, `cargo build` time from
+   clean, stripped binary size, `unsafe` count, C/C++ in the build, licence.
+5. **Coverage**: a feature matrix — encryption revisions, JBIG2, JPX, CCITT,
+   shading types 1–7, Type3 and CID fonts, annotations/forms, JavaScript,
+   incremental updates, tagged PDF — each cell verified by a corpus file,
+   not by a README.
+
+**Rules:** one script (`benches/compare/`), reproducible from a clean
+checkout with the peers as ordinary dependencies behind a `compare`
+feature so they never enter the default tree (DEPS.md records them as
+benchmark-only); the C engines run through their Rust wrappers exactly as
+a user would use them; every number carries the commit, the machine and
+the load; we publish losses. **Exit:** `docs/benchmarks/README.md` with
+the tables, the method and the script; a `--json` dump the tables are
+generated from; and the corpus rows where we lose listed as work items.
+
 ## XFA — declined, with the count written down
 
 35 corpus files exist, so it *qualifies* under this phase's criterion, and the
