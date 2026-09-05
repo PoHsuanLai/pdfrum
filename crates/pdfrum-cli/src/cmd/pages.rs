@@ -470,7 +470,7 @@ pub fn booklet(
     }
     let mut bytes = Vec::new();
     padding.write_to(&mut bytes, &SaveOptions::default())?;
-    let padded = Document::from_bytes(bytes.into())?;
+    let padded = out::open_bytes(bytes, None)?;
 
     let sheet = (2.0 * w, h);
     let dest = Document::blank(sheet.0, sheet.1)?;
@@ -535,7 +535,7 @@ pub fn create(
     }
     let mut bytes = Vec::new();
     shape.write_to(&mut bytes, &SaveOptions::default())?;
-    let doc = Document::from_bytes(bytes.into())?;
+    let doc = out::open_bytes(bytes, None)?;
 
     let mut edit = doc.edit();
     let mut page_edits = Vec::with_capacity(decoded.len());
