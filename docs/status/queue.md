@@ -1112,7 +1112,10 @@ not-achievable bucket. The two divergences are written up as A72 and A73 in
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 
 Four PDFium rendering issues, the `EnableStdConversion` dead-mechanism
-note, one `hayro-jbig2`, one `zune-jpeg`. The user files these.
+note, one `hayro-jbig2`, one `zune-jpeg`, and (new 2026-09-06) one
+`vello_cpu` — `docs/upstream/vello/pack-unpack-simd.md`, the scalar
+`F32Kernel::pack`/`unpack` behind §1.1 of the mupdf study, verified
+unfixed on upstream `main`. The user files these.
 
 Re-checked 2026-09-05 against upstream `a043bed4a` (`docs/upstream/README.md`):
 five of the eight filed issues were fixed upstream on 2026-09-03 (leap year,
@@ -1123,3 +1126,18 @@ has a runtime repro (`repro/tr_single_function_17_outputs.pdf` renders
 black, its two controls grey) and is observed-output. The `zune-jpeg`
 request already exists as zune-image #434 (opened 2026-08-18 by someone
 else): post ours as a comment there. `hayro-jbig2` draft stands.
+
+## `U8Kernel` measured — §7's first bullet answered, no code landed (2026-09-06)
+
+`docs/design/mupdf-comparison.md` §8. `RenderMode::OptimizeSpeed` **plus**
+the `u8_pipeline` cargo feature (without the feature the mode is a silent
+no-op — `vello_cpu` picks the pipeline by `#[cfg]`) is **deterministic**
+(two full boards identical over 1759 rows) and worth **1.9×–3.4× marginal
+`Ir`** / 1.51× warm wall, putting us at **0.75×–1.19× of mupdf** where F32
+is 1.24×–3.46×. But it moves **14 rows pass→fail** — all
+`corpus/fx/FRC_8.2.4_part1/FRC_*`, 0.990010 → 0.989976, sitting one part in
+10^5 above the 0.99 floor — so it is **out as a default**. Median SSIM move
+is one part in 10^6, byte-exact count unmoved at 499. The kernel line is
+reverted; the proposal for the user is a type-driven per-backend mode knob
+defaulting to `OptimizeQuality`, not a flipped pin. Also drafted
+`docs/upstream/vello/pack-unpack-simd.md` for the underlying upstream fix.
