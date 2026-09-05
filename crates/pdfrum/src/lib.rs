@@ -74,6 +74,7 @@ mod form;
 #[cfg(feature = "forms")]
 mod form_session;
 mod outline;
+mod owned_page;
 mod page;
 mod profile;
 mod render;
@@ -106,6 +107,7 @@ pub use form_session::{
 // and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
+pub use owned_page::OwnedPage;
 pub use page::{
     ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage, Rotation,
 };
@@ -455,6 +457,7 @@ mod tests {
         fn send<T: Send>() {}
 
         send_sync::<Document>();
+        send_sync::<OwnedPage>();
         send_sync::<Pixmap>();
         send_sync::<TextPage>();
         send_sync::<Error>();

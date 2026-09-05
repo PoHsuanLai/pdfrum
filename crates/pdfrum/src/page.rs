@@ -1,5 +1,7 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
+use std::sync::Arc;
+
 use pdfrum_common::{Diagnostics, LimitExceeded, Limits, Operation, PageIndex};
 use pdfrum_object::{Name, Resolve, names};
 use pdfrum_page::BuildContext;
@@ -21,11 +23,14 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Page<'a> {
     pub(crate) doc: &'a Document,
-    pub(crate) dict: PageDict,
+    /// Shared rather than owned so that an [`OwnedPage`](crate::OwnedPage),
+    /// which carries the same record, can lend it to a `Page` for the
+    /// length of one call without copying the dictionary.
+    pub(crate) dict: Arc<PageDict>,
     pub(crate) index: PageIndex,
-    media_box: kurbo::Rect,
-    crop_box: kurbo::Rect,
-    rotation: Rotation,
+    pub(crate) media_box: kurbo::Rect,
+    pub(crate) crop_box: kurbo::Rect,
+    pub(crate) rotation: Rotation,
 }
 
 impl<'a> Page<'a> {
@@ -52,7 +57,7 @@ impl<'a> Page<'a> {
         ));
         Ok(Page {
             doc,
-            dict,
+            dict: Arc::new(dict),
             index,
             media_box,
             crop_box,
