@@ -169,17 +169,11 @@ impl UndoStack {
         }
     }
 
-    /// Whether the stack records anything at all.
+    /// Turns recording on or off. Does not discard what is already recorded.
     ///
     /// A disabled stack receives no items, boundaries included — the check
     /// happens once, at the single entry point, rather than at each of the
     /// several call sites that would otherwise each have to remember it.
-    #[must_use]
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// Turns recording on or off. Does not discard what is already recorded.
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }

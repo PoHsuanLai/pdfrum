@@ -154,7 +154,6 @@ pub fn pdfrum_form::UndoStack::can_redo(&self) -> bool
 pub fn pdfrum_form::UndoStack::can_undo(&self) -> bool
 pub fn pdfrum_form::UndoStack::clear(&mut self)
 pub fn pdfrum_form::UndoStack::is_empty(&self) -> bool
-pub fn pdfrum_form::UndoStack::is_enabled(&self) -> bool
 pub fn pdfrum_form::UndoStack::items(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_form::UndoItem>
 pub fn pdfrum_form::UndoStack::len(&self) -> usize
 pub fn pdfrum_form::UndoStack::max(&self) -> usize
@@ -718,7 +717,6 @@ pub fn pdfrum_form::UndoStack::can_redo(&self) -> bool
 pub fn pdfrum_form::UndoStack::can_undo(&self) -> bool
 pub fn pdfrum_form::UndoStack::clear(&mut self)
 pub fn pdfrum_form::UndoStack::is_empty(&self) -> bool
-pub fn pdfrum_form::UndoStack::is_enabled(&self) -> bool
 pub fn pdfrum_form::UndoStack::items(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_form::UndoItem>
 pub fn pdfrum_form::UndoStack::len(&self) -> usize
 pub fn pdfrum_form::UndoStack::max(&self) -> usize
