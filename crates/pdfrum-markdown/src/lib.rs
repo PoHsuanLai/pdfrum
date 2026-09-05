@@ -77,16 +77,18 @@ pub fn page_blocks<R: Resolve>(
         let (mut blocks, claimed) = tagged::blocks(tree, &by_mcid, resolver);
         if blocks.iter().any(|b| !b.text().trim().is_empty()) {
             // Text the tree did not claim — an id it names for another page,
-            // a run outside any mark — is still text; it follows, read by
-            // typography, so nothing on the page is lost.
+            // a run outside any mark, a running header the producer left
+            // untagged — is still text; it follows, read by typography among
+            // the page's lines, so nothing on the page is lost and a header
+            // is still a header.
             let unclaimed: Vec<Line> = lines
                 .iter()
                 .filter_map(|line| {
                     let text: String = line
                         .segments
                         .iter()
-                        .filter(|(id, _)| id.is_none_or(|id| !claimed.contains(&id)))
-                        .map(|(_, run)| run.as_str())
+                        .filter(|s| s.mcid.is_none_or(|id| !claimed.contains(&id)))
+                        .map(|s| s.text.as_str())
                         .collect();
                     (!text.trim().is_empty()).then(|| Line {
                         text: text.trim().to_owned(),
@@ -94,7 +96,7 @@ pub fn page_blocks<R: Resolve>(
                     })
                 })
                 .collect();
-            blocks.extend(heuristics::blocks(&unclaimed, page.crop_box));
+            blocks.extend(heuristics::blocks_among(&unclaimed, &lines, page.crop_box));
             return blocks;
         }
     }
