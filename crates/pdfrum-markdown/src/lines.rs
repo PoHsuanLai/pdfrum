@@ -42,6 +42,11 @@ pub struct Line {
     /// Whether most of the characters came from a font whose name says
     /// bold, or were filled and stroked for a faux bold.
     pub bold: bool,
+    /// How many bytes at the head of `text` were drawn bold: the length of
+    /// a bold lead-in, `text.len()` for a line bold throughout, 0 for one
+    /// that starts plain. The prefix ends at a drawn character, never at a
+    /// space.
+    pub bold_prefix: usize,
     /// Whether most came from a font whose name says monospaced.
     pub mono: bool,
     /// The marked-content ids the characters sit under, in order, deduplicated.
@@ -253,6 +258,10 @@ struct LineBuilder {
     bold_votes: usize,
     mono_votes: usize,
     voters: usize,
+    /// Bytes of `text` drawn bold from its head, while `head_over` is false.
+    bold_prefix: usize,
+    /// Whether a plain character has ended the bold head.
+    head_over: bool,
     mcids: Vec<i64>,
     segments: Vec<Segment>,
     /// Every character kept so far with its box, for the repeat check.
@@ -311,6 +320,13 @@ impl LineBuilder {
         if font_size > 0.0 {
             self.sizes.push(font_size);
         }
+        if !self.head_over {
+            if facts.is_some_and(|f| f.bold) {
+                self.bold_prefix = self.text.len();
+            } else {
+                self.head_over = true;
+            }
+        }
         if let Some(f) = facts {
             self.voters += 1;
             self.bold_votes += usize::from(f.bold);
@@ -336,6 +352,7 @@ impl LineBuilder {
             bbox: self.bbox.unwrap_or(Rect::ZERO),
             font_size,
             bold: self.voters > 0 && self.bold_votes * 2 > self.voters,
+            bold_prefix: self.bold_prefix,
             mono: self.voters > 0 && self.mono_votes * 2 > self.voters,
             mcids: self.mcids,
             segments: self.segments,
@@ -392,9 +409,9 @@ pub fn text_by_mcid(lines: &[Line]) -> McidText {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObjectFacts, lines};
+    use super::{Facts, ObjectFacts, lines};
     use kurbo::{Affine, Point, Rect};
-    use pdfrum_text::{CharBox, CharType, TextPage};
+    use pdfrum_text::{CharBox, CharType, ObjectIndex, TextPage};
 
     fn drawn(ch: char, x: f64, y: f64) -> CharBox {
         let char_box = Rect::new(x, y, x + 5.0, y + 7.0);
@@ -441,6 +458,46 @@ mod tests {
         let got = lines(&page, &ObjectFacts::default());
         let texts: Vec<&str> = got.iter().map(|l| l.text.as_str()).collect();
         assert_eq!(texts, ["Welcome", "Welcome"]);
+    }
+
+    #[test]
+    fn a_bold_lead_in_is_measured_to_its_last_bold_character() {
+        let mut chars: Vec<CharBox> = word("Redaction", 100.0, 700.0)
+            .into_iter()
+            .map(|c| CharBox {
+                object: Some(ObjectIndex(0)),
+                ..c
+            })
+            .collect();
+        chars.push(generated(' '));
+        chars.extend(
+            word("- Lets you", 160.0, 700.0)
+                .into_iter()
+                .map(|c| CharBox {
+                    object: Some(ObjectIndex(1)),
+                    ..c
+                }),
+        );
+        let mut facts = ObjectFacts::default();
+        facts.by_index.insert(
+            0,
+            Facts {
+                bold: true,
+                ..Facts::default()
+            },
+        );
+        facts.by_index.insert(1, Facts::default());
+        let page = TextPage {
+            chars,
+            ..TextPage::default()
+        };
+        let got = lines(&page, &facts);
+        assert_eq!(got[0].text, "Redaction - Lets you");
+        assert_eq!(got[0].bold_prefix, "Redaction".len());
+        assert!(!got[0].bold);
+        // A line drawn plain throughout has no bold head at all.
+        let plain = lines(&page, &ObjectFacts::default());
+        assert_eq!(plain[0].bold_prefix, 0);
     }
 
     #[test]

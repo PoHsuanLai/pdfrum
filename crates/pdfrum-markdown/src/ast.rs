@@ -10,7 +10,10 @@ pub enum Block {
         /// The heading's text, on one line.
         text: String,
     },
-    /// Running text, wrapped lines already joined.
+    /// Running text, wrapped lines already joined. A paragraph that opens
+    /// with a bold lead-in — `**Redaction** - Lets you …` — carries it
+    /// wrapped in the Markdown marks, the one piece of markup a block holds;
+    /// [`lead_in`] takes it apart, and everything after it is plain text.
     Paragraph(String),
     /// A list; each item is one line of text.
     List {
@@ -35,7 +38,10 @@ impl Block {
     #[must_use]
     pub fn text(&self) -> String {
         match self {
-            Self::Heading { text, .. } | Self::Paragraph(text) | Self::Code(text) => text.clone(),
+            Self::Paragraph(text) => {
+                lead_in(text).map_or_else(|| text.clone(), |(lead, rest)| format!("{lead}{rest}"))
+            }
+            Self::Heading { text, .. } | Self::Code(text) => text.clone(),
             Self::List { items, .. } => items.join("\n"),
             Self::Table(rows) => rows
                 .iter()
@@ -44,5 +50,32 @@ impl Block {
                 .join("\n"),
             Self::Image { alt } => alt.clone(),
         }
+    }
+}
+
+/// A paragraph's bold lead-in and what follows it, when it opens with one:
+/// `**Redaction** - Lets you` is `("Redaction", " - Lets you")`.
+#[must_use]
+pub fn lead_in(text: &str) -> Option<(&str, &str)> {
+    let (lead, rest) = text.strip_prefix("**")?.split_once("**")?;
+    (!lead.is_empty()).then_some((lead, rest))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Block, lead_in};
+
+    #[test]
+    fn a_lead_in_is_taken_apart_and_words_come_without_the_marks() {
+        assert_eq!(
+            lead_in("**Redaction** - Lets you"),
+            Some(("Redaction", " - Lets you"))
+        );
+        assert_eq!(lead_in("Redaction - Lets you"), None);
+        assert_eq!(lead_in("****"), None);
+        assert_eq!(
+            Block::Paragraph("**Redaction** - Lets you".into()).text(),
+            "Redaction - Lets you"
+        );
     }
 }
