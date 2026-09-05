@@ -60,6 +60,22 @@ use pdfrum_common::Limits;
 /// builds every annotation list through the form-fill environment, which
 /// disables the `/NeedAppearances` widget path outright. The implementations
 /// exist for callers that want the documented viewer behavior instead.
+///
+/// ```
+/// use pdfrum_doc::DocOptions;
+///
+/// // Both switches are off by default, which is what a viewer building
+/// // its annotation list through the form-fill environment does.
+/// assert!(!DocOptions::default().generate_widget_ap);
+///
+/// // Turn on the documented `/NeedAppearances` behaviour instead:
+/// let options = DocOptions {
+///     generate_widget_ap: true,
+///     generate_widget_shapes: true,
+///     ..DocOptions::default()
+/// };
+/// assert!(options.generate_widget_shapes);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DocOptions {
     /// Generate an appearance for a `/NeedAppearances` widget that has none.

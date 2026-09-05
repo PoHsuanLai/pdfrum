@@ -165,6 +165,13 @@ const AACTION_KEYS: [(AActionType, &[u8]); 21] = [
 
 impl AActionType {
     /// The dictionary key this trigger lives under.
+    ///
+    /// ```
+    /// use pdfrum_doc::AActionType;
+    ///
+    /// assert_eq!(AActionType::KeyStroke.key(), b"K");
+    /// assert_eq!(AActionType::CloseDocument.key(), b"WC");
+    /// ```
     #[must_use]
     pub fn key(self) -> &'static [u8] {
         AACTION_KEYS
@@ -175,6 +182,13 @@ impl AActionType {
 
     /// Whether the trigger is a direct user input rather than a document or
     /// page event.
+    ///
+    /// ```
+    /// use pdfrum_doc::AActionType;
+    ///
+    /// assert!(AActionType::KeyStroke.is_user_input());
+    /// assert!(!AActionType::PageOpen.is_user_input());
+    /// ```
     #[must_use]
     pub fn is_user_input(self) -> bool {
         matches!(
@@ -193,6 +207,29 @@ pub struct Action {
 
 impl Action {
     /// Wraps a dictionary as an action.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::Action;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let action = Action::new(Dict::from_pairs([
+    ///     (Name::from("S"), Object::Name(Name::from("GoTo"))),
+    ///     (
+    ///         Name::from("D"),
+    ///         Object::Array(Array::of([
+    ///             Object::Int(2),
+    ///             Object::Name(Name::from("XYZ")),
+    ///             Object::from(0.0_f32),
+    ///             Object::from(792.0_f32),
+    ///             Object::Int(0),
+    ///         ])),
+    ///     ),
+    /// ]));
+    /// use pdfrum_doc::ActionKind;
+    ///
+    /// assert_eq!(action.kind(), ActionKind::GoTo);
+    /// ```
     #[must_use]
     pub fn new(dict: Dict) -> Action {
         Action { dict }
@@ -203,6 +240,19 @@ impl Action {
     /// Two gates: `/Type`, if present, must be the **name** `Action`; and
     /// `/S` is read **name-typed and without resolving**, so a string `/S`
     /// yields nothing and the action is unknown.
+    ///
+    /// ```
+    /// use pdfrum_doc::{Action, ActionKind};
+    /// use pdfrum_object::{Dict, Name, Object, PdfString};
+    ///
+    /// let goto = Dict::from_pairs([(Name::from("S"), Object::Name(Name::from("GoTo")))]);
+    /// assert_eq!(Action::new(goto).kind(), ActionKind::GoTo);
+    ///
+    /// // `/S` is read name-typed: a string spelling is not a kind.
+    /// let stringly =
+    ///     Dict::from_pairs([(Name::from("S"), Object::Str(PdfString::literal(b"GoTo")))]);
+    /// assert_eq!(Action::new(stringly).kind(), ActionKind::Unknown);
+    /// ```
     #[must_use]
     pub fn kind(&self) -> ActionKind {
         if let Some(kind) = self.dict.name(names::TYPE)
@@ -220,6 +270,31 @@ impl Action {
     }
 
     /// The action's destination, for the three kinds that have one.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::nav::Action;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let action = Action::new(Dict::from_pairs([
+    ///     (Name::from("S"), Object::Name(Name::from("GoTo"))),
+    ///     (
+    ///         Name::from("D"),
+    ///         Object::Array(Array::of([
+    ///             Object::Int(2),
+    ///             Object::Name(Name::from("XYZ")),
+    ///             Object::from(0.0_f32),
+    ///             Object::from(792.0_f32),
+    ///             Object::Int(0),
+    ///         ])),
+    ///     ),
+    /// ]));
+    ///
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = action.dest(&catalog, &NoResolve, &limits, &mut diags);
+    /// assert_eq!(dest.xyz(&NoResolve).and_then(|xyz| xyz.y), Some(792.0));
+    /// ```
     #[must_use]
     pub fn dest<R: Resolve>(
         &self,
@@ -243,6 +318,17 @@ impl Action {
     /// A `Launch` action with no `/F` falls back to `/Win /F`, decoded as
     /// **Latin-1** rather than as PDF text — the only such decoding in the
     /// navigation path, and it changes what high bytes mean.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let launch = Action::new(Dict::from_pairs([
+    ///     (Name::from("S"), Object::Name(Name::from("Launch"))),
+    ///     (Name::from("F"), Object::Str(PdfString::literal(b"report.pdf"))),
+    /// ]));
+    /// assert_eq!(launch.file_path(&NoResolve), "report.pdf");
+    /// ```
     #[must_use]
     pub fn file_path<R: Resolve>(&self, r: &R) -> String {
         let kind = self.kind();
@@ -276,6 +362,18 @@ impl Action {
     /// past its first character — is prefixed with the catalog's `/URI /Base`
     /// when there is one. Note a URI *starting* with a colon counts as
     /// relative.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let uri = Action::new(Dict::from_pairs([
+    ///     (Name::from("S"), Object::Name(Name::from("URI"))),
+    ///     (Name::from("URI"), Object::Str(PdfString::literal(b"https://example.test/a"))),
+    /// ]));
+    /// // Absolute: the catalog's `/URI /Base` is not prefixed.
+    /// assert_eq!(uri.uri(&Dict::default(), &NoResolve), b"https://example.test/a");
+    /// ```
     #[must_use]
     pub fn uri<R: Resolve>(&self, catalog: &Dict, r: &R) -> Vec<u8> {
         if self.kind() != ActionKind::Uri {
@@ -303,18 +401,48 @@ impl Action {
     ///
     /// The key is **Boolean-typed**, so an integer `/H 0` is not false — it
     /// is absent, and the default is to hide.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, Object};
+    ///
+    /// // `/H` defaults to true, and is Boolean-typed: an integer 0 is absent.
+    /// assert!(Action::new(Dict::default()).hide_status());
+    /// let shown = Dict::from_pairs([(Name::from("H"), Object::Bool(false))]);
+    /// assert!(!Action::new(shown).hide_status());
+    /// ```
     #[must_use]
     pub fn hide_status(&self) -> bool {
         self.dict.bool(names::H).unwrap_or(true)
     }
 
     /// A named action's name.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let named = Action::new(Dict::from_pairs([
+    ///     (Name::from("N"), Object::Str(PdfString::literal(b"NextPage"))),
+    /// ]));
+    /// assert_eq!(named.named_action(&NoResolve), b"NextPage");
+    /// ```
     #[must_use]
     pub fn named_action<R: Resolve>(&self, r: &R) -> Vec<u8> {
         self.dict.byte_string(names::N, r).unwrap_or_default()
     }
 
     /// A submit- or reset-form action's flag word.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let submit = Dict::from_pairs([(Name::from("Flags"), Object::Int(4))]);
+    /// assert_eq!(Action::new(submit).flags(&NoResolve), 4);
+    /// // Absent reads as zero.
+    /// assert_eq!(Action::new(Dict::default()).flags(&NoResolve), 0);
+    /// ```
     #[must_use]
     pub fn flags<R: Resolve>(&self, r: &R) -> i64 {
         self.dict.int(names::FLAGS, r).unwrap_or(0)
@@ -325,6 +453,20 @@ impl Action {
     /// `/S` is read **coercively** here, unlike in [`Action::kind`], so a
     /// string-valued `/S (Hide)` reaches the `/T` branch even though the
     /// action's type reads as unknown.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let reset = Action::new(Dict::from_pairs([
+    ///     (Name::from("S"), Object::Name(Name::from("ResetForm"))),
+    ///     (
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Str(PdfString::literal(b"name"))])),
+    ///     ),
+    /// ]));
+    /// assert_eq!(reset.fields(&NoResolve).len(), 1);
+    /// ```
     #[must_use]
     pub fn fields<R: Resolve>(&self, r: &R) -> Vec<Object> {
         let is_hide = self.dict.byte_string(names::S, r).as_deref() == Some(b"Hide");
@@ -350,6 +492,18 @@ impl Action {
     /// `CPDF_Stream::GetUnicodeText` reads it (`LoadAllDataFiltered`,
     /// `cpdf_stream.cpp:171-175`) — then read as PDF text. A saved file
     /// commonly Flate-encodes the stream, and the script must survive that.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let js = Action::new(Dict::from_pairs([
+    ///     (Name::from("JS"), Object::Str(PdfString::literal(b"app.alert(1);"))),
+    /// ]));
+    /// assert_eq!(js.javascript(&NoResolve).as_deref(), Some("app.alert(1);"));
+    /// // No `/JS` at all is a different answer from one decoding to nothing.
+    /// assert_eq!(Action::new(Dict::default()).javascript(&NoResolve), None);
+    /// ```
     #[must_use]
     pub fn javascript<R: Resolve>(&self, r: &R) -> Option<String> {
         let value = self.dict.get(names::JS, r).map(|v| v.get().clone())?;
@@ -370,6 +524,18 @@ impl Action {
     /// The key's *presence* is tested before its value, so a `/Next` holding
     /// an unresolvable reference has the key but no direct object and counts
     /// zero.
+    ///
+    /// ```
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let chained = Action::new(Dict::from_pairs([(
+    ///     Name::from("Next"),
+    ///     Object::Array(Array::of([Object::Dict(Dict::default())])),
+    /// )]));
+    /// assert_eq!(chained.next_count(&NoResolve), 1);
+    /// assert_eq!(Action::new(Dict::default()).next_count(&NoResolve), 0);
+    /// ```
     #[must_use]
     pub fn next_count<R: Resolve>(&self, r: &R) -> usize {
         if !self.dict.contains_key(names::NEXT) {
@@ -383,6 +549,19 @@ impl Action {
     }
 
     /// The `index`-th following action.
+    ///
+    /// ```
+    /// use pdfrum_doc::{Action, ActionKind};
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let inner = Dict::from_pairs([(Name::from("S"), Object::Name(Name::from("GoTo")))]);
+    /// let chained = Action::new(Dict::from_pairs([(
+    ///     Name::from("Next"),
+    ///     Object::Dict(inner),
+    /// )]));
+    /// assert_eq!(chained.next(0, &NoResolve).map(|a| a.kind()), Some(ActionKind::GoTo));
+    /// assert!(chained.next(1, &NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn next<R: Resolve>(&self, index: usize, r: &R) -> Option<Action> {
         if !self.dict.contains_key(names::NEXT) {
@@ -402,6 +581,19 @@ impl Action {
     /// Upstream has no guard here at all — an action whose `/Next` points at
     /// itself loops forever — so this adds a visited set keyed on object
     /// number and a depth cap.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Action;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let inner = Dict::from_pairs([(Name::from("S"), Object::Name(Name::from("GoTo")))]);
+    /// let root = Action::new(Dict::from_pairs([(Name::from("Next"), Object::Dict(inner))]));
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// // The root itself is not in the chain; only what follows it.
+    /// assert_eq!(root.chain(&NoResolve, &Limits::default(), &mut diags).len(), 1);
+    /// ```
     #[must_use]
     pub fn chain<R: Resolve>(
         &self,
@@ -445,6 +637,15 @@ fn collect_chain<R: Resolve>(
 }
 
 /// Reads one trigger out of an additional-actions dictionary.
+///
+/// ```
+/// use pdfrum_doc::{AActionType, nav::additional_action};
+/// use pdfrum_object::{Dict, Name, NoResolve, Object};
+///
+/// let aactions = Dict::from_pairs([(Name::from("K"), Object::Dict(Dict::default()))]);
+/// assert!(additional_action(&aactions, AActionType::KeyStroke, &NoResolve).is_some());
+/// assert!(additional_action(&aactions, AActionType::Format, &NoResolve).is_none());
+/// ```
 #[must_use]
 pub fn additional_action<R: Resolve>(
     aactions: &Dict,

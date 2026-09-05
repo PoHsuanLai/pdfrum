@@ -50,8 +50,7 @@ pub enum Graphics {
     Off,
 }
 
-/// The roles colour plays in the output, and nothing else is ever painted
-/// (`docs/design/cli-style.md` §2).
+/// The roles colour plays in the output, and nothing else is ever painted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Style {
     /// A section heading: `page 3`.
@@ -138,7 +137,7 @@ impl Term {
     }
 
     /// `text` in `style`, when colour is on. The only way anything is
-    /// painted (`docs/design/cli-style.md` §2).
+    /// painted.
     pub fn paint(self, style: Style, text: &str) -> String {
         if self.color {
             format!("\x1b[{}m{text}\x1b[0m", style.sgr())

@@ -123,6 +123,30 @@ use crate::vt::{Config, Layout, Metrics, Section, word_width};
 ///
 /// `word == None` is the line header — the position before the line's first
 /// character. Every other value names the character the caret sits after.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// // The header -- the position before a line's first character --
+/// // orders ahead of every character on it.
+/// assert!(Place::new(0, 0, None) < Place::new(0, 0, Some(0)));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Place {
     /// Which paragraph.
@@ -138,6 +162,13 @@ pub struct Place {
 
 impl Place {
     /// A place, from the three indices.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::hit::Place;
+    ///
+    /// let after_first = Place::new(0, 0, Some(0));
+    /// assert_eq!(after_first.word, Some(0));
+    /// ```
     #[must_use]
     pub fn new(section: u32, line: u32, word: Option<u32>) -> Place {
         Place {
@@ -158,6 +189,15 @@ impl Place {
     /// This constant used to bake `word: -1` into a public surface, which is
     /// the purest form of what §C forbids; it now spells the header as the
     /// `None` it always meant.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::hit::Place;
+    ///
+    /// // The beginning of the text, not `(0, 0, 0)`: a zero `word` is the
+    /// // position *after* the first character.
+    /// assert_eq!(Place::START, Place::new(0, 0, None));
+    /// assert_eq!(Place::default(), Place::START);
+    /// ```
     pub const START: Place = Place {
         section: 0,
         line: 0,
@@ -165,6 +205,12 @@ impl Place {
     };
 
     /// [`Place::START`], as a function.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::hit::Place;
+    ///
+    /// assert_eq!(Place::start(), Place::START);
+    /// ```
     #[must_use]
     pub fn start() -> Place {
         Place::START
@@ -185,6 +231,28 @@ impl Default for Place {
 }
 
 /// The first place in a layout: the header of its first line.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// assert_eq!(hit::begin_place(&laid_out), Place::START);
+/// ```
 #[must_use]
 pub fn begin_place(layout: &Layout) -> Place {
     let _ = layout;
@@ -195,6 +263,31 @@ pub fn begin_place(layout: &Layout) -> Place {
 ///
 /// An empty layout, and one whose last section has no lines, both answer the
 /// header of section zero — there is nowhere else for a caret to be.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// // After the last character of the last line.
+/// assert_eq!(hit::end_place(&laid_out), Place::new(0, 0, Some(1)));
+/// // An empty layout answers the header of section zero.
+/// assert_eq!(hit::end_place(&Default::default()), Place::new(0, 0, None));
+/// ```
 #[must_use]
 pub fn end_place(layout: &Layout) -> Place {
     let Some(section) = layout.sections.len().checked_sub(1) else {
@@ -236,6 +329,31 @@ fn clamp_index(index: usize) -> u32 {
 /// Within a line, the caret lands after the last character whose horizontal
 /// midpoint the point is **strictly** past. A point exactly on a midpoint is
 /// therefore *before* that character, not after it.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+///
+/// // A point left of the first character lands on the line header.
+/// let point = kurbo::Point::new(-10.0, 35.0);
+/// let place = hit::place_at_point(
+///     &laid_out, config.plate, &config, &metrics, (0.0, 0.0), point);
+/// assert_eq!(place.word, None);
+/// ```
 #[must_use]
 pub fn place_at_point(
     layout: &Layout,
@@ -464,6 +582,31 @@ fn word_at_x(
 /// answers that container's own start rather than failing — the layout can
 /// shrink under an edit while a caret still points into it, and a caret
 /// outside the text is not an error.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// // The inverse of `place_at_point`, in PDF user space.
+/// let point = hit::point_at_place(
+///     &laid_out, config.plate, &config, &metrics, (0.0, 0.0), Place::START);
+/// assert_eq!(point.x, f64::from(geom::left(config.plate)));
+/// ```
 #[must_use]
 pub fn point_at_place(
     layout: &Layout,
@@ -483,6 +626,32 @@ pub fn point_at_place(
 /// `width` is the caret's thickness — [`crate::ap::field_body::CARET_WIDTH`]
 /// for a drawn caret. The rectangle is in PDF user space, ready to hand to
 /// [`crate::ap::field_body::Highlight`].
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// let rect = hit::caret_rect(
+///     &laid_out, config.plate, &config, &metrics, (0.0, 0.0), Place::START, 1.0);
+/// // A hairline from the line's ascent down to its descent.
+/// assert_eq!(geom::width(rect), 1.0);
+/// assert!(geom::height(rect) > 0.0);
+/// ```
 #[must_use]
 pub fn caret_rect(
     layout: &Layout,
@@ -635,6 +804,29 @@ fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: P
 /// Clamped to the end, and the clamp counts **no trailing section break**, so
 /// an out-of-range section index yields the last section's end rather than
 /// one past it.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// assert_eq!(hit::word_index_of_place(&laid_out, Place::START), 0);
+/// assert_eq!(hit::word_index_of_place(&laid_out, Place::new(0, 0, Some(1))), 2);
+/// ```
 #[must_use]
 pub fn word_index_of_place(layout: &Layout, place: Place) -> usize {
     // The fold, before anything is counted. A header on the first line has no
@@ -700,6 +892,30 @@ const SECTION_BREAK_LENGTH: usize = 1;
 /// paragraph's last character and the next paragraph's first — answers the
 /// **end of the earlier** section, which is where a caret typed to that point
 /// actually sits.
+///
+/// ```
+/// use pdfrum_doc::geom;
+/// use pdfrum_doc::vt::{Config, Metrics, layout};
+///
+/// // Every character ten thousandths wide: the stub the layout assertions
+/// // in this crate are written against.
+/// let width = |_code: u32| 10;
+/// let metrics = Metrics { width: &width, ascent: 1000, descent: -200 };
+///
+/// let config = Config {
+///     plate: geom::rect(0.0, 0.0, 100.0, 40.0),
+///     font_size: 10.0,
+///     multi_line: true,
+///     ..Config::default()
+/// };
+/// let laid_out = layout("Hi", &config, &metrics);
+/// use pdfrum_doc::vt::hit;
+/// use pdfrum_doc::vt::hit::Place;
+///
+/// // The inverse of `word_index_of_place`.
+/// assert_eq!(hit::place_of_word_index(&laid_out, 0), Place::START);
+/// assert_eq!(hit::place_of_word_index(&laid_out, 2), Place::new(0, 0, Some(1)));
+/// ```
 #[must_use]
 pub fn place_of_word_index(layout: &Layout, index: usize) -> Place {
     let mut consumed: usize = 0;

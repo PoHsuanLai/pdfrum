@@ -11,11 +11,31 @@
 
 /// The off state's appearance name, which every check box and radio button
 /// shares.
+///
+/// A file may name the *on* state anything; this is the only reserved
+/// spelling.
+///
+/// ```
+/// use pdfrum_form::field::{ToggleState, toggle::OFF_STATE};
+///
+/// let mut state = ToggleState::new(OFF_STATE, "Yes");
+/// state.set_checked(true);
+/// assert_eq!(state.state, "Yes");
+/// ```
 pub const OFF_STATE: &str = "Off";
 
 /// A check box or radio button's interaction state.
 ///
 /// One fact: which appearance state the control is showing.
+///
+/// ```
+/// use pdfrum_form::field::{ToggleKind, ToggleState, activate, toggle::OFF_STATE};
+///
+/// let mut state = ToggleState::new(OFF_STATE, "On");
+/// assert!(!state.is_checked());
+/// activate(&mut state, ToggleKind::Check, false);
+/// assert_eq!(state.state, "On");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ToggleState {
     /// The appearance state name currently selected — the "on" name when the
@@ -41,6 +61,17 @@ pub struct ToggleState {
 
 impl ToggleState {
     /// A control showing `state`, whose checked appearance is `on_state`.
+    ///
+    /// An empty `on_state` means the control offers no checked appearance at
+    /// all, and it can then never be checked.
+    ///
+    /// ```
+    /// use pdfrum_form::field::{ToggleState, toggle::OFF_STATE};
+    ///
+    /// let state = ToggleState::new(OFF_STATE, "On");
+    /// assert!(!state.is_checked());
+    /// assert_eq!(state.checked_control, None, "nothing has been clicked yet");
+    /// ```
     #[must_use]
     pub fn new(state: impl Into<String>, on_state: impl Into<String>) -> ToggleState {
         ToggleState {
@@ -51,6 +82,17 @@ impl ToggleState {
     }
 
     /// Whether the control is currently checked.
+    ///
+    /// An empty state reads as clear rather than as ambiguous: a widget with
+    /// no appearance state at all is not checked.
+    ///
+    /// ```
+    /// use pdfrum_form::field::ToggleState;
+    ///
+    /// assert!(ToggleState::new("On", "On").is_checked());
+    /// assert!(!ToggleState::new("Off", "On").is_checked());
+    /// assert!(!ToggleState::new("", "On").is_checked());
+    /// ```
     #[must_use]
     pub fn is_checked(&self) -> bool {
         self.state != OFF_STATE && !self.state.is_empty()
@@ -72,6 +114,23 @@ impl ToggleState {
     ///   radio group is a name only this kid carries.
     /// - **A sibling was chosen**: [`OFF_STATE`], whatever the file's `/AS`
     ///   still says.
+    ///
+    /// ```
+    /// use pdfrum_form::AnnotId;
+    /// use pdfrum_form::field::{ToggleState, toggle::OFF_STATE};
+    ///
+    /// let clicked = AnnotId::new(0u32, 1);
+    /// let sibling = AnnotId::new(0u32, 2);
+    ///
+    /// let mut state = ToggleState::new(OFF_STATE, "Choice1");
+    /// // Nothing clicked yet: read each widget's own `/AS`.
+    /// assert_eq!(state.state_for_control(clicked), None);
+    ///
+    /// state.set_checked(true);
+    /// state.checked_control = Some(clicked);
+    /// assert_eq!(state.state_for_control(clicked), Some("Choice1"));
+    /// assert_eq!(state.state_for_control(sibling), Some(OFF_STATE));
+    /// ```
     // A check box is a field with one control, so `control` is always the
     // chosen one once anything has been clicked and the answer is its own
     // state either way.
@@ -89,6 +148,14 @@ impl ToggleState {
     ///
     /// Checking a control with no on state leaves it clear: there is no
     /// appearance to show.
+    ///
+    /// ```
+    /// use pdfrum_form::field::{ToggleState, toggle::OFF_STATE};
+    ///
+    /// let mut none = ToggleState::new(OFF_STATE, "");
+    /// none.set_checked(true);
+    /// assert!(!none.is_checked());
+    /// ```
     pub fn set_checked(&mut self, checked: bool) {
         if checked && !self.on_state.is_empty() {
             self.state.clone_from(&self.on_state);
@@ -98,6 +165,16 @@ impl ToggleState {
     }
 
     /// Flips the control. What a click on a check box does.
+    ///
+    /// ```
+    /// use pdfrum_form::field::{ToggleState, toggle::OFF_STATE};
+    ///
+    /// let mut state = ToggleState::new(OFF_STATE, "On");
+    /// state.toggle();
+    /// assert!(state.is_checked());
+    /// state.toggle();
+    /// assert!(!state.is_checked());
+    /// ```
     pub fn toggle(&mut self) {
         let checked = self.is_checked();
         self.set_checked(!checked);
@@ -105,6 +182,21 @@ impl ToggleState {
 }
 
 /// Which of the two controls a widget is, for the one line where they differ.
+///
+/// ```
+/// use pdfrum_form::field::{ToggleKind, ToggleState, activate, toggle::OFF_STATE};
+///
+/// // A check box flips; a radio button sets and never clears.
+/// let mut check = ToggleState::new(OFF_STATE, "On");
+/// activate(&mut check, ToggleKind::Check, false);
+/// activate(&mut check, ToggleKind::Check, false);
+/// assert!(!check.is_checked());
+///
+/// let mut radio = ToggleState::new(OFF_STATE, "On");
+/// activate(&mut radio, ToggleKind::Radio, false);
+/// activate(&mut radio, ToggleKind::Radio, false);
+/// assert!(radio.is_checked());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToggleKind {
     /// A check box: activation flips it.
@@ -117,6 +209,25 @@ pub enum ToggleKind {
 ///
 /// Returns whether the state moved. A read-only control never moves, but its
 /// caller still reports the event as consumed.
+///
+/// ```
+/// use pdfrum_form::field::{ToggleKind, ToggleState, activate, toggle::OFF_STATE};
+///
+/// let mut state = ToggleState::new(OFF_STATE, "On");
+/// assert!(activate(&mut state, ToggleKind::Check, false));
+/// assert!(state.is_checked());
+///
+/// // A radio button re-activated is a no-op, not a clear.
+/// let mut radio = ToggleState::new(OFF_STATE, "On");
+/// activate(&mut radio, ToggleKind::Radio, false);
+/// assert!(!activate(&mut radio, ToggleKind::Radio, false));
+/// assert!(radio.is_checked());
+///
+/// // A read-only control does not move.
+/// let mut fixed = ToggleState::new(OFF_STATE, "On");
+/// assert!(!activate(&mut fixed, ToggleKind::Check, true));
+/// assert!(!fixed.is_checked());
+/// ```
 pub fn activate(state: &mut ToggleState, kind: ToggleKind, read_only: bool) -> bool {
     if read_only {
         return false;

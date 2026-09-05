@@ -6,15 +6,45 @@
 //! ([`CharIndex`]) and the search-facing text ([`TextIndex`]). See
 //! [`TextPage`] for what each holds and which one a given method speaks.
 //!
-//! ```no_run
+//! Extraction takes an *interpreted* page — the page-object graph
+//! `pdfrum-page` builds — and the resolver that page's indirect objects live
+//! in, so the whole call is one function over values:
+//!
+//! ```
 //! use pdfrum_common::{Diagnostics, Limits};
-//! use pdfrum_text::{ExtractOptions, extract};
+//! use pdfrum_text::{CharIndex, ExtractOptions, extract};
 //!
 //! # fn demo(page: &pdfrum_page::Page, resolver: &impl pdfrum_object::Resolve) {
 //! let mut diags = Diagnostics::default();
 //! let text = extract(page, resolver, &ExtractOptions::default(), &Limits::default(), &mut diags);
+//!
+//! // The search-facing text, which is what `Display` writes.
 //! println!("{text}");
+//! // The character stream, with the geometry each glyph was drawn at.
+//! for boxed in &text.chars {
+//!     let _ = (boxed.unicode, boxed.char_box, boxed.font_size);
+//! }
 //! # }
+//! ```
+//!
+//! The one thing to get right is **which of the two sequences a number counts
+//! in**. [`TextPage::find`] answers in [`TextIndex`], [`TextPage::web_links`]
+//! answers in [`CharIndex`], and [`TextPage::runs`] is the only conversion
+//! between them:
+//!
+//! ```
+//! use pdfrum_text::{CharIndex, FindOptions, TextIndex, TextPage};
+//!
+//! let page = TextPage {
+//!     search_text: "Hello, world!".chars().collect(),
+//!     ..TextPage::default()
+//! };
+//! let hit = page.find("world", FindOptions::default()).next().expect("a match");
+//! assert_eq!(hit, TextIndex::new(7)..TextIndex::new(12));
+//!
+//! // A `TextIndex` is not a `CharIndex`; converting is `runs`' job, and on a
+//! // page with no character stream there is nothing to convert to.
+//! assert_eq!(page.runs.char_index(hit.start), None);
 //! ```
 
 #![forbid(unsafe_code)]
@@ -68,6 +98,21 @@ use std::collections::BTreeMap;
 use std::ops::{Range, RangeBounds};
 
 /// How extraction behaves.
+///
+/// # Examples
+///
+/// ```
+/// use pdfrum_text::ExtractOptions;
+///
+/// // The default reads direction from each line's own text.
+/// assert!(!ExtractOptions::default().rtl);
+///
+/// // A document whose catalog says `/ViewerPreferences << /Direction /R2L >>`
+/// // must be extracted with this set, or every line comes out in the wrong
+/// // order.
+/// let options = ExtractOptions { rtl: true };
+/// assert!(options.rtl);
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExtractOptions {
     /// The document's `/Root /ViewerPreferences /Direction` is `R2L`.
@@ -97,6 +142,24 @@ pub struct ExtractOptions {
 /// [`runs`](Self::runs) converts between the two spaces; every signature
 /// names which one it counts in. Cheap to clone and `Send + Sync`, so a
 /// document's pages can be extracted in parallel.
+///
+/// # Examples
+///
+/// The fields are public, so a page can be built by hand — which is how the
+/// query side is exercised without a file:
+///
+/// ```
+/// use pdfrum_text::TextPage;
+///
+/// let page = TextPage {
+///     search_text: "Hello, world!".chars().collect(),
+///     ..TextPage::default()
+/// };
+/// // `Display` writes the search-facing text, never the character stream.
+/// assert_eq!(page.to_string(), "Hello, world!");
+/// // …which is a different sequence, and here an empty one.
+/// assert_eq!(page.char_count(), 0);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct TextPage {
     /// Characters in reading order addressed by [`CharIndex`].
@@ -120,6 +183,31 @@ pub struct TextPage {
 /// carries on. A `limits.deadline` that has passed is read once, here on
 /// entry — a page is the extractor's unit of work — and answers an empty
 /// page with [`DiagKind::TimeLimitReached`].
+///
+/// # Examples
+///
+/// A page with nothing on it extracts to nothing, without an error and
+/// without a diagnostic:
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_object::NoResolve;
+/// use pdfrum_page::Page;
+/// use pdfrum_text::{ExtractOptions, extract};
+///
+/// let mut diags = Diagnostics::default();
+/// let text = extract(
+///     &Page::empty(),
+///     &NoResolve,
+///     &ExtractOptions::default(),
+///     &Limits::default(),
+///     &mut diags,
+/// );
+///
+/// assert_eq!(text.char_count(), 0);
+/// assert_eq!(text.to_string(), "");
+/// assert!(diags.entries().is_empty());
+/// ```
 #[must_use]
 pub fn extract<R: Resolve>(
     page: &Page,
@@ -220,6 +308,23 @@ fn char_bounds(range: &impl RangeBounds<CharIndex>, total: usize) -> (usize, usi
 
 impl TextPage {
     /// How many characters the page drew.
+    ///
+    /// This counts [`chars`](Self::chars), not
+    /// [`search_text`](Self::search_text): the two sequences have different
+    /// lengths, and a page can have text and no characters or the reverse.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pdfrum_text::TextPage;
+    ///
+    /// let page = TextPage {
+    ///     search_text: "Hello".chars().collect(),
+    ///     ..TextPage::default()
+    /// };
+    /// assert_eq!(page.to_string().len(), 5);
+    /// assert_eq!(page.char_count(), 0);
+    /// ```
     #[must_use]
     pub fn char_count(&self) -> usize {
         self.chars.len()
@@ -237,6 +342,43 @@ impl TextPage {
     ///
     /// This is the one call where the two spaces of [`TextPage`] meet: the
     /// bounds count characters and the answer is text.
+    ///
+    /// # Examples
+    ///
+    /// A page holding `"Hello, world!"` on one line and `"Goodbye, world!"` on
+    /// the next, with the extractor's generated `\r\n` between them:
+    ///
+    /// ```
+    /// # use pdfrum_text::CharIndex;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// let at = CharIndex::new;
+    /// assert_eq!(page.slice(at(0)..at(5)), "Hello");
+    /// // An unbounded end is "to the end of the page".
+    /// assert_eq!(page.slice(at(15)..), "Goodbye, world!");
+    /// assert_eq!(page.slice(..), "Hello, world!\r\nGoodbye, world!");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn slice(&self, range: impl RangeBounds<CharIndex>) -> String {
         let total = self.chars.len();
@@ -292,6 +434,37 @@ impl TextPage {
     /// Reported ranges are [`CharIndex`] spans into [`chars`](Self::chars) —
     /// **not** the [`TextIndex`] space [`find`](Self::find) returns. The two
     /// index spaces are different sequences; see [`TextPage`].
+    /// # Examples
+    ///
+    /// The fixture below draws no address, so nothing is reported; a page that
+    /// draws `www.example.com` reports it with an `http://` already prefixed.
+    ///
+    /// ```
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// assert!(page.web_links().is_empty());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn web_links(&self) -> Vec<WebLink> {
         links::extract(&self.chars, &self.search_text, &index::build(&self.chars))
@@ -305,12 +478,87 @@ impl TextPage {
     /// in which every character was skipped still yields one box, an all-zero
     /// rectangle. An unbounded end is "to the end of the page", and a range
     /// running past the end takes what is there.
+    /// # Examples
+    ///
+    /// Two lines set in two different fonts are two text objects, so the whole
+    /// page yields two boxes rather than one:
+    ///
+    /// ```
+    /// # use pdfrum_text::CharIndex;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// let boxes = page.rects(..);
+    /// assert_eq!(boxes.len(), 2);
+    /// // The first line sits below the second in page space, which is y-up.
+    /// assert!(boxes[0].y1 < boxes[1].y0);
+    ///
+    /// // A run inside one object is one box.
+    /// assert_eq!(page.rects(CharIndex::new(0)..CharIndex::new(5)).len(), 1);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn rects(&self, range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
         select::rects(&self.chars, range)
     }
 
     /// The character under a point in page space, or the nearest within tolerance.
+    /// A point inside a character's box wins outright and reports the
+    /// **first** such character; failing that, and only when a tolerance is
+    /// given, the nearest character within it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use kurbo::{Point, Size};
+    /// # use pdfrum_text::CharIndex;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// // Inside the first glyph's box.
+    /// assert_eq!(page.index_at(Point::new(24.0, 54.0), Size::ZERO), Some(CharIndex::new(0)));
+    /// // Far from every glyph, with no tolerance to fall back on.
+    /// assert_eq!(page.index_at(Point::new(500.0, 500.0), Size::ZERO), None);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn index_at(&self, point: Point, tolerance: Size) -> Option<CharIndex> {
         select::index_at(&self.chars, point, tolerance)
@@ -318,12 +566,77 @@ impl TextPage {
 
     /// The text inside a rectangle, with `\r\n` where the selection crosses a
     /// baseline.
+    /// # Examples
+    ///
+    /// ```
+    /// # use kurbo::Rect;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// // A rectangle covering only the lower line takes only its text.
+    /// assert_eq!(page.text_in_rect(Rect::new(0.0, 0.0, 200.0, 70.0)), "Hello, world!");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn text_in_rect(&self, rect: Rect) -> String {
         select::text_in_rect(&self.chars, rect)
     }
 
     /// The text drawn by a specific text object.
+    /// The [`ObjectIndex`] is the one a character carries in
+    /// [`CharBox::object`], counting text objects in content order.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pdfrum_text::ObjectIndex;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// assert_eq!(page.text_of_object(ObjectIndex(0)), "Hello, world!");
+    /// assert_eq!(page.text_of_object(ObjectIndex(1)), "Goodbye, world!");
+    /// // An object the page does not have draws nothing.
+    /// assert_eq!(page.text_of_object(ObjectIndex(9)), "");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn text_of_object(&self, object: ObjectIndex) -> String {
         select::text_of_object(&self.chars, object)
@@ -334,6 +647,44 @@ impl TextPage {
     /// # Errors
     ///
     /// Returns [`Error::CharIndexOutOfRange`] when `index` is past the end of [`chars`](Self::chars).
+    /// # Examples
+    ///
+    /// ```
+    /// # use pdfrum_text::{CharIndex, CharType, Error};
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// let first = page.char(CharIndex::new(0))?;
+    /// assert_eq!(char::from_u32(first.unicode), Some('H'));
+    /// assert_eq!(first.char_type, CharType::Normal);
+    /// assert_eq!(first.font_size, 12.0);
+    ///
+    /// // The error names both the index and the bound it broke.
+    /// assert_eq!(
+    ///     page.char(CharIndex::new(999)),
+    ///     Err(Error::CharIndexOutOfRange { index: CharIndex::new(999), len: 30 }),
+    /// );
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn char(&self, index: CharIndex) -> Result<&CharBox, Error> {
         self.chars
             .get(index.get())
@@ -350,6 +701,41 @@ impl TextPage {
     ///
     /// `None` past the end, for a character no text object drew (every
     /// generated one), and for a font with no base name (Type 3).
+    /// # Examples
+    ///
+    /// ```
+    /// # use pdfrum_text::CharIndex;
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// // Two lines, two fonts.
+    /// assert_eq!(page.font_name(CharIndex::new(0)), Some("Times-Roman"));
+    /// assert_eq!(page.font_name(CharIndex::new(15)), Some("Helvetica"));
+    ///
+    /// // Character 13 is the line break the extractor generated: no text
+    /// // object drew it, so it has no font.
+    /// assert_eq!(page.font_name(CharIndex::new(13)), None);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[must_use]
     pub fn font_name(&self, index: CharIndex) -> Option<&str> {
         let object = self.chars.get(index.get())?.object?;
@@ -380,6 +766,39 @@ impl TextPage {
 ///
 /// A character whose font maps it to nothing contributes `U+0000`, which is
 /// word-continuing; a space ends a word without starting one.
+/// # Examples
+///
+/// Each text object restarts the run, so the two lines of the fixture below
+/// are four words rather than two — and the comma stays attached, because it
+/// is below the word-continuing cutoff:
+///
+/// ```
+/// # use pdfrum_common::{Diagnostics, Limits};
+/// # use pdfrum_object::{Name, Object};
+/// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+/// # use std::sync::Arc;
+/// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+/// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+/// # let loaded = doc.page(0)?;
+/// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// # let mut content = Vec::new();
+/// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+/// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+/// #     content.extend_from_slice(
+/// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+/// # }
+/// # let ops = parse_content(&content, &limits, &mut diags);
+/// # let resources = Resources::for_page(
+/// #     loaded.inherited(&Name::from("Resources"), &doc)
+/// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+/// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+/// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+/// assert_eq!(
+///     pdfrum_text::words(&built),
+///     ["Hello, ", "world!", "Goodbye, ", "world!"],
+/// );
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[must_use]
 pub fn words(page: &Page) -> Vec<String> {
     /// `IsLatinWord`: neither a space nor past the cutoff.

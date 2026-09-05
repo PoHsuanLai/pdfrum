@@ -36,6 +36,59 @@ use crate::{focus, tab};
 ///
 /// A borrowed view rather than an owned context object: it is assembled at
 /// the call site from things the caller already has, and it owns nothing.
+/// # Examples
+///
+/// Everything here is read from the file before any event is applied; the
+/// context borrows it and owns nothing:
+///
+/// ```
+/// use pdfrum_doc::ap;
+/// use pdfrum_form::route::Context;
+/// use pdfrum_form::{FormSession, NoScripts, Permissions, read_page};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// // The page's widgets, read once.
+/// let page = read_page(0, &page_dict, &catalog, &resolve);
+/// let mut build = pdfrum_page::BuildContext::new();
+/// // The fonts the form's `/DR` declares.
+/// let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+///
+/// let ctx = Context {
+///     page: &page,
+///     catalog: &catalog,
+///     resolve: &resolve,
+///     fonts: &fonts,
+///     permissions: Permissions::ALL,
+/// };
+/// assert_eq!(ctx.page.widgets.len(), 1);
+///
+/// // The session and the cascade are the caller's; the context is rebuilt
+/// // per page, the session outlives every event.
+/// let mut session = FormSession::new();
+/// let mut cascade = NoScripts;
+/// # let _ = (&mut session, &mut cascade);
+/// ```
 pub struct Context<'a, R: Resolve> {
     /// The page the event happened on, already read.
     pub page: &'a PageForm,
@@ -82,6 +135,86 @@ impl<R: Resolve> Context<'_, R> {
 /// query below here compares `f32` against widget edges already rounded the
 /// same way; letting an `f64` reach one of them would move an inclusive edge,
 /// or a caret across a glyph boundary.
+/// # Examples
+///
+/// A click is three events, and the field's interaction state comes into
+/// being on the first one that touches it:
+///
+/// ```
+/// # use kurbo::Point;
+/// # use pdfrum_form::field::FieldState;
+/// # use pdfrum_form::{Button, Event, FieldId, Modifiers};
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// let at = Point { x: 100.0, y: 115.0 };
+/// for event in [
+///     Event::MouseMove { at, modifiers: Modifiers::NONE },
+///     Event::MouseDown { button: Button::Left, at, modifiers: Modifiers::NONE },
+///     Event::MouseUp { button: Button::Left, at, modifiers: Modifiers::NONE },
+/// ] {
+///     route::apply(&mut session, &ctx, &mut cascade, event);
+/// }
+///
+/// // Typing goes to whatever the click focused.
+/// let response = route::apply(&mut session, &ctx, &mut cascade,
+///     Event::Char { ch: 'X', modifiers: Modifiers::NONE });
+/// assert!(response.consumed);
+/// // Every changed field arrives as an appearance the caller re-renders.
+/// for update in &response.updates {
+///     let _ = update.annot;
+/// }
+///
+/// let Some(FieldState::Text(state)) = session.fields.get(&FieldId(0)) else {
+///     unreachable!("the click built the field's state")
+/// };
+/// assert_eq!(state.edit.text, "oldX");
+///
+/// // A click that lands on no widget is still this session's business while
+/// // a field holds the keyboard: it drops focus, which commits the edit.
+/// let miss = route::apply(&mut session, &ctx, &mut cascade,
+///     Event::MouseDown { button: Button::Left, at: Point { x: 5.0, y: 5.0 },
+///         modifiers: Modifiers::NONE });
+/// assert!(miss.consumed);
+/// assert!(route::focus_of(&session, &ctx).is_none());
+///
+/// // With nothing focused, the same click is answered rather than dropped —
+/// // every event has an answer, and this one is "nothing here".
+/// let again = route::apply(&mut session, &ctx, &mut cascade,
+///     Event::MouseDown { button: Button::Left, at: Point { x: 5.0, y: 5.0 },
+///         modifiers: Modifiers::NONE });
+/// assert!(!again.consumed);
+/// ```
 pub fn apply<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1549,6 +1682,45 @@ fn set_combo_text<R: Resolve>(
 /// common case: only a click on a drop button, a `Return` or a `Space` on a
 /// gated combo opens one.
 #[must_use]
+/// # Examples
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // Nothing on this page has a dropdown, so a host is told to draw none.
+/// assert!(route::popup_view(&session, &ctx).is_none());
+/// ```
 pub fn popup_view<R: Resolve>(
     session: &FormSession,
     ctx: &Context<'_, R>,
@@ -1585,6 +1757,46 @@ pub fn popup_view<R: Resolve>(
 /// [`None`] for an annotation that is not a choice widget, or one the session
 /// has never built state for.
 #[must_use]
+/// # Examples
+///
+/// ```
+/// # use pdfrum_form::AnnotId;
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // The page's one widget is a text field, which has no rows to scroll.
+/// assert!(route::scroll_view(&session, &ctx, AnnotId::new(0u32, 0)).is_none());
+/// ```
 pub fn scroll_view<R: Resolve>(
     session: &FormSession,
     ctx: &Context<'_, R>,
@@ -1618,6 +1830,48 @@ pub fn scroll_view<R: Resolve>(
 ///
 /// An index past the end of the options is ignored, and the response is
 /// [`Response::ignored`] — a host cannot corrupt a field by miscounting.
+/// # Examples
+///
+/// ```
+/// # use pdfrum_form::AnnotId;
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // A host cannot corrupt a field by naming a row that is not there — or,
+/// // as here, an annotation that is not a choice widget at all.
+/// let response = route::choose(&mut session, &ctx, &mut cascade, AnnotId::new(0u32, 0), 7);
+/// assert!(!response.consumed);
+/// ```
 pub fn choose<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1656,6 +1910,47 @@ pub fn choose<R: Resolve>(
 ///
 /// [`Response::ignored`] when that annotation had no dropdown open, so a host
 /// may call it unconditionally.
+/// # Examples
+///
+/// ```
+/// # use pdfrum_form::AnnotId;
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // Safe to call unconditionally: with no dropdown open it changes nothing
+/// // and says so.
+/// assert!(!route::close_popup(&mut session, &ctx, AnnotId::new(0u32, 0)).consumed);
+/// ```
 pub fn close_popup<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2078,6 +2373,49 @@ fn take_focus<R: Resolve>(
 /// Answers [`Response::ignored`] for an index this page does not carry —
 /// a script may name a field on a page nobody has read, and a routing context
 /// that cannot see the widget cannot run its scripts.
+/// # Examples
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // `index` is the document-wide field position a script names, not the
+/// // page-local `FieldId`. This page's `/AcroForm` lists no `/Fields`, so no
+/// // widget carries that position and the move is ignored rather than
+/// // guessed at.
+/// assert!(!route::focus_field(&mut session, &ctx, &mut cascade, 0).consumed);
+/// assert!(route::focus_of(&session, &ctx).is_none());
+/// ```
 pub fn focus_field<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2132,9 +2470,63 @@ pub fn focus_field<R: Resolve>(
 /// Public because it is not only a left click's miss path: the embedder's own
 /// `FORM_ForceToKillFocus` is the same operation, and a second implementation
 /// of it would be a second chance to forget the redraw. Dropping focus is
-/// what turns a field's live editor state back into a generated stream
-/// (brief §3.3 step 6), so a version that only reported `FocusChanged` would
-/// leave the caret and the live text on the page.
+/// what turns a field's live editor state back into a generated stream, so a
+/// version that only reported `FocusChanged` would leave the caret and the
+/// live text on the page.
+/// # Examples
+///
+/// ```
+/// # use kurbo::Point;
+/// # use pdfrum_form::{Button, Event, Modifiers};
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// let at = Point { x: 100.0, y: 115.0 };
+/// for event in [
+///     Event::MouseDown { button: Button::Left, at, modifiers: Modifiers::NONE },
+///     Event::MouseUp { button: Button::Left, at, modifiers: Modifiers::NONE },
+/// ] {
+///     route::apply(&mut session, &ctx, &mut cascade, event);
+/// }
+/// assert!(route::focus_of(&session, &ctx).is_some());
+///
+/// // Dropping focus turns the live editor back into a generated appearance,
+/// // which is why it hands back an update rather than only a flag.
+/// let response = route::kill_focus(&mut session, &ctx, &mut cascade);
+/// assert!(response.consumed);
+/// assert!(!response.updates.is_empty());
+/// assert!(route::focus_of(&session, &ctx).is_none());
+/// ```
 pub fn kill_focus<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2474,6 +2866,62 @@ fn with_font<R: Resolve, T>(
 /// The embedder's paste, and half of its cut. Answers whether the field
 /// changed — which an empty replacement of an empty selection does not, and
 /// a read-only field never does.
+/// # Examples
+///
+/// ```
+/// # use kurbo::Point;
+/// # use pdfrum_form::field::FieldState;
+/// # use pdfrum_form::{Button, Event, FieldId, Modifiers};
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// # let at = Point { x: 100.0, y: 115.0 };
+/// # for event in [
+/// #     Event::MouseDown { button: Button::Left, at, modifiers: Modifiers::NONE },
+/// #     Event::MouseUp { button: Button::Left, at, modifiers: Modifiers::NONE },
+/// # ] { route::apply(&mut session, &ctx, &mut cascade, event); }
+/// // The embedder's paste, at the caret the click left.
+/// assert!(route::replace_selection(&mut session, &ctx, FieldId(0), "Hello"));
+///
+/// let Some(FieldState::Text(state)) = session.fields.get(&FieldId(0)) else {
+///     unreachable!("the click built the field's state")
+/// };
+/// assert_eq!(state.edit.text, "oldHello");
+///
+/// // A field the session has never built state for has no selection to
+/// // replace, and refuses rather than creating one.
+/// assert!(!route::replace_selection(&mut session, &ctx, FieldId(9), "x"));
+/// ```
 pub fn replace_selection<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2711,6 +3159,45 @@ fn generate<R: Resolve>(
 // cases are one row, not two. And a push button deflates where the generic
 // answer inflates — the opposite sign on the same number.
 #[must_use]
+/// # Examples
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, NoScripts, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let mut session = FormSession::new();
+/// # let mut cascade = NoScripts;
+/// // A fresh session holds no focus, so the page renders with none.
+/// assert!(route::focus_of(&session, &ctx).is_none());
+/// ```
 pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Option<ap::Focus> {
     let target = session.focus?;
     let annot = target.annot();

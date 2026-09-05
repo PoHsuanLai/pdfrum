@@ -5,11 +5,69 @@
 //! crate rasterizes nothing; the field data model, the variable-text layout
 //! engine and the appearance generators live in `pdfrum-doc`.
 //!
-//! ```text
+//! A caller reads the page's widgets once, keeps a [`FormSession`] across
+//! events, and feeds one [`Event`] at a time:
+//!
+//! ```
+//! use kurbo::Point;
+//! use pdfrum_doc::ap;
+//! use pdfrum_form::field::FieldState;
+//! use pdfrum_form::route::{apply, Context};
+//! use pdfrum_form::{Button, Event, FieldId, FormSession, Modifiers, NoScripts, Permissions};
+//! # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+//! # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+//! #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+//! # }
+//! # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+//! # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+//! #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+//! # }
+//! # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+//! #     (b"BaseFont", nm(b"Helvetica"))]);
+//! # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+//! #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+//! #     (b"DR", Object::Dict(dict([(b"Font",
+//! #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+//! # ])))]);
+//! # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+//! #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+//! #     (b"V", Object::Str(PdfString::literal(b"old"))),
+//! #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+//! #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+//! # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+//! #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+//! # let resolve = NoResolve;
+//! # let mut build = pdfrum_page::BuildContext::new();
+//! let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+//! let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+//! let ctx = Context {
+//!     page: &page,
+//!     catalog: &catalog,
+//!     resolve: &resolve,
+//!     fonts: &fonts,
+//!     permissions: Permissions::ALL,
+//! };
+//!
 //! let mut session = FormSession::new();
-//! let ctx = Context { page, catalog, resolve, fonts, permissions };
-//! let response = apply(&mut session, &ctx, &mut NoScripts, event);
-//! for update in &response.updates { /* re-render this annotation */ }
+//! let mut cascade = NoScripts;
+//!
+//! let at = Point { x: 100.0, y: 115.0 };
+//! for event in [
+//!     Event::MouseDown { button: Button::Left, at, modifiers: Modifiers::NONE },
+//!     Event::MouseUp { button: Button::Left, at, modifiers: Modifiers::NONE },
+//!     Event::Char { ch: 'X', modifiers: Modifiers::NONE },
+//! ] {
+//!     let response = apply(&mut session, &ctx, &mut cascade, event);
+//!     for update in &response.updates {
+//!         // Re-render this annotation; nothing is pushed at the caller.
+//!         let _ = update.annot;
+//!     }
+//! }
+//!
+//! let Some(FieldState::Text(state)) = session.fields.get(&FieldId(0)) else {
+//!     unreachable!("the click built the field's state")
+//! };
+//! assert_eq!(state.edit.text, "oldX");
 //! ```
 //!
 //! Four things a caller can get wrong:

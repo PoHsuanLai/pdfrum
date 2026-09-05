@@ -112,33 +112,75 @@ pub fn replay_page(
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Call {
     /// `mouse_move`.
-    MouseMove { at: Point, modifiers: Modifiers },
+    MouseMove {
+        /// Page-space point, y-up, as the script's integers gave it.
+        at: Point,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// `mouse_down` — the left button only.
-    MouseDown { at: Point, modifiers: Modifiers },
+    MouseDown {
+        /// Page-space point, y-up, as the script's integers gave it.
+        at: Point,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// `mouse_up` — the left button only.
-    MouseUp { at: Point, modifiers: Modifiers },
+    MouseUp {
+        /// Page-space point, y-up, as the script's integers gave it.
+        at: Point,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// A non-primary button, applied as an [`Event`] because the facade has
     /// no method for one.
     Button {
+        /// The button the script named; only the right button reaches here.
         button: Button,
+        /// `true` for the press edge, `false` for the release edge.
         down: bool,
+        /// Page-space point, y-up, as the script's integers gave it.
         at: Point,
+        /// Modifier keys held down for this event.
         modifiers: Modifiers,
     },
     /// `double_click`.
-    DoubleClick { at: Point, modifiers: Modifiers },
+    DoubleClick {
+        /// Page-space point, y-up, as the script's integers gave it.
+        at: Point,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// `mouse_wheel`.
     MouseWheel {
+        /// Page-space point, y-up, as the script's integers gave it.
         at: Point,
+        /// Horizontal and vertical wheel steps, in the script's own units.
         delta: (i32, i32),
+        /// Modifier keys held down for this event.
         modifiers: Modifiers,
     },
     /// `focus_at`.
-    FocusAt { at: Point, modifiers: Modifiers },
+    FocusAt {
+        /// Page-space point, y-up, as the script's integers gave it.
+        at: Point,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// `key_down`. There is no `KeyUp` variant, and that is fact 2.
-    KeyDown { key: Key, modifiers: Modifiers },
+    KeyDown {
+        /// The virtual key the script's integer named.
+        key: Key,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
     /// `character`.
-    Char { ch: char, modifiers: Modifiers },
+    Char {
+        /// The Unicode scalar the script's code point named.
+        ch: char,
+        /// Modifier keys held down for this event.
+        modifiers: Modifiers,
+    },
 }
 
 /// One grammar event onto the call it means, or `None` when it means none.
