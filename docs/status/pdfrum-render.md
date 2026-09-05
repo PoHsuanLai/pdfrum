@@ -3248,3 +3248,191 @@ tests pin the arithmetic underneath — the `/Matte` inverse blend's three
 cases, the sub-sixteen-pixel cell rule, the tile-offset overflow, the
 source-over blit, the box filter — and `pdfrum-page` gains the named-`scn`
 operand fix, the `d0`/`d1` colouring rule, and the char proc's objects.
+
+## M21 losses — the six files where a peer is closer
+
+`docs/status/queue.md` §M21 item 5 named six files where some peer renders
+closer to the oracle than we do. This section is the burn-down: per file, the
+cause named at the oracle line, the ruling, and the SSIM. The numbers are the
+comparative harness's own — `benches/compare`, page 1 at 150 DPI against
+`pdfium_test --png --scale=2.0833333333`, the SSIM copied from
+`conformance/src/ssim.rs` — reproduced at the head of this pass and matching
+the published ones exactly.
+
+**This pass diagnosed; it did not fix.** Every cause below is named at a
+verified oracle line, and no engine change was landed, so every "after" equals
+its "before". The two fixes that are ready to write are called out as such.
+
+| file | SSIM | cause | oracle line | ruling |
+|---|---|---|---|---|
+| `fx/path/transparent1.pdf` | 0.984 | the fill+stroke knockout buffer does not knock out | `cfx_renderdevice.cpp:806`, `:873-875` | ours — fix identified |
+| `fx/image/1_image.pdf` | 0.986 | magnification with `/Interpolate false` is nearest-neighbour upstream, filtered here | `cstretchengine.cpp:106` | ours — fix identified |
+| `vector_en_system.pdf` | 0.960 | over-inking of 31 overlapping `/SMask` images; mechanism not isolated | — | undiagnosed |
+| `vector_tcpdf_009.pdf` | 0.959 | not investigated this pass | — | not investigated |
+| `image_en_fqa.pdf` | 0.977 | coverage of a 4x-downscaled bilevel `/SMask`; probably the same root cause as `vector_en_system.pdf` | — | ours, provisional |
+| `image_jpx_123.pdf` | 0.987 | JPX numerical accuracy in a third-party decoder | `mct.c:333-335`, `tcd.c:2350` | neither — upstream numerics |
+
+### `fx/path/transparent1.pdf` — the knockout buffer is not a knockout
+
+One ellipse: black fill, red stroke at `10 w`, `/FX1 gs` with `<</CA 0.58>>`,
+painted `B*`. PDFium gates the fill+stroke case at
+`core/fxge/cfx_renderdevice.cpp:806` — `if (fill && fill_alpha &&
+stroke_alpha < 0xff && fill_options.stroke)` — and draws it into a bitmap made
+by `CreateForBitmapWithBackdropAndGroupKnockout(bitmap, std::move(backdrop),
+/*group_knockout=*/true)` at `:873-875`, seeded with a copy of the backdrop.
+Each paint therefore composites against the backdrop rather than against the
+other paint.
+
+`paint.rs:210-212` mirrors the gate exactly and the branch does run. But
+`draw_fill_stroke_knockout` (`paint.rs:296+`) fills and then strokes into a
+plain `backend.new_target(w, h, TRANSPARENT)` with ordinary source-over, so
+the translucent stroke composites over the fill wherever the two overlap. The
+pixels say it plainly: the oracle has 27 586 pixels of `#ff6c6c` and **zero**
+of `#930000`; we have 13 182 and 12 567. `0x93` is 147, which is
+`round(0.58 x 255)` — `#930000` is the stroke at its own alpha over the black
+fill, a colour the oracle never produces, and 13 182 + 12 567 recovers the
+oracle's single uniform ring.
+
+A second, independent defect sits at the same file's closepath: the `m`/`h`
+vertex maps to device (806.3, 456.3) and both the visible kink and the largest
+diff tile are there. `hard_clip` (`path.rs:49-62`), the degenerate-subpath
+nudge, the buffer rect and `split_for_stroke` were each ruled out; what
+remains is join-versus-cap at the seam in the stroke expansion.
+
+**Ruling: ours, on both counts.** No spec ambiguity — PDFium's is the correct
+transparency semantics. The fix is a knockout-capable sub-target on
+`RasterBackend` so `draw_fill_stroke_knockout` can seed a backdrop and
+composite each paint against it; that is a design change rather than a
+one-liner, which is why it is not in this pass.
+
+### `fx/image/1_image.pdf` — an upscale, not a downscale
+
+The whole page is `q 171 0 0 269 100 313.0390625 cm /Im0 Do Q` over a 140x140
+`DeviceGray` image with `/Interpolate false`, so the destination is about
+356x560 device pixels: a 2.5x / 4x **magnification**. `scale` in
+`CStretchEngine::WeightTable::CalculateWeights` is `src_len / dest_len` =
+140/356 = 0.39, so magnification takes the branch at
+`core/fxge/dib/cstretchengine.cpp:106` — `if (options.bNoSmoothing ||
+fabs(scale) < 1.0f)` — which places one source position per destination pixel
+at `dest_pixel * scale + scale / 2` and, with `bilinear` false because
+`/Interpolate` is false, assigns a single weight of `kFixedPointOne`: plain
+nearest-neighbour. We produce filtered intermediate greys instead. The diff is
+confined to glyph edges with no drift down the page, and the worst tile shows
+the same glyph rows at the same positions with different per-pixel greys.
+
+The `833x1250` versus `833x1249` size difference on this file is **not** an
+engine defect and contributes nothing to the score:
+`benches/compare/src/oracle.rs` formats the flag as `--scale={scale:.10}`, so
+the oracle is invoked with `2.0833333333` and `600 x 2.0833333333` truncates
+to 1249, where our exact `150.0/72.0` gives 1250. The harness compares over
+the common area with two pixels of slack. It is a harness precision artifact,
+worth recording and not worth chasing.
+
+**Ruling: ours, low severity** (0.712 % of pixels differ). The rule upstream
+is well defined and we should match it. One gap before the fix is written:
+which of our quality paths actually executes for this image, and at what
+phase, was not confirmed.
+
+### `vector_en_system.pdf` — measured, not solved
+
+The page is 31 `DeviceRGB` images whose samples are entirely black, each with
+a co-registered `/SMask` carrying the glyph shapes and `/Matte [0 0 0]`; the
+masks peak at 102 and never reach 255. Both engines render the same
+`#054696`, which is that blue re-composited over itself six to nine times —
+the 31 image boxes overlap heavily (85 overlapping pairs, stack depth up to
+6). We paint 19 200 fully-saturated pixels against the oracle's 3 104, and the
+coverage histogram shows where it goes: 21 801 pixels at full coverage against
+6 485, with correspondingly fewer mid-tones. The excess is present at every
+column and at **both** stack depths (175 to 1 247 where at most one image
+paints; 2 929 to 17 953 where two or more do), so overlap amplifies the defect
+but does not cause it — each individual image is drawn too opaquely.
+
+Ruled out by measurement, each with the experiment that killed it:
+
+- **the `/Matte` un-premultiply** — a no-op on this file, since the samples
+  and the matte are both black; rendering with it disabled is byte-identical;
+- **the fused-versus-separate mask path** — PDFium always takes
+  `DrawMaskedImage` (`cpdf_imagerenderer.cpp:147-148`, unconditional on
+  `loader_->GetMask()`) where we fold a co-registered mask into the base's
+  pixels, but forcing our separate path *lowers* SSIM (0.9470 against 0.9538);
+- **the pre-reduction** — disabling it leaves the saturated count unchanged at
+  19 200 and SSIM at 0.9535;
+- **the downsample kernel** — simulating PDFium's box filter and a nearest
+  centre-sample over the real 484x228 mask at its real 175x82 destination
+  gives near-identical distributions (total ink 98 643 against 100 089, about
+  1.5 % apart), because the mask is essentially binary;
+- **the stencil inversion** — `alpha_at` inverts only for a `/Mask`, and these
+  are `/SMask`.
+
+What remains is how the fused mask alpha is applied or composited. **Ruling:
+undiagnosed.** It is ours — a 6x excess of saturated ink is nobody's correct
+answer — but the mechanism is not named, so no fix is proposed here.
+
+### `image_jpx_123.pdf` — a numerical difference in a third-party decoder
+
+One 1269x1643 `DeviceRGB` `/JPXDecode` image drawn at 1240x1753. The JP2
+`colr` box is `meth=1 enumCS=16` (sRGB) with no ICC profile, so PDFium's
+`sycc_to_rgb` is not on this path; the codestream's `COD` marker says `MCT=1`
+with the 9/7 irreversible wavelet, which is the floating-point inverse
+irreversible colour transform.
+
+The divergence is a colour reconstruction difference, not resampling and not a
+decode failure, and the measurement separates the two: an integer shift search
+over `dx, dy` in `[-2, 2]` puts the best alignment at `(0, 0)`, so nothing is
+displaced; and restricted to **locally flat** oracle regions (3x3 luma spread
+at most 2), where resampling cannot contribute, the signed per-channel
+difference over 452 751 samples is R `-0.225`, G `+1.802`, B `-1.424`, with
+green's mode at `+3` and blue's at `-2`/`-3`. A resampling difference averages
+to zero on flat areas; this does not.
+
+PDFium bundles OpenJPEG in-tree, so the oracle's decoder is
+`third_party/libopenjpeg/mct.c:333-335` — `opj_mct_decode_real`, separate
+multiply and add in `f32` — finishing at `tcd.c:2350`, where `opj_lrintf`
+rounds half to **even** before the clamp. Ours is `hayro-jpeg2000` 0.4.0,
+reached through the `jpx` feature: identical ICT constants to the digit, but
+`mul_add` rather than separate operations (`src/j2c/mct.rs:72-77`) and
+`f32::round`, half away from zero (`src/math.rs:470-473`).
+
+Both differences are real, and neither is big enough: they are sub-LSB and
+tie-only, so they do not by themselves produce a `+1.8` green mean with a mode
+at `+3`. The residual is earlier in the pipeline — the 9/7 inverse DWT lifting
+steps or dequantisation — and was not isolated, since that needs
+instrumentation inside the decoder.
+
+**Ruling: neither ours nor an oracle bug.** ISO 15444-1 specifies the ICT in
+real arithmetic; OpenJPEG's rounding and hayro's are both legal realisations
+of it, and PDFium is not wrong. This is a known upstream numerical difference
+in a third-party decoder with no pdfrum-side change that fixes it, and the
+golden should be bucketed rather than chased. Filing the measurement against
+`hayro-jpeg2000` is the only useful action.
+
+### `image_en_fqa.pdf` — the same family as `vector_en_system.pdf`
+
+552 image XObjects in 276 pairs. Every base is a 2x2 flat `Indexed`/`DeviceRGB`
+swatch with a ten-byte stream; every `/SMask` is a large **1-bit** `DeviceGray`
+plane carrying the text shape, from 94x85 up to 2250x85. Nothing on the page is
+drawn text — both fonts are non-embedded with only a space in `/Widths` — so
+every glyph the reader sees is an image mask.
+
+Because a 1572x85 mask is never co-registered with a 2x2 base,
+`is_coregistered` is false and `render_masked_image` runs for all 276 draws.
+The measured geometry makes the shape of the problem clear: `mask=1572x85`
+into a 394x22 rect, `mask=2250x85` into 563x22 — a roughly **4x downscale of a
+binary mask**, which we resolve as `Bilinear`. The diff is diffuse and
+text-shaped over the whole page, every glyph carrying a pale fringe with ours
+slightly lighter, and no displacement anywhere.
+
+That is the same question as `vector_en_system.pdf`, one axis larger: how much
+mid-coverage a reduction produces from an essentially binary source. Ruled out
+here: drawn text, font substitution, geometry and placement, and the base
+colour. The remaining candidates are the coverage produced by the mask
+reduction at 4x, `effective_quality` selecting `Bilinear` where PDFium's
+`ResampleOptions` resolves differently for a 1-bpp mask, and the alpha
+composite itself. Note this is a downscale, so the branch that applies
+upstream is the box-filter loop from `cstretchengine.cpp:136` and **not** the
+`:106` magnification branch that governs `fx/image/1_image.pdf`.
+
+**Ruling: ours, provisionally** — the oracle's mid-coverage is the more
+correct answer — but no oracle line is claimed for it, because the comparison
+against PDFium's mask path was not completed. The two files should be
+re-measured together once either is fixed.
