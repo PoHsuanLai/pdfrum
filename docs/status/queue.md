@@ -332,6 +332,34 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Cold start, measured again (user question, 2026-09-05)
 
+- **Corrected 2026-09-06 (`docs/status/cold-start.md`): the row below is
+  right about `Ir` and wrong as a conclusion.** The font layer *is* the
+  benchmark's cold-start cost, but in **kernel time**, which an `Ir` profile
+  cannot see — which is also why `docs/design/mupdf-comparison.md` §0 could
+  measure a cold render within 15% of mupdf per page and still leave a 4x
+  cold/warm ratio unexplained. Every benchmark `run` passes `--font-dir`, and
+  the resulting scan of the oracle's hermetic `test_fonts` reads 33.8 MB whole
+  (26 MB of it two faces the ladder rarely picks) to read two small tables per
+  face. Measured: 20.5 ms of syscall time with `--font-dir` against 2.9 ms
+  without on one cold render; 22 of the 44 corpus files pay exactly one such
+  scan inside the harness's timed region; the 44-file cold median is
+  **45.42 ms with `--font-dir` against 33.21 ms without** (cold/warm 3.62x vs
+  2.35x). hayro, on the same box, opens **zero** font files — it bundles and
+  never scans — so run 3's cold column is not comparing the same work. The
+  earlier row's "the system font scan M18 fixed is no longer visible" holds
+  for the *host* scan; the `--font-dir` scan is a different path and was never
+  cached until 2026-09-06.
+- **Owed, with the numbers attached: stop reading whole font files during a
+  scan.** `describe` needs each face's `name` and `OS/2` tables and currently
+  faults in the entire file to reach them. Memory-mapping is the natural fix
+  and was written and **backed out**: `pdfrum-font` carries
+  `#![forbid(unsafe_code)]` and the workspace sets `unsafe_code = "forbid"`,
+  so `memmap2::Mmap::map` cannot go there — weakening a stated safety
+  invariant for a benchmark is not an agent's call. The safe route is to parse
+  the sfnt table directory and read only those two tables by offset, which
+  risks changing which face the ladder picks across 1759 board files and so
+  wants a pinned before/after. Worth ~12 ms of the 44-file cold median and
+  nothing else in the engine.
 - The user asked whether the font layer makes cold start slow. Measured
   with callgrind on today's tree (`profile --op render --iterations 1`,
   vello-cpu): the guide's page 1 (images and text) is 3.86 G `Ir`, of
