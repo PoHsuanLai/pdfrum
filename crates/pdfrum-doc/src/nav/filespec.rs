@@ -27,6 +27,14 @@ const NAME_KEYS: [&Name; 5] = [names::UF, names::F, names::DOS, names::MAC, name
 
 impl FileSpec {
     /// Wraps an object as a file specification.
+    ///
+    /// ```
+    /// use pdfrum_doc::FileSpec;
+    /// use pdfrum_object::{NoResolve, Object, PdfString};
+    ///
+    /// let spec = FileSpec::new(Object::Str(PdfString::literal(b"report.pdf")));
+    /// assert_eq!(spec.file_name(&NoResolve), "report.pdf");
+    /// ```
     #[must_use]
     pub fn new(object: Object) -> FileSpec {
         FileSpec { object }
@@ -36,6 +44,22 @@ impl FileSpec {
     ///
     /// An object that is neither a string nor a dictionary — a *name*, for
     /// instance — has no file name at all.
+    ///
+    /// ```
+    /// use pdfrum_doc::FileSpec;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// // `/UF` outranks `/F`.
+    /// let dict = Dict::from_pairs([
+    ///     (Name::from("F"), Object::Str(PdfString::literal(b"old.pdf"))),
+    ///     (Name::from("UF"), Object::Str(PdfString::literal(b"new.pdf"))),
+    /// ]);
+    /// assert_eq!(FileSpec::new(Object::Dict(dict)).file_name(&NoResolve), "new.pdf");
+    ///
+    /// // Neither a string nor a dictionary: no file name at all.
+    /// let named = FileSpec::new(Object::Name(Name::from("F")));
+    /// assert_eq!(named.file_name(&NoResolve), "");
+    /// ```
     #[must_use]
     pub fn file_name<R: Resolve>(&self, r: &R) -> String {
         match &self.object {
@@ -51,6 +75,15 @@ impl FileSpec {
     /// the stream comes from `/EF`, so a name with no matching `/EF` entry
     /// falls through to the next key rather than ending the search. A `/FS`
     /// of `URL` truncates the key list to `/UF` and `/F`.
+    ///
+    /// ```
+    /// use pdfrum_doc::FileSpec;
+    /// use pdfrum_object::{NoResolve, Object, PdfString};
+    ///
+    /// // A bare string names a file but embeds nothing.
+    /// let spec = FileSpec::new(Object::Str(PdfString::literal(b"report.pdf")));
+    /// assert!(spec.file_stream(&NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn file_stream<R: Resolve>(&self, r: &R) -> Option<Stream> {
         let dict = self.object.as_dict()?;
@@ -72,6 +105,14 @@ impl FileSpec {
     }
 
     /// The embedded file stream's `/Params` dictionary.
+    ///
+    /// ```
+    /// use pdfrum_doc::FileSpec;
+    /// use pdfrum_object::{NoResolve, Object, PdfString};
+    ///
+    /// let spec = FileSpec::new(Object::Str(PdfString::literal(b"report.pdf")));
+    /// assert!(spec.params(&NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn params<R: Resolve>(&self, r: &R) -> Option<Dict> {
         self.file_stream(r)?.dict.dict(names::PARAMS, r)
@@ -130,12 +171,25 @@ fn latin1(bytes: &[u8]) -> String {
 /// reproduced here, and the Windows branch in particular reads past the end
 /// of a one- or two-character path, which we would not reproduce even if it
 /// were enabled.
+///
+/// ```
+/// use pdfrum_doc::nav::decode_file_name;
+///
+/// // The identity on this platform.
+/// assert_eq!(decode_file_name("dir/report.pdf"), "dir/report.pdf");
+/// ```
 #[must_use]
 pub fn decode_file_name(name: &str) -> String {
     name.to_owned()
 }
 
 /// The inverse of [`decode_file_name`]; also the identity here.
+///
+/// ```
+/// use pdfrum_doc::nav::encode_file_name;
+///
+/// assert_eq!(encode_file_name("dir/report.pdf"), "dir/report.pdf");
+/// ```
 #[must_use]
 pub fn encode_file_name(name: &str) -> String {
     name.to_owned()

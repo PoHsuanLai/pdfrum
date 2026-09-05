@@ -53,6 +53,18 @@ impl FieldKind {
     ///
     /// Returns `None` for a node with no field type at all, which is how the
     /// walk tells a naming-only interior node from a terminal field.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::{FieldFlags, FieldKind};
+    ///
+    /// assert_eq!(FieldKind::classify(b"Tx", FieldFlags::default()), Some(FieldKind::Text));
+    /// // A `/Btn` splits three ways on its flags.
+    /// let radio = FieldFlags::from_bits(1 << 15);
+    /// assert_eq!(FieldKind::classify(b"Btn", radio), Some(FieldKind::Radio));
+    /// assert_eq!(FieldKind::classify(b"Btn", FieldFlags::default()), Some(FieldKind::Check));
+    /// // No field type at all: an interior naming node, not a field.
+    /// assert_eq!(FieldKind::classify(b"", FieldFlags::default()), None);
+    /// ```
     #[must_use]
     pub fn classify(field_type: &[u8], flags: FieldFlags) -> Option<FieldKind> {
         match field_type {
@@ -79,6 +91,14 @@ impl FieldKind {
     /// False only for [`FieldKind::Button`], which fires an action rather
     /// than storing anything, and [`FieldKind::Signature`], whose value is a
     /// signature dictionary this crate does not synthesize.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldKind;
+    ///
+    /// assert!(FieldKind::Text.is_writable());
+    /// assert!(!FieldKind::Button.is_writable());
+    /// assert!(!FieldKind::Signature.is_writable());
+    /// ```
     #[must_use]
     pub fn is_writable(self) -> bool {
         !matches!(self, FieldKind::Button | FieldKind::Signature)
@@ -86,6 +106,14 @@ impl FieldKind {
 
     /// Whether the field is one of the two on/off controls, whose value is a
     /// state name rather than free text.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldKind;
+    ///
+    /// assert!(FieldKind::Check.is_toggle());
+    /// assert!(FieldKind::Radio.is_toggle());
+    /// assert!(!FieldKind::Combo.is_toggle());
+    /// ```
     #[must_use]
     pub fn is_toggle(self) -> bool {
         matches!(self, FieldKind::Check | FieldKind::Radio)
@@ -116,6 +144,12 @@ pub struct FieldFlags(i64);
 
 impl FieldFlags {
     /// The raw `/Ff` word, including every bit no predicate here reads.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert_eq!(FieldFlags::from_bits(1 << 12).bits(), 1 << 12);
+    /// ```
     #[must_use]
     pub const fn bits(self) -> i64 {
         self.0
@@ -124,18 +158,38 @@ impl FieldFlags {
     /// The word as written in the file. **Unknown bits are retained**: a bit
     /// whose meaning belongs to a `/FT` this type knows nothing about is
     /// kept, not dropped.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1).is_read_only());
+    /// // A bit belonging to a `/FT` this type knows nothing about survives.
+    /// assert_eq!(FieldFlags::from_bits(1 << 40).bits(), 1 << 40);
+    /// ```
     #[must_use]
     pub const fn from_bits(bits: i64) -> Self {
         Self(bits)
     }
 
     /// Bit 1: the field may not be changed.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 0).is_read_only());
+    /// ```
     #[must_use]
     pub const fn is_read_only(self) -> bool {
         self.0 & (1 << 0) != 0
     }
 
     /// Bit 2: the field must have a value when the form is submitted.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 1).is_required());
+    /// ```
     #[must_use]
     pub const fn is_required(self) -> bool {
         self.0 & (1 << 1) != 0
@@ -143,36 +197,72 @@ impl FieldFlags {
 
     /// Bit 16, on a `/Btn`: the field is a radio button rather than a check
     /// box.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 15).is_radio());
+    /// ```
     #[must_use]
     pub const fn is_radio(self) -> bool {
         self.0 & (1 << 15) != 0
     }
 
     /// Bit 17, on a `/Btn`: the field is a push button and holds no value.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 16).is_push_button());
+    /// ```
     #[must_use]
     pub const fn is_push_button(self) -> bool {
         self.0 & (1 << 16) != 0
     }
 
     /// Bit 18, on a `/Ch`: the field is a drop-down rather than a list box.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 17).is_combo());
+    /// ```
     #[must_use]
     pub const fn is_combo(self) -> bool {
         self.0 & (1 << 17) != 0
     }
 
     /// Bit 19, on a `/Ch`: the combo box includes an editable text box.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 18).is_editable_combo());
+    /// ```
     #[must_use]
     pub const fn is_editable_combo(self) -> bool {
         self.0 & (1 << 18) != 0
     }
 
     /// Bit 22, on a `/Ch`: more than one option may be selected at once.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 21).is_multi_select());
+    /// ```
     #[must_use]
     pub const fn is_multi_select(self) -> bool {
         self.0 & (1 << 21) != 0
     }
 
     /// Bit 13, on a `/Tx`: the field accepts more than one line.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 12).is_multiline());
+    /// ```
     #[must_use]
     pub const fn is_multiline(self) -> bool {
         self.0 & (1 << 12) != 0
@@ -180,12 +270,24 @@ impl FieldFlags {
 
     /// Bit 14, on a `/Tx`: the field's contents are obscured as they are
     /// typed.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 13).is_password());
+    /// ```
     #[must_use]
     pub const fn is_password(self) -> bool {
         self.0 & (1 << 13) != 0
     }
 
     /// Bit 25, on a `/Tx`: the text is laid out in equally spaced cells.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::from_bits(1 << 24).is_comb());
+    /// ```
     #[must_use]
     #[doc(alias = "Comb")]
     pub const fn is_comb(self) -> bool {
@@ -197,6 +299,14 @@ impl FieldFlags {
     ///
     /// The positive reading of the spec's `DoNotScroll` bit: a field scrolls
     /// *unless* the bit is set.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// // The positive reading: a field scrolls unless `DoNotScroll` is set.
+    /// assert!(FieldFlags::default().scrolls());
+    /// assert!(!FieldFlags::from_bits(1 << 23).scrolls());
+    /// ```
     #[must_use]
     #[doc(alias = "DoNotScroll")]
     pub const fn scrolls(self) -> bool {
@@ -206,6 +316,13 @@ impl FieldFlags {
     /// Bit 23, on a `/Tx` or `/Ch`: whether the value is spell-checked.
     ///
     /// The positive reading of the spec's `DoNotSpellCheck` bit.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    ///
+    /// assert!(FieldFlags::default().spell_checks());
+    /// assert!(!FieldFlags::from_bits(1 << 22).spell_checks());
+    /// ```
     #[must_use]
     #[doc(alias = "DoNotSpellCheck")]
     pub const fn spell_checks(self) -> bool {
@@ -259,6 +376,38 @@ impl Field {
     /// For a check box or radio button this is the *state name* — `Off` for
     /// clear, and whatever the widget's `/AP /N` calls its on-state
     /// otherwise. Use [`Field::is_checked`] for the boolean.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    ///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let field = form.field("name").expect("one terminal field");
+    /// assert_eq!(field.value(None, &NoResolve), "Ada");
+    ///
+    /// // An edit supersedes the file's own `/V`.
+    /// let mut values = FieldValues::new();
+    /// values.set("name", "Grace");
+    /// assert_eq!(field.value(Some(&values), &NoResolve), "Grace");
+    /// ```
     #[must_use]
     pub fn value<R: Resolve>(&self, values: Option<&FieldValues>, r: &R) -> String {
         if let Some(edited) = values.and_then(|values| values.get(&self.name)) {
@@ -268,6 +417,32 @@ impl Field {
     }
 
     /// The value the *file* holds, ignoring any edit.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    ///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// let field = form.field("name").expect("one terminal field");
+    /// assert_eq!(field.stored_value(&NoResolve), "Ada");
+    /// ```
     #[must_use]
     pub fn stored_value<R: Resolve>(&self, r: &R) -> String {
         let (limits, mut diags) = (Limits::default(), Diagnostics::default());
@@ -389,6 +564,32 @@ impl Form {
     /// A catalog with an `/AcroForm` whose `/Fields` is absent or empty still
     /// yields a `Form` — an empty form is a different thing from no form, and
     /// only the second means "this document is not interactive".
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    ///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// assert_eq!(form.len(), 1);
+    /// assert_eq!(form.fields[0].name, "name");
+    /// ```
     #[must_use]
     pub fn load<R: Resolve>(
         catalog: &Dict,
@@ -429,18 +630,92 @@ impl Form {
     }
 
     /// How many terminal fields the form has.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// assert_eq!(form.len(), 1);
+    /// ```
     #[must_use]
     pub fn len(&self) -> usize {
         self.fields.len()
     }
 
     /// Whether the form has no fields at all.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// assert!(!form.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
 
     /// The field with this fully-qualified name.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    ///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// assert!(form.field("name").is_some());
+    /// assert!(form.field("absent").is_none());
+    /// ```
     #[must_use]
     pub fn field(&self, name: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.name == name)
@@ -464,6 +739,32 @@ impl Form {
     /// dictionary that is not one of this form's terminal fields are dropped.
     /// Duplicates are kept: the array is the order, and it is indexed
     /// positionally.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::form::Form;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let field = Dict::from_pairs([
+    ///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+    ///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+    ///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+    /// ]);
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("AcroForm"),
+    ///     Object::Dict(Dict::from_pairs([(
+    ///         Name::from("Fields"),
+    ///         Object::Array(Array::of([Object::Dict(field)])),
+    ///     )])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+    ///     .expect("the catalog declares an /AcroForm");
+    ///
+    /// // No `/CO`: nothing recalculates. That is the answer, not a fallback.
+    /// assert!(form.calculation_order(&catalog, &NoResolve).is_empty());
+    /// ```
     #[must_use]
     pub fn calculation_order<R: Resolve>(&self, catalog: &Dict, r: &R) -> Vec<usize> {
         let Some(acro) = catalog.dict(names::ACRO_FORM, r) else {
@@ -701,6 +1002,12 @@ pub struct FieldValues {
 
 impl FieldValues {
     /// An empty buffer.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// assert!(FieldValues::new().is_empty());
+    /// ```
     #[must_use]
     pub fn new() -> FieldValues {
         FieldValues::default()
@@ -708,6 +1015,17 @@ impl FieldValues {
 
     /// Records a value for the field with this fully-qualified name,
     /// replacing any earlier one.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let mut values = FieldValues::new();
+    /// values.set("name", "Ada");
+    /// // Writing again replaces, it does not append.
+    /// values.set("name", "Grace");
+    /// assert_eq!(values.get("name"), Some("Grace"));
+    /// assert_eq!(values.len(), 1);
+    /// ```
     pub fn set(&mut self, name: impl Into<String>, value: impl Into<String>) {
         let name = name.into();
         let value = value.into();
@@ -718,6 +1036,15 @@ impl FieldValues {
     }
 
     /// What was written for this field, if anything.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let mut values = FieldValues::new();
+    /// values.set("name", "Ada");
+    /// assert_eq!(values.get("name"), Some("Ada"));
+    /// assert_eq!(values.get("absent"), None);
+    /// ```
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&str> {
         self.entries
@@ -727,6 +1054,16 @@ impl FieldValues {
     }
 
     /// Every recorded write, in the order it was first made.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let mut values = FieldValues::new();
+    /// values.set("b", "2");
+    /// values.set("a", "1");
+    /// // First-write order, not sorted.
+    /// assert_eq!(values.iter().collect::<Vec<_>>(), [("b", "2"), ("a", "1")]);
+    /// ```
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.entries
             .iter()
@@ -734,12 +1071,28 @@ impl FieldValues {
     }
 
     /// How many fields have been written to.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let mut values = FieldValues::new();
+    /// values.set("name", "Ada");
+    /// assert_eq!(values.len(), 1);
+    /// ```
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether nothing has been written.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldValues;
+    ///
+    /// let mut values = FieldValues::new();
+    /// values.set("name", "Ada");
+    /// assert!(!values.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
@@ -771,6 +1124,37 @@ pub struct FieldEdit {
 ///
 /// A field the buffer names but the form does not have is skipped, as is one
 /// whose dictionary is inline and therefore has no reference to replace.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::form::Form;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+///
+/// let field = Dict::from_pairs([
+///     (Name::from("FT"), Object::Name(Name::from("Tx"))),
+///     (Name::from("T"), Object::Str(PdfString::literal(b"name"))),
+///     (Name::from("V"), Object::Str(PdfString::literal(b"Ada"))),
+/// ]);
+/// let catalog = Dict::from_pairs([(
+///     Name::from("AcroForm"),
+///     Object::Dict(Dict::from_pairs([(
+///         Name::from("Fields"),
+///         Object::Array(Array::of([Object::Dict(field)])),
+///     )])),
+/// )]);
+///
+/// let mut diags = Diagnostics::default();
+/// let form = Form::load(&catalog, &NoResolve, &Limits::default(), &mut diags)
+///     .expect("the catalog declares an /AcroForm");
+/// use pdfrum_doc::form::{FieldValues, apply};
+///
+/// let mut values = FieldValues::new();
+/// values.set("name", "Grace");
+///
+/// // The field is written inline in `/Fields`, so it has no reference to
+/// // replace and no edit is produced.
+/// assert!(apply(&form, &values, &NoResolve, &mut diags).is_empty());
+/// ```
 #[must_use]
 pub fn apply<R: Resolve>(
     form: &Form,

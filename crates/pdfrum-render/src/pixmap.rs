@@ -19,6 +19,17 @@ use crate::color::rgb_to_gray;
 /// blit a plain weighted sum. [`Pixmap::to_straight_bgra`] undoes it at the
 /// output boundary, because the oracle's PNGs and MD5s are taken over a
 /// straight-alpha BGRA buffer.
+///
+/// ```
+/// use pdfrum_render::Pixmap;
+///
+/// let red = Pixmap::filled(2, 2, peniko::Color::from_rgba8(255, 0, 0, 255));
+/// assert_eq!((red.width(), red.height()), (2, 2));
+///
+/// // Premultiplied on the inside; straight at the output boundary.
+/// assert_eq!(red.pixel(0, 0), Some([255, 0, 0, 255]));
+/// assert_eq!(&red.to_straight_rgb()[..3], &[255, 0, 0]);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pixmap {
     width: u32,
@@ -31,6 +42,15 @@ impl Pixmap {
     ///
     /// A zero in either axis is legal and yields an empty buffer, because the
     /// engine reaches this with clipped-away geometry all the time.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let empty = Pixmap::new(2, 2);
+    /// assert_eq!(empty.pixel(0, 0), Some([0, 0, 0, 0]));
+    /// // A zero in either axis is legal: clipped-away geometry reaches this.
+    /// assert!(Pixmap::new(0, 5).data().is_empty());
+    /// ```
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
         let len = (width as usize)
@@ -44,6 +64,13 @@ impl Pixmap {
     }
 
     /// A pixmap of the given size, every pixel set to `color`.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(2, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.data(), &[255, 0, 0, 255, 255, 0, 0, 255]);
+    /// ```
     #[must_use]
     pub fn filled(width: u32, height: u32, color: peniko::Color) -> Self {
         // Built in one pass rather than `new` + `fill`: a zeroing allocation
@@ -75,6 +102,14 @@ impl Pixmap {
     /// Wrap an existing premultiplied RGBA8 buffer.
     ///
     /// Returns `None` when `data` is not exactly `width * height * 4` bytes.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// assert!(Pixmap::from_vec(1, 1, vec![255, 0, 0, 255]).is_some());
+    /// // Not exactly `width * height * 4` bytes.
+    /// assert!(Pixmap::from_vec(1, 1, vec![255, 0, 0]).is_none());
+    /// ```
     #[must_use]
     pub fn from_vec(width: u32, height: u32, data: Vec<u8>) -> Option<Self> {
         let len = (width as usize)
@@ -88,35 +123,77 @@ impl Pixmap {
     }
 
     /// The pixmap's width in pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// assert_eq!(Pixmap::new(3, 2).width(), 3);
+    /// ```
     #[must_use]
     pub fn width(&self) -> u32 {
         self.width
     }
 
     /// The pixmap's height in pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// assert_eq!(Pixmap::new(3, 2).height(), 2);
+    /// ```
     #[must_use]
     pub fn height(&self) -> u32 {
         self.height
     }
 
     /// The premultiplied RGBA8 bytes, row-major.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// // Four bytes per pixel, row-major, no padding.
+    /// assert_eq!(Pixmap::new(2, 2).data().len(), 16);
+    /// ```
     #[must_use]
     pub fn data(&self) -> &[u8] {
         &self.data
     }
 
     /// The premultiplied RGBA8 bytes, mutably.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut p = Pixmap::new(1, 1);
+    /// p.data_mut().copy_from_slice(&[255, 0, 0, 255]);
+    /// assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]));
+    /// ```
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data
     }
 
     /// Consume the pixmap, yielding its premultiplied RGBA8 bytes.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// assert_eq!(Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255)).into_data(), vec![255, 0, 0, 255]);
+    /// ```
     #[must_use]
     pub fn into_data(self) -> Vec<u8> {
         self.data
     }
 
     /// The premultiplied RGBA bytes of one pixel, or `None` when out of range.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(2, 2, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.pixel(1, 1), Some([255, 0, 0, 255]));
+    /// // Out of range, not a panic.
+    /// assert_eq!(red.pixel(2, 0), None);
+    /// ```
     #[must_use]
     pub fn pixel(&self, x: u32, y: u32) -> Option<[u8; 4]> {
         let i = self.index(x, y)?;
@@ -155,6 +232,16 @@ impl Pixmap {
     /// Overwrite one pixel with premultiplied RGBA bytes. Out of range is a
     /// no-op — the shading rasterizers clip by construction and a stray write
     /// must not panic on a crafted file.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut p = Pixmap::new(2, 2);
+    /// p.set_pixel(1, 0, [255, 0, 0, 255]);
+    /// assert_eq!(p.pixel(1, 0), Some([255, 0, 0, 255]));
+    /// // Out of range is a no-op: a crafted file must not panic here.
+    /// p.set_pixel(9, 9, [255, 255, 255, 255]);
+    /// ```
     pub fn set_pixel(&mut self, x: u32, y: u32, px: [u8; 4]) {
         let Some(i) = self.index(x, y) else { return };
         if let Some(slot) = self.data.get_mut(i..i + 4) {
@@ -163,6 +250,14 @@ impl Pixmap {
     }
 
     /// Set every pixel to `color`.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut p = Pixmap::new(2, 2);
+    /// p.fill(peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]));
+    /// ```
     pub fn fill(&mut self, color: peniko::Color) {
         let px = premultiply(color);
         for chunk in self.data.chunks_exact_mut(4) {
@@ -176,6 +271,15 @@ impl Pixmap {
     /// and the per-pixel product truncates too. On a premultiplied buffer all
     /// four channels scale, where the oracle scales only the alpha byte of a
     /// straight one — the same image either way.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// // The scalar truncates to a byte: `0.5` is 127, not 128.
+    /// p.multiply_alpha(0.5);
+    /// assert_eq!(p.pixel(0, 0), Some([127, 0, 0, 127]));
+    /// ```
     pub fn multiply_alpha(&mut self, alpha: f32) {
         if alpha >= 1.0 {
             return;
@@ -201,6 +305,18 @@ impl Pixmap {
     /// `agn == a0` this returns a transparent pixel, the same image once
     /// composited back. `backdrop` must match this pixmap's dimensions; a
     /// mismatch is a no-op, as for [`Self::multiply_alpha_mask`].
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let backdrop = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// let mut group = backdrop.clone();
+    ///
+    /// // The group painted nothing over its backdrop, so removing it
+    /// // leaves a transparent pixel -- the same image once composited back.
+    /// group.remove_backdrop(&backdrop);
+    /// assert_eq!(group.pixel(0, 0), Some([0, 0, 0, 0]));
+    /// ```
     pub fn remove_backdrop(&mut self, backdrop: &Self) {
         // The oracle never removes the backdrop: it copies the page beneath
         // into the group buffer, then composites that buffer back with no
@@ -281,6 +397,17 @@ impl Pixmap {
     ///
     /// A mismatch in dimensions is a no-op, on the same invariant as
     /// [`Self::multiply_alpha_mask`].
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut base = Pixmap::filled(1, 1, peniko::Color::from_rgba8(0, 0, 255, 255));
+    /// let next = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    ///
+    /// // Full coverage replaces rather than blending.
+    /// base.knockout_over(&next);
+    /// assert_eq!(base.pixel(0, 0), Some([255, 0, 0, 255]));
+    /// ```
     pub fn knockout_over(&mut self, next: &Self) {
         if next.width != self.width || next.height != self.height {
             return;
@@ -354,6 +481,20 @@ impl Pixmap {
     /// `MultiplyAlphaMask`. The mask must match the pixmap's dimensions
     /// exactly — an invariant, not a preference: a mismatched mask silently
     /// disables masking on both backends, so the engine never emits one.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// let mut p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// p.multiply_alpha_mask(&AlphaMask::filled(1, 1, 128));
+    /// assert_eq!(p.pixel(0, 0), Some([128, 0, 0, 128]));
+    ///
+    /// // A mismatched mask is a no-op, which is why the engine never emits one.
+    /// p.multiply_alpha_mask(&AlphaMask::filled(4, 4, 0));
+    /// assert_eq!(p.pixel(0, 0), Some([128, 0, 0, 128]));
+    /// ```
     pub fn multiply_alpha_mask(&mut self, mask: &AlphaMask) {
         if mask.width() != self.width || mask.height() != self.height {
             return;
@@ -370,6 +511,14 @@ impl Pixmap {
     ///
     /// Deliberately *not* either backend's luminance helper: both use BT.709
     /// coefficients and the oracle uses NTSC ones on a 0..100 integer scale.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// // The oracle's NTSC weights on a 0..100 integer scale, not BT.709.
+    /// let blue = Pixmap::filled(1, 1, peniko::Color::from_rgba8(0, 0, 255, 255));
+    /// assert_eq!(blue.luminosity_mask().data(), &[28]);
+    /// ```
     #[must_use]
     pub fn luminosity_mask(&self) -> AlphaMask {
         let mut out = Vec::with_capacity(self.data.len() / 4);
@@ -391,6 +540,13 @@ impl Pixmap {
     }
 
     /// The alpha channel on its own, for an alpha-type soft mask.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.alpha_mask().data(), &[255]);
+    /// ```
     #[must_use]
     pub fn alpha_mask(&self) -> AlphaMask {
         let out: Vec<u8> = self
@@ -408,6 +564,19 @@ impl Pixmap {
     /// A page with no transparency is rendered into a 32bpp buffer whose
     /// fourth byte is padding, and a hash taken over these bytes sees that
     /// padding as `0xFF` rather than as whatever the render left there.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// // Blue, green, red, alpha.
+    /// assert_eq!(red.to_straight_bgra(false), vec![0, 0, 255, 255]);
+    ///
+    /// // `opaque` forces the alpha byte without touching the colours, which
+    /// // is what a hash over a 32bpp buffer with padding sees.
+    /// let clear = Pixmap::new(1, 1);
+    /// assert_eq!(clear.to_straight_bgra(true), vec![0, 0, 0, 255]);
+    /// ```
     #[must_use]
     pub fn to_straight_bgra(&self, opaque: bool) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
@@ -425,6 +594,13 @@ impl Pixmap {
 
     /// The straight-alpha RGB bytes, three per pixel — the shape the oracle's
     /// PNG encoder writes for a page with no transparency.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.to_straight_rgb(), vec![255, 0, 0]);
+    /// ```
     #[must_use]
     pub fn to_straight_rgb(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len() / 4 * 3);
@@ -441,6 +617,13 @@ impl Pixmap {
 
     /// The straight-alpha RGBA bytes, four per pixel — the shape the oracle's
     /// PNG encoder writes for a page that has transparency.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.to_straight_rgba(), vec![255, 0, 0, 255]);
+    /// ```
     #[must_use]
     pub fn to_straight_rgba(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
@@ -471,6 +654,15 @@ impl Pixmap {
 /// sized and aligned to the device it applies to, because a mismatched mask
 /// is silently ignored by `vello_cpu` and merely warned about by
 /// `tiny-skia` — it fails *open*.
+///
+/// ```
+/// use pdfrum_render::AlphaMask;
+///
+/// let mask = AlphaMask::filled(2, 2, 128);
+/// assert_eq!((mask.width(), mask.height()), (2, 2));
+/// // One byte per pixel; 255 is fully opaque.
+/// assert_eq!(mask.data(), &[128; 4]);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlphaMask {
     width: u32,
@@ -480,6 +672,13 @@ pub struct AlphaMask {
 
 impl AlphaMask {
     /// A fully transparent (all-zero) mask.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// // Fully transparent: all zero.
+    /// assert_eq!(AlphaMask::new(2, 1).data(), &[0, 0]);
+    /// ```
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
         let len = (width as usize).saturating_mul(height as usize);
@@ -491,6 +690,12 @@ impl AlphaMask {
     }
 
     /// A mask with every byte set to `value`.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// assert_eq!(AlphaMask::filled(2, 1, 255).data(), &[255, 255]);
+    /// ```
     #[must_use]
     pub fn filled(width: u32, height: u32, value: u8) -> Self {
         let len = (width as usize).saturating_mul(height as usize);
@@ -502,6 +707,14 @@ impl AlphaMask {
     }
 
     /// Wrap an existing coverage plane, or `None` on a size mismatch.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// assert!(AlphaMask::from_vec(2, 1, vec![0, 255]).is_some());
+    /// // Not exactly `width * height` bytes.
+    /// assert!(AlphaMask::from_vec(2, 1, vec![0]).is_none());
+    /// ```
     #[must_use]
     pub fn from_vec(width: u32, height: u32, data: Vec<u8>) -> Option<Self> {
         let len = (width as usize).checked_mul(height as usize)?;
@@ -513,29 +726,62 @@ impl AlphaMask {
     }
 
     /// The mask's width in pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// assert_eq!(AlphaMask::new(3, 2).width(), 3);
+    /// ```
     #[must_use]
     pub fn width(&self) -> u32 {
         self.width
     }
 
     /// The mask's height in pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// assert_eq!(AlphaMask::new(3, 2).height(), 2);
+    /// ```
     #[must_use]
     pub fn height(&self) -> u32 {
         self.height
     }
 
     /// The coverage bytes, row-major.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// // One byte per pixel, row-major.
+    /// assert_eq!(AlphaMask::new(2, 2).data().len(), 4);
+    /// ```
     #[must_use]
     pub fn data(&self) -> &[u8] {
         &self.data
     }
 
     /// The coverage bytes, mutably.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// let mut mask = AlphaMask::new(1, 1);
+    /// mask.data_mut()[0] = 255;
+    /// assert_eq!(mask.data(), &[255]);
+    /// ```
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data
     }
 
     /// Consume the mask, yielding its coverage bytes.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// assert_eq!(AlphaMask::filled(1, 1, 200).into_data(), vec![200]);
+    /// ```
     #[must_use]
     pub fn into_data(self) -> Vec<u8> {
         self.data
@@ -543,6 +789,15 @@ impl AlphaMask {
 
     /// Intersect with another mask of the same size: the truncating integer
     /// product `old * new / 255`.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// let mut mask = AlphaMask::filled(1, 1, 255);
+    /// // The truncating integer product `old * new / 255`.
+    /// mask.intersect(&AlphaMask::filled(1, 1, 128));
+    /// assert_eq!(mask.data(), &[128]);
+    /// ```
     pub fn intersect(&mut self, other: &Self) {
         if other.width != self.width || other.height != self.height {
             return;
@@ -553,6 +808,17 @@ impl AlphaMask {
     }
 
     /// Map every byte through a 256-entry lookup — a soft mask's `/TR`.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// let mut mask = AlphaMask::filled(1, 1, 10);
+    /// // A soft mask's `/TR`, as a 256-entry lookup.
+    /// let mut table = [0u8; 256];
+    /// table[10] = 200;
+    /// mask.apply_transfer(&table);
+    /// assert_eq!(mask.data(), &[200]);
+    /// ```
     pub fn apply_transfer(&mut self, table: &[u8; 256]) {
         for b in &mut self.data {
             *b = *table.get(*b as usize).unwrap_or(b);
@@ -563,6 +829,15 @@ impl AlphaMask {
     ///
     /// This is E8's padding: a soft mask is produced at the clip rect's size
     /// and must be handed to `push_layer` device-sized.
+    ///
+    /// ```
+    /// use pdfrum_render::AlphaMask;
+    ///
+    /// // A mask produced at a clip rect's size, padded out to the device.
+    /// let small = AlphaMask::filled(1, 1, 255);
+    /// let placed = small.placed_in(2, 2, 1, 1);
+    /// assert_eq!(placed.data(), &[0, 0, 0, 255]);
+    /// ```
     #[must_use]
     pub fn placed_in(&self, width: u32, height: u32, x: i32, y: i32) -> Self {
         let mut out = Self::new(width, height);
@@ -598,6 +873,14 @@ impl AlphaMask {
 ///
 /// `alpha_byte_rounding` is the other conversion; the two differ on a large
 /// fraction of real `ca` values.
+///
+/// ```
+/// use pdfrum_render::pixmap::alpha_byte_truncating;
+///
+/// // Truncating, so a `ca 0.5` is 127 rather than 128.
+/// assert_eq!(alpha_byte_truncating(0.5), 127);
+/// assert_eq!(alpha_byte_truncating(1.0), 255);
+/// ```
 #[must_use]
 pub fn alpha_byte_truncating(alpha: f32) -> u8 {
     if alpha.is_nan() {
@@ -632,6 +915,14 @@ pub(crate) fn alpha_byte_rounding(alpha: f32) -> u8 {
 }
 
 /// `a * b / 255`, truncating — the oracle's ubiquitous 8-bit product.
+///
+/// ```
+/// use pdfrum_render::pixmap::mul255;
+///
+/// assert_eq!(mul255(255, 128), 128);
+/// // Truncating: 128 * 128 / 255 is 64, not 64.25 rounded.
+/// assert_eq!(mul255(128, 128), 64);
+/// ```
 #[must_use]
 pub fn mul255(a: u8, b: u8) -> u8 {
     #[expect(
@@ -643,6 +934,14 @@ pub fn mul255(a: u8, b: u8) -> u8 {
 }
 
 /// `AlphaMerge(d, s, a) = (d*(255-a) + s*a) / 255`, truncating and unclamped.
+///
+/// ```
+/// use pdfrum_render::pixmap::alpha_merge;
+///
+/// // Full alpha takes the source; none of it keeps the destination.
+/// assert_eq!(alpha_merge(0, 255, 255), 255);
+/// assert_eq!(alpha_merge(0, 255, 0), 0);
+/// ```
 #[must_use]
 pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
     let a = u32::from(alpha);

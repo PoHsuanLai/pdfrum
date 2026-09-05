@@ -15,6 +15,20 @@ use crate::names;
 ///
 /// The value is resolved one level, so an attribute written as a reference
 /// comes back as what it points at.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::form::field_attr;
+/// use pdfrum_object::{Dict, Name, NoResolve, Object};
+///
+/// // `/Ff` on the parent is inherited by the child that omits it.
+/// let parent = Dict::from_pairs([(Name::from("Ff"), Object::Int(1))]);
+/// let child = Dict::from_pairs([(Name::from("Parent"), Object::Dict(parent))]);
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// let found = field_attr(&child, &Name::from("Ff"), &NoResolve, &limits, &mut diags);
+/// assert_eq!(found, Some(Object::Int(1)));
+/// ```
 #[must_use]
 pub fn field_attr<R: Resolve>(
     dict: &Dict,
@@ -51,6 +65,19 @@ pub fn field_attr<R: Resolve>(
 ///   closes a cycle is processed once more than a check-before-advance guard
 ///   would allow. A four-node ring therefore reports three components,
 ///   rotated differently depending on where the walk started.
+///
+/// ```
+/// use pdfrum_doc::form::full_name;
+/// use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+///
+/// let t = |s: &[u8]| (Name::from("T"), Object::Str(PdfString::literal(s)));
+///
+/// // An unnamed level is skipped without a separator: `a.b`, not `a..b`.
+/// let root = Dict::from_pairs([t(b"a")]);
+/// let middle = Dict::from_pairs([(Name::from("Parent"), Object::Dict(root))]);
+/// let leaf = Dict::from_pairs([t(b"b"), (Name::from("Parent"), Object::Dict(middle))]);
+/// assert_eq!(full_name(&leaf, &NoResolve), "a.b");
+/// ```
 #[must_use]
 pub fn full_name<R: Resolve>(dict: &Dict, r: &R) -> String {
     let mut full = String::new();

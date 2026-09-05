@@ -84,6 +84,25 @@ impl Dest {
     /// ladder against the *current* document — including for a remote
     /// `/GoToR` destination, whose named target is never resolved in the file
     /// it actually names. That is the behavior, not an oversight to fix.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    ///
+    /// assert!(dest.array.is_some());
+    /// ```
     #[must_use]
     pub fn create<R: Resolve>(
         catalog: &Dict,
@@ -107,6 +126,26 @@ impl Dest {
     ///
     /// The name at index 1 is read **coercively**, so a string `(XYZ)`
     /// matches here even though [`Dest::xyz`] would reject it.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    /// use pdfrum_doc::ZoomMode;
+    ///
+    /// assert_eq!(dest.zoom_mode(&NoResolve), ZoomMode::Xyz);
+    /// ```
     #[must_use]
     pub fn zoom_mode<R: Resolve>(&self, r: &R) -> ZoomMode {
         let Some(array) = &self.array else {
@@ -123,6 +162,26 @@ impl Dest {
 
     /// How many parameters this destination actually carries: the mode's
     /// maximum, capped by what the array holds.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    ///
+    /// // `XYZ` names three parameters, and the array carries all three.
+    /// assert_eq!(dest.num_params(&NoResolve), 3);
+    /// ```
     #[must_use]
     pub fn num_params<R: Resolve>(&self, r: &R) -> usize {
         let Some(array) = &self.array else {
@@ -142,6 +201,27 @@ impl Dest {
     /// Parameter `index`, counting from the first one after the mode name.
     ///
     /// Unbounded: an index past the end reads as zero.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    ///
+    /// assert_eq!(dest.param(1), 792.0);
+    /// // Past the end reads as zero rather than panicking.
+    /// assert_eq!(dest.param(99), 0.0);
+    /// ```
     #[must_use]
     pub fn param(&self, index: usize) -> f32 {
         self.array
@@ -150,6 +230,25 @@ impl Dest {
     }
 
     /// Every parameter, ignoring the mode entirely.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    ///
+    /// assert_eq!(dest.params_all(), [0.0, 792.0, 0.0]);
+    /// ```
     #[must_use]
     pub fn params_all(&self) -> Vec<f32> {
         let Some(array) = &self.array else {
@@ -167,6 +266,28 @@ impl Dest {
     /// (not a string) spelling `XYZ`; each of indices 2–4 is a number or it
     /// is absent; and a zoom of exactly zero counts as absent while an x or y
     /// of zero does not.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    ///
+    /// let xyz = dest.xyz(&NoResolve).expect("a well-formed XYZ destination");
+    /// assert_eq!((xyz.x, xyz.y), (Some(0.0), Some(792.0)));
+    /// // A written zoom of zero means "unchanged", and reads as absent.
+    /// assert_eq!(xyz.zoom, None);
+    /// ```
     #[must_use]
     pub fn xyz<R: Resolve>(&self, r: &R) -> Option<Xyz> {
         let array = self.array.as_ref()?;
@@ -203,6 +324,28 @@ impl Dest {
     /// `page_index_of` maps an **object number** — the indirect reference a
     /// dictionary entry carries — to the page it is, so its `u32` argument is
     /// an object number and not an index. Only the answer is a [`PageIndex`].
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::Dest;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let array = Object::Array(Array::of([
+    ///     Object::Int(2),
+    ///     Object::Name(Name::from("XYZ")),
+    ///     Object::from(0.0_f32),
+    ///     Object::from(792.0_f32),
+    ///     Object::Int(0),
+    /// ]));
+    /// let (catalog, limits) = (Dict::default(), Limits::default());
+    /// let mut diags = Diagnostics::default();
+    /// let dest = Dest::create(&catalog, Some(&array), &NoResolve, &limits, &mut diags);
+    /// use pdfrum_common::PageIndex;
+    ///
+    /// // A number at index 0 is returned verbatim, with no bounds check.
+    /// let page = dest.page_index(&NoResolve, |_| None, &mut diags);
+    /// assert_eq!(page, Some(PageIndex::from(2)));
+    /// ```
     #[must_use]
     pub fn page_index<R: Resolve>(
         &self,

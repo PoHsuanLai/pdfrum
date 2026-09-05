@@ -48,6 +48,31 @@ use crate::names;
 use crate::vt;
 
 /// One generated appearance and the dictionary edits it implies.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_doc::ap::generate_appearances;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(square)])),
+/// )]);
+///
+/// let mut diags = Diagnostics::default();
+/// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+/// let generated = overlay.get(0).expect("a square has a generator");
+///
+/// // The matrix these generators produce is always the identity.
+/// assert_eq!(generated.matrix, kurbo::Affine::IDENTITY);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeneratedAp {
     /// The content-stream bytes.
@@ -73,6 +98,18 @@ pub struct GeneratedAp {
 /// cleared — focus left it and it went back to drawing nothing — needs the
 /// second, and expressing it as the absence of an entry would make it
 /// indistinguishable from the first.
+///
+/// ```
+/// use pdfrum_doc::{AnnotOverlay, ap::Appearance};
+///
+/// let mut overlay = AnnotOverlay::with_capacity(2);
+/// assert_eq!(overlay.appearance(0), &Appearance::Untouched);
+///
+/// // Suppressed is not the same as untouched: it says "draw nothing",
+/// // even for an annotation the file gave an `/AP`.
+/// overlay.set_appearance(0, Appearance::Suppressed);
+/// assert!(overlay.get(0).is_none());
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum Appearance {
     /// Nothing to say. The file's own `/AP` is used, if it has one.
@@ -114,6 +151,16 @@ pub enum Appearance {
 /// [`FocusBox::None`] is the empty answer and the default: a focused entry
 /// that names it is still *focused* — it draws no tint — and simply strokes
 /// nothing.
+///
+/// ```
+/// use pdfrum_doc::{FocusBox, geom};
+///
+/// // A text field and an editable combo box stroke nothing.
+/// assert_eq!(FocusBox::default(), FocusBox::None);
+/// // A multi-select list box names the rectangle only it can compute.
+/// let explicit = FocusBox::Rect(geom::rect(0.0, 0.0, 100.0, 20.0));
+/// assert_ne!(explicit, FocusBox::Inflated);
+/// ```
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum FocusBox {
     /// No rectangle: nothing is stroked. A text field and an editable combo
@@ -134,6 +181,17 @@ pub enum FocusBox {
 /// the focused one is the only widget a live control reaches in a
 /// single-focus session. The *box* decides whether anything is stroked in its
 /// place, which most field types answer with nothing.
+///
+/// ```
+/// use pdfrum_doc::{AnnotOverlay, Focus, FocusBox, geom};
+///
+/// let mut overlay = AnnotOverlay::with_capacity(2);
+/// overlay.set_focus(Focus {
+///     annot: 1,
+///     box_: FocusBox::Rect(geom::rect(0.0, 0.0, 100.0, 20.0)),
+/// });
+/// assert_eq!(overlay.focus().map(|f| f.annot), Some(1));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Focus {
     /// The raw `/Annots` index of the focused annotation — the same key space
@@ -146,6 +204,15 @@ pub struct Focus {
 impl Focus {
     /// Focus on one annotation with no rectangle to stroke — the answer a
     /// text field and an editable combo box give.
+    ///
+    /// ```
+    /// use pdfrum_doc::{Focus, FocusBox};
+    ///
+    /// let focus = Focus::at(2);
+    /// assert_eq!(focus.annot, 2);
+    /// // No rectangle to stroke, which is what a text field answers.
+    /// assert_eq!(focus.box_, FocusBox::None);
+    /// ```
     #[must_use]
     pub fn at(annot: usize) -> Focus {
         Focus {
@@ -163,6 +230,30 @@ impl Focus {
 /// it is set by the same session that sets the appearances, from the same
 /// index space, and adding it here left every existing caller compiling
 /// unchanged.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_doc::ap::generate_appearances;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(square)])),
+/// )]);
+///
+/// // Every reader in this crate takes the overlay and consults it
+/// // before the raw dictionary.
+/// let mut diags = Diagnostics::default();
+/// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+/// assert!(overlay.get(0).is_some());
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnnotOverlay {
     entries: Vec<Appearance>,
@@ -173,6 +264,14 @@ pub struct AnnotOverlay {
 
 impl AnnotOverlay {
     /// An overlay with room for `count` annotations and nothing generated.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, ap::Appearance};
+    ///
+    /// let overlay = AnnotOverlay::with_capacity(3);
+    /// assert_eq!(overlay.len(), 3);
+    /// assert_eq!(overlay.appearance(0), &Appearance::Untouched);
+    /// ```
     #[must_use]
     pub fn with_capacity(count: usize) -> AnnotOverlay {
         AnnotOverlay {
@@ -189,11 +288,29 @@ impl AnnotOverlay {
     /// overlay's length: an overlay sized for the appearances it carries can
     /// still name a focused annotation past its end, and the annotation pass
     /// keys on the index rather than on an entry.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, Focus};
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(2);
+    /// // The index is a raw `/Annots` index and is not bounded by the length.
+    /// overlay.set_focus(Focus::at(7));
+    /// assert_eq!(overlay.focus().map(|f| f.annot), Some(7));
+    /// ```
     pub fn set_focus(&mut self, focus: Focus) {
         self.focus = Some(focus);
     }
 
     /// Which annotation holds the focus, if any.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, Focus};
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(2);
+    /// assert!(overlay.focus().is_none());
+    /// overlay.set_focus(Focus::at(1));
+    /// assert_eq!(overlay.focus().map(|f| f.annot), Some(1));
+    /// ```
     #[must_use]
     pub fn focus(&self) -> Option<Focus> {
         self.focus
@@ -212,11 +329,30 @@ impl AnnotOverlay {
     /// **open**. A note card is drawn only while the pointer is inside its
     /// parent, and nothing a file can say opens one, so this is the whole of
     /// the signal.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(4);
+    /// overlay.set_hover(1);
+    /// assert_eq!(overlay.hover(), Some(1));
+    /// // Hover and focus move independently.
+    /// assert!(overlay.focus().is_none());
+    /// ```
     pub fn set_hover(&mut self, annot: usize) {
         self.hover = Some(annot);
     }
 
     /// Which annotation the pointer is inside, if any.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(4);
+    /// assert!(overlay.hover().is_none());
+    /// overlay.set_hover(0);
+    /// assert_eq!(overlay.hover(), Some(0));
+    /// ```
     #[must_use]
     pub fn hover(&self) -> Option<usize> {
         self.hover
@@ -236,28 +372,97 @@ impl AnnotOverlay {
     /// generates no appearance for it and there is nothing to mark. What this
     /// records is that the appearance carried at this index came from an
     /// editor, which is what makes the oracle draw its text with `ClearType`.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(4);
+    /// overlay.set_live_edit(1);
+    /// // A second call replaces the first: one field is edited at a time.
+    /// overlay.set_live_edit(2);
+    /// assert_eq!(overlay.live_edit(), Some(2));
+    /// ```
     pub fn set_live_edit(&mut self, annot: usize) {
         self.live_edit = Some(annot);
     }
 
     /// Which annotation's appearance is a live edit's, if any.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(4);
+    /// assert!(overlay.live_edit().is_none());
+    /// overlay.set_live_edit(3);
+    /// assert_eq!(overlay.live_edit(), Some(3));
+    /// ```
     #[must_use]
     pub fn live_edit(&self) -> Option<usize> {
         self.live_edit
     }
 
     /// Whether the appearance at one `/Annots` index came from a live edit.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(4);
+    /// overlay.set_live_edit(1);
+    /// assert!(overlay.is_live_edit(1));
+    /// assert!(!overlay.is_live_edit(0));
+    /// ```
     #[must_use]
     pub fn is_live_edit(&self, index: usize) -> bool {
         self.live_edit == Some(index)
     }
 
     /// Records a generated appearance at one `/Annots` index.
+    ///
+    /// ```
+    /// use pdfrum_common::Diagnostics;
+    /// use pdfrum_doc::ap::generate_appearances;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let square = Dict::from_pairs([
+    ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+    ///     (
+    ///         Name::from("Rect"),
+    ///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+    ///     ),
+    ///     (
+    ///         Name::from("IC"),
+    ///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+    ///     ),
+    /// ]);
+    /// let page = Dict::from_pairs([(
+    ///     Name::from("Annots"),
+    ///     Object::Array(Array::of([Object::Dict(square)])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+    ///
+    /// // The walk sets index 0; a caller can set any index the same way.
+    /// let generated = overlay.get(0).expect("a square has a generator").clone();
+    /// let mut mine = pdfrum_doc::AnnotOverlay::with_capacity(2);
+    /// mine.set(1, generated);
+    /// assert!(mine.get(1).is_some());
+    /// ```
     pub fn set(&mut self, index: usize, generated: GeneratedAp) {
         self.set_appearance(index, Appearance::Generated(generated));
     }
 
     /// Records any of the three states at one `/Annots` index.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, ap::Appearance};
+    ///
+    /// let mut overlay = AnnotOverlay::with_capacity(2);
+    /// overlay.set_appearance(0, Appearance::Suppressed);
+    /// assert_eq!(overlay.appearance(0), &Appearance::Suppressed);
+    /// // A suppressed entry has no stream to draw.
+    /// assert!(overlay.get(0).is_none());
+    /// ```
     pub fn set_appearance(&mut self, index: usize, appearance: Appearance) {
         if let Some(slot) = self.entries.get_mut(index) {
             *slot = appearance;
@@ -269,6 +474,35 @@ impl AnnotOverlay {
     /// A suppressed entry answers [`None`], the same as an untouched one —
     /// callers that only want a stream to draw need not distinguish them.
     /// [`AnnotOverlay::appearance`] is what tells them apart.
+    ///
+    /// ```
+    /// use pdfrum_common::Diagnostics;
+    /// use pdfrum_doc::ap::generate_appearances;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    ///
+    /// let square = Dict::from_pairs([
+    ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+    ///     (
+    ///         Name::from("Rect"),
+    ///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+    ///     ),
+    ///     (
+    ///         Name::from("IC"),
+    ///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+    ///     ),
+    /// ]);
+    /// let page = Dict::from_pairs([(
+    ///     Name::from("Annots"),
+    ///     Object::Array(Array::of([Object::Dict(square)])),
+    /// )]);
+    ///
+    /// let mut diags = Diagnostics::default();
+    /// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+    ///
+    /// assert!(overlay.get(0).is_some());
+    /// // Past the end is `None`, not a panic.
+    /// assert!(overlay.get(9).is_none());
+    /// ```
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&GeneratedAp> {
         match self.appearance(index) {
@@ -281,6 +515,15 @@ impl AnnotOverlay {
     ///
     /// An index past the overlay's end reads as [`Appearance::Untouched`],
     /// which is what makes a short overlay safe to consult for any index.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, ap::Appearance};
+    ///
+    /// let overlay = AnnotOverlay::with_capacity(1);
+    /// // An index past the end reads as untouched, so a short overlay is
+    /// // safe to consult for any index.
+    /// assert_eq!(overlay.appearance(99), &Appearance::Untouched);
+    /// ```
     #[must_use]
     pub fn appearance(&self, index: usize) -> &Appearance {
         self.entries.get(index).unwrap_or(&Appearance::Untouched)
@@ -303,6 +546,21 @@ impl AnnotOverlay {
     /// has one, and leave it alone when it does not — the same "wins wherever
     /// it speaks" rule the entries follow. Unlike an entry, either one past
     /// this overlay's end survives: both name an annotation, not a slot.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, ap::Appearance};
+    ///
+    /// let mut page = AnnotOverlay::with_capacity(2);
+    /// page.set_appearance(0, Appearance::Suppressed);
+    ///
+    /// // The session speaks about index 1 only.
+    /// let mut session = AnnotOverlay::with_capacity(2);
+    /// session.set_appearance(1, Appearance::Suppressed);
+    /// page.merge_over(&session);
+    ///
+    /// assert_eq!(page.appearance(0), &Appearance::Suppressed);
+    /// assert_eq!(page.appearance(1), &Appearance::Suppressed);
+    /// ```
     pub fn merge_over(&mut self, other: &AnnotOverlay) {
         for (index, entry) in other.entries.iter().enumerate() {
             if matches!(entry, Appearance::Untouched) {
@@ -322,6 +580,15 @@ impl AnnotOverlay {
     }
 
     /// The rectangle an annotation should be read as having.
+    ///
+    /// ```
+    /// use pdfrum_doc::{AnnotOverlay, geom};
+    ///
+    /// let overlay = AnnotOverlay::with_capacity(1);
+    /// let raw = geom::rect(0.0, 0.0, 100.0, 50.0);
+    /// // Nothing generated: the annotation keeps the rectangle it declared.
+    /// assert_eq!(overlay.rect(0, raw), raw);
+    /// ```
     #[must_use]
     pub fn rect(&self, index: usize, raw: Rect) -> Rect {
         self.get(index)
@@ -330,12 +597,25 @@ impl AnnotOverlay {
     }
 
     /// How many annotations the overlay covers.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// assert_eq!(AnnotOverlay::with_capacity(3).len(), 3);
+    /// ```
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether the overlay covers no annotations at all.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotOverlay;
+    ///
+    /// assert!(AnnotOverlay::with_capacity(0).is_empty());
+    /// assert!(!AnnotOverlay::with_capacity(1).is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
@@ -347,6 +627,23 @@ impl AnnotOverlay {
 /// Threaded in rather than loaded here, because loading one needs a font
 /// cache the caller already owns, and because the layout engine is a pure
 /// function of these numbers — which is what lets it be tested against a stub.
+///
+/// ```
+/// use pdfrum_doc::ap::FormFonts;
+/// use pdfrum_object::{Dict, NoResolve};
+///
+/// // A catalog with no `/AcroForm` still yields the stock fallback face.
+/// let mut ctx = pdfrum_page::BuildContext::new();
+/// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+/// use pdfrum_doc::ap::TextFont;
+///
+/// let font = fonts.face(b"Helv").expect("the fallback face");
+/// let width = |code: u32| TextFont::char_width(font, code);
+/// let text = fonts.text_font(b"Helv", &width).expect("a face to set text with");
+///
+/// // The ascent the layout engine stacks lines by.
+/// assert!(text.metrics.ascent > 0);
+/// ```
 pub struct TextFont<'a> {
     /// The loaded font.
     pub font: &'a pdfrum_font::Font,
@@ -393,6 +690,23 @@ impl TextFont<'_> {
     /// Dropping the character instead loses the object entirely, which on
     /// `bug_725389` — three Hebrew characters in a `/DA` naming Times-Roman —
     /// is the difference between six text objects and three.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// use pdfrum_doc::ap::TextFont;
+    ///
+    /// let font = fonts.face(b"Helv").expect("the fallback face");
+    /// let width = |code: u32| TextFont::char_width(font, code);
+    /// let text = fonts.text_font(b"Helv", &width).expect("a face");
+    ///
+    /// // `A` writes as one byte in a simple font.
+    /// assert_eq!(text.encode(u32::from('A')), b"A");
+    /// ```
     // The oracle reaches the same place by a longer road: CPDF_BAFontMap
     // first looks for a second face that knows the character, and only
     // CPWL_EditImpl::GetPDFWordString's fallthrough appends the raw value
@@ -425,6 +739,20 @@ impl TextFont<'_> {
     /// A free function rather than a method because [`Self::metrics_of`] wants
     /// it as a `&dyn Fn` borrowed for the same lifetime as the font, which a
     /// closure over `self` cannot supply before `self` exists.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// use pdfrum_doc::ap::TextFont;
+    ///
+    /// let font = fonts.face(b"Helv").expect("the fallback face");
+    /// // Thousandths of an em, for whatever `encode` wrote.
+    /// assert!(TextFont::char_width(font, u32::from('A')) > 0);
+    /// ```
     #[must_use]
     pub fn char_width(font: &pdfrum_font::Font, code: u32) -> i32 {
         let charcode = char::from_u32(code)
@@ -437,6 +765,21 @@ impl TextFont<'_> {
     }
 
     /// The layout metrics a loaded font supplies.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// use pdfrum_doc::ap::TextFont;
+    ///
+    /// let font = fonts.face(b"Helv").expect("the fallback face");
+    /// let width = |code: u32| TextFont::char_width(font, code);
+    /// let metrics = TextFont::metrics_of(font, &width);
+    /// assert!(metrics.ascent > metrics.descent);
+    /// ```
     #[must_use]
     pub fn metrics_of<'a>(
         font: &'a pdfrum_font::Font,
@@ -457,6 +800,23 @@ impl TextFont<'_> {
 /// because a generator needs all three to write one character — the alias for
 /// the `Tf`, the face for the width, and the dictionary so the name resolves
 /// when the stream is drawn.
+///
+/// ```
+/// use pdfrum_doc::ap::FormFonts;
+/// use pdfrum_object::{Dict, NoResolve};
+///
+/// // A catalog with no `/AcroForm` still yields the stock fallback face.
+/// let mut ctx = pdfrum_page::BuildContext::new();
+/// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+/// use pdfrum_font::Charset;
+///
+/// // A second face for the characters the `/DA` font cannot write.
+/// if let Some(substitute) = fonts.substitute(Charset::ShiftJis) {
+///     // The alias is the `Tf` name and the key in the appearance's
+///     // own `/Resources /Font`.
+///     assert!(!substitute.alias.as_bytes().is_empty());
+/// }
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Substitute<'a> {
     /// The `Tf` name, and the key in the appearance's font resources.
@@ -486,6 +846,18 @@ pub struct Substitute<'a> {
 /// through the same loader and the same substitution options every other font
 /// on the page goes through. A name the resources do not carry gets a stock
 /// Helvetica, which is what the fallback is actually for.
+///
+/// ```
+/// use pdfrum_doc::ap::FormFonts;
+/// use pdfrum_object::{Dict, NoResolve};
+///
+/// // A catalog with no `/AcroForm` still yields the stock fallback face.
+/// let mut ctx = pdfrum_page::BuildContext::new();
+/// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+///
+/// // A name the resources do not carry falls back rather than failing.
+/// assert!(fonts.face(b"NoSuchFace").is_some());
+/// ```
 pub struct FormFonts {
     /// Resource name and the face loaded under it, in `/DR /Font` order with
     /// the fallback last.
@@ -552,6 +924,19 @@ impl FormFonts {
     /// the fallback face and the substitute face once per page per render, for
     /// a form with no fields, and on four of them it was the single largest
     /// line in the render.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    ///
+    /// // Loaded once per document and shared: a second load hits the cache.
+    /// let again = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// assert!(std::sync::Arc::ptr_eq(&fonts, &again));
+    /// ```
     #[must_use]
     pub fn load<R: Resolve>(
         catalog: &Dict,
@@ -664,6 +1049,20 @@ impl FormFonts {
     /// Answers nothing for a charset with no encoding table, and for one whose
     /// face would not load — in both cases the caller leaves the character to
     /// the `/DA` font, which is the behaviour that predates this.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// use pdfrum_font::Charset;
+    ///
+    /// // Nothing for a charset with no encoding table, or whose face will
+    /// // not load: the caller then leaves the character to the `/DA` font.
+    /// let _ = fonts.substitute(Charset::ShiftJis);
+    /// ```
     #[must_use]
     pub fn substitute(&self, charset: pdfrum_font::Charset) -> Option<Substitute<'_>> {
         let alias = font_map::substitute_alias(charset);
@@ -682,6 +1081,19 @@ impl FormFonts {
     /// Answers nothing only if the fallback itself is missing, which
     /// [`Self::load`] makes impossible — the caller then generates chrome
     /// alone rather than being told a face exists that does not.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    ///
+    /// assert!(fonts.face(b"Helv").is_some());
+    /// // Answers the fallback rather than nothing for an unknown name.
+    /// assert!(fonts.face(b"NoSuchFace").is_some());
+    /// ```
     #[must_use]
     pub fn face(&self, name: &[u8]) -> Option<&pdfrum_font::Font> {
         self.entries
@@ -698,6 +1110,22 @@ impl FormFonts {
     /// borrowed for the font's lifetime, which a closure over `self` cannot
     /// supply before `self` exists — so the caller keeps it and passes it in,
     /// the same shape [`TextFont::metrics_of`] already has.
+    ///
+    /// ```
+    /// use pdfrum_doc::ap::FormFonts;
+    /// use pdfrum_object::{Dict, NoResolve};
+    ///
+    /// // A catalog with no `/AcroForm` still yields the stock fallback face.
+    /// let mut ctx = pdfrum_page::BuildContext::new();
+    /// let fonts = FormFonts::load(&Dict::default(), &NoResolve, &mut ctx);
+    /// use pdfrum_doc::ap::TextFont;
+    ///
+    /// // The width closure is borrowed for the font's lifetime, so the
+    /// // caller keeps it and passes it in.
+    /// let font = fonts.face(b"Helv").expect("the fallback face");
+    /// let width = |code: u32| TextFont::char_width(font, code);
+    /// assert!(fonts.text_font(b"Helv", &width).is_some());
+    /// ```
     #[must_use]
     pub fn text_font<'a>(
         &'a self,
@@ -721,6 +1149,35 @@ impl FormFonts {
 ///
 /// The text-bearing generators are skipped here; [`generate_appearances_with_text`]
 /// is the walk that enables them.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_doc::ap::generate_appearances;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///     ),
+///     (
+///         Name::from("IC"),
+///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(square)])),
+/// )]);
+///
+/// let mut diags = Diagnostics::default();
+/// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+///
+/// // One entry per `/Annots` index; the square got a stream.
+/// assert_eq!(overlay.len(), 1);
+/// assert!(!overlay.get(0).expect("generated").stream.is_empty());
+/// ```
 #[must_use]
 pub fn generate_appearances<R: Resolve>(
     page: &Dict,
@@ -760,6 +1217,40 @@ pub fn generate_appearances<R: Resolve>(
 /// up in the form's default resources — not with one page-wide font. A page
 /// whose fields name two different faces stacks their lines by two different
 /// ascents, which is what a viewer does.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_doc::ap::generate_appearances;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///     ),
+///     (
+///         Name::from("IC"),
+///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(square)])),
+/// )]);
+///
+/// let mut diags = Diagnostics::default();
+/// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+/// use pdfrum_doc::ap::generate_appearances_with_text;
+///
+/// let catalog = Dict::default();
+/// // With no fonts in hand the text-bearing generators stay off, so the
+/// // result matches the plain walk.
+/// let mut diags = Diagnostics::default();
+/// let with_text =
+///     generate_appearances_with_text(&page, &catalog, None, &NoResolve, &mut diags);
+/// assert_eq!(with_text.get(0), overlay.get(0));
+/// ```
 #[must_use]
 pub fn generate_appearances_with_text<R: Resolve>(
     page: &Dict,
@@ -987,6 +1478,37 @@ pub(crate) fn resources_dict(ext_gstate: Dict, font: Option<Dict>) -> Dict {
 }
 
 /// The stream dictionary a generated appearance is stored under.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_doc::ap::generate_appearances;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+///
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///     ),
+///     (
+///         Name::from("IC"),
+///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(square)])),
+/// )]);
+///
+/// let mut diags = Diagnostics::default();
+/// let overlay = generate_appearances(&page, &NoResolve, &mut diags);
+/// use pdfrum_doc::ap::stream_dict;
+/// use pdfrum_object::names;
+///
+/// let dict = stream_dict(overlay.get(0).expect("generated"));
+/// assert_eq!(dict.name(names::SUBTYPE).map(|n| n.as_bytes().to_vec()),
+///     Some(b"Form".to_vec()));
+/// ```
 #[must_use]
 pub fn stream_dict(generated: &GeneratedAp) -> Dict {
     Dict::from_pairs([

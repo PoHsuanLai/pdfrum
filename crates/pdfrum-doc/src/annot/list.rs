@@ -18,6 +18,32 @@ use crate::geom;
 use crate::names;
 
 /// A page's annotations as the rendering path sees them.
+///
+/// ```
+/// use pdfrum_doc::annot::AnnotList;
+/// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+///
+/// let note = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Text"))),
+///     (Name::from("Contents"), Object::Str(PdfString::literal(b"a note"))),
+///     (
+///         Name::from("Rect"),
+///         Object::Array(Array::of([10, 300, 30, 320].map(Object::from))),
+///     ),
+/// ]);
+/// let page = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::of([Object::Dict(note)])),
+/// )]);
+///
+/// // `page_width` is the crop-box width, which decides where a
+/// // synthesized pop-up lands.
+/// let list = AnnotList::load(&page, 612.0, &NoResolve);
+///
+/// assert_eq!(list.annots.len(), 1);
+/// // The file declares no pop-up; one is synthesized for the note.
+/// assert_eq!(list.popups.len(), 1);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnnotList {
     /// The annotations the file declares, minus its pop-ups, in `/Annots`
@@ -36,6 +62,32 @@ impl AnnotList {
     ///
     /// `page_width` is the crop-box width, which decides where a synthesized
     /// pop-up lands.
+    ///
+    /// ```
+    /// use pdfrum_doc::annot::AnnotList;
+    /// use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    ///
+    /// let note = Dict::from_pairs([
+    ///     (Name::from("Subtype"), Object::Name(Name::from("Text"))),
+    ///     (Name::from("Contents"), Object::Str(PdfString::literal(b"a note"))),
+    ///     (
+    ///         Name::from("Rect"),
+    ///         Object::Array(Array::of([10, 300, 30, 320].map(Object::from))),
+    ///     ),
+    /// ]);
+    /// let page = Dict::from_pairs([(
+    ///     Name::from("Annots"),
+    ///     Object::Array(Array::of([Object::Dict(note)])),
+    /// )]);
+    ///
+    /// // `page_width` is the crop-box width, which decides where a
+    /// // synthesized pop-up lands.
+    /// let list = AnnotList::load(&page, 612.0, &NoResolve);
+    ///
+    /// // The index in the original `/Annots` array survives, which is what
+    /// // keeps the dump and the appearance overlay aligned.
+    /// assert_eq!(list.source_indices, [0]);
+    /// ```
     #[must_use]
     pub fn load<R: Resolve>(page: &Dict, page_width: f32, r: &R) -> AnnotList {
         let mut list = AnnotList::default();

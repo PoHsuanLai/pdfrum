@@ -11,6 +11,25 @@ use pdfrum_object::{Array, Dict, Name, Object, Resolve};
 use crate::names;
 
 /// A document's viewer preferences.
+///
+/// ```
+/// use pdfrum_doc::ViewerPrefs;
+/// use pdfrum_object::{Dict, Name, NoResolve, Object};
+///
+/// let catalog = Dict::from_pairs([(
+///     Name::from("ViewerPreferences"),
+///     Object::Dict(Dict::from_pairs([
+///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+///         (Name::from("NumCopies"), Object::Int(3)),
+///     ])),
+/// )]);
+/// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+///
+/// assert!(prefs.is_direction_r2l(&NoResolve));
+/// // A catalog with no `/ViewerPreferences` has no dictionary at all,
+/// // which is not the same as an empty one.
+/// assert!(ViewerPrefs::read(&Dict::default(), &NoResolve).dict.is_none());
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ViewerPrefs {
     /// The `/ViewerPreferences` dictionary, absent when the catalog has none.
@@ -19,6 +38,22 @@ pub struct ViewerPrefs {
 
 impl ViewerPrefs {
     /// Reads the catalog's preferences.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// assert!(prefs.dict.is_some());
+    /// ```
     #[must_use]
     pub fn read<R: Resolve>(catalog: &Dict, r: &R) -> ViewerPrefs {
         ViewerPrefs {
@@ -27,6 +62,23 @@ impl ViewerPrefs {
     }
 
     /// Whether the reading order is right-to-left.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// assert!(prefs.is_direction_r2l(&NoResolve));
+    /// assert!(!ViewerPrefs::default().is_direction_r2l(&NoResolve));
+    /// ```
     #[must_use]
     pub fn is_direction_r2l<R: Resolve>(&self, r: &R) -> bool {
         self.dict
@@ -38,6 +90,24 @@ impl ViewerPrefs {
 
     /// Whether the print dialog offers page scaling. **True** with no
     /// dictionary.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// // True with no dictionary, and true unless the key says `None`.
+    /// assert!(prefs.print_scaling(&NoResolve));
+    /// assert!(ViewerPrefs::default().print_scaling(&NoResolve));
+    /// ```
     #[must_use]
     pub fn print_scaling<R: Resolve>(&self, r: &R) -> bool {
         self.dict
@@ -51,6 +121,24 @@ impl ViewerPrefs {
     ///
     /// One with no dictionary, **zero** with a dictionary that omits the key
     /// — the two paths genuinely differ.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// assert_eq!(prefs.num_copies(&NoResolve), 3);
+    /// // One with no dictionary; a dictionary omitting the key answers zero.
+    /// assert_eq!(ViewerPrefs::default().num_copies(&NoResolve), 1);
+    /// ```
     #[must_use]
     pub fn num_copies<R: Resolve>(&self, r: &R) -> i64 {
         match &self.dict {
@@ -61,6 +149,22 @@ impl ViewerPrefs {
 
     /// The default printed page range, as raw index pairs. Duplicates are
     /// kept.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// assert!(prefs.print_page_range(&NoResolve).is_none());
+    /// ```
     #[must_use]
     pub fn print_page_range<R: Resolve>(&self, r: &R) -> Option<Array> {
         self.dict
@@ -69,6 +173,23 @@ impl ViewerPrefs {
     }
 
     /// The duplex handling. `None` — the *string* — with no dictionary.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// // The *string* `None` is the default, not an absent value.
+    /// assert_eq!(prefs.duplex(&NoResolve), b"None");
+    /// ```
     #[must_use]
     pub fn duplex<R: Resolve>(&self, r: &R) -> Vec<u8> {
         self.dict
@@ -82,6 +203,24 @@ impl ViewerPrefs {
     /// The type filter is the point: a Boolean `/HideToolbar` and an integer
     /// `/NumCopies` both answer nothing here even when present. Keys are
     /// case-sensitive.
+    ///
+    /// ```
+    /// use pdfrum_doc::ViewerPrefs;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("ViewerPreferences"),
+    ///     Object::Dict(Dict::from_pairs([
+    ///         (Name::from("Direction"), Object::Name(Name::from("R2L"))),
+    ///         (Name::from("NumCopies"), Object::Int(3)),
+    ///     ])),
+    /// )]);
+    /// let prefs = ViewerPrefs::read(&catalog, &NoResolve);
+    ///
+    /// assert_eq!(prefs.generic_name(&Name::from("Direction")), Some(b"R2L".to_vec()));
+    /// // Name-typed: the integer `/NumCopies` answers nothing here.
+    /// assert_eq!(prefs.generic_name(&Name::from("NumCopies")), None);
+    /// ```
     #[must_use]
     pub fn generic_name(&self, key: &Name) -> Option<Vec<u8>> {
         self.dict

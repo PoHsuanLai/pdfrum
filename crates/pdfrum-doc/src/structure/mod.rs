@@ -32,6 +32,27 @@ use crate::names;
 use crate::nav::number_tree;
 
 /// One page's view of the document's structure tree.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::StructTree;
+/// use pdfrum_object::{Dict, Name, NoResolve, Object};
+///
+/// // "Tagged" is `/MarkInfo /Marked` read as a non-zero integer, so a
+/// // Boolean `true` and a written `1` both count.
+/// let catalog = Dict::from_pairs([(
+///     Name::from("MarkInfo"),
+///     Object::Dict(Dict::from_pairs([(Name::from("Marked"), Object::Bool(true))])),
+/// )]);
+///
+/// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+/// let tree = StructTree::load_page(
+///     &catalog, &Dict::default(), 1, &NoResolve, &limits, &mut diags,
+/// ).expect("the document is tagged");
+///
+/// // No `/StructTreeRoot`: a tree, but an empty one.
+/// assert!(tree.elements.is_empty());
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct StructTree {
     /// Every element reached from this page, in discovery order. Kid and
@@ -50,6 +71,33 @@ impl StructTree {
     /// integer**, and a Boolean has an integer reading of zero or one — so
     /// the spec-conforming `/Marked true` works, and so does a file writing
     /// `/Marked 1`.
+    ///
+    /// ```
+    /// use pdfrum_common::{Diagnostics, Limits};
+    /// use pdfrum_doc::StructTree;
+    /// use pdfrum_object::{Dict, Name, NoResolve, Object};
+    ///
+    /// // "Tagged" is `/MarkInfo /Marked` read as a non-zero integer, so a
+    /// // Boolean `true` and a written `1` both count.
+    /// let catalog = Dict::from_pairs([(
+    ///     Name::from("MarkInfo"),
+    ///     Object::Dict(Dict::from_pairs([(Name::from("Marked"), Object::Bool(true))])),
+    /// )]);
+    ///
+    /// let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// let page = Dict::default();
+    /// assert!(
+    ///     StructTree::load_page(&catalog, &page, 1, &NoResolve, &limits, &mut diags).is_some(),
+    /// );
+    ///
+    /// // An untagged document has no tree at all -- a different answer from
+    /// // an empty one.
+    /// assert!(
+    ///     StructTree::load_page(
+    ///         &Dict::default(), &page, 1, &NoResolve, &limits, &mut diags,
+    ///     ).is_none(),
+    /// );
+    /// ```
     #[must_use]
     pub fn load_page<R: Resolve>(
         catalog: &Dict,

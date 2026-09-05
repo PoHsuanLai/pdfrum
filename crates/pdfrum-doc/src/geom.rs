@@ -71,6 +71,13 @@ pub(crate) fn is_float_smaller(a: f32, b: f32) -> bool {
 }
 
 /// Builds a rectangle from PDF's `[left bottom right top]` ordering.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// let letter = geom::rect(0.0, 0.0, 612.0, 792.0);
+/// assert_eq!(geom::width(letter), 612.0);
+/// ```
 #[must_use]
 pub fn rect(left: f32, bottom: f32, right: f32, top: f32) -> Rect {
     Rect::new(
@@ -82,42 +89,88 @@ pub fn rect(left: f32, bottom: f32, right: f32, top: f32) -> Rect {
 }
 
 /// The rectangle's left edge.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::left(geom::rect(4.0, 0.0, 10.0, 8.0)), 4.0);
+/// ```
 #[must_use]
 pub fn left(r: Rect) -> f32 {
     r.x0 as f32
 }
 
 /// The rectangle's bottom edge.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::bottom(geom::rect(4.0, 1.0, 10.0, 8.0)), 1.0);
+/// ```
 #[must_use]
 pub fn bottom(r: Rect) -> f32 {
     r.y0 as f32
 }
 
 /// The rectangle's right edge.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::right(geom::rect(4.0, 0.0, 10.0, 8.0)), 10.0);
+/// ```
 #[must_use]
 pub fn right(r: Rect) -> f32 {
     r.x1 as f32
 }
 
 /// The rectangle's top edge.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::top(geom::rect(4.0, 0.0, 10.0, 8.0)), 8.0);
+/// ```
 #[must_use]
 pub fn top(r: Rect) -> f32 {
     r.y1 as f32
 }
 
 /// `right - left`, which is **negative** for an inverted rectangle.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::width(geom::rect(4.0, 0.0, 10.0, 8.0)), 6.0);
+/// // Inverted: the subtraction is not corrected.
+/// assert_eq!(geom::width(geom::rect(10.0, 0.0, 4.0, 8.0)), -6.0);
+/// ```
 #[must_use]
 pub fn width(r: Rect) -> f32 {
     right(r) - left(r)
 }
 
 /// `top - bottom`, which is **negative** for an inverted rectangle.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// assert_eq!(geom::height(geom::rect(4.0, 0.0, 10.0, 8.0)), 8.0);
+/// assert_eq!(geom::height(geom::rect(4.0, 8.0, 10.0, 0.0)), -8.0);
+/// ```
 #[must_use]
 pub fn height(r: Rect) -> f32 {
     top(r) - bottom(r)
 }
 
 /// Swaps whichever pairs of edges are out of order.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// let inverted = geom::rect(10.0, 8.0, 4.0, 0.0);
+/// assert_eq!(geom::normalize(inverted), geom::rect(4.0, 0.0, 10.0, 8.0));
+/// ```
 #[must_use]
 pub fn normalize(r: Rect) -> Rect {
     let (x0, x1) = if r.x0 > r.x1 {
@@ -209,6 +262,17 @@ pub(crate) fn translate(r: Rect, dx: f32, dy: f32) -> Rect {
 /// A degenerate axis (source extent under `0.001`) contributes a scale of 1
 /// rather than a division by nearly zero, which is how an appearance stream
 /// with a zero-width `/BBox` still lands somewhere sensible.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// // The transform that places an appearance stream's `/BBox` into an
+/// // annotation's `/Rect`.
+/// let bbox = geom::rect(0.0, 0.0, 10.0, 20.0);
+/// let rect = geom::rect(100.0, 200.0, 120.0, 240.0);
+/// let placed = geom::transform_rect(geom::match_rect(rect, bbox), bbox);
+/// assert_eq!(placed, rect);
+/// ```
 #[must_use]
 pub fn match_rect(dest: Rect, src: Rect) -> Affine {
     let a = if (src.x0 - src.x1).abs() < 0.001 {
@@ -225,6 +289,18 @@ pub fn match_rect(dest: Rect, src: Rect) -> Affine {
 }
 
 /// Maps all four corners and returns their bounding box.
+///
+/// ```
+/// use pdfrum_doc::geom;
+///
+/// use kurbo::Affine;
+///
+/// // A quarter turn maps the corners; the answer is their bounding box.
+/// let turned = geom::transform_rect(Affine::rotate(std::f64::consts::FRAC_PI_2),
+///     geom::rect(0.0, 0.0, 10.0, 20.0));
+/// assert!((geom::width(turned) - 20.0).abs() < 1e-4);
+/// assert!((geom::height(turned) - 10.0).abs() < 1e-4);
+/// ```
 #[must_use]
 pub fn transform_rect(m: Affine, r: Rect) -> Rect {
     let corners = [
@@ -283,6 +359,16 @@ impl WidgetRotation {
     /// `[oracle-bug]` A negative multiple of 90 keeps its sign through the
     /// fold, so `/R -90` draws and hit-tests as a three-quarter turn — the
     /// specification's "counterclockwise" reading, and pdf.js's.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom::WidgetRotation;
+    ///
+    /// assert_eq!(WidgetRotation::from_degrees(90), WidgetRotation::Quarter);
+    /// // `-90` counterclockwise is three quarters, and folds there.
+    /// assert_eq!(WidgetRotation::from_degrees(-90), WidgetRotation::ThreeQuarter);
+    /// // Not a multiple of 90: no quadrant at all.
+    /// assert_eq!(WidgetRotation::from_degrees(45), WidgetRotation::None);
+    /// ```
     // [oracle-bug] PDFium folds with `abs(GetRotation() % 360)`
     // (fpdfsdk/cpdfsdk_widget.cpp:1029 in GetRotatedRect, :1049 in
     // GetMatrix), sending -90 to 90 — the wrong direction. The two agree on
@@ -308,6 +394,13 @@ impl WidgetRotation {
     }
 
     /// Whether this rotation exchanges the widget's width and height.
+    ///
+    /// ```
+    /// use pdfrum_doc::geom::WidgetRotation;
+    ///
+    /// assert!(WidgetRotation::Quarter.swaps_axes());
+    /// assert!(!WidgetRotation::Half.swaps_axes());
+    /// ```
     #[must_use]
     pub fn swaps_axes(self) -> bool {
         matches!(self, WidgetRotation::Quarter | WidgetRotation::ThreeQuarter)
