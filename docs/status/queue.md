@@ -301,7 +301,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   it (zune-image #434), which cuts `decode_dct`'s 293 M on downscaled
   JPEGs and changes pixels.
 
-## M22 — `libpdfrum` (scoped 2026-09-05, PLAN.md M22) — IN PROGRESS
+## ~~M22 — `libpdfrum`~~ — MET 2026-09-05 (`docs/status/M22.md`); rows below are the record
 
 - ~~Phase 1 owned handles~~ — landed 2026-09-05: `Document::page_owned`/`pages_owned`
   and `OwnedPage`, `FormSession::owned`/`owned_with_scripts` and
@@ -316,8 +316,18 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   document, pixmaps identical). The C test caught what no Rust gate could:
   `pdfrum_page` as both a typedef and a function shadows the type in C's
   one namespace — the accessor is `pdfrum_document_page`.
-- Phase 4 `pdfrum-wasm` on wasm-bindgen — IN PROGRESS 2026-09-05; phase 5
-  UniFFI/PyO3 on request.
+- ~~Phase 4 `pdfrum-wasm`~~ — landed 2026-09-05 (596d45d): four handles
+  (`Document`, `Page`, `Form`, `Cancel`) plus `version()`, three option
+  classes and nine value types typed in the generated `.d.ts`; errors are
+  JS `Error`s with `.code` = `ErrorCode`; 13 Node tests through
+  `wasm-bindgen-test-runner` (render, text, words, fill/save/reopen, wrong
+  password code 3, pixel cap code 9, cancel); `scripts/wasm-package.nu`
+  drives bindgen and `wasm-opt` directly because `wasm-pack` cannot build
+  the crate (hard-coded `-O`, no feature flags); `opt-level = 3` won on
+  size at every stage (4.83 MB after `-Oz`, budget 5.79 MB in CI);
+  `cc` ban scoped with `wrappers = ["minicov"]` (dev-only, measured absent
+  from every normal+build tree); `js-sys` allowed by name in the pure-Rust
+  check. M22's exit is met; phase 5 UniFFI/PyO3 stays on request.
 - Facts checked 2026-09-05: the facade already `cargo check`s on
   `wasm32-unknown-unknown` with vello-cpu, tinyskia, agg, codecs-all,
   forms, edit, markdown; only `javascript` fails (boa's getrandom wants
