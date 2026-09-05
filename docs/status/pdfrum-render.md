@@ -3681,7 +3681,7 @@ Exactly **one** board row moves and none moves down:
 | `fx/path/transparent1.pdf` | 0.991918 | fixed (`5ba19cd`); closepath-seam residual open |
 | `fx/image/1_image.pdf` | 0.999858 | fixed (`322ab67`) |
 | `vector_en_system.pdf` | 0.998275 | fixed (`b65f89e`) — a path-builder defect, not a mask one |
-| `vector_tcpdf_009.pdf` | — | still not investigated |
+| `vector_tcpdf_009.pdf` | 0.999960 | fixed — the colour half of `image_en_fqa`, see below |
 | `image_en_fqa.pdf` | 0.999671 | fixed (`4667301`) |
 | `image_jpx_123.pdf` | 0.987 | neither — upstream numerics; bucket it |
 
@@ -3702,3 +3702,92 @@ which makes `matte_source` the identity, exactly as the section above
 established — so it is invisible on this corpus and was left alone rather
 than fixed blind. It needs a file whose matte is not black to be worth
 touching, and there is none on the board.
+
+### `vector_tcpdf_009.pdf`, fixed 2026-09-06 — the colour half of `image_en_fqa`
+
+The last unexamined "ours" row, and it needed no diagnosis of its own: it is
+the same defect as `image_en_fqa.pdf` on the other path. `benches/compare`'s
+basis — page 1 at 150 DPI against `pdfium_test --png --scale=2.0833333333`:
+
+| file | before | after |
+|---|---|---|
+| `vector_tcpdf_009.pdf` | 0.959381 | **0.999960** |
+
+The page is 22 draws of a 1181x1772 `DeviceRGB` JPEG reduced 2.67x-8.0x.
+Upstream box-filters once, straight onto the **integer** destination rect —
+`GetUnitRect().GetOuterRect()`
+(`core/fpdfapi/render/cpdf_imagerenderer.cpp:488-497`) feeds the integer
+`dest_width` / `dest_height` to the area loop at
+`core/fxge/dib/cstretchengine.cpp:135-172`. We reduced to the *ceiled
+fractional* footprint instead, which leaves a residual scale of 0.9990-0.9998
+and a subpixel phase, and the backend's bilinear sampler then resolved that —
+a second resample, carrying 76.5% of the oracle's high-frequency energy
+page-wide.
+
+`SnappedReduction` (`4667301`) already closed exactly this for soft-mask
+planes. **The wiring is a type rather than a call.** `Reduction`
+(`crates/pdfrum-render/src/stretch.rs`) carries the reduction size and the
+placement transform in one value, so a caller cannot pair the size of one
+rule with the transform of the other — which is precisely how the two came
+apart before. `render_image` asks `stretch::reduction` once and reads both
+halves off the answer.
+
+**One restriction the colour path adds** beyond `snapped_reduction`'s own
+(axis-aligned, unmirrored, reducing in both axes): a type-3 char proc, where
+the target is a sub-bitmap whose origin is the glyph's outer rect rather than
+the page's. Upstream's snap is to the *device* grid
+(`cpdf_imagerenderer.cpp:658-664`), so snapping there would quantise onto the
+sub-target's grid and be quantised again when it is blitted — two roundings
+where upstream has one. `image_placement` already carried that restriction
+for `Placement::Snapped`; it now applies one step earlier so the *reduction*
+is not snapped either.
+
+#### And one ulp, found by the board
+
+The first board pass moved `corpus/fx/image/image_foxit.pdf` **down**, 0.9960
+to 0.9686, from pass to fail — the only row that went down by more than a
+rounding, and the reason there were two passes. The cause is float
+composition, not geometry. That file is `273 0 0 105 0 0 cm` on a 273x105
+page with a 364x140 image, so the footprint is *exactly* the integer rect —
+but composing the `cm`, the device y flip and the image's own `1/364` yields
+an `a` of `0.7500000000000001` and a right edge of `273.00000000000006`,
+which `outer_rect`'s `ceil` turned into **274**: one column too wide, placed
+at x=0, shifting the whole image. The footprint rule never saw it because its
+extent came off `transform_rect_bbox`.
+
+`snapped_for` now rounds a unit-rect edge that is within `EXACTNESS` of a
+whole number onto it before the outer rect ceils. `EXACTNESS` is the module's
+existing statement of how far off integral our composition drifts, and it is
+orders of magnitude below the half pixel at which a real edge would move.
+Upstream needs no such settling because its `CFX_Matrix` never composes the
+image's reciprocal in.
+
+#### What the board did
+
+**1759 files, 1547 pass -> 1551 pass**, and the run's own
+`--check-regressions` reports none.
+
+- **138 rows up.** Four go fail -> pass: `corpus/third_party/tcpdf/example_009.pdf`
+  0.946402 -> 0.999971, `corpus/third_party/tcpdf/example_010.pdf`
+  0.971044 -> 0.999787, `corpus/third_party/tcpdf/example_057.pdf`
+  0.989655 -> 0.999988, `corpus/pdfium/bug_691967.pdf` 0.989498 -> 0.999998.
+  The largest remaining movers: `corpus/fx/text/quick_start_guide.pdf`
+  0.967161 -> 0.998999, the fifteen `corpus/fx/FRC_8.2.4_part1/FRC_*` rows
+  0.990063 -> 0.999975 each, `corpus/third_party/tcpdf/example_064.pdf`
+  0.993027 -> 0.999927, `corpus/fx/mulobj/new/image_video/image_png.pdf`
+  0.993324 -> 1.000000. Most of the tcpdf family lands in the 0.9999 band.
+- **Three rows down, all by less than 0.0002, none changing status.**
+  `resources/pixel/transfer_function.in` and `.pdf` 0.999791 -> 0.999779:
+  400x400 and 50x50 images into 100x100 boxes, and the two renders differ by
+  a **max channel delta of 2** — 1-2 LSB of box-filter rounding on a clean
+  4x/2x reduction, not a geometric change. `resources/page_labels.pdf`
+  0.999637 -> 0.999482: a 171x32 logo at scale 0.8009, so the footprint is
+  genuinely fractional (136.95 x 25.63) and the snap moves the *origin* onto
+  the integer grid, which is upstream's geometry. The ink bounding box is
+  unchanged and the difference is one row of top-edge coverage over a 92x25
+  region, 3.7% of that logo's ink.
+
+Reported rather than silently accepted, per the pass's rule that any row
+moving down is stop-and-report. The judgement is that reproducing upstream's
+destination grid is the correct behaviour and these three are its residual,
+two of them below the level at which the rule was meant to bite.

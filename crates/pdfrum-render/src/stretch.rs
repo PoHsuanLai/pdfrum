@@ -894,6 +894,27 @@ fn snapped_for(to_device: kurbo::Affine, src_width: u32, src_height: u32) -> Opt
     {
         return None;
     }
+    // **Round an edge that is a few ulps off a whole number onto it before
+    // the outer rect ceils.** `to_device` reaches here through the page
+    // matrix, the `cm`, the y flip and the image's own `1/width`, so a
+    // placement that is mathematically integral — `273 0 0 105 0 0 cm` on a
+    // 273-wide page, `fx/image/image_foxit.pdf` — arrives as `273.000…6`,
+    // and `ceil` then buys a whole extra column that upstream never had.
+    // Upstream computes the same rect from the same geometry without that
+    // error because its `CFX_Matrix` never composes the image's reciprocal
+    // in; the tolerance is [`EXACTNESS`], the module's existing statement of
+    // how far off integral our composition drifts, and it is orders of
+    // magnitude below the half pixel at which a real edge would move.
+    let settle = |v: f64| {
+        let r = v.round();
+        if (v - r).abs() <= EXACTNESS { r } else { v }
+    };
+    let unit = kurbo::Rect::new(
+        settle(unit.x0),
+        settle(unit.y0),
+        settle(unit.x1),
+        settle(unit.y1),
+    );
     let rect = crate::path::outer_rect(unit);
     let (w, h) = (
         rect.right.checked_sub(rect.left)?,
@@ -1012,6 +1033,117 @@ pub fn snapped_reduction(
         size: (w, h),
         origin: (rect.left, rect.top),
     })
+}
+
+/// Which reduction a draw takes, and the placement that reduction implies.
+///
+/// The size to box-filter to and the transform that then places the reduced
+/// pixmap are **one decision**, not two, because getting them from two
+/// independent rules is exactly the defect this type exists to remove: the
+/// footprint rule ceils a fractional extent, so the reduced pixmap has
+/// upstream's pixel *count* on a grid offset from upstream's by a subpixel
+/// phase, and the backend's kernel then resamples what was already filtered.
+/// `image_en_fqa.pdf` measured that as a one-pixel spread on every mask edge
+/// and `vector_tcpdf_009.pdf` as 23.5% of the page's high-frequency energy.
+///
+/// A variant therefore carries both halves, and a caller cannot pair the
+/// size of one rule with the transform of the other.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Reduction {
+    /// Upstream's geometry: reduce straight onto the integer destination
+    /// rect and place the result whole, so [`placement_for`] answers
+    /// [`Placement::Exact`] and nothing resamples it again.
+    ///
+    /// This is `CPDF_ImageRenderer::StartDIBBase`'s reduced-image path —
+    /// `GetUnitRect().GetOuterRect()`
+    /// (`core/fpdfapi/render/cpdf_imagerenderer.cpp:488-497`) feeds the
+    /// *integer* `dest_width` / `dest_height` to the box-filter loop at
+    /// `core/fxge/dib/cstretchengine.cpp:135-172`. One resample, ending on
+    /// the device grid.
+    Snapped(SnappedReduction),
+    /// The pre-existing rule: reduce to the ceiled fractional footprint and
+    /// let the backend's sampler resolve the residual scale and phase.
+    ///
+    /// This is what every draw the snap does not cover keeps getting — a
+    /// rotated or skewed matrix, a mirrored axis, a single-axis reduction,
+    /// and a draw inside a type-3 char proc, whose target is a sub-bitmap on
+    /// a grid of its own.
+    Footprint {
+        /// The whole-pixel size to box-filter the source down to.
+        size: (u32, u32),
+        /// The caller's transform, pre-scaled by the reduction ratio.
+        transform: kurbo::Affine,
+    },
+    /// Neither axis is being reduced: the source pixels are the pixels to
+    /// draw, through the caller's own transform.
+    None(kurbo::Affine),
+}
+
+impl Reduction {
+    /// The pixmap size this reduction produces, given the source's.
+    ///
+    /// The cache keys on it, and it is the one number both the key and the
+    /// pixels must agree on — which is why it comes off the same value the
+    /// transform does rather than from a second call.
+    #[must_use]
+    pub const fn size(self, src_width: u32, src_height: u32) -> (u32, u32) {
+        match self {
+            Self::Snapped(snapped) => snapped.size(),
+            Self::Footprint { size, .. } => size,
+            Self::None(_) => (src_width, src_height),
+        }
+    }
+
+    /// The transform that places the reduced pixmap on the device.
+    #[must_use]
+    pub fn transform(self) -> kurbo::Affine {
+        match self {
+            Self::Snapped(snapped) => snapped.transform(),
+            Self::Footprint { transform, .. } | Self::None(transform) => transform,
+        }
+    }
+
+    /// Whether any box filtering is to be done — `false` only for
+    /// [`Reduction::None`], where the source pixels are drawn as they are.
+    #[must_use]
+    pub const fn filters(self) -> bool {
+        !matches!(self, Self::None(_))
+    }
+}
+
+/// Choose the reduction for one image draw.
+///
+/// `snap` is the caller's statement that upstream's device-grid snap is
+/// applicable here at all. It is false inside a type-3 char proc, where the
+/// target is a sub-bitmap whose origin is the glyph's outer rect rather than
+/// the page's: upstream's snap is to the *device* integer grid
+/// (`cpdf_imagerenderer.cpp:658-664`), so snapping against a sub-target
+/// would quantise onto the wrong grid and be quantised again when that
+/// sub-target is blitted — two roundings where upstream has one. Same
+/// restriction, and for the same reason, as [`Placement::Snapped`] carries
+/// in `crate::walk`'s `image_placement`.
+///
+/// Every other restriction lives in [`snapped_reduction`]: axis-aligned,
+/// unmirrored, and reducing in both axes.
+#[must_use]
+pub fn reduction(
+    to_device: kurbo::Affine,
+    src_width: u32,
+    src_height: u32,
+    dest_width: f64,
+    dest_height: f64,
+    snap: bool,
+) -> Reduction {
+    if snap && let Some(snapped) = snapped_reduction(to_device, src_width, src_height) {
+        return Reduction::Snapped(snapped);
+    }
+    match reduction_for(src_width, src_height, dest_width, dest_height) {
+        Some((new_w, new_h)) => Reduction::Footprint {
+            size: (new_w, new_h),
+            transform: reduction_transform(to_device, src_width, src_height, new_w, new_h),
+        },
+        None => Reduction::None(to_device),
+    }
 }
 
 /// The largest source axis this pre-pass will process.
@@ -1582,6 +1714,37 @@ mod tests {
         assert_eq!(rect.height, 560);
     }
 
+    /// An integral footprint that arrives a few ulps long must not ceil to an
+    /// extra column.
+    ///
+    /// `fx/image/image_foxit.pdf` is the case: `273 0 0 105 0 0 cm` places a
+    /// 364x140 image on a 273x105 page, so the footprint is exactly the
+    /// integer rect — but composing the `cm`, the device y flip and the
+    /// image's own `1/364` gives an `a` of `0.7500000000000001` and a right
+    /// edge of `273.00000000000006`, which `outer_rect` would ceil to 274.
+    /// One column too wide is a whole-image shift, not a rounding: the file
+    /// scored 0.9686 with it and 0.9960 without.
+    #[test]
+    fn an_integral_footprint_does_not_ceil_to_an_extra_column() {
+        let (w, h) = (364_u32, 140_u32);
+        let placement = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 105.0])
+            * Affine::new([273.0, 0.0, 0.0, 105.0, 0.0, 0.0])
+            * Affine::new([1.0 / f64::from(w), 0.0, 0.0, -1.0 / f64::from(h), 0.0, 1.0]);
+        // The premise: the composition really is off by an ulp, so the right
+        // edge lands just past 273 and a plain `ceil` would buy column 274.
+        let right = placement.as_coeffs()[0] * f64::from(w);
+        assert!(
+            right > 273.0,
+            "the ulp this test exists for is gone: {right}"
+        );
+        assert!(right < 273.000_1);
+        let snapped = snapped_reduction(placement, w, h).expect("an axis-aligned reduction");
+        assert_eq!(snapped.size(), (273, 105));
+        // And it agrees with the footprint rule, which never saw the ulp
+        // because its extent came off `transform_rect_bbox`.
+        assert_eq!(Some(snapped.size()), reduction_for(w, h, 273.0, 105.0));
+    }
+
     /// The signs come from `GetDimensionsFromUnitRect`, not from a bbox.
     ///
     /// A negative `a` mirrors x and a **positive** `d` mirrors y, and the
@@ -1652,5 +1815,65 @@ mod tests {
         assert_eq!(reduce_gray_to(&[1, 2, 3], 4, 4, 2, 2), vec![0; 4]);
         assert_eq!(reduce_gray_to(&[], 0, 0, 2, 2), vec![0; 4]);
         assert!(reduce_gray_to(&[1; 16], 4, 4, 0, 2).is_empty());
+    }
+
+    /// The whole point of the type: a snapped reduction's own transform must
+    /// resolve to `Exact`, so the pixmap it sizes is drawn with the nearest
+    /// sampler and never resampled a second time.
+    #[test]
+    fn a_snapped_reduction_places_exactly() {
+        // 1181x1772 reduced onto a fractional footprint at a fractional
+        // origin — `vector_tcpdf_009`'s shape.
+        let at = Affine::translate((37.421, 88.913)) * Affine::scale_non_uniform(0.31, 0.28);
+        let Reduction::Snapped(snapped) = reduction(at, 1181, 1772, 366.11, 496.16, true) else {
+            panic!("an axis-aligned two-axis reduction snaps");
+        };
+        let (w, h) = snapped.size();
+        assert!(w > 0 && h > 0 && w < 1181 && h < 1772);
+        assert!(matches!(
+            placement_for(snapped.transform(), w, h),
+            Placement::Exact { .. }
+        ));
+        assert_eq!(Reduction::Snapped(snapped).size(1181, 1772), (w, h));
+        assert!(Reduction::Snapped(snapped).filters());
+    }
+
+    /// A type-3 char proc draws into a sub-bitmap on a grid of its own, so
+    /// the device-grid snap must not apply — it falls back to the footprint
+    /// reduction the draw was already getting.
+    #[test]
+    fn a_type3_draw_keeps_the_footprint_reduction() {
+        let at = Affine::translate((37.421, 88.913)) * Affine::scale_non_uniform(0.31, 0.28);
+        let snapped = reduction(at, 1181, 1772, 366.11, 496.16, true);
+        let unsnapped = reduction(at, 1181, 1772, 366.11, 496.16, false);
+        assert!(matches!(snapped, Reduction::Snapped(_)));
+        let Reduction::Footprint { size, transform } = unsnapped else {
+            panic!("without the snap the footprint rule applies");
+        };
+        assert_eq!(
+            size,
+            reduction_for(1181, 1772, 366.11, 496.16).expect("reduces")
+        );
+        assert_eq!(transform, unsnapped.transform());
+        assert!(unsnapped.filters());
+    }
+
+    /// A rotation is never snapped: upstream hands it to `CFX_ImageTransformer`
+    /// rather than `CStretchEngine`, and the reduced pixmap still needs the
+    /// backend's kernel for the rotation itself.
+    #[test]
+    fn a_rotated_or_enlarging_draw_is_not_snapped() {
+        let rotated = Affine::rotate(0.4) * Affine::scale(0.3);
+        assert!(!matches!(
+            reduction(rotated, 800, 600, 240.0, 180.0, true),
+            Reduction::Snapped(_)
+        ));
+        // An enlargement reduces in neither axis, so there is nothing to
+        // filter and the caller's own transform is what places it.
+        let grown = Affine::scale(4.0);
+        let up = reduction(grown, 8, 8, 32.0, 32.0, true);
+        assert_eq!(up, Reduction::None(grown));
+        assert_eq!(up.size(8, 8), (8, 8));
+        assert!(!up.filters());
     }
 }
