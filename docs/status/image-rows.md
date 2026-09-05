@@ -434,3 +434,35 @@ The API baseline gains `Depth`, `Packed`, `Unpacked` and `Samples`;
 surface does not move** — the facade never exposed `Pixels` — so
 `pdfrum-capi` and `pdfrum-wasm`, which consume the facade's image API, are
 unchanged.
+
+### Step 5 follow-up — the warm regression, and what it actually was
+
+Landed 2026-09-06. The step's benchmark run recorded a real regression:
+`image_bug_583804`'s `render-warm-*` doubled on all three backends while
+every `render-cold-*` row on the same file improved
+(`docs/status/M13-perf-baseline.md` §25.2). The write-up there blamed the
+deleted `Pixels::Whole` intermediate and the per-render row walk. It was
+neither.
+
+The pass changed what the **decoded-image cache holds**. Widened, this file's
+samples were 60,023,187 bytes and fit `pdfrum_page::MAX_BYTES`; packed, they
+are 120,242,982 — sixteen bits per component, so leaving them packed made the
+cached form *twice as large*, not smaller. Over the budget, the eviction pass
+dropped the entry in the same `insert` that added it, and every page rebuild
+re-ran the JPEG decode. `render-warm-*` rebuilds its `Page` inside the timed
+closure, so it paid that decode per iteration: 94.713 ms against 0.009 ms
+before the pass, measured on `himmel`. `benches/src/bin/profile --warm`
+hoists `prepare` out and never repeated it, which is why the regression was
+invisible to the profiler and to callgrind.
+
+The fix is in `crates/pdfrum-page/src/image/cache.rs`: the byte budget keeps
+its last entry however large, so an image bigger than the whole budget is
+cached rather than inserted-and-evicted. `RenderedImageCache` downstream
+already had the rule. Warm returns to 192.02 ms (from 295.96) and cold to
+425.96 ms (from 429.08), both on `himmel` at load < 0.1; peak RSS at 150 DPI
+is unchanged.
+
+The lesson for the design doc's ledger: `ImageData::byte_size` reporting the
+*packed* bytes is honest about what is held, but "smaller than the widened
+form it never builds" is only true below eight bits per component. At sixteen
+it is larger, and any budget keyed on it has to tolerate that.

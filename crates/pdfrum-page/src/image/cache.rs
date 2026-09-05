@@ -11,6 +11,14 @@
 //! before looking at the byte budget at all**, and only then evicts further
 //! to fit the budget. So a cache holding twenty small images loses five of
 //! them even when they total a few kilobytes.
+//!
+//! The byte budget, unlike the entry cap, never empties the cache: the last
+//! entry survives however large it is. An image bigger than the whole budget
+//! would otherwise be inserted and evicted in one call, leaving a caller that
+//! draws it repeatedly re-decoding it every time — the cache doing strictly
+//! worse than no cache. The rendered-pixmap cache downstream
+//! (`pdfrum_render`'s `RenderedImageCache`) states the same rule for the same
+//! reason.
 
 use super::ImageData;
 use pdfrum_object::ObjRef;
@@ -249,7 +257,18 @@ impl ImageCache {
         for (_, _, bytes) in order.iter().take(over) {
             projected = projected.saturating_sub(*bytes);
         }
-        while projected > MAX_BYTES && drop_count < order.len() {
+        // `order.len() - 1` and not `order.len()`: one entry survives the
+        // byte budget however large it is. A single image bigger than the
+        // whole budget would otherwise be inserted and evicted in the same
+        // call, so a session that draws it repeatedly re-decodes it every
+        // time and the cache does nothing at all — which is what the corpus's
+        // 4473x4473 sixteen-bit `image_bug_583804` did once its samples
+        // stopped being widened on decode (120 MiB packed against a 100 MiB
+        // budget). `crate::image` names the same rule for the rendered
+        // pixmaps downstream. The entry cap above stays unconditional,
+        // because that is upstream's order and it is a count, not a size.
+        let keep_last = order.len().saturating_sub(1);
+        while projected > MAX_BYTES && drop_count < keep_last {
             if let Some((_, _, bytes)) = order.get(drop_count) {
                 projected = projected.saturating_sub(*bytes);
             }
@@ -505,6 +524,42 @@ mod tests {
                 "{wanted:?} is larger than the entry on at least one axis"
             );
         }
+    }
+
+    /// One image larger than the whole byte budget is still cached.
+    ///
+    /// The regression this pins: `image_bug_583804` is a 4473x4473 sixteen-bit
+    /// RGB image whose packed samples are 120 MiB against a 100 MiB budget, so
+    /// the eviction pass dropped it in the same call that inserted it and every
+    /// rebuild of the page re-ran the decode. A warm render that rebuilds its
+    /// page — which is what `render-warm-*` measures — paid 95 ms per iteration
+    /// for a cache that held nothing.
+    #[test]
+    fn one_image_larger_than_the_whole_budget_survives_eviction() {
+        let big = Arc::new(ImageData {
+            width: 1,
+            height: 1,
+            samples: Samples::Whole(Pixels::Gray8(
+                vec![0u8; super::MAX_BYTES + 1].into_boxed_slice(),
+            )),
+            mask: None,
+            matte: None,
+            interpolate: false,
+        });
+        let mut cache = ImageCache::default();
+        let key = ObjRef::new(1, 0);
+        cache.insert(key, RequestedSize::Full, Arc::clone(&big));
+        assert!(
+            cache.get(key, RequestedSize::Full).is_some(),
+            "the only entry is kept however large it is"
+        );
+
+        // A second image does not get the same protection: with two entries
+        // the budget sheds the older one and the newest survives.
+        let key2 = ObjRef::new(2, 0);
+        cache.insert(key2, RequestedSize::Full, big);
+        assert!(cache.get(key, RequestedSize::Full).is_none());
+        assert!(cache.get(key2, RequestedSize::Full).is_some());
     }
 
     #[test]
