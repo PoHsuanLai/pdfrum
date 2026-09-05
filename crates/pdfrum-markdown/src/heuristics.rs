@@ -27,7 +27,23 @@
 //! - **Paragraphs.** Consecutive body lines join with a space; a line ending
 //!   in a hyphen followed by a lower-case letter is de-hyphenated; a
 //!   vertical gap of more than 0.8 line heights, or a size change, starts
-//!   a new one.
+//!   a new one. Two more rules decide within the gap, the ones every layout
+//!   engine applies to justified and left-aligned prose:
+//!   - *Ragged right.* A line that stops short of its column's right edge
+//!     is its paragraph's last. The edge is the furthest right any body
+//!     line sharing its left edge (within a character width) reaches, and
+//!     short is more than two character widths — 0.9 × the font size each
+//!     — before it, when the next line opens with a capital or a digit. A
+//!     short line followed by a lower-case word is a justified paragraph's
+//!     last line met by an unlucky wrap, and joins; a short line followed
+//!     by a capital is one paragraph ending and the next beginning, so a
+//!     run of one-line paragraphs comes out one each.
+//!   - *Lead-in.* A line that opens bold and turns plain, or whose first
+//!     six words at most are a capitalised phrase — the first word and at
+//!     least half of them — closed by ` - ` or ` – `, begins a paragraph
+//!     whatever the gap: `XFA Form Filling - XFA (XML Form Architecture)
+//!     form allows …`. It stays a paragraph, not a list item; a bold
+//!     lead-in is written `**XFA Form Filling** - …`.
 //! - **Ligatures.** `ﬁ`, `ﬂ`, `ﬀ`, `ﬃ`, `ﬄ` become their letters.
 //! - **Dot leaders.** Five or more dots in a row, spaces between them
 //!   allowed, are a table-of-contents leader and become ` ... ` — one
@@ -55,6 +71,17 @@ const H2_RATIO: f32 = 1.3;
 const HEADING_MAX_WORDS: usize = 12;
 /// A gap between lines wider than this many line heights ends a paragraph.
 const PARAGRAPH_GAP: f64 = 0.8;
+/// A character's width as a fraction of the font size, the unit the
+/// ragged-right rule measures in.
+const CHAR_WIDTH: f64 = 0.9;
+/// A line stopping more than this many character widths before its
+/// column's right edge is ragged.
+const RAGGED_CHARS: f64 = 2.0;
+/// Lines whose left edges are within this many character widths share a
+/// column.
+const LEFT_EDGE_CHARS: f64 = 1.0;
+/// A lead-in has at most this many words before its dash.
+const LEAD_IN_MAX_WORDS: usize = 6;
 /// A run of this many dots is a leader, not an ellipsis.
 const LEADER_MIN_DOTS: usize = 5;
 
@@ -349,7 +376,90 @@ fn continues(prev: &Line, next: &Line) -> bool {
     gap < height * PARAGRAPH_GAP && gap > -height * 0.5 && size_close
 }
 
+/// A character's width on `line`, the ragged-right rule's unit.
+fn char_width(line: &Line) -> f64 {
+    f64::from(line.font_size).max(1.0) * CHAR_WIDTH
+}
+
+/// The right edge of the column `line` sits in: the furthest right any of
+/// `bodies` sharing its left edge reaches, `line` itself among them.
+fn column_right_edge(line: &Line, bodies: &[&Line]) -> f64 {
+    let reach = char_width(line) * LEFT_EDGE_CHARS;
+    bodies
+        .iter()
+        .filter(|other| (other.bbox.x0 - line.bbox.x0).abs() <= reach)
+        .map(|other| other.bbox.x1)
+        .fold(line.bbox.x1, f64::max)
+}
+
+/// Whether `prev` is its paragraph's last line: it stops short of `edge`,
+/// the column's right edge, and `next` opens with a capital or a digit. A
+/// short line met by a lower-case word is a justified paragraph's last
+/// line and an unlucky wrap, and joins.
+fn ends_ragged(prev: &Line, next: &Line, edge: f64) -> bool {
+    let short = edge - prev.bbox.x1 > char_width(prev) * RAGGED_CHARS;
+    short
+        && next
+            .text
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_uppercase() || c.is_ascii_digit())
+}
+
+/// Whether the line's head begins a paragraph: a bold run that turns
+/// plain, or a capitalised phrase closed by a dash.
+fn starts_lead_in(line: &Line) -> bool {
+    has_bold_lead_in(line) || has_dash_lead_in(&line.text)
+}
+
+/// A line drawn bold at its head and plain after: the lead-in is the bold.
+fn has_bold_lead_in(line: &Line) -> bool {
+    line.bold_prefix > 0 && line.bold_prefix < line.text.len()
+}
+
+/// A capitalised phrase of at most [`LEAD_IN_MAX_WORDS`] words — the first
+/// word and at least half of them capitalised — closed by ` - ` or ` – `:
+/// `XFA Form Filling - XFA …`, `Email and Phone Support - helps …`.
+fn has_dash_lead_in(text: &str) -> bool {
+    let Some(at) = [" - ", " \u{2013} "]
+        .iter()
+        .filter_map(|dash| text.find(dash))
+        .min()
+    else {
+        return false;
+    };
+    let words: Vec<&str> = text
+        .get(..at)
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect();
+    let capitalised = |w: &str| w.chars().next().is_some_and(char::is_uppercase);
+    !words.is_empty()
+        && words.len() <= LEAD_IN_MAX_WORDS
+        && words.first().is_some_and(|w| capitalised(w))
+        && words.iter().filter(|w| capitalised(w)).count() * 2 >= words.len()
+}
+
+/// A paragraph's opening line, its bold lead-in marked when it has one.
+fn paragraph_head(line: &Line) -> String {
+    match (
+        line.text.get(..line.bold_prefix),
+        line.text.get(line.bold_prefix..),
+    ) {
+        (Some(lead), Some(rest)) if has_bold_lead_in(line) => {
+            normalize(&format!("**{lead}**{rest}"))
+        }
+        _ => normalize(&line.text),
+    }
+}
+
 fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
+    let bodies: Vec<&Line> = classified
+        .iter()
+        .filter(|(class, _)| *class == Class::Body)
+        .map(|(_, line)| *line)
+        .collect();
     let mut blocks = Vec::new();
     let mut i = 0;
     while let Some(&(class, line)) = classified.get(i) {
@@ -406,12 +516,14 @@ fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
                 i = j;
             }
             Class::Body => {
-                let mut text = normalize(&line.text);
+                let mut text = paragraph_head(line);
                 let mut j = i + 1;
                 while let Some((Class::Body, next)) = classified.get(j).copied()
-                    && classified
-                        .get(j - 1)
-                        .is_some_and(|(_, prev)| continues(prev, next))
+                    && classified.get(j - 1).is_some_and(|(_, prev)| {
+                        continues(prev, next)
+                            && !ends_ragged(prev, next, column_right_edge(prev, &bodies))
+                    })
+                    && !starts_lead_in(next)
                 {
                     join(&mut text, &normalize(&next.text));
                     j += 1;
@@ -426,7 +538,7 @@ fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
 
 #[cfg(test)]
 mod tests {
-    use super::{blocks, blocks_among, normalize};
+    use super::{blocks, blocks_among, has_dash_lead_in, normalize};
     use crate::ast::Block;
     use crate::lines::Line;
     use kurbo::Rect;
@@ -445,6 +557,7 @@ mod tests {
             ),
             font_size: size,
             bold,
+            bold_prefix: 0,
             mono,
             mcids: Vec::new(),
             segments: Vec::new(),
@@ -511,6 +624,7 @@ mod tests {
             bbox: Rect::new(72.0, y0, 520.0, y1),
             font_size: 11.0,
             bold: false,
+            bold_prefix: 0,
             mono: false,
             mcids: Vec::new(),
             segments: Vec::new(),
@@ -537,6 +651,212 @@ mod tests {
                 Block::Paragraph("A line thirty points lower starts anew.".into()),
             ]
         );
+    }
+
+    /// A 10 pt body line in a column whose left edge is 72, from `x1`
+    /// back, its top at `top`; the head of the line drawn bold for
+    /// `bold_prefix` bytes.
+    fn column_line(text: &str, x1: f64, top: f64, bold_prefix: usize) -> Line {
+        Line {
+            text: text.to_owned(),
+            bbox: Rect::new(72.0, top - 10.0, x1, top),
+            font_size: 10.0,
+            bold: false,
+            bold_prefix,
+            mono: false,
+            mcids: Vec::new(),
+            segments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_line_short_of_the_column_ends_its_paragraph_when_a_capital_follows() {
+        // Every line twelve points below the last: within the gap rule.
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            column_line(
+                "Many businesses need more than just PDF creation. They",
+                500.0,
+                700.0,
+                0,
+            ),
+            column_line("need security that ensures compliance.", 380.0, 688.0, 0),
+            column_line("System Requirements", 170.0, 676.0, 0),
+            column_line("Operating Systems", 160.0, 664.0, 0),
+            column_line(
+                "Microsoft Windows XP Home, Professional, or Tablet PC (32-bit",
+                500.0,
+                652.0,
+                0,
+            ),
+            column_line("& 64-bit).", 120.0, 640.0, 0),
+            column_line("Windows 7 (32-bit & 64-bit).", 210.0, 628.0, 0),
+        ];
+        let texts: Vec<String> = blocks(&lines, page).iter().map(Block::text).collect();
+        assert_eq!(
+            texts,
+            [
+                "Many businesses need more than just PDF creation. They need security that \
+                 ensures compliance.",
+                "System Requirements",
+                "Operating Systems",
+                "Microsoft Windows XP Home, Professional, or Tablet PC (32-bit & 64-bit).",
+                "Windows 7 (32-bit & 64-bit).",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_justified_paragraphs_short_last_line_joins_a_lower_case_wrap() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            column_line(
+                "This paragraph is set justified, so every line but the last",
+                500.0,
+                700.0,
+                0,
+            ),
+            column_line("reaches the edge; this one is short", 320.0, 688.0, 0),
+            column_line(
+                "but the next begins in lower case, as a wrapped line does.",
+                490.0,
+                676.0,
+                0,
+            ),
+        ];
+        assert_eq!(
+            blocks(&lines, page),
+            vec![Block::Paragraph(
+                "This paragraph is set justified, so every line but the last reaches the edge; \
+                 this one is short but the next begins in lower case, as a wrapped line does."
+                    .into()
+            )]
+        );
+    }
+
+    #[test]
+    fn a_capitalised_phrase_closed_by_a_dash_begins_a_paragraph_within_the_gap() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            // Ends thirteen points short of the edge: not ragged.
+            column_line(
+                "XFA Form Filling - XFA (XML Form Architecture) form allows you to leverage existing XFA forms.",
+                494.0,
+                700.0,
+                0,
+            ),
+            column_line(
+                "High Performance - Up to 3 times faster PDF creation from over 200 of the most common office",
+                507.0,
+                688.0,
+                0,
+            ),
+            column_line(
+                "file types and convert multiple files to PDF in a single operation.",
+                364.0,
+                676.0,
+                0,
+            ),
+            column_line(
+                "Form Design - Easy to use electronic forms design tools to make your office forms work harder.",
+                507.0,
+                664.0,
+                0,
+            ),
+            // A capital after a full line is a sentence, not a paragraph.
+            column_line(
+                "Enables you to create or convert static PDF files into professional looking forms. Form data",
+                507.0,
+                652.0,
+                0,
+            ),
+            column_line(
+                "import tools allow data to be automatically imported - reducing manual key entering, the",
+                507.0,
+                640.0,
+                0,
+            ),
+            // Eight capitalised words before the dash is a sentence too.
+            column_line(
+                "Active Directory RMS Protector And Policy Manager Extends - the usage control benefits.",
+                507.0,
+                628.0,
+                0,
+            ),
+        ];
+        let texts: Vec<String> = blocks(&lines, page).iter().map(Block::text).collect();
+        assert_eq!(
+            texts,
+            [
+                "XFA Form Filling - XFA (XML Form Architecture) form allows you to leverage existing \
+                 XFA forms.",
+                "High Performance - Up to 3 times faster PDF creation from over 200 of the most common \
+                 office file types and convert multiple files to PDF in a single operation.",
+                "Form Design - Easy to use electronic forms design tools to make your office forms work \
+                 harder. Enables you to create or convert static PDF files into professional looking \
+                 forms. Form data import tools allow data to be automatically imported - reducing \
+                 manual key entering, the Active Directory RMS Protector And Policy Manager Extends - \
+                 the usage control benefits.",
+            ]
+        );
+        assert!(has_dash_lead_in(
+            "Email and Phone Support \u{2013} helps when you need it."
+        ));
+        assert!(!has_dash_lead_in("the result - as expected - was fine"));
+    }
+
+    #[test]
+    fn a_bold_lead_in_begins_a_paragraph_and_is_written_in_bold() {
+        const BOLD_FIRST: &str =
+            "A bold line that wraps, with more than twelve words so that it is not a heading, and";
+        const BOLD_WRAP: &str =
+            "its wrap, bold throughout as well, and long enough to stay a paragraph line too.";
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            column_line(
+                "Foxit PhantomPDF Business builds upon the capabilities of PhantomPDF Standard and",
+                500.0,
+                700.0,
+                0,
+            ),
+            column_line(
+                "Redaction Lets you permanently remove visible text and images from PDF documents.",
+                500.0,
+                688.0,
+                "Redaction".len(),
+            ),
+            column_line(
+                "Security Validation of digital signatures and encryption with passwords.",
+                400.0,
+                676.0,
+                "Security".len(),
+            ),
+            // Bold throughout is a bold line, not a lead-in: the two wrap
+            // into one paragraph.
+            column_line(BOLD_FIRST, 500.0, 664.0, BOLD_FIRST.len()),
+            column_line(BOLD_WRAP, 500.0, 652.0, BOLD_WRAP.len()),
+        ];
+        let got = blocks(&lines, page);
+        assert_eq!(
+            got,
+            vec![
+                Block::Paragraph(
+                    "Foxit PhantomPDF Business builds upon the capabilities of PhantomPDF Standard and"
+                        .into()
+                ),
+                Block::Paragraph(
+                    "**Redaction** Lets you permanently remove visible text and images from PDF \
+                     documents."
+                        .into()
+                ),
+                Block::Paragraph(
+                    "**Security** Validation of digital signatures and encryption with passwords."
+                        .into()
+                ),
+                Block::Paragraph(format!("{BOLD_FIRST} {BOLD_WRAP}")),
+            ]
+        );
+        assert!(crate::render(&got[1..2]).starts_with("**Redaction** Lets you"));
     }
 
     #[test]
