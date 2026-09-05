@@ -665,8 +665,7 @@ impl ScriptCascade {
     ///
     /// **Nothing reads this yet.** The sweep it asks for is
     /// [`Cascade::calculate`], which today runs only inside a commit; running
-    /// it on request is item 6 of `docs/status/unwired-oracle-ports.md`,
-    /// which says what the wire needs.
+    /// it on request is not wired up.
     #[expect(
         dead_code,
         reason = "unwired — see docs/status/unwired-oracle-ports.md"
