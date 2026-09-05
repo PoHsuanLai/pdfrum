@@ -146,18 +146,34 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Nine engines ran (`benches/compare/`, its own workspace, peers never in
   the root tree): hayro, hayro-interpret, pdf-extract, lopdf, pdf,
   pdf_oxide, pdfium-render (pypdfium2's libpdfium), mupdf; `pdf-render`
-  not measured (commercial-licence fork). Load 18–88 throughout, so the
-  ratios are the reading.
+  not measured (commercial-licence fork). Runs 1 and 2 ran at load 18–88,
+  so only their ratios were readable.
+- ~~A whole run in one sitting on a quiet box~~ — **done 2026-09-06**:
+  run 3 of `docs/benchmarks/README.md`, commit `8a02d57b1fa7`, machine
+  `himmel` (32 CPUs, rustc 1.98.1), idle at load under 2 for the whole
+  chain — both corpora, coverage, both throughput tables, adoption, then
+  `cargo bench --workspace` and `ratchet check`, one script
+  (`~/himmel-chain.sh`, quoted in the README). **Run 3 is now the run the
+  headline reading and the loss list are quoted from**; runs 1 and 2 keep
+  their data files and are marked history with their speed columns
+  superseded. The throughput label correction (only PDFium is genuinely
+  single-threaded; mupdf threads in its own display-list model) stands and
+  every engine's rows in run 3c were measured together, retiring run 1's
+  mixed-load caveat.
 - **Where we lead:** correctness and robustness. Render inside SSIM 0.99 of
   the oracle on 35/44 and 180/209 (pdfium-render 31/158, hayro 10/122,
   mupdf 13/101, pdf_oxide 8/90 with 40 errors); text normalized match
   89%/95% (pdf-extract panics on 9 of 44); opens 208/209 with zero
   panics, crashes or timeouts in 759 runs; coverage 22/22 features.
 - **Where we lose, now work items:**
-  1. Render speed: slowest median renderer (warm 15.9 ms vs pdfium 8.3,
-     mupdf 6.1, hayro 15.0 on the 44; 10.4 vs 4.1/3.4/5.4 on the sample)
-     and cold render 3–9× the others — the image-rows pass is the first
-     answer; per-session setup the second (see 3).
+  1. Render speed: still the slowest median renderer, now measured on an
+     idle box (run 3) — warm **10.55 ms** vs pdfium 5.68, mupdf 4.18,
+     hayro 8.78 on the 44; **7.37** vs 3.00/2.08/3.82 on the sample; cold
+     41.90 / 28.99 ms, 3–9× the others. The ratios barely moved from run
+     1's loaded reading (2.61× → 2.5× against mupdf on the 44), which is
+     what the load-averaging argument predicted. The image-rows pass and
+     lazy unpack are the first answer, per-session setup the second
+     (see 3).
   2. ~~Text extraction 10× PDFium~~ — first pass landed 2026-09-05
      (b0592c1; `docs/status/text-perf.md`): `page_flow` built every text
      object a second time, a bare CFF drew each glyph's outline to read an
@@ -195,9 +211,15 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
      2026-09-05 (214c597) in MuPDF's own model — display lists recorded on
      one thread, rasterized on N cloned contexts, 17.7% serial share — after
      the user pointed out the "single-thread-only" label was wrong; only
-     PDFium is single-threaded. Its run was at load 20 against run 1's
-     30–40, said in the README; a whole run in one sitting is owed before
-     the speed columns are quoted.
+     PDFium is single-threaded. That label correction stands. Its run had
+     been at load 20 against run 1's 30–40; **run 3c re-measured every
+     engine together on the idle box 2026-09-06** and that caveat is
+     retired. On the 18-file multi-page set pdfrum now reads 60.7 → 124.3 →
+     135.1 pages/s (**2.05×** to four threads, 2.23× to eight, against run
+     1's 1.9×), mupdf 176.6 → 269.5 → 281.4 (1.53×) and pdf_oxide 97.0 →
+     263.6 → 329.4 (3.40×, the best scaling of any engine here). Still
+     open: the one-thread gap to hayro and the C engines, and the
+     per-session glyph caches.
   4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
      vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
      plus the scaled JPEG decode once zune-jpeg has it).
