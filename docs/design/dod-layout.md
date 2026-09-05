@@ -1,6 +1,6 @@
 # Data layout pass — what the profile says a DOD pass should touch
 
-**Status:** Landed 2026-09-05; PLAN.md M18 MET (`docs/status/M18.md`).
+**Status:** Landed 2026-09-05; PLAN.md M18 MET.
 **Scope:** `pdfrum-object`, `pdfrum-page` (lexer, state), `pdfrum-font` (glyph names).
 **Method:** callgrind instruction counts (`Ir`) on the `profile` binary built from
 `main` at `5142672`, cold render (`--op render`, fresh session per iteration,
@@ -136,7 +136,7 @@ by `to_vec()`; the lexer holds `last_word: Vec<u8>`; numbers go through
 concatenates into one buffer), strings and names that need unescaping keep
 one reusable scratch buffer, and numbers parse from bytes. **The number
 parse must be bit-identical**: `word_to_number`'s digit rules are oracle
-behaviour (`docs/status/pdfrum-page.md` §"word_to_number"), so the new path
+behaviour, so the new path
 keeps `parse_real`'s semantics and is pinned by a test that runs old and new
 over every number token in every corpus content stream. Expected on
 `vector_paths_1751`: build −30% to −40% (lexer 46.8% of `Ir`, allocation
@@ -157,9 +157,9 @@ landed with `api-snapshot update` and an RSS row.
 - **No new dependency** (DEPS.md "Performance ring": tuned no-dep first, and
   none of the four items needs one).
 - **Conformance byte-identical** after every commit (1757 rows; the board
-  recipe in `docs/status/queue.md`).
+  recipe in the open work list (`docs/issues-to-file.md`)).
 - **Every claim carries an `Ir` before/after and a ratchet run**, interleaved,
-  from one target dir per sha (`docs/status/M13-perf-baseline.md` §18 method).
+  from one target dir per sha.
   Wall-clock on this machine is quoted with its load.
 - **Public types move only where §2.3 says**, and `api-snapshot update` is
   a deliberate commit of its own.
@@ -175,5 +175,5 @@ landed with `api-snapshot update` and an RSS row.
   after; `open/*` inside its band.
 - Clip-stack count table for the corpus in the status doc, with the
   threshold decision.
-- `docs/status/M18.md` records each item's numbers, and this document's
+- the internal working notes records each item's numbers, and this document's
   §1.3 verdicts stand or are corrected in place.
