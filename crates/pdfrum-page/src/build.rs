@@ -82,8 +82,15 @@ pub struct BuildContext {
     /// much bigger an image is than the whole page bitmap, not how small a
     /// rectangle it lands in.
     pub decode_target: RequestedSize,
-    /// Fonts.
-    pub fonts: FontCache,
+    /// Fonts: the loaded-font cache and the font-identity counter.
+    ///
+    /// Shared by `Arc` rather than owned, so every session over one document
+    /// — every worker of a parallel render, and a text run and a render run
+    /// alike — loads each font once between them. A context built with
+    /// [`BuildContext::new`] gets a fresh one, which is the right answer for
+    /// a caller with no document to hang it on; the facade hands its own
+    /// document-owned cache to every session it makes.
+    pub fonts: Arc<FontCache>,
     /// How a non-embedded font finds a face to draw with.
     ///
     /// Carried here rather than passed in per call because every font load
@@ -93,15 +100,6 @@ pub struct BuildContext {
     /// built-in faces alone, which is what keeps tests hermetic; the tool
     /// fills it from `--font-dir` and `--croscore-font-names`.
     pub substitution: pdfrum_font::SubstitutionOptions,
-    /// Loaded font *instances*, keyed on the reference that named them.
-    ///
-    /// Separate from [`fonts`](Self::fonts), which hands out identities: this
-    /// is what makes two text objects that name the same `/Font` resource
-    /// share one `Arc<Font>`. Text extraction's duplicate suppression
-    /// compares fonts by that pointer, so loading a fresh instance per `Tf`
-    /// would silently stop it firing and let a redrawn line be extracted
-    /// twice.
-    font_instances: HashMap<pdfrum_object::ObjRef, Option<Arc<Font>>>,
     /// The interactive form's default-resource faces, keyed on the object
     /// that declares them.
     ///
@@ -1427,40 +1425,38 @@ impl<R: Resolve> Interp<'_, R> {
         diags: &mut Diagnostics,
     ) -> Option<Arc<Font>> {
         // An indirect resource is cached under its reference, so every `Tf`
-        // naming it shares one instance. A resource written inline has no
-        // reference and is loaded afresh — two inline copies genuinely are
+        // naming it shares one instance — across pages and across sessions,
+        // because the cache is the document's. A resource written inline has
+        // no reference and is loaded afresh: two inline copies genuinely are
         // two fonts.
-        let reference = self.resources.find_ref(names::FONT, name, self.resolver);
-        if let Some(reference) = reference
-            && let Some(cached) = ctx.font_instances.get(&reference)
-        {
-            return cached.clone();
-        }
-        let dict = self
-            .resources
-            .find(names::FONT, name, self.resolver)
-            .and_then(|o| o.as_dict().cloned());
-        let font = match dict {
-            Some(d) => pdfrum_font::load_with_options(
-                &d,
-                self.resolver,
-                &ctx.fonts,
-                &ctx.substitution,
-                limits,
-                diags,
-            )
-            .map(Arc::new),
-            // A name that resolves to nothing yields the stock font rather
-            // than nothing at all.
-            None => Some(Arc::new(Font::load_standard(
-                pdfrum_font::StandardFont::Helvetica,
-                &ctx.fonts,
-            ))),
+        let fonts = Arc::clone(&ctx.fonts);
+        let substitution = &ctx.substitution;
+        let mut load = || {
+            let dict = self
+                .resources
+                .find(names::FONT, name, self.resolver)
+                .and_then(|o| o.as_dict().cloned());
+            match dict {
+                Some(d) => pdfrum_font::load_with_options(
+                    &d,
+                    self.resolver,
+                    &fonts,
+                    substitution,
+                    limits,
+                    diags,
+                ),
+                // A name that resolves to nothing yields the stock font
+                // rather than nothing at all.
+                None => Some(Font::load_standard(
+                    pdfrum_font::StandardFont::Helvetica,
+                    &fonts,
+                )),
+            }
         };
-        if let Some(reference) = reference {
-            ctx.font_instances.insert(reference, font.clone());
+        match self.resources.find_ref(names::FONT, name, self.resolver) {
+            Some(reference) => fonts.get_or_load(reference, load),
+            None => load().map(Arc::new),
         }
-        font
     }
 
     /// `cs` and `CS`: install a colour space, resetting the colour.
@@ -1585,28 +1581,48 @@ impl<R: Resolve> Interp<'_, R> {
         // because files written against PDFium use it. See the
         // `[oracle-bug]` note in `state::extgstate`.
         let find_font = |first: Option<&Object>| -> Option<Arc<Font>> {
-            let dict = match first? {
+            // Two of the three spellings name a font by reference, and that
+            // reference is the same document-scoped identity `Tf` keys on —
+            // so an `/ExtGState` font and a `Tf` font that are the same
+            // object share one loaded instance rather than each loading it.
+            let (reference, dict) = match first? {
                 // Spec (table 58): an indirect reference to a font dict.
-                r @ Object::Ref(_) => r.resolve(resolver).ok()?.as_dict().cloned()?,
+                Object::Ref(reference) => (
+                    Some(*reference),
+                    Object::Ref(*reference)
+                        .resolve(resolver)
+                        .ok()?
+                        .as_dict()
+                        .cloned()?,
+                ),
                 // Tolerance: the oracle's name-in-the-resources reading.
-                Object::Name(name) => resources
-                    .find(names::FONT, name, resolver)
-                    .and_then(|o| o.as_dict().cloned())?,
+                Object::Name(name) => (
+                    resources.find_ref(names::FONT, name, resolver),
+                    resources
+                        .find(names::FONT, name, resolver)
+                        .and_then(|o| o.as_dict().cloned())?,
+                ),
                 // A direct dictionary is neither spelling, but there is
                 // nothing else it could mean and refusing it would lose a
-                // font a file plainly named.
-                Object::Dict(d) => d.clone(),
+                // font a file plainly named. It has no reference, so it is
+                // not cached.
+                Object::Dict(d) => (None, d.clone()),
                 _ => return None,
             };
-            pdfrum_font::load_with_options(
-                &dict,
-                resolver,
-                fonts,
-                substitution,
-                limits,
-                &mut Diagnostics::with_limit(0),
-            )
-            .map(Arc::new)
+            let load = || {
+                pdfrum_font::load_with_options(
+                    &dict,
+                    resolver,
+                    fonts,
+                    substitution,
+                    limits,
+                    &mut Diagnostics::with_limit(0),
+                )
+            };
+            match reference {
+                Some(reference) => fonts.get_or_load(reference, load),
+                None => load().map(Arc::new),
+            }
         };
         apply_ext_gstate(
             &mut self.state,

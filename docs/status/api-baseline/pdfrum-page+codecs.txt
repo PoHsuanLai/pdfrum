@@ -341,7 +341,7 @@ pub fn pdfrum_page::BitImage::pixel(&self, u32, u32) -> bool
 pub struct pdfrum_page::BuildContext
 pub pdfrum_page::BuildContext::colorspaces: pdfrum_page::color::load::ColorSpaceCache
 pub pdfrum_page::BuildContext::decode_target: pdfrum_page::RequestedSize
-pub pdfrum_page::BuildContext::fonts: pdfrum_font::FontCache
+pub pdfrum_page::BuildContext::fonts: alloc::sync::Arc<pdfrum_font::FontCache>
 pub pdfrum_page::BuildContext::functions: pdfrum_page::FunctionCache
 pub pdfrum_page::BuildContext::images: pdfrum_page::ImageCache
 pub pdfrum_page::BuildContext::substitution: pdfrum_font::subst::SubstitutionOptions
