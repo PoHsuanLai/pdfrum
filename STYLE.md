@@ -53,9 +53,16 @@ Violations are review-blockers even when tests pass.
   not pointers. Shared immutable payloads use `Arc`.
 - State machines (lexer modes, progressive render, xref recovery) are enums
   driven by `match`, not boolean-flag clusters.
-- Types encode invariants, not ceremony: newtypes for ids and indices
-  (`ObjRef`, `Gid`, `CharCode`, `PageIndex`), units where confusion is real.
-  No typestate gymnastics or trait-level metaprogramming for its own sake.
+- **New code is type-driven** (user rule, 2026-09-05): an impossible state
+  does not compile rather than being caught at runtime. Newtypes for ids,
+  indices and units (`ObjRef`, `Gid`, `CharCode`, `PageIndex`, `Dpi`);
+  enums over booleans and stringly options; a distinct type for a value
+  that only exists after a step (a decoded font, a converted row, an owned
+  page) instead of an `Option` field checked at every use; `#[repr(C)]`
+  structs and enums as a foreign contract, never magic integers. Existing
+  code is not rewritten for this alone, and typestate or trait-level
+  metaprogramming is still not used for its own sake — the test is whether
+  the type removes a check or a comment.
 
 ## 2b. Traits, generics, macros — the complete map
 
