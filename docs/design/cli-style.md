@@ -18,7 +18,10 @@ through nothing else.
   people in JSON mode. Every command whose output is data has it.
 - **Streams are raw.** `extract text`, `extract markdown`, `inspect object`,
   `--decode`, `render -o -` and `completions` write their bytes and add
-  nothing: no heading, no colour, no trailing summary.
+  nothing: no heading, no colour, no trailing summary. Two streams are
+  read by people as often as by diffs — the object dump and the script
+  transcript — and those paint their tokens on a terminal only, leaving
+  the bytes in a pipe untouched.
 - **A closed pipe is not an error.** Exit 0, quietly.
 
 ## 2. Colour

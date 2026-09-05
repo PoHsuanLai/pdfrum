@@ -640,7 +640,7 @@ fn main() -> ExitCode {
         Command::Pages { what } => run_pages(what, password, term),
         Command::Forms { what } => run_forms(what, password, term),
         #[cfg(feature = "javascript")]
-        Command::Scripts { what } => run_scripts(what, password),
+        Command::Scripts { what } => run_scripts(what, password, term),
         Command::Repair { input, save } => cmd::file::rewrite(
             &input.file,
             password,
@@ -891,9 +891,15 @@ fn run_pages(what: Pages, password: Option<&str>, term: term::Term) -> anyhow::R
 }
 
 #[cfg(feature = "javascript")]
-fn run_scripts(what: Scripts, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_scripts(
+    what: Scripts,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
     match what {
-        Scripts::Run { input, time, json } => cmd::scripts::run(&input.file, password, time, json),
+        Scripts::Run { input, time, json } => {
+            cmd::scripts::run(&input.file, password, time, json, term)
+        }
     }
 }
 
