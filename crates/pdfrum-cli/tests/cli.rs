@@ -1500,6 +1500,131 @@ fn inspect_object_json_encodes_every_kind_and_hints_at_references() {
     assert_eq!(both.status.code(), Some(2), "they conflict");
 }
 
+/// The keys of a JSON document's first object: the object itself, or the
+/// first element of an array.
+fn keys_of(v: &serde_json::Value) -> Result<Vec<String>, String> {
+    let object = v.as_array().map_or(v, |a| &a[0]);
+    let mut keys: Vec<String> = object
+        .as_object()
+        .ok_or_else(|| format!("not an object: {object}"))?
+        .keys()
+        .cloned()
+        .collect();
+    keys.sort();
+    Ok(keys)
+}
+
+/// Each `--json` command with a fixture run that prints every key it has a
+/// value for; the schema's example must carry all of them.
+fn schema_runs() -> Vec<(Vec<&'static str>, Vec<&'static str>)> {
+    let hello = "fixtures/hello_world_2_pages.pdf";
+    vec![
+        (vec!["extract", "words"], vec!["extract", "words", hello]),
+        (vec!["info"], vec!["info", "fixtures/two_signatures.pdf"]),
+        (
+            vec!["doctor"],
+            vec!["doctor", "fixtures/parser_rebuildxref_correct.pdf"],
+        ),
+        (vec!["search"], vec!["search", "world", hello]),
+        (vec!["hash"], vec!["hash", hello]),
+        (vec!["diff"], vec!["diff", hello, "fixtures/bookmarks.pdf"]),
+        (vec!["extract", "text"], vec!["extract", "text", hello]),
+        (
+            vec!["extract", "links"],
+            vec!["extract", "links", "fixtures/annots_action_handling.pdf"],
+        ),
+        (
+            vec!["extract", "toc"],
+            vec!["extract", "toc", "fixtures/bookmarks.pdf"],
+        ),
+        (
+            vec!["extract", "attachments"],
+            vec![
+                "extract",
+                "attachments",
+                "fixtures/embedded_attachments_with_desc.pdf",
+            ],
+        ),
+        (
+            vec!["extract", "annotations"],
+            vec!["extract", "annotations", "fixtures/annotiter.pdf"],
+        ),
+        (
+            vec!["extract", "signatures"],
+            vec!["extract", "signatures", "fixtures/two_signatures.pdf"],
+        ),
+        (
+            vec!["extract", "images"],
+            vec!["extract", "images", "fixtures/rotated_image.pdf"],
+        ),
+        (
+            vec!["extract", "fonts"],
+            vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        ),
+        (
+            vec!["forms", "dump"],
+            vec!["forms", "dump", "fixtures/text_form.pdf"],
+        ),
+        (
+            vec!["inspect", "object"],
+            vec!["inspect", "object", hello, "1"],
+        ),
+        (
+            vec!["inspect", "xref"],
+            vec!["inspect", "xref", "fixtures/bug_1484283.pdf"],
+        ),
+        (
+            vec!["inspect", "revisions"],
+            vec!["inspect", "revisions", "fixtures/bug_1484283.pdf"],
+        ),
+        (
+            vec!["inspect", "structure"],
+            vec!["inspect", "structure", "fixtures/tagged_alt_text.pdf"],
+        ),
+    ]
+}
+
+#[test]
+fn schema_lists_the_json_commands_and_its_examples_carry_every_real_key() {
+    let listing = stdout(&["schema"]).unwrap();
+    let header = listing.lines().next().unwrap_or_default();
+    assert!(
+        header.starts_with("COMMAND") && header.ends_with("DESCRIPTION"),
+        "{listing}"
+    );
+    for command in ["info", "extract words", "inspect object", "hash", "diff"] {
+        assert!(
+            listing
+                .lines()
+                .any(|l| l.starts_with(&format!("{command}  "))),
+            "{command} is not listed:\n{listing}"
+        );
+    }
+    // Each example has every key the command printed on a fixture (an
+    // optional key the fixture lacks is still in the example).
+    for (schema, real) in schema_runs() {
+        let mut args = vec!["schema"];
+        args.extend(&schema);
+        let example = json(&args).unwrap();
+        let mut args = real.clone();
+        args.push("--json");
+        let out = run(&args).unwrap();
+        let printed: serde_json::Value =
+            serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{real:?}: {e}"));
+        assert_eq!(example.is_array(), printed.is_array(), "{schema:?}");
+        let expected = keys_of(&example).unwrap();
+        for key in keys_of(&printed).unwrap() {
+            assert!(
+                expected.contains(&key),
+                "{schema:?}: `{key}` is not in the schema"
+            );
+        }
+    }
+    let unknown = run(&["schema", "extract", "nothing"]).unwrap();
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no --json output"));
+}
+
 #[test]
 fn inspect_object_hints_at_what_a_reference_is() {
     let text = stdout(&[
