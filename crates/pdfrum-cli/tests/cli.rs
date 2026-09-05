@@ -1335,6 +1335,62 @@ fn extract_images_folds_repeated_draws_and_leaves_spacers_out_unless_asked() {
 }
 
 #[test]
+fn extract_words_lists_every_word_with_its_box_font_and_size() {
+    assert_eq!(
+        stdout(&["extract", "words", fx("fixtures/hello_world_2_pages.pdf")]).unwrap(),
+        expected("words_hello_world_2_pages.txt").unwrap()
+    );
+    let v = json(&[
+        "extract",
+        "words",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "--pages",
+        "2",
+        "--json",
+    ])
+    .unwrap();
+    let rows = v.as_array().unwrap();
+    assert_eq!(rows.len(), 4, "{v}");
+    let texts: Vec<&str> = rows.iter().map(|r| r["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, ["Hello,", "world!", "Goodbye,", "world!"]);
+    assert!(rows.iter().all(|r| r["page"] == 2));
+    assert_eq!(rows[0]["font"], "Times-Roman");
+    assert_eq!(rows[0]["size"], 12.0);
+    assert_eq!(rows[2]["font"], "Helvetica");
+    assert_eq!(rows[2]["size"], 16.0);
+    // The range slices the word back out of the page's text.
+    assert_eq!(rows[0]["start"], 0);
+    assert_eq!(rows[0]["end"], 6);
+    assert_eq!(rows[1]["start"], 7);
+    for r in rows {
+        for key in ["x0", "y0", "x1", "y1"] {
+            assert!(r[key].is_number(), "{r}");
+        }
+        assert!(r["x0"].as_f64() < r["x1"].as_f64(), "{r}");
+    }
+    // Left to right on a line, and the second line above the first in
+    // y-up page space.
+    assert!(rows[0]["x1"].as_f64() <= rows[1]["x0"].as_f64());
+    assert!(rows[2]["y0"].as_f64() > rows[0]["y1"].as_f64());
+    // The corpus guide's first page has 45 words.
+    let guide = json(&[
+        "extract",
+        "words",
+        "../../../benches/corpus/text_quick_start.pdf",
+        "--pages",
+        "1",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(guide.as_array().unwrap().len(), 45);
+    assert!(
+        stdout(&["extract", "words", fx("fixtures/bug_674771.pdf")])
+            .unwrap()
+            .contains("no words")
+    );
+}
+
+#[test]
 fn inspect_object_hints_at_what_a_reference_is() {
     let text = stdout(&[
         "inspect",
@@ -1982,6 +2038,7 @@ fn jsonl_prints_one_object_per_line_on_every_list_command() {
         vec!["extract", "annotations", "fixtures/annotiter.pdf"],
         vec!["extract", "images", "fixtures/rotated_image.pdf"],
         vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        vec!["extract", "words", "fixtures/hello_world_2_pages.pdf"],
         vec![
             "extract",
             "attachments",
