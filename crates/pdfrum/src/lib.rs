@@ -74,6 +74,8 @@ mod form;
 #[cfg(feature = "forms")]
 mod form_session;
 mod outline;
+#[cfg(feature = "forms")]
+mod owned_form;
 mod owned_page;
 mod page;
 mod profile;
@@ -107,6 +109,8 @@ pub use form_session::{
 // and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
+#[cfg(feature = "forms")]
+pub use owned_form::OwnedFormSession;
 pub use owned_page::OwnedPage;
 pub use page::{
     ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage, Rotation,
