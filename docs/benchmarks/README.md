@@ -536,17 +536,33 @@ toward it.
 ### Parallel-render throughput
 
 `data/2026-09-05-114527a71d4c-throughput.json`, `compare throughput` on
-`benches/corpus`: every page of every file at 150 DPI, one opened document
-shared by N threads through the facade (`Document` is `Sync`;
-`std::thread::scope` deals page indices round-robin, each thread with its
-own `VelloCpuBackend` and `RenderSession`), one untimed pass then one timed
-pass per (file, thread count), pages per second summed over the files. This
-is the batch-conversion shape — fresh document and fresh caches per file —
-not the warm per-page number above. PDFium and MuPDF are single-threaded by
-their own rules (PDFium requires every call on one thread; mupdf-rs holds
-one context), so their columns are the one-thread figure repeated, marked.
-hayro shares its `Pdf` across threads with a `RenderCache` per thread;
-pdf_oxide's `PdfDocument` is `Sync` and is shared as is.
+`benches/corpus`: every page of every file at 150 DPI on N threads, one
+untimed pass then one timed pass per (file, thread count), pages per second
+summed over the files. This is the batch-conversion shape — fresh document
+and fresh caches per file — not the warm per-page number above.
+
+**Each engine is driven in its own multi-threading model**, because they do
+not have the same one, and a column of numbers cannot say that by itself.
+The harness names the model as a type (`engines::Sharing`) and prints it
+under every table:
+
+- **pdfrum, hayro, pdf_oxide — one shared document.** `Document` is `Sync`,
+  so one opened document is read by every thread; `std::thread::scope` deals
+  page indices round-robin, each thread with its own `VelloCpuBackend` and
+  `RenderSession`. hayro shares its `Pdf` with a `RenderCache` per thread;
+  pdf_oxide's `PdfDocument` is `Sync` and is shared as is. **Parse and
+  rasterization are both parallel.**
+- **mupdf — shared display lists.** This is MuPDF's own documented model
+  (`docs/examples/multi-threaded.c`), and the harness now follows it:
+  `mupdf-sys` builds its base `fz_context` with `FZ_LOCK_MAX` pthread
+  mutexes as MuPDF's lock callbacks, `Context::get()` hands each thread its
+  own `fz_clone_context` of it, and `DisplayList` is `Send + Sync`. Only
+  `Document` and `Page` are not `Send` — so the calling thread loads every
+  page and records it into a display list, then N workers rasterize those
+  lists in parallel. **The parse is serial; the rasterization is parallel.**
+- **pdfium-render — one thread.** PDFium keeps one global state and requires
+  every call on one thread. Its columns are the one-thread figure repeated,
+  and they are the only cells still marked `(1 thread)`.
 
 | engine | files | pages | 1 thread pages/s | 4 threads pages/s | 8 threads pages/s |
 |---|---|---|---|---|---|
@@ -554,11 +570,12 @@ pdf_oxide's `PdfDocument` is `Sync` and is shared as is.
 | hayro | 44 | 188 | 23.7 | 31.3 | 32.3 |
 | pdf_oxide | 39 | 183 | 20.0 | 24.1 | 23.8 |
 | pdfium-render | 44 | 188 | 49.7 (1 thread) | 53.1 (1 thread) | 59.0 (1 thread) |
-| mupdf | 44 | 186 | 73.6 (1 thread) | 65.0 (1 thread) | 76.0 (1 thread) |
+| mupdf | 44 | 186 | 81.3 | 94.1 | 98.1 |
 
 Thread counts are clamped to a file's page count, and 21 of the 44 files
 have one page, so the corpus-wide column barely moves. On the 18 files
-with four or more pages (156 pages) the scaling is visible:
+with four or more pages (156 pages) the scaling is visible — that table is
+the same command with `--min-pages 4`:
 
 | engine | files | pages | 1 thread pages/s | 4 threads pages/s | 8 threads pages/s |
 |---|---|---|---|---|---|
@@ -566,7 +583,7 @@ with four or more pages (156 pages) the scaling is visible:
 | hayro | 18 | 156 | 70.3 | 156.4 | 167.2 |
 | pdf_oxide | 18 | 156 | 72.2 | 162.2 | 179.0 |
 | pdfium-render | 18 | 156 | 153.4 (1 thread) | 151.4 (1 thread) | 152.0 (1 thread) |
-| mupdf | 18 | 156 | 144.2 (1 thread) | 154.4 (1 thread) | 160.1 (1 thread) |
+| mupdf | 18 | 156 | 148.8 | 220.0 | 229.1 |
 
 pdfrum scales 1.9× from one to four threads and flattens after, and its
 one-thread figure is half hayro's and a quarter of the C engines'. The gap
@@ -574,6 +591,31 @@ to its own warm per-page median says where the time goes: every thread
 builds a `RenderSession` whose substitution enumerates the font directory,
 and that, plus the cold interpretation of each page, is paid once per file
 per thread in this shape. The per-session font enumeration is a work item.
+
+mupdf scales 1.5× on the multi-page set and 1.2× corpus-wide — real
+scaling, but the least of any threaded engine here, and the reason is
+Amdahl. Its display-list build is serial and is inside the timed pass, as
+the parse is for every other engine in this table; timed on its own over
+the 44 files it is **0.38 s against 1.81 s of rasterization, a 17.7 %
+serial share**, which caps the achievable speed-up at about 5.6× however
+many threads are given. The measured 1.5× is well under that cap, so the
+serial build is the floor rather than the binding constraint at these
+thread counts: MuPDF's per-page rasterization is fast enough that the
+scope's thread startup and this machine's contention take the rest.
+pdfrum, which parallelizes the parse as well, has no such floor — and it
+is the reason its 1.9× beats mupdf's 1.5× while its absolute numbers do
+not come close.
+
+Only the mupdf rows of the throughput JSON were re-measured; every other
+engine's rows are run 1's, byte for byte, and both tables above reproduce
+run 1's numbers for them exactly. Machine: frieren (32 CPUs). Load before:
+`22:18:08 up 10 days, 23:32,  1 user,  load average: 20.01, 17.36, 15.54`;
+after: `22:18:34 up 10 days, 23:33,  1 user,  load average: 20.03, 17.49,
+15.63`. **That is a lighter machine than run 1 saw** (load 30–40 on those
+same 32 cores), so mupdf's figures here are measured under less contention
+than the rows they sit beside; the model correction is the point of the
+re-measurement, and the cross-engine comparison at these thread counts
+should be read with that caveat until a whole run is redone at once.
 
 ### Adoption
 

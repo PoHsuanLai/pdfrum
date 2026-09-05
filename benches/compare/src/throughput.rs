@@ -1,6 +1,8 @@
-//! Parallel-render throughput: every page of every file, one opened document
-//! shared by N threads, pages per second. In-process, because the point is
-//! the document being shared; a per-file JSON write keeps the run resumable.
+//! Parallel-render throughput: every page of every file on N threads, pages
+//! per second. Each engine is driven in its own multi-threading model — see
+//! [`crate::engines::Sharing`] — so the table's footnote, not the numbers
+//! alone, says what was parallel. In-process, because the point is the
+//! sharing; a per-file JSON write keeps the run resumable.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -9,11 +11,50 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::engines;
+use crate::engines::{self, Sharing};
 use crate::model::Ctx;
 
 /// The engines that render, in table order.
 pub const ENGINES: &[&str] = &["pdfrum", "hayro", "pdf_oxide", "pdfium-render", "mupdf"];
+
+/// What became of one measurement — and, when it succeeded, which
+/// parallelism model produced it. The JSON spellings are the ones run 1
+/// wrote, so the data files under `docs/benchmarks/data` still read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Status {
+    /// Ran on the requested threads, sharing one opened document.
+    Ok,
+    /// Ran on the requested threads: serial display-list build, parallel
+    /// rasterization ([`Sharing::DisplayLists`]).
+    DisplayLists,
+    /// The engine's rules put it on one thread; this figure is the
+    /// one-thread figure, repeated for every requested count.
+    SingleThreadOnly,
+    /// The engine failed on this file; `detail` says how.
+    Error,
+    /// Not compiled into this build.
+    NotRun,
+    /// A spelling this binary does not know, from an older data file.
+    #[serde(other)]
+    Unknown,
+}
+
+impl Status {
+    /// Whether the row carries a usable measurement.
+    fn measured(self) -> bool {
+        matches!(self, Self::Ok | Self::DisplayLists | Self::SingleThreadOnly)
+    }
+
+    /// The status a successful run under `sharing` gets.
+    fn of(sharing: Sharing) -> Self {
+        match sharing {
+            Sharing::Document => Self::Ok,
+            Sharing::DisplayLists => Self::DisplayLists,
+            Sharing::SingleThread { .. } => Self::SingleThreadOnly,
+        }
+    }
+}
 
 /// One (file, engine, threads) measurement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,10 +66,7 @@ pub struct ThroughputRow {
     /// Wall seconds for the measured pass (after one untimed warm-up pass).
     pub secs: f64,
     pub pages_per_sec: f64,
-    /// `ok`, `error`, or `single-thread-only` (the engine's rules, or its
-    /// document type is not `Sync`; measured on one thread and reported as
-    /// such for every thread count).
-    pub status: String,
+    pub status: Status,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
@@ -85,30 +123,24 @@ pub fn run(
                 anyhow::bail!("unknown engine {engine}");
             };
             eprintln!("{relative} {engine}");
-            let single_only = engines::single_threaded(engine);
+            let sharing = engines::sharing(engine);
+            let why = match sharing {
+                Sharing::SingleThread { why } => Some(why.to_owned()),
+                Sharing::Document | Sharing::DisplayLists => None,
+            };
             for &threads in thread_counts {
-                let effective = if single_only.is_some() { 1 } else { threads };
                 let (status, detail, pages, secs) = if info.compiled {
-                    match render_all(engine, file, ctx, effective) {
+                    match render_all(engine, file, ctx, sharing.threads(threads)) {
                         Ok((pages, elapsed)) => (
-                            if single_only.is_some() {
-                                "single-thread-only".to_owned()
-                            } else {
-                                "ok".to_owned()
-                            },
-                            single_only.map(str::to_owned),
+                            Status::of(sharing),
+                            why.clone(),
                             pages,
                             elapsed.as_secs_f64(),
                         ),
-                        Err(err) => ("error".to_owned(), Some(format!("{err:#}")), 0, 0.0),
+                        Err(err) => (Status::Error, Some(format!("{err:#}")), 0, 0.0),
                     }
                 } else {
-                    (
-                        "not-run".to_owned(),
-                        Some("not compiled in".to_owned()),
-                        0,
-                        0.0,
-                    )
+                    (Status::NotRun, Some("not compiled in".to_owned()), 0, 0.0)
                 };
                 rows.push(ThroughputRow {
                     file: relative.clone(),
@@ -128,8 +160,17 @@ pub fn run(
 }
 
 /// The throughput table: pages per second per engine at each thread count,
-/// over the files every thread count of that engine rendered.
-pub fn render(rows: &[ThroughputRow], thread_counts: &[usize]) -> String {
+/// over the files every thread count of that engine rendered. `min_pages`
+/// keeps only the files with at least that many pages — the second table of
+/// docs/benchmarks/README.md is this one with `min_pages = 4`, since the
+/// corpus is half one-page files and thread counts are clamped to the page
+/// count.
+///
+/// The cells are plain numbers for every engine that ran on the threads
+/// asked for, whichever model it used; the footnote under the table says
+/// which model each engine used, because a `mupdf` cell and a `pdfrum` cell
+/// at 8 threads are not measuring the same amount of parallel work.
+pub fn render(rows: &[ThroughputRow], thread_counts: &[usize], min_pages: usize) -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
@@ -150,16 +191,12 @@ pub fn render(rows: &[ThroughputRow], thread_counts: &[usize]) -> String {
         // the same work.
         let files: std::collections::BTreeSet<&str> = mine
             .iter()
-            .filter(|r| r.status != "error" && r.status != "not-run")
+            .filter(|r| r.status.measured() && r.pages >= min_pages)
             .map(|r| r.file.as_str())
             .filter(|file| {
                 thread_counts.iter().all(|t| {
-                    mine.iter().any(|r| {
-                        r.file == *file
-                            && r.threads == *t
-                            && r.status != "error"
-                            && r.status != "not-run"
-                    })
+                    mine.iter()
+                        .any(|r| r.file == *file && r.threads == *t && r.status.measured())
                 })
             })
             .collect();
@@ -175,7 +212,7 @@ pub fn render(rows: &[ThroughputRow], thread_counts: &[usize]) -> String {
             }
             let note = mine
                 .iter()
-                .find(|r| r.threads == *t && r.status == "single-thread-only")
+                .find(|r| r.threads == *t && r.status == Status::SingleThreadOnly)
                 .map_or("", |_| " (1 thread)");
             cells.push(if secs > 0.0 {
                 format!("{:.1}{note}", pages as f64 / secs)
@@ -191,7 +228,37 @@ pub fn render(rows: &[ThroughputRow], thread_counts: &[usize]) -> String {
             cells.join(" | ")
         );
     }
-    let errors: Vec<&ThroughputRow> = rows.iter().filter(|r| r.status == "error").collect();
+    // What was parallel, per engine that has rows: a mupdf cell and a
+    // pdfrum cell at 8 threads do not describe the same amount of parallel
+    // work, and the table cannot show that by itself.
+    let mut notes: Vec<String> = Vec::new();
+    for engine in ENGINES {
+        if !rows
+            .iter()
+            .any(|r| r.engine == *engine && r.status.measured())
+        {
+            continue;
+        }
+        notes.push(match engines::sharing(engine) {
+            Sharing::Document => format!(
+                "- `{engine}`: one opened document shared by N threads — parse and rasterization both parallel."
+            ),
+            Sharing::DisplayLists => format!(
+                "- `{engine}`: N threads, MuPDF's own model — the calling thread loads every page and records it into a display list (serial, and inside the timed pass), then N threads rasterize those lists, each on its own cloned context. Only the rasterization is parallel."
+            ),
+            Sharing::SingleThread { why } => format!(
+                "- `{engine}`: one thread whatever the column says ({why}); the figure is the one-thread figure repeated, marked."
+            ),
+        });
+    }
+    if !notes.is_empty() {
+        let _ = writeln!(out, "\nWhat ran in parallel:\n");
+        for note in notes {
+            let _ = writeln!(out, "{note}");
+        }
+    }
+
+    let errors: Vec<&ThroughputRow> = rows.iter().filter(|r| r.status == Status::Error).collect();
     if !errors.is_empty() {
         let _ = writeln!(out, "\nFiles excluded for an error ({}):\n", errors.len());
         for row in errors {

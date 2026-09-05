@@ -153,6 +153,10 @@ struct ThroughputArgs {
     pdfium_lib: Option<PathBuf>,
     #[arg(long, default_value_t = 150.0)]
     dpi: f64,
+    /// Table only the files with at least this many pages (the README's
+    /// second throughput table is `--min-pages 4`).
+    #[arg(long, default_value_t = 0)]
+    min_pages: usize,
     /// Keep the rows `--out` already holds and run only the files it lacks.
     #[arg(long)]
     resume: bool,
@@ -277,7 +281,10 @@ fn main() -> Result<()> {
                 &args.out,
                 args.resume,
             )?;
-            print!("{}", throughput::render(&rows, &args.threads));
+            print!(
+                "{}",
+                throughput::render(&rows, &args.threads, args.min_pages)
+            );
             Ok(())
         }
         Cmd::Run(args) => {
