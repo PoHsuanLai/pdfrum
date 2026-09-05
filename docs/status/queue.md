@@ -801,6 +801,15 @@ paid here. Once they are, `ratchet update` records the whole set.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
+- **Three raised `image_bug_583804` warm rows are now too high, 2026-09-06.**
+  §25.2 raised `render-warm-{agg,tinyskia,vello-cpu}/image_bug_583804` to the
+  regressed numbers the lazy unpack produced. §25.2a found the cause — the
+  decoded-image cache evicted its only entry, because a sixteen-bit image's
+  packed samples are 120 MiB against a 100 MiB budget — and fixed it, so
+  `vello-cpu` measures 192.02 ms on `himmel` against a baseline of 295.
+  The other two backends were not re-measured. **Lower all three at the next
+  `himmel` re-baseline**; do not hand-edit `benches/baseline.json`.
+
 - ~~`forms_combo_box` third cost~~ — landed 30c0419 (2026-09-03): an AGG
   clip push allocated, walked and cloned a page-sized coverage plane per
   appearance form; forms geomean 2.29x → 1.17x, `combo_box` 3.76x → 1.54x,

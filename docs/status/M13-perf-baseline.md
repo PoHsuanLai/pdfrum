@@ -4015,6 +4015,60 @@ lands a benchmark run, and it is the reason `image_bug_583804` also carries
 this milestone's memory loss (1.5 GiB peak, `docs/benchmarks/README.md` run
 3a). It belongs with the queued work on decoding at the reduced size.
 
+### 25.2a Resolved: the cache was evicting the entry it had just inserted
+
+**2026-09-06.** The hypothesis above is wrong, and the fix is three lines.
+
+The regression is not the deleted `Pixels::Whole` intermediate, and not
+memory traffic. Both caches behave: the rendered-pixmap cache hits on every
+warm iteration (probed), and the decoded-image cache is asked for the same
+`(ObjRef, RequestedSize)` it was given. The **decoded** cache misses anyway,
+because `insert` evicts the entry in the same call that adds it.
+
+`image_bug_583804` is a 4473x4473 **sixteen-bit** RGB image. Widened on
+decode it was 60,023,187 bytes, inside the 100 MiB `MAX_BYTES`. Left packed
+it is 120,242,982 — 120 MiB of samples plus the 192 KiB decode table — over
+the budget, so the eviction pass dropped it every time. The pass halved the
+build (`interpretation` 165.0 ms -> 91.3 ms) and doubled what a *rebuild*
+costs, from nothing to a full JPEG decode.
+
+**Why it showed in criterion and not in the profile binary.** `render-warm-*`
+calls `opened.pages()` *inside* the timed closure, so each iteration rebuilds
+the `Page`; `benches/src/bin/profile --warm` hoists `prepare` out and only
+draws. That is the whole difference, and it is why the earlier callgrind pass
+found `Ir` flat — the work is a decode the profile binary never repeated.
+Isolated, on `himmel`, `page.prepare` per warm iteration:
+
+| | `036b675` | `048b0c7`..`main` |
+|---|---|---|
+| `prepare` per warm iteration | 0.009 ms | **94.713 ms** |
+
+which is the +100 ms, to the millisecond.
+
+**The fix** (`crates/pdfrum-page/src/image/cache.rs`): the byte budget keeps
+its last entry however large it is, so an image bigger than the whole budget
+is cached rather than inserted-and-dropped. The entry cap stays
+unconditional — upstream's order, and a count rather than a size.
+`RenderedImageCache` downstream already had this rule; the decoded cache did
+not.
+
+Measured on `himmel`, idle, before and after:
+
+| Row | raised in 25.2 | fixed |
+|---|---|---|
+| `render-warm-vello-cpu/image/image_bug_583804` | 295.96 ms | **192.02 ms** |
+| `render-cold-vello-cpu/image/image_bug_583804` | 429.08 ms | **425.96 ms** |
+
+Warm is back at the 191.4 ms `036b675` measures on the same box, and cold
+keeps the pass's win. Peak RSS at 150 DPI is unchanged (1,643,144 kB ->
+1,642,240 kB through `benches/compare`'s child). Board: 1759 files, 1547
+pass, no regressions.
+
+**The three rows §25.2 raised are now too high.** `render-warm-{agg,
+tinyskia,vello-cpu}/image_bug_583804` were set to the regressed numbers;
+they are for the next `himmel` re-baseline to lower, not to edit by hand
+here.
+
 ### 25.3 What was written
 
 With the 8 rows set by hand, `check` on `himmel` read `72 unchanged, 368
