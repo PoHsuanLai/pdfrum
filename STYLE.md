@@ -197,6 +197,14 @@ flow.
     is the only shape of suppression the tree keeps; an attribute whose
     reason does not cite the registry is a decision not yet taken.
 
+- **An optimization or refactoring pass ends with a dead-code sweep** (user
+  rule, 2026-09-05). A rewritten stage leaves its old sampler behind, a new
+  type leaves the old flag, a keyed cache leaves the lookup it replaced;
+  the lint does not see `pub` items, so read the callers. The sweep covers
+  what the pass touched — helpers, fields, variants, constants, feature
+  gates and the tests that only they had — and lands in the same series,
+  as its own commit that lists what went.
+
   Deciding which of the three applies means reading the oracle, not the port's
   own doc comment — a comment claiming a caller is not evidence one exists.
   Test harnesses under `examples/` and `benches/`, where each binary uses a
