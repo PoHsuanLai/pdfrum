@@ -196,22 +196,6 @@ impl PageEdit {
     pub fn graph_mut(&mut self) -> &mut pdfrum_page::Page {
         &mut self.page
     }
-
-    /// The page's `/Resources` as it stands in the document, which the
-    /// regenerator consults for the names already in use.
-    pub(crate) fn resources(&self, doc: &crate::Document) -> pdfrum_object::Dict {
-        doc.inner
-            .page(self.index)
-            .ok()
-            .and_then(|page| {
-                page.inherited(pdfrum_object::names::RESOURCES, &doc.inner)?
-                    .resolve(&doc.inner)
-                    .ok()?
-                    .as_dict()
-                    .cloned()
-            })
-            .unwrap_or_default()
-    }
 }
 
 /// The RGB triple and the alpha `pdfrum-edit` writes, out of a

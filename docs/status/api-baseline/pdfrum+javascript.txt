@@ -200,6 +200,7 @@ pub fn pdfrum::DocEdit<'_>::import_pages(&mut self, &pdfrum::Document, impl core
 pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, (f64, f64)) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::set_metadata(&mut self, &pdfrum::Metadata)
 pub fn pdfrum::DocEdit<'_>::set_page_box(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::pages::PageBox, kurbo::rect::Rect) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::set_rotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>

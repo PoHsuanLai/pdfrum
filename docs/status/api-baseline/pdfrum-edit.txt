@@ -155,8 +155,10 @@ pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::pdf_date(std::time::SystemTime) -> alloc::string::String
 pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::PageRewrite>
 pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
