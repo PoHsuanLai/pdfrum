@@ -16,6 +16,15 @@ leader becomes ` ... `, and the top and bottom 10% of the page lose their
 running headers, page numbers and URLs. In either tier a line's text is
 the text page's text for that line — its spacing is the contract — and a
 run the producer drew twice, for a faux bold or a shadow, is read once.
+A figure is the image drawn under its marked-content id, and an untagged
+page's pictures — anything drawn 4 pt or more on each side — take their
+place among the lines; each image block carries its index into the page's
+images, and `render_with_images` links it to a file the caller wrote.
+
+Read as a document rather than a page at a time (`document_blocks`), a
+line repeated in the top or bottom 12% of a majority of the pages, three
+at least, is a running header or footer — `Page 3 of 11` and `Page 4 of
+11` are one line — and goes from every page.
 
 Those rules come from the non-learned half of
 [MinerU](https://github.com/opendatalab/MinerU)'s text pipeline; they are
@@ -26,7 +35,8 @@ let doc = pdfrum::Document::open("paper.pdf")?;
 let page = doc.page(0)?;
 println!("{}", page.markdown());      // with the facade's `markdown` feature
 println!("{}", page.layout_text());   // columns kept as columns
+println!("{}", doc.markdown());       // every page, running headers dropped
 ```
 
-From the command line: `pdfrum extract markdown paper.pdf` and
-`pdfrum extract text --layout paper.pdf`.
+From the command line: `pdfrum extract markdown paper.pdf`, with `-o DIR`
+to write and link the images, and `pdfrum extract text --layout paper.pdf`.

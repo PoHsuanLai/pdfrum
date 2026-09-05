@@ -388,17 +388,30 @@ impl<'a> Page<'a> {
         links
     }
 
-    /// The page as GitHub-flavoured Markdown.
+    /// The page as GitHub-flavoured Markdown: [`Page::markdown_blocks`]
+    /// rendered, every image `![alt](image)`.
     ///
     /// A tagged document's structure tree names the headings, paragraphs,
     /// lists, tables and figures and is read as it is; an untagged one is
     /// read by its typography — sizes, weights, bullets, gaps, margins. See
-    /// `pdfrum-markdown` for the rules.
+    /// `pdfrum-markdown` for the rules. One page cannot see a running header
+    /// repeated on the next; [`Document::markdown`] can.
     #[cfg(feature = "markdown")]
     #[must_use]
     pub fn markdown(&self) -> String {
-        let (graph, tree, options, mut diags) = self.markdown_inputs();
-        let text = pdfrum_markdown::page_markdown(
+        pdfrum_markdown::render(&self.markdown_blocks())
+    }
+
+    /// The page's content as Markdown blocks, in reading order — what
+    /// [`Page::markdown`] renders, for a caller who wants to walk them or to
+    /// link each [`Block::Image`] to a file through
+    /// [`markdown::render_with_images`](crate::markdown::render_with_images).
+    /// An image block's index is into [`Page::images`].
+    #[cfg(feature = "markdown")]
+    #[must_use]
+    pub fn markdown_blocks(&self) -> Vec<crate::Block> {
+        let (graph, tree, options, diags) = self.markdown_inputs(WITH_IMAGE_PLACES);
+        let blocks = pdfrum_markdown::page_blocks(
             &graph,
             tree.as_ref(),
             &self.doc.inner,
@@ -406,9 +419,7 @@ impl<'a> Page<'a> {
             &self.doc.limits,
         );
         self.doc.note(&diags);
-        diags = Diagnostics::default();
-        self.doc.note(&diags);
-        text
+        blocks
     }
 
     /// The page's text with its layout kept: columns stay columns, gaps
@@ -416,17 +427,20 @@ impl<'a> Page<'a> {
     #[cfg(feature = "markdown")]
     #[must_use]
     pub fn layout_text(&self) -> String {
-        let (graph, _, options, diags) = self.markdown_inputs();
+        let (graph, _, options, diags) =
+            self.markdown_inputs(pdfrum_page::RequestedSize::NoSamples);
         let text = pdfrum_markdown::page_layout(&graph, &self.doc.inner, options, &self.doc.limits);
         self.doc.note(&diags);
         text
     }
 
-    /// The graph (images undecoded), the structure tree when the document
-    /// is tagged, and the reading options `pdfrum-markdown` takes.
+    /// The graph with its images decoded to `images`, the structure tree
+    /// when the document is tagged, and the reading options
+    /// `pdfrum-markdown` takes.
     #[cfg(feature = "markdown")]
     fn markdown_inputs(
         &self,
+        images: pdfrum_page::RequestedSize,
     ) -> (
         pdfrum_page::Page,
         Option<pdfrum_doc::structure::StructTree>,
@@ -434,7 +448,7 @@ impl<'a> Page<'a> {
         Diagnostics,
     ) {
         let mut ctx = BuildContext::new();
-        ctx.decode_target = pdfrum_page::RequestedSize::NoSamples;
+        ctx.decode_target = images;
         let graph = self.build(&mut ctx);
         let mut diags = Diagnostics::default();
         let catalog = self.doc.catalog();
@@ -761,6 +775,92 @@ impl PreparedPage<'_> {
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);
         Ok(pixmap?)
+    }
+}
+
+/// How far a Markdown read decodes the page's images: to a pixel, enough
+/// for the graph to carry each image's place and marked-content id — a
+/// build that asks for no samples emits no image object at all — and no
+/// more, since the text tiers never read a sample.
+#[cfg(feature = "markdown")]
+const WITH_IMAGE_PLACES: pdfrum_page::RequestedSize = pdfrum_page::RequestedSize::Reduced {
+    width: 1,
+    height: 1,
+};
+
+#[cfg(feature = "markdown")]
+impl Document {
+    /// The document as one Markdown string: [`Document::markdown_pages`]
+    /// with a `---` rule between pages — what `pdfrum extract markdown`
+    /// prints.
+    #[must_use]
+    pub fn markdown(&self) -> String {
+        self.markdown_pages().join("\n---\n\n")
+    }
+
+    /// Each page as Markdown, read as one document: a line repeated in the
+    /// top or bottom band of a majority of the pages, three at least, is a
+    /// running header or footer and is dropped — `Page 3 of 11` and `Page 4
+    /// of 11` are one line — which one page alone cannot tell
+    /// ([`Page::markdown`] keeps such a line unless it looks like one). Each
+    /// image is `![alt](image)`; [`Document::markdown_blocks`] is the way
+    /// to link them. A page that will not load is an empty string, so the
+    /// index is the page's.
+    #[must_use]
+    pub fn markdown_pages(&self) -> Vec<String> {
+        let loadable: Vec<PageIndex> = (0..self.page_count())
+            .map(PageIndex::from)
+            .filter(|&index| self.page(index).is_ok())
+            .collect();
+        let mut out: Vec<String> = (0..self.page_count()).map(|_| String::new()).collect();
+        if let Ok(pages) = self.markdown_blocks(loadable.iter().copied()) {
+            for (index, blocks) in loadable.iter().zip(&pages) {
+                let at = usize::try_from(u32::from(*index)).unwrap_or(usize::MAX);
+                if let Some(slot) = out.get_mut(at) {
+                    *slot = pdfrum_markdown::render(blocks);
+                }
+            }
+        }
+        out
+    }
+
+    /// The Markdown blocks of `pages`, read as one document the way
+    /// [`Document::markdown_pages`] reads them, one list per page in the
+    /// order given. An image block's index is into that page's
+    /// [`Page::images`]; [`markdown::render_with_images`](crate::markdown::render_with_images)
+    /// links them.
+    ///
+    /// # Errors
+    ///
+    /// A page that will not load, as [`Document::page`] reports it.
+    pub fn markdown_blocks(
+        &self,
+        pages: impl IntoIterator<Item = PageIndex>,
+    ) -> Result<Vec<Vec<crate::Block>>> {
+        let pages: Vec<Page<'_>> = pages
+            .into_iter()
+            .map(|index| self.page(index))
+            .collect::<Result<_>>()?;
+        let inputs: Vec<_> = pages
+            .iter()
+            .map(|page| page.markdown_inputs(WITH_IMAGE_PLACES))
+            .collect();
+        let options = pdfrum_markdown::Options {
+            rtl: self.reads_right_to_left(),
+        };
+        let page_inputs: Vec<pdfrum_markdown::PageInput<'_>> = inputs
+            .iter()
+            .map(|(graph, tree, _, _)| pdfrum_markdown::PageInput {
+                page: graph,
+                tree: tree.as_ref(),
+            })
+            .collect();
+        let blocks =
+            pdfrum_markdown::document_blocks(&page_inputs, &self.inner, options, &self.limits);
+        for (_, _, _, diags) in &inputs {
+            self.note(diags);
+        }
+        Ok(blocks)
     }
 }
 

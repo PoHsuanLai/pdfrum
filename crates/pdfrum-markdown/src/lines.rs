@@ -20,6 +20,11 @@
 //! overlapping by half or origins within a point. A producer's faux bold or
 //! shadow draws a whole run twice, and the extractor drops the second text
 //! object only when it matches the first exactly; this catches the rest.
+//!
+//! The same walk numbers the page's images in drawing order — a form's
+//! images where the form is drawn — which is the order the facade's
+//! `Page::images` lists them in, so a [`DrawnImage::index`] names one of
+//! those.
 
 use std::collections::HashMap;
 
@@ -70,11 +75,24 @@ pub struct Segment {
     pub bbox: Rect,
 }
 
+/// An image the page draws, by its place in drawing order.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DrawnImage {
+    /// Which of the page's images it is: the same index the facade's
+    /// `Page::images` uses.
+    pub index: usize,
+    /// The marked-content id it was drawn under, when any.
+    pub mcid: Option<i64>,
+    /// Where it lands on the page: the unit square through its matrix.
+    pub bbox: Rect,
+}
+
 /// What the page graph knows per text object, keyed by the extractor's own
-/// object numbering.
+/// object numbering, and the images it draws.
 #[derive(Debug, Clone, Default)]
 pub struct ObjectFacts {
     by_index: HashMap<u32, Facts>,
+    images: Vec<DrawnImage>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -93,6 +111,12 @@ impl ObjectFacts {
         let mut next = 0u32;
         collect(&page.objects, &mut next, &mut facts);
         facts
+    }
+
+    /// The page's images in drawing order.
+    #[must_use]
+    pub fn images(&self) -> &[DrawnImage] {
+        &self.images
     }
 
     fn get(&self, index: u32) -> Facts {
@@ -132,7 +156,18 @@ fn collect(objects: &[PageObject], next: &mut u32, out: &mut ObjectFacts) {
                 *next += 1;
                 collect(&content.object.objects, next, out);
             }
-            PageObject::Path(_) | PageObject::Image(_) | PageObject::Shading(_) => {
+            PageObject::Image(content) => {
+                out.images.push(DrawnImage {
+                    index: out.images.len(),
+                    mcid: content.marks.content_id(),
+                    bbox: content
+                        .object
+                        .matrix
+                        .transform_rect_bbox(Rect::new(0.0, 0.0, 1.0, 1.0)),
+                });
+                *next += 1;
+            }
+            PageObject::Path(_) | PageObject::Shading(_) => {
                 *next += 1;
             }
         }
