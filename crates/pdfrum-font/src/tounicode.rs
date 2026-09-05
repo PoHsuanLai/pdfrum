@@ -589,8 +589,10 @@ fn handle_bfchar(
 enum Range {
     /// `<lo> <hi> [<a> <b> …]` — one destination string per code.
     Array { low: u32, dests: Vec<Vec<u32>> },
-    /// `<lo> <hi> <start>` — consecutive values from a single unit.
-    Consecutive { low: u32, high: u32, start: u32 },
+    /// `<lo> <hi> <start>` — consecutive values from a single unit. Carries
+    /// the [`Run`] it commits as: the collected and the stored form are the
+    /// same three numbers, so there is nothing to translate.
+    Consecutive(Run),
     /// `<lo> <hi> <multi>` — the destination string incremented per code.
     Incremented { low: u32, dests: Vec<Vec<u32>> },
 }
@@ -668,11 +670,11 @@ fn handle_bfrange(
 
         let dest = string_to_units(third);
         if let [single] = dest.as_slice() {
-            ranges.push(Range::Consecutive {
+            ranges.push(Range::Consecutive(Run {
                 low: lowcode,
                 high: highcode,
                 start: *single,
-            });
+            }));
         } else {
             let mut dests = Vec::with_capacity(span.min(256));
             dests.push(dest);
@@ -710,16 +712,12 @@ fn commit_range(range: &Range, map: &mut ToUnicode) {
                 map.set_code(code, dest);
             }
         }
-        Range::Consecutive { low, high, start } => {
+        Range::Consecutive(run) => {
             // Stored whole. Plain `u32` arithmetic with no clamping: a start
             // near 0xFFFF walks straight through the multi-character
             // indicator and out the far side, where `lookup`'s low-16-bit
             // mask takes over.
-            map.insert_run(Run {
-                low: *low,
-                high: *high,
-                start: *start,
-            });
+            map.insert_run(*run);
         }
         Range::Incremented { low, dests } => {
             for (i, dest) in dests.iter().enumerate() {
