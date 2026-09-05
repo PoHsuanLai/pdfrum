@@ -7,8 +7,12 @@
 # `crates/pdfrum-capi`'s own build touches `cc`.
 #
 # Usage:
-#   crates/pdfrum-capi/ctest/run.sh            # builds release, then runs
-#   crates/pdfrum-capi/ctest/run.sh --no-build # runs against what is there
+#   crates/pdfrum-capi/ctest/run.sh              # builds release, then runs
+#   crates/pdfrum-capi/ctest/run.sh --no-build   # runs against what is there
+#   crates/pdfrum-capi/ctest/run.sh --build-only # builds the library, runs nothing
+#
+# `--build-only` is for scripts/capi-header.nu, whose symbol half reads the
+# release cdylib and should not have to know how to build it.
 #
 # `scripts/ci.nu` calls this after the pure-Rust check and skips it, with a
 # printed note, when no C compiler is installed.
@@ -32,6 +36,10 @@ fi
 if [ "${1:-}" != "--no-build" ]; then
     echo "==> cargo build -p pdfrum-capi --release"
     (cd "$root" && cargo build -p pdfrum-capi --release)
+fi
+
+if [ "${1:-}" = "--build-only" ]; then
+    exit 0
 fi
 
 if [ ! -f "$lib/libpdfrum.so" ]; then
