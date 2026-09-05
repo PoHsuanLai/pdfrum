@@ -11,7 +11,7 @@
 use std::borrow::Cow;
 
 use kurbo::Affine;
-use pdfrum_page::{BlendMode, ColorSpace, ImageData, Pixels};
+use pdfrum_page::{BlendMode, ColorSpace, Converted, ImageData, Pixels, Rgba8, Source};
 
 use crate::color::Argb;
 use crate::device::ImageQuality;
@@ -211,140 +211,133 @@ pub fn to_pixmap(
     transfer: Option<&crate::transfer::TransferFunc<'_>>,
 ) -> Pixmap {
     let mut out = Pixmap::new(image.width, image.height);
-    let matte = image.matte.map(pdfrum_page::Rgb::to_bytes);
-    // `StartRenderDIBBase` wraps the source in a `CPDF_TransferFuncDIB` when
-    // the state carries a `/TR` that is not the identity, so *every sample*
-    // goes through the three tables — not just the fill colour. Skipping this
-    // leaves an image untouched on a page whose paths all inverted, which is
-    // what `transfer_function.in`'s second page shows.
-    //
-    // A **stencil** takes it through its colour instead: it has no samples of
-    // its own, and `GetFillArgb` already ran the same function over the fill.
-    let transfer = transfer.filter(|t| !t.is_identity());
-    // A mask on its own grid is drawn separately; folding it in here would
-    // sample it at the base's coordinates.
-    let fused = image.mask.as_ref().filter(|m| is_coregistered(m, image));
-    // M12: the stencil test is hoisted out of the pixel loop and the
-    // destination is written through its row slice, rather than
-    // `set_pixel` recomputing `(y * width + x) * 4` per pixel.
-    //
-    // The `if let Pixels::Stencil` was inside a loop over every sample of the
-    // image, re-deciding a fact that is a property of the *image* — the
-    // optimizer cannot hoist it on its own because `image.pixels` is behind a
-    // reference it must assume the loop body could change. On the corpus's
-    // large images this function is the single most expensive thing in a
-    // render (`docs/status/M12.md`), so a branch per pixel is worth removing
-    // even though it predicts perfectly.
-    //
-    // The arithmetic per pixel is untouched, and deliberately: `color_at` stays
-    // the one place a sample becomes a colour, matte and transfer still apply
-    // in the same order, and the products are still `mul255`. What changed is
-    // where the loop-invariant work happens.
-    let stencil = match &image.pixels {
-        Pixels::Stencil(bits) => Some(bits),
-        _ => None,
-    };
-    // M12b P1: the sample becomes bytes without a float trip, and an indexed
-    // image's palette is encoded once instead of once per pixel.
-    //
-    // `color_at(..).to_bytes()` reached `Rgb` through `f32::from(b) / 255.0`
-    // and came back through `(v.clamp(0,1) * 255).round()`, which is exactly
-    // the identity on all 256 byte values — so for grey and RGB the whole trip
-    // was a no-op the optimizer cannot remove (it cannot know `round` is exact
-    // here), and for CMYK it wrapped a table lookup that is byte-in byte-out
-    // already. `Pixels::sample_bytes` is the same answer, proved exhaustively
-    // by `the_byte_path_is_exactly_the_float_path` rather than by measurement.
-    //
-    // This runs once per *source* pixel — twenty-five million times on
-    // `image_bug_718762`, where it was 90% of the render
-    // (docs/status/M12b-P1.md §6).
-    let palette = image.pixels.byte_palette();
-    let indices = match &image.pixels {
-        Pixels::Indexed { indices, .. } => Some(&**indices),
-        _ => None,
-    };
-    let cmyk = match &image.pixels {
-        Pixels::Cmyk8(data) => Some(&**data),
-        _ => None,
-    };
+    let finish = RowFinish::new(image, stencil_color, transfer);
+    let mut rows = converted_rows(image);
     let width = image.width as usize;
     for y in 0..image.height {
-        let Some(row) = out
+        // The row is converted and finished inside the stage, then borrowed
+        // to copy out. Nothing here is the size of the image: `Converted`
+        // holds one row, and this loop holds a reference to it.
+        let Some(row) = rows.next_row_with(|row| finish.apply(row, y)) else {
+            break;
+        };
+        let Some(dest) = out
             .data_mut()
             .get_mut((y as usize).saturating_mul(width).saturating_mul(4)..)
             .and_then(|rest| rest.get_mut(..width.saturating_mul(4)))
         else {
             continue;
         };
-        for (x, slot) in (0..image.width).zip(row.chunks_exact_mut(4)) {
-            let alpha = fused.map_or(255, |m| m.alpha_at(x, y));
-            let px = if let Some(bits) = stencil {
-                // A set bit is ink; a clear one paints nothing at all.
-                if bits.pixel(x, y) {
-                    let a = mul255(stencil_color.a, alpha);
-                    [
-                        mul255(stencil_color.r, a),
-                        mul255(stencil_color.g, a),
-                        mul255(stencil_color.b, a),
-                        a,
-                    ]
-                } else {
-                    [0, 0, 0, 0]
-                }
-            } else {
-                // The indexed fast path reads the pre-encoded palette; every
-                // other kind goes through `sample_bytes`, which has no palette
-                // to hoist.
-                let mut rgb = match (indices, palette.as_ref(), cmyk) {
-                    (Some(indices), Some(palette), _) => {
-                        // An absent index reads as 0 and an absent palette
-                        // entry as black, which is `color_at`'s own ladder:
-                        // `indices.get(i).unwrap_or(0)`, then
-                        // `palette.get(..).unwrap_or(Rgb::BLACK)`.
-                        let i = (y as usize)
-                            .saturating_mul(width)
-                            .saturating_add(x as usize);
-                        let entry = indices.get(i).copied().unwrap_or(0);
-                        palette
-                            .get(usize::from(entry))
-                            .copied()
-                            .unwrap_or([0, 0, 0])
-                    }
-                    // CMYK is the one remaining kind whose per-sample cost is
-                    // large enough for the index arithmetic to show beside it:
-                    // `adobe_cmyk_to_srgb` is a four-dimensional interpolated
-                    // table, and `sample_bytes` reaches it through a
-                    // `checked_mul` and a `checked_add` the row walk has
-                    // already done. Measured on `image_bug_718762`'s 25
-                    // million CMYK samples, hoisting it is -10.4% of
-                    // `to_pixmap` (409.9 ms best-of-five to 367.3 ms, the two
-                    // sets not overlapping). The bytes are `sample_bytes`'s
-                    // own — same fallback of 0 for a short buffer, same table.
-                    (_, _, Some(data)) => {
-                        let i = (y as usize)
-                            .saturating_mul(width)
-                            .saturating_add(x as usize)
-                            .saturating_mul(4);
-                        let at = |o: usize| data.get(i.saturating_add(o)).copied().unwrap_or(0);
-                        pdfrum_page::adobe_cmyk_to_srgb(at(0), at(1), at(2), at(3))
-                    }
-                    _ => image.pixels.sample_bytes(x, y, image.width),
-                };
-                if let Some(matte) = matte {
-                    rgb = matte_source(rgb, alpha, matte);
-                }
-                if let Some(transfer) = transfer {
-                    let [r, g, b] = rgb;
-                    let mapped = transfer.translate(Argb { a: 255, r, g, b });
-                    rgb = [mapped.r, mapped.g, mapped.b];
-                }
-                let [r, g, b] = rgb;
-                [mul255(r, alpha), mul255(g, alpha), mul255(b, alpha), alpha]
-            };
-            slot.copy_from_slice(&px);
+        for (slot, px) in dest.chunks_exact_mut(4).zip(row.pixels()) {
+            slot.copy_from_slice(&px.0);
         }
     }
     out
+}
+
+/// The [`Converted`] stage for an image, with its palette already encoded.
+///
+/// An `Indexed` image's palette is resolved into bytes once here rather than
+/// once per pixel, which is what [`pdfrum_page::Palette`] exists for.
+pub(crate) fn converted_rows(image: &ImageData) -> Converted<'_> {
+    let palette = match &image.pixels {
+        Pixels::Indexed { palette, .. } => Some(pdfrum_page::Palette::new(palette)),
+        _ => None,
+    };
+    Converted::new(
+        Source::new(&image.pixels, image.width, image.height),
+        palette,
+    )
+}
+
+/// Everything that happens to a converted row before it reaches the pixmap.
+///
+/// The mask alpha, the matte, the transfer function and the stencil colour
+/// were four decisions taken *inside* the old per-pixel loop, re-made on every
+/// one of an image's samples even though all four are properties of the
+/// image. Here they are resolved once, when the struct is built, and the row
+/// loop reads fields it cannot get wrong.
+pub(crate) struct RowFinish<'a> {
+    /// The mask to fold into the alpha, when it shares the image's grid.
+    ///
+    /// A mask on a grid of its own is drawn separately ([`separate_mask`]);
+    /// folding it in here would sample it at the base's coordinates.
+    fused: Option<&'a pdfrum_page::ImageMask>,
+    /// Set when the image is a stencil, carrying the colour its ink takes.
+    ///
+    /// `Some` *is* the stencil test, hoisted out of the pixel loop: a stencil
+    /// has no colours of its own, so the converted row's grey only says
+    /// whether the pixel is ink.
+    stencil: Option<Argb>,
+    /// A `/Matte` image's samples are pre-blended against this colour, and are
+    /// un-premultiplied by [`matte_source`] before the mask becomes alpha.
+    matte: Option<[u8; 3]>,
+    /// A non-identity `/TR`. `StartRenderDIBBase` wraps the source in a
+    /// `CPDF_TransferFuncDIB`, so it reaches *every sample* and not only the
+    /// fill colour — without it an image stays untouched on a page whose
+    /// paths all inverted, which is `transfer_function.in`'s second page.
+    transfer: Option<&'a crate::transfer::TransferFunc<'a>>,
+}
+
+impl<'a> RowFinish<'a> {
+    /// Resolve the four per-image decisions, once.
+    pub(crate) fn new(
+        image: &'a ImageData,
+        stencil_color: Argb,
+        transfer: Option<&'a crate::transfer::TransferFunc<'a>>,
+    ) -> Self {
+        Self {
+            fused: image.mask.as_ref().filter(|m| is_coregistered(m, image)),
+            stencil: matches!(image.pixels, Pixels::Stencil(_)).then_some(stencil_color),
+            matte: image.matte.map(pdfrum_page::Rgb::to_bytes),
+            // A stencil takes the transfer function through its *colour*
+            // instead: it has no samples, and `GetFillArgb` already ran the
+            // same function over the fill.
+            transfer: transfer.filter(|t| !t.is_identity()),
+        }
+    }
+
+    /// Fold the alpha, matte, transfer and stencil colour into one row.
+    pub(crate) fn apply(&self, row: &mut [Rgba8], y: u32) {
+        for (x, slot) in (0_u32..).zip(row.iter_mut()) {
+            let alpha = self.fused.map_or(255, |m| m.alpha_at(x, y));
+            *slot = Rgba8(match self.stencil {
+                // `Source` gives a set bit — ink — the sample 0 and a clear
+                // one 255, so the dark sample is the one that paints.
+                Some(color) if slot.0[0] == 0 => {
+                    let a = mul255(color.a, alpha);
+                    [
+                        mul255(color.r, a),
+                        mul255(color.g, a),
+                        mul255(color.b, a),
+                        a,
+                    ]
+                }
+                // A clear bit paints nothing at all.
+                Some(_) => [0, 0, 0, 0],
+                None => self.sample(slot.0, alpha),
+            });
+        }
+    }
+
+    /// One non-stencil pixel: matte, then transfer, then premultiply.
+    ///
+    /// The order is `StartRenderDIBBase`'s and is not interchangeable — the
+    /// matte un-premultiplies against a colour the transfer function has not
+    /// seen, and the alpha multiplies in last.
+    fn sample(&self, px: [u8; 4], alpha: u8) -> [u8; 4] {
+        let mut rgb = [px[0], px[1], px[2]];
+        if let Some(matte) = self.matte {
+            rgb = matte_source(rgb, alpha, matte);
+        }
+        if let Some(transfer) = self.transfer {
+            let [r, g, b] = rgb;
+            let mapped = transfer.translate(Argb { a: 255, r, g, b });
+            rgb = [mapped.r, mapped.g, mapped.b];
+        }
+        let [r, g, b] = rgb;
+        [mul255(r, alpha), mul255(g, alpha), mul255(b, alpha), alpha]
+    }
 }
 
 /// Whether a mask shares its image's sample grid, so it can be folded into
@@ -817,22 +810,26 @@ mod tests {
         );
     }
 
-    /// `to_pixmap`'s CMYK arm reaches `adobe_cmyk_to_srgb` with an index the
-    /// row walk already has, where `sample_bytes` recomputes it. The two must
-    /// give the same byte for every sample, including past the end of a buffer
-    /// shorter than its declared size — which is the one place the two index
-    /// ladders could differ.
+    /// `to_pixmap`'s CMYK output is `adobe_cmyk_to_srgb` applied to each
+    /// sample in row-major order, including where the buffer is shorter than
+    /// the declared dimensions.
+    ///
+    /// The row pipeline walks the buffer rather than deriving an index per
+    /// pixel, so a buffer shorter than the declared dimensions is the one
+    /// place the walk and the arithmetic could part company. It must not:
+    /// every missing component reads as zero, exactly as the per-pixel
+    /// `get(..).unwrap_or(0)` ladder made it, so the tail of a truncated
+    /// image is the table applied to zeroes rather than a hole.
     #[test]
-    fn the_cmyk_fast_arm_is_sample_bytes() {
+    fn the_cmyk_arm_is_the_table_applied_row_by_row() {
         for (w, h, len) in [(4_u32, 3_u32, 48_usize), (4, 3, 20), (4, 3, 100), (1, 1, 4)] {
             let data: Box<[u8]> = (0..len)
                 .map(|i| u8::try_from(i * 53 % 256).unwrap_or(0))
                 .collect();
-            let pixels = Pixels::Cmyk8(data.clone());
             let image = ImageData {
                 width: w,
                 height: h,
-                pixels: pixels.clone(),
+                pixels: Pixels::Cmyk8(data.clone()),
                 mask: None,
                 matte: None,
                 interpolate: false,
@@ -840,10 +837,13 @@ mod tests {
             let out = to_pixmap(&image, Argb::opaque(0, 0, 0), None);
             for y in 0..h {
                 for x in 0..w {
-                    let [r, g, b] = pixels.sample_bytes(x, y, w);
+                    let at = ((y as usize) * (w as usize) + x as usize) * 4;
+                    let sample = |o: usize| data.get(at.saturating_add(o)).copied().unwrap_or(0);
+                    let rgb =
+                        pdfrum_page::adobe_cmyk_to_srgb(sample(0), sample(1), sample(2), sample(3));
                     assert_eq!(
                         out.pixel(x, y),
-                        Some([r, g, b, 255]),
+                        Some([rgb[0], rgb[1], rgb[2], 255]),
                         "{w}x{h}, {len} bytes, sample ({x}, {y})"
                     );
                 }
