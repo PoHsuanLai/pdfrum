@@ -27,6 +27,13 @@ pdfrum pages reorder report.pdf --pages 3,1,2 -o reordered.pdf
 pdfrum pages create scan1.jpg scan2.png --dpi 300 -o scans.pdf
 pdfrum pages nup slides.pdf --grid 2x2 --sheet a4 -o handout.pdf
 pdfrum pages booklet zine.pdf -o print-me.pdf
+pdfrum pages delete report.pdf --pages 3,7 -o fewer.pdf
+pdfrum pages rotate scan.pdf --pages 2-end --by 90 -o upright.pdf   # added to each page's own rotation
+pdfrum metadata set report.pdf --title "Q3 report" --author "A. Person" --clear keywords -o titled.pdf
+pdfrum attach add report.pdf data.csv notes.txt --description "the raw numbers" -o with-data.pdf
+pdfrum attach remove with-data.pdf notes.txt -o report.pdf
+pdfrum stamp text draft.pdf DRAFT --angle 30 --opacity 0.3 --size 96 --rgb cc0000 -o stamped.pdf
+pdfrum stamp image report.pdf logo.png --width 72 --position top-right -o branded.pdf
 pdfrum forms dump form.pdf --json
 pdfrum forms fill form.pdf --data values.json -o filled.pdf
 pdfrum forms flatten filled.pdf -o static.pdf
@@ -103,8 +110,9 @@ $ pdfrum serve --stdio
 ```
 
 `open` takes a path or `bytes_base64`; the writers (`pages.slice`,
-`pages.merge`, `forms.fill`) hand the file back as `bytes_base64` and
-write nothing; `--max-docs` caps what is open at once; `shutdown` or
+`pages.merge`, `pages.delete`, `pages.rotate`, `forms.fill`,
+`metadata.set`, `attach.add`, `attach.remove`, `stamp.text`,
+`stamp.image`) hand the file back as `bytes_base64` and write nothing; `--max-docs` caps what is open at once; `shutdown` or
 closing stdin ends the session. Errors are the CLI's messages under
 JSON-RPC codes (`-32601` no such method, `-32602` the request is wrong,
 `-32000` the work failed). `pdfrum schema serve` prints every method with
