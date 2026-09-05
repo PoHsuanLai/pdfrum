@@ -68,12 +68,21 @@ pdfrum extract links report.pdf --jsonl | jq -c 'select(.kind == "uri")'
 PDFRUM_PASSWORD=secret pdfrum extract text locked.pdf   # the password out of the history
 pdfrum -q optimize big.pdf -o -  > small.pdf      # no notices; errors still print
 pdfrum -v info damaged.pdf                         # every parser diagnostic, one per line
+pdfrum render --max-pixels 100M poster.pdf        # a page above 100 megapixels is refused, exit 4
+pdfrum --time-limit 5s extract text huge.pdf      # five seconds for the whole command, then exit 4
 ```
 
 Every command takes `--password` for an encrypted file — or reads
 `PDFRUM_PASSWORD` when the flag is absent — and prints notices on stderr,
 never on stdout; `--quiet` drops the notices and `--verbose` lists every
-parser diagnostic on open. Every reading command's FILE accepts `-` for
+parser diagnostic on open. Two ceilings for untrusted input, both off by
+default: `--max-pixels N` (`100M`, `2G`, or a number) refuses any render
+that would come out larger — `render`, `preview`, `view`, `diff --visual`
+— before a pixel is allocated, and `--time-limit DURATION` (`500ms`,
+`5s`, `2m`) is the whole command's budget, after which the work stops
+where it is. Either exits 4 with the library's one-line reason, distinct
+from a broken file's 1, so a script can tell a refused job from a bad
+one. Every reading command's FILE accepts `-` for
 stdin, every writing command's `-o` accepts `-` for stdout (refused on a
 terminal), and `info`, `hash`, `doctor` and `search` take several files, a
 file that cannot be opened reported and skipped. `--json` output has
@@ -113,9 +122,14 @@ $ pdfrum serve --stdio
 `pages.merge`, `pages.delete`, `pages.rotate`, `forms.fill`,
 `metadata.set`, `attach.add`, `attach.remove`, `stamp.text`,
 `stamp.image`) hand the file back as `bytes_base64` and write nothing; `--max-docs` caps what is open at once; `shutdown` or
-closing stdin ends the session. Errors are the CLI's messages under
-JSON-RPC codes (`-32601` no such method, `-32602` the request is wrong,
-`-32000` the work failed). `pdfrum schema serve` prints every method with
+closing stdin ends the session. `--max-pixels` and `--time-limit` on
+`serve` are the ceilings every `open` starts from, and `open` takes
+`limits: {max_pixels, time_limit_ms}` over them per document — the
+budget runs from that open, and every later call on the document stops
+when it is spent. Errors are the CLI's messages under JSON-RPC codes
+(`-32601` no such method, `-32602` the request is wrong, `-32000` the
+work failed, `-32001` a limit refused it). `pdfrum schema serve` prints
+every method with
 its params as JSON Schema and its result shape.
 
 With `--mcp` the same process speaks the Model Context Protocol, so an
