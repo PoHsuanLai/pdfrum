@@ -37,6 +37,13 @@ members = [
     # boundary, every one with a `# Safety` section, nothing unsafe below the
     # facade. It adds no external dependency: `pdfrum` is all it needs.
     "crates/pdfrum-capi",
+    # M22 phase 4. The WebAssembly binding: the same handles as the C ABI in
+    # JavaScript shape, plus the TypeScript types wasm-bindgen generates from
+    # the same source. A member so it is formatted, linted and documented like
+    # anything else; its own tests run on `wasm32-unknown-unknown` under Node,
+    # which `scripts/ci.nu` runs as its own stage and skips with a note when
+    # the target or `node` is absent.
+    "crates/pdfrum-wasm",
     "conformance",
     "benches",
     "benches/corpus-list",
@@ -190,3 +197,38 @@ criterion = { version = "=0.5.1", default-features = false, features = ["cargo_b
 # `cargo bench` measures. Benchmarks and profiles now describe the same binary.
 [profile.release]
 debug = 1
+
+# M22 phase 4. The profile `crates/pdfrum-wasm` is built under, named rather
+# than folded into `release` for two reasons: cargo ignores a `[profile.*]`
+# table in a workspace *member*, so it had to live here; and size is a trade
+# only the web binding wants — `opt-level = "z"` and `lto` cost native build
+# time and native speed that nothing else in this workspace is asking to
+# spend. `wasm-pack build --profile wasm` and `cargo build --profile wasm`
+# both take it. The measurement behind the settings is in docs/status/M22.md.
+[profile.wasm]
+inherits = "release"
+# Optimize for speed, which on this crate is *also* the smallest. Measured on
+# the shipped module — the `_bg.wasm` wasm-bindgen emits, after `wasm-opt -Oz`:
+#
+#   opt-level      raw        after bindgen   after wasm-opt -Oz
+#   3            5,650,552      5,097,256          4,827,012
+#   "s"          5,959,819      5,368,249          4,932,482
+#   "z"          6,040,761      5,409,739          4,982,040
+#
+# `3` wins at every stage, by 3% over `"z"` on the shipped artefact. That is
+# the opposite of the usual advice, and it was measured rather than assumed:
+# this crate's bulk is a rasterizer and three image codecs, whose inner loops
+# `z` refuses to unroll or vectorize and then pays for in call overhead and
+# spill code. No tie-break on render time was needed — `3` is both the
+# smallest and the fastest here.
+opt-level = 3
+# One codegen unit lets LLVM see the whole module.
+codegen-units = 1
+# Cross-crate inlining and dead-code elimination: the single largest win.
+lto = true
+# `wasm32-unknown-unknown` has no unwinder, so a panic aborts either way.
+# Saying so drops the landing pads.
+panic = "abort"
+# No DWARF in a module a browser downloads; `release` above sets `debug = 1`.
+debug = false
+strip = true

@@ -1,0 +1,19 @@
+# The test runner for `cargo test --target wasm32-unknown-unknown`.
+#
+# `wasm-bindgen-test-runner` is the harness `wasm-bindgen-test` builds against:
+# it takes the test binary cargo produces, runs `wasm-bindgen` over it, and
+# executes the result under Node. Naming it here is what makes plain
+# `cargo test --target wasm32-unknown-unknown` work in this crate, which is the
+# form `scripts/ci.nu` runs and the one a contributor will reach for first.
+#
+# The alternative, `wasm-pack test --node`, works too and needs no config — but
+# it re-resolves the crate graph through its own manifest handling and does not
+# honour a workspace `--profile`, so the two would not be testing quite the
+# same build. This one is the same cargo invocation as every other test in the
+# repository, with a different target.
+#
+# The runner binary comes from `cargo install wasm-bindgen-cli --locked`, whose
+# version must match the `wasm-bindgen` dependency in Cargo.toml (DEPS.md, "The
+# web binding's tools").
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"
