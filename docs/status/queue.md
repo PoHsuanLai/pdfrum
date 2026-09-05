@@ -655,6 +655,19 @@ paid here. Once they are, `ratchet update` records the whole set.
   follow the same rule. A CI grep for the two path prefixes outside
   `docs/reviews/` and `docs/status/` keeps it clean.
 
+## Scoreboard re-recorded 2026-09-06 (1759 files, 1544 pass, 215 fail)
+
+- `conformance/scoreboard.json` had been recorded 2026-09-03 (1757 files,
+  1539 pass). Re-recorded from the main board after the timezone fix
+  (74d49be): `fx/image/1_image.pdf` and `fx/path/lines.pdf` fail → pass
+  (the snapped placement, 83d27db), `util_printd.in#js-transcript` fail →
+  pass (the `Zone` rule), and four rows that were failing only for missing
+  goldens — the two `bug_554790604` files the oracle fetch added and the
+  `util_printd.in`/`util_scand.in` render rows — after `generate-goldens`
+  filled the store (2 generated, 1675 present, oracle checkout clean). The
+  "REGRESSION: util_printd.in, util_scand.in" line every board printed
+  since 2026-09-05 was those two missing goldens, not a code change.
+
 ## Oracle checkout hygiene (added 2026-09-03)
 
 - ~~**The board should refuse a modified oracle checkout.**~~ — landed

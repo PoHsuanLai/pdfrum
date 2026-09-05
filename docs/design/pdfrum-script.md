@@ -717,8 +717,14 @@ pub struct ScriptConfig {
     /// The clock scripts see, in milliseconds since the epoch. `None` reads
     /// the host clock; `Some` freezes it, which is what a golden run needs.
     pub clock_ms: Option<i64>,
-    /// The local timezone offset in seconds. Defaults to 0 (UTC).
-    pub timezone_offset_secs: i32,
+    /// The local timezone: a standard offset and a daylight-saving rule
+    /// (`Zone`, `script/zone.rs`), because `pdfium_test` leaves V8's `Date`
+    /// on the real `America/Los_Angeles` rule while its own `FX_LocalTime`
+    /// sees a flat `GMT-0800`. Defaults to UTC with no rule.
+    pub timezone: Zone,
+    /// The offset `util.printd` applies before reading a date's components,
+    /// the flat one above.
+    pub printd_offset_secs: i32,
 }
 
 impl ScriptCascade {
@@ -1226,9 +1232,10 @@ let mut ctx = Context::builder()
 
 produces `Date.now() == 1399672130000` and
 `new Date().toString() == "Fri May 09 2014 14:48:50 GMT-0700"` — PDFium's seed
-time and offset, exactly. **`ScriptConfig::clock_ms` and
-`timezone_offset_secs` (§2.4) are those two knobs**, and the conformance runner
-sets them from the same constants the oracle does.
+time and offset, exactly. **`ScriptConfig::clock_ms`, `timezone` and
+`printd_offset_secs` (§2.4) are those knobs**, and the conformance runner
+sets them from the same constants the oracle does (`GOLDEN_TIMEZONE`,
+`GOLDEN_PRINTD_OFFSET_SECS`).
 
 ### 5.5 How a test proves termination
 
