@@ -108,8 +108,9 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `info|hash|doctor|search` with `file:page:` prefixes, `--quiet`/`--verbose`,
   `PDFRUM_PASSWORD`, `--jsonl`; no facade gap.
 - ~~Phase 2, facade half~~ — `Page::words` landed 2026-09-05 (05ad806).
-- Phase 2 — `extract words --json` (facade `Page::words`), `inspect
-  object --json`, `pdfrum schema <command>`.
+- ~~Phase 2 — CLI~~ — landed 2026-09-05 (`extract words`, `inspect object
+  --json`, `schema` with a test that every `--json` command has an entry);
+  no facade gap.
 - Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
 - Phase 4 — `pdfrum serve --stdio`: JSON-RPC over stdin/stdout, one parse
   per document, plus MCP tool listing; no new dependency.
