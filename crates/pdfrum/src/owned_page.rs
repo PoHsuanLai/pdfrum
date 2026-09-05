@@ -24,8 +24,8 @@ use crate::{
 /// [`render`](OwnedPage::render), [`text`](OwnedPage::text),
 /// [`words`](OwnedPage::words), [`links`](OwnedPage::links),
 /// [`annotations`](OwnedPage::annotations), [`images`](OwnedPage::images),
-/// [`structure`](OwnedPage::structure), and with the `markdown` feature
-/// [`markdown`](OwnedPage::markdown). Each is the borrowed method, called
+/// [`structure`](OwnedPage::structure), and `markdown` with the feature of
+/// that name. Each is the borrowed method, called
 /// through a [`Page`] this handle lends its record to for the length of the
 /// call: the dictionary and boxes a `Page` reads at load are read once here
 /// too and kept, so nothing is re-derived per call and a render costs what

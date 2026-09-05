@@ -13,7 +13,7 @@ use crate::{Document, FormSession, Modifiers, Response, SessionConfig};
 /// borrowing it — [`FormSession`] for a caller who cannot carry a lifetime.
 ///
 /// Built by [`FormSession::owned`], [`FormSession::owned_with_config`] and,
-/// with the `javascript` feature, [`FormSession::owned_with_scripts`]. The
+/// with the `javascript` feature, `FormSession::owned_with_scripts`. The
 /// event and value surface of [`FormSession`] under the same names, each
 /// method the borrowed one: for the length of a call the session's state is
 /// moved into a `FormSession` over a borrow of the held document and taken
