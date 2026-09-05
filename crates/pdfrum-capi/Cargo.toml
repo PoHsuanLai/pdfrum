@@ -19,7 +19,13 @@ publish = false
 # `libpdfrum.so` / `libpdfrum.a`, not `libpdfrum_capi.*`: the artefact is the
 # library a C program links, and its name is the product's.
 name = "pdfrum"
-crate-type = ["cdylib", "staticlib", "rlib"]
+# No `rlib`. The two C artefacts are the whole point and nothing in this
+# workspace links this crate as a Rust library — but with an `rlib` here the
+# lib target is *named* `pdfrum`, the same as the facade it depends on, and
+# `cargo test --doc` then hands rustdoc two `--extern pdfrum` rlibs and fails
+# with E0464. Dropping the rlib keeps the artefact names the product's and the
+# doctest unambiguous.
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 # The only dependency, and deliberately the only one: this crate is a
