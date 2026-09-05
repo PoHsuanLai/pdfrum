@@ -231,9 +231,20 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
        char proc, each restriction measured. The 833x1250 vs 833x1249
        size gap is a harness artifact (`oracle.rs` passes a truncated
        `--scale=2.0833333333`) and contributes nothing.
-     - `vector_en_system.pdf` 0.960 — **ours, undiagnosed.** 31
-       overlapping black `/SMask` images; we paint 21 801 fully-covered
-       pixels against 6 485, at both stack depths. Ruled out by
+     - `vector_en_system.pdf` 0.960 — **ours, narrowed 2026-09-06 to
+       mask edge coverage, not fixed.** Measured against
+       `pdfium_test --save-rendered-images`: the raw `/SMask` samples cap
+       at **102** and the oracle's 31 rendered images contain **zero**
+       alpha-255 pixels, so no correct composite of them saturates
+       (`1 - 0.6^n` is 243/255 at this page's stack depth of 6). On the
+       page we paint `#054696` at 102 976 pixels against 59 227; of the
+       48 378 excess, ~35 000 are blues within three levels of ours
+       (rounding) and **11 991 are ink where the oracle is near-white**.
+       Those form 1 039 components of **median size 3 px** across 1 118
+       rows — a one-pixel fringe tracing every glyph, not misplaced ink,
+       with 66 % of the excess 8-adjacent to oracle ink. That exonerates
+       the alpha composite and points at how a mask sample's coverage
+       resolves where it meets a zero sample. Previously ruled out by
        measurement: the `/Matte` un-premultiply, the separate-mask path
        (forcing it *lowers* SSIM to 0.947), the pre-reduction, the
        downsample kernel (box and nearest simulated within 1.5 % on the
