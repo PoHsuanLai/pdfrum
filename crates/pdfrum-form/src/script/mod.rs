@@ -667,7 +667,10 @@ impl ScriptCascade {
     /// [`Cascade::calculate`], which today runs only inside a commit. Running
     /// it on request needs a host that reads the flag back after the script
     /// returns and sweeps then; no caller does yet.
-    #[expect(dead_code, reason = "missed wire, registered in docs/issues-to-file.md")]
+    #[expect(
+        dead_code,
+        reason = "missed wire, registered in docs/issues-to-file.md"
+    )]
     pub(crate) fn take_calculate_request(&mut self) -> bool {
         std::mem::take(&mut self.host.borrow_mut().calculate_requested)
     }
