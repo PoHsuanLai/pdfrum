@@ -156,18 +156,54 @@ pub fn run(name: &str, op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
     }
 }
 
-/// Why an engine is measured on one thread whatever the thread count asked
-/// for, or `None` when its document can be shared across threads.
-pub fn single_threaded(name: &str) -> Option<&'static str> {
-    match name {
-        "pdfium-render" => Some("PDFium requires every call on one thread"),
-        "mupdf" => Some("mupdf-rs holds one context; single-threaded by its rules"),
-        _ => None,
+/// What an engine shares between the threads of a throughput run — the
+/// shape of its own multi-threading model, not a flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sharing {
+    /// One opened document, `Sync`, read by every thread: parse and
+    /// rasterization both run in parallel.
+    Document,
+    /// One thread loads every page and records it into a display list, then
+    /// N threads rasterize those lists, each on its own cloned context.
+    /// This is `MuPDF`'s documented model (`docs/examples/multi-threaded.c`):
+    /// `Document` and `Page` are not `Send`, `DisplayList` is `Send + Sync`,
+    /// and `Context::get()` hands each thread its own `fz_clone_context` of
+    /// a base context built with `FZ_LOCK_MAX` pthread mutexes as `MuPDF`'s
+    /// lock callbacks. The parse is serial, the rasterization parallel.
+    DisplayLists,
+    /// The engine's own rules put every call on one thread.
+    SingleThread {
+        /// The rule, for the table's footnote.
+        why: &'static str,
+    },
+}
+
+impl Sharing {
+    /// How many threads to actually run for a requested count.
+    #[must_use]
+    pub fn threads(self, requested: usize) -> usize {
+        match self {
+            Self::SingleThread { .. } => 1,
+            Self::Document | Self::DisplayLists => requested,
+        }
     }
 }
 
-/// Renders every page of `path` at the run's DPI on `threads` threads
-/// sharing one opened document; returns the page count.
+/// How engine `name` shares work between the threads of a throughput run.
+#[must_use]
+pub fn sharing(name: &str) -> Sharing {
+    match name {
+        "pdfium-render" => Sharing::SingleThread {
+            why: "PDFium keeps one global state; every call must be on one thread",
+        },
+        "mupdf" => Sharing::DisplayLists,
+        _ => Sharing::Document,
+    }
+}
+
+/// Renders every page of `path` at the run's DPI on `threads` threads,
+/// sharing whatever [`sharing`] says this engine shares; returns the page
+/// count.
 pub fn render_all(name: &str, path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
     match name {
         "pdfrum" => pdfrum::render_all(path, ctx, threads),
@@ -178,7 +214,7 @@ pub fn render_all(name: &str, path: &Path, ctx: &Ctx<'_>, threads: usize) -> Res
         #[cfg(feature = "pdfium-render")]
         "pdfium-render" => pdfium_render::render_all(path, ctx),
         #[cfg(feature = "mupdf")]
-        "mupdf" => mupdf::render_all(path, ctx),
+        "mupdf" => mupdf::render_all(path, ctx, threads),
         other => bail!("engine {other} does not render, or is not compiled in"),
     }
 }
