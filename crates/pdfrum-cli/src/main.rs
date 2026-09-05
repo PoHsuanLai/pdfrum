@@ -151,6 +151,11 @@ enum Command {
         #[command(subcommand)]
         what: Pages,
     },
+    /// The document's /Info metadata: set or clear its keys. `info` shows them.
+    Metadata {
+        #[command(subcommand)]
+        what: Metadata,
+    },
     /// Interactive forms: list fields, fill them, or bake them into the page.
     Forms {
         #[command(subcommand)]
@@ -413,6 +418,37 @@ enum Pages {
     Booklet {
         #[command(flatten)]
         input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+#[derive(Subcommand)]
+enum Metadata {
+    /// Set /Info keys and save; a key not named is kept as it was.
+    Set {
+        #[command(flatten)]
+        input: Input,
+        /// The title. An empty value removes the key, as `--clear` does.
+        #[arg(long, value_name = "TEXT")]
+        title: Option<String>,
+        /// The author.
+        #[arg(long, value_name = "TEXT")]
+        author: Option<String>,
+        /// The subject.
+        #[arg(long, value_name = "TEXT")]
+        subject: Option<String>,
+        /// The keywords, as one string.
+        #[arg(long, value_name = "TEXT")]
+        keywords: Option<String>,
+        /// The creator: the application the content came from.
+        #[arg(long, value_name = "TEXT")]
+        creator: Option<String>,
+        /// Keys to remove, comma-separated, by the names `info` prints:
+        /// title, author, subject, keywords, creator, producer, created,
+        /// modified.
+        #[arg(long, value_name = "KEYS")]
+        clear: Option<String>,
         #[command(flatten)]
         save: SaveArgs,
     },
@@ -748,6 +784,7 @@ fn main() -> ExitCode {
         }),
         Command::Extract { what } => run_extract(what, password, term),
         Command::Pages { what } => run_pages(what, password, term),
+        Command::Metadata { what } => run_metadata(what, password, term),
         Command::Forms { what } => run_forms(what, password, term),
         #[cfg(feature = "javascript")]
         Command::Scripts { what } => run_scripts(what, password, term),
@@ -1062,6 +1099,44 @@ fn run_scripts(
         Scripts::Run { input, time, json } => {
             cmd::scripts::run(&input.file, password, time, json, term)
         }
+    }
+}
+
+fn run_metadata(
+    what: Metadata,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
+    match what {
+        Metadata::Set {
+            input,
+            title,
+            author,
+            subject,
+            keywords,
+            creator,
+            clear,
+            save,
+        } => cmd::metadata::set(
+            &cmd::metadata::Set {
+                file: &input.file,
+                password,
+                changes: &cmd::metadata::Changes {
+                    title,
+                    author,
+                    subject,
+                    keywords,
+                    creator,
+                    clear: clear
+                        .as_deref()
+                        .map(cmd::metadata::parse_clear)
+                        .unwrap_or_default(),
+                },
+                output: &save.output,
+                deterministic: save.deterministic,
+            },
+            term,
+        ),
     }
 }
 
