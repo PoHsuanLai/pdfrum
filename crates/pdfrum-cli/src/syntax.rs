@@ -1,5 +1,5 @@
 //! Objects in PDF syntax, for a person: `inspect object` prints them and
-//! `hash` digests them.
+//! `hash` digests them; and as JSON, for `inspect object --json`.
 //!
 //! The spelling is canonical rather than the file's: names `#`-escaped
 //! where they must be, strings as `(…)` with the four escapes or `<…>`
@@ -31,6 +31,81 @@ pub fn object(out: &mut String, object: &Object, depth: usize) {
             let _ = write!(out, "{} {} R", r.num, r.generation);
         }
     }
+}
+
+/// `object` as JSON, for `inspect object --json` — the encoding an agent
+/// walks without parsing PDF syntax:
+///
+/// | PDF | JSON |
+/// |---|---|
+/// | `null`, `true`, `42`, `1.5` | `null`, `true`, `42`, `1.5` |
+/// | `/Type` | `{"name": "Type"}` |
+/// | `(text)` | `{"string": "text"}` — after PDF text decoding, when what came out is text |
+/// | `<01FF>` | `{"hex": "01ff"}` — a string that is not text, its bytes |
+/// | `[…]` | a JSON array |
+/// | `<< /K v >>` | a JSON object keyed by the name; a duplicate key keeps its last value |
+/// | `4 0 R` | `{"ref": [4, 0]}` |
+/// | a stream | `{"dict": {…}, "stream": {"length": N, "filters": ["FlateDecode"]}}` — `N` the raw bytes in the file; `--decode` gives the data |
+///
+/// A string is text when its decoding ([`PdfString::as_text`]: UTF-16 with
+/// a byte-order mark, else `PDFDocEncoding`) has no control character but
+/// tab, line feed and carriage return, and no replacement character — so
+/// a `/Title` is a string and an `/ID` is hex.
+pub fn json(object: &Object) -> serde_json::Value {
+    use serde_json::{Value, json};
+    match object {
+        Object::Null => Value::Null,
+        Object::Bool(b) => Value::Bool(*b),
+        Object::Int(i) => Value::from(*i),
+        Object::Real(r) => Value::from(f64::from(*r)),
+        Object::Str(s) => {
+            let text = s.as_text();
+            if is_text(&text) {
+                json!({ "string": text })
+            } else {
+                json!({ "hex": crate::out::hex(&s.bytes) })
+            }
+        }
+        Object::Name(n) => json!({ "name": n.as_text() }),
+        Object::Array(a) => Value::Array(a.iter().map(json).collect()),
+        Object::Dict(d) => Value::Object(dict_json(d)),
+        Object::Stream(s) => {
+            let filters: Vec<Value> = match s.dict.raw(&Name::from("Filter")) {
+                Some(Object::Name(n)) => vec![Value::from(n.as_text())],
+                Some(Object::Array(a)) => a
+                    .iter()
+                    .filter_map(|f| match f {
+                        Object::Name(n) => Some(Value::from(n.as_text())),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            json!({
+                "dict": Value::Object(dict_json(&s.dict)),
+                "stream": { "length": s.data.len(), "filters": filters },
+            })
+        }
+        Object::Ref(r) => json!({ "ref": [r.num, r.generation] }),
+    }
+}
+
+/// A dictionary as a JSON object, the last value of a repeated key kept —
+/// the same effective view [`effective`] gives the printer.
+fn dict_json(d: &Dict) -> serde_json::Map<String, serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    for (key, value) in d.iter() {
+        out.insert(key.as_text().into_owned(), json(value));
+    }
+    out
+}
+
+/// Whether a decoded string reads as text rather than as bytes that happen
+/// to decode: no control character but tab, line feed and carriage return,
+/// and no replacement character.
+fn is_text(text: &str) -> bool {
+    text.chars()
+        .all(|c| (!c.is_control() || matches!(c, '\t' | '\n' | '\r')) && c != '\u{FFFD}')
 }
 
 /// What an object is, in a few words, for a hint beside a reference or a
@@ -291,9 +366,69 @@ fn stream(out: &mut String, s: &Stream, depth: usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::{describe, highlight, object};
+    use super::{describe, highlight, json, object};
     use crate::term::{Graphics, Term};
-    use pdfrum::{Array, Dict, Name, ObjRef, Object, PdfString};
+    use pdfrum::{Array, Dict, Name, ObjRef, Object, PdfString, Stream};
+
+    #[test]
+    fn every_kind_encodes_as_json_and_a_binary_string_is_hex() {
+        let dict = Dict::from_pairs([
+            (Name::from("Type"), Object::Name(Name::from("Page"))),
+            (Name::from("Count"), Object::Int(3)),
+            (Name::from("Scale"), Object::Real(0.5)),
+            (
+                Name::from("Title"),
+                Object::Str(PdfString::literal(b"a(b)\n")),
+            ),
+            (
+                Name::from("Unicode"),
+                Object::Str(PdfString::hex(b"\xFE\xFF\x00\xe9")),
+            ),
+            (Name::from("ID"), Object::Str(PdfString::hex(b"\x01\xff"))),
+            (Name::from("Odd name"), Object::Null),
+            (Name::from("On"), Object::Bool(true)),
+            (
+                Name::from("Kids"),
+                Object::Array(Array::from_iter([
+                    Object::Ref(ObjRef::new(4, 0)),
+                    Object::Int(-1),
+                ])),
+            ),
+            // A repeated key: the last value is the effective one.
+            (Name::from("Count"), Object::Int(4)),
+        ]);
+        assert_eq!(
+            json(&Object::Dict(dict)),
+            serde_json::json!({
+                "Type": {"name": "Page"},
+                "Count": 4,
+                "Scale": 0.5,
+                "Title": {"string": "a(b)\n"},
+                "Unicode": {"string": "é"},
+                "ID": {"hex": "01ff"},
+                "Odd name": null,
+                "On": true,
+                "Kids": [{"ref": [4, 0]}, -1],
+            })
+        );
+        let stream = Stream {
+            dict: Dict::from_pairs([
+                (Name::from("Length"), Object::Int(5)),
+                (
+                    Name::from("Filter"),
+                    Object::Array(Array::from_iter([Object::Name(Name::from("FlateDecode"))])),
+                ),
+            ]),
+            data: b"hello".to_vec().into(),
+        };
+        assert_eq!(
+            json(&Object::Stream(Box::new(stream))),
+            serde_json::json!({
+                "dict": {"Length": 5, "Filter": [{"name": "FlateDecode"}]},
+                "stream": {"length": 5, "filters": ["FlateDecode"]},
+            })
+        );
+    }
 
     #[test]
     fn highlighting_paints_keys_names_and_references_and_leaves_the_text_alone() {

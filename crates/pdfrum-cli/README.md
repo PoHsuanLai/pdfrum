@@ -10,6 +10,7 @@ pdfrum doctor damaged.pdf --strict     # what the parser recovered; exit 3 if an
 pdfrum render report.pdf --pages 1-3 --dpi 200 -o out/{stem}-{n}.png
 pdfrum extract text report.pdf --pages 2,5-end
 pdfrum extract text --layout two-column.pdf     # columns stay columns
+pdfrum extract words paper.pdf --json           # every word: page, box, font, size, character range
 pdfrum extract markdown paper.pdf > paper.md    # tags if present, typography if not
 pdfrum extract links report.pdf --json
 pdfrum extract toc report.pdf
@@ -37,6 +38,7 @@ pdfrum extract images brochure.pdf -o images/   # one row per picture, repeats c
 pdfrum extract fonts brochure.pdf -o fonts/     # the embedded programs, .ttf/.cff/.otf/.pfb
 pdfrum inspect object report.pdf 12             # one object, highlighted, each reference told what it is
 pdfrum inspect object report.pdf 12 --decode > content.txt
+pdfrum inspect object report.pdf 12 --json      # the object as JSON: names, strings, refs, a stream's summary
 pdfrum inspect xref report.pdf                  # where every object lives and what it is, and the trailer
 pdfrum inspect revisions edited.pdf             # the incremental-update history
 pdfrum inspect revision edited.pdf --rev 1 -o original.pdf
@@ -44,12 +46,13 @@ pdfrum inspect structure tagged.pdf             # the structure tree, indented
 pdfrum diff v1.pdf v2.pdf                       # text per page; exit 1 if they differ
 pdfrum diff v1.pdf v2.pdf --visual -o diffs/    # pixels too, changes in red
 pdfrum hash report.pdf                          # sha256, /ID, and a semantic hash
+pdfrum schema extract words                     # the JSON shape a command's --json prints; no argument lists them
 pdfrum completions zsh > ~/.zfunc/_pdfrum
 pdfrum manpage -o man/
 
 # Composition: `-` is stdin or stdout, several files at once, one object per line.
 curl -s https://example.com/report.pdf | pdfrum info -
-pdfrum pages slice report.pdf --pages 1 -o - | pdfrum extract text -
+pdfrum pages slice report.pdf --pages 1 -o - | pdfrum extract words - --json | jq '.[0]'
 pdfrum info *.pdf --json | jq '.[].pages'          # one document per file
 pdfrum search "total" a.pdf b.pdf                  # a.pdf:page 2:… as grep -H does
 pdfrum extract links report.pdf --jsonl | jq -c 'select(.kind == "uri")'
@@ -67,7 +70,9 @@ terminal), and `info`, `hash`, `doctor` and `search` take several files, a
 file that cannot be opened reported and skipped. `--json` output has
 `snake_case` keys that do not change between releases; on several files it
 is an array of the per-file documents. The commands whose answer is a list
-also take `--jsonl`, one compact object per line. Exit codes: 0, 1 on error
+also take `--jsonl`, one compact object per line. `pdfrum schema <command>`
+prints an example of a command's `--json` document with every key, and
+`pdfrum schema` alone lists the commands that have one. Exit codes: 0, 1 on error
 (including a file among several that failed), 2 for a usage mistake, 3
 from `doctor --strict`.
 
