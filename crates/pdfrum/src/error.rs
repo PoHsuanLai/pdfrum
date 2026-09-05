@@ -43,13 +43,13 @@ pub enum Error {
     /// a page index with no page behind it, an object the store cannot
     /// produce, a reference loop.
     #[error("cannot read document: {0}")]
-    Read(#[from] pdfrum_parser::Error),
+    Read(#[source] pdfrum_parser::Error),
 
     /// A page would not render. In practice this is a target size that is
     /// zero or larger than the rasterizer's limit; content that will not draw
     /// is a diagnostic, not an error, because the page still has an image.
     #[error("cannot render page: {0}")]
-    Render(#[from] pdfrum_render::Error),
+    Render(#[source] pdfrum_render::Error),
 
     /// Reading a document-level feature failed — an outline, an annotation,
     /// a form field, the structure tree.
@@ -64,6 +64,24 @@ pub enum Error {
     /// Text extraction refused an index.
     #[error("cannot extract text: {0}")]
     Text(#[from] pdfrum_text::Error),
+
+    /// A ceiling the caller set in [`Limits`](crate::Limits) was exceeded:
+    /// a render whose target has more pixels than
+    /// [`Limits::max_render_pixels`](crate::Limits::max_render_pixels)
+    /// allows, or a [`Limits::deadline`](crate::Limits::deadline) that passed
+    /// while the document was being opened, a page loaded, or a page
+    /// rendered. (Text extraction cannot fail; past the deadline it returns
+    /// an empty page and records
+    /// [`DiagKind::TimeLimitReached`](crate::DiagKind::TimeLimitReached).)
+    ///
+    /// The one variant besides [`Error::WrongPassword`] a caller acts on
+    /// rather than reports: the payload says which cap and by how much, and
+    /// its message says what would satisfy it. Never produced by a default
+    /// `Limits`, whose ceilings are all off. The member crates' errors carry
+    /// a `Limit` variant of their own for the same value; the conversions
+    /// below route every one of them here, so a caller matches one place.
+    #[error(transparent)]
+    Limit(#[from] pdfrum_common::LimitExceeded),
 
     /// The filesystem refused a read or a write. Only the path-taking
     /// convenience methods ([`Document::open`](crate::Document::open),
@@ -87,7 +105,30 @@ impl From<pdfrum_parser::LoadError> for Error {
     fn from(e: pdfrum_parser::LoadError) -> Self {
         match e {
             pdfrum_parser::LoadError::WrongPassword => Error::WrongPassword,
+            pdfrum_parser::LoadError::Limit(limit) => Error::Limit(limit),
             other => Error::Open(other),
+        }
+    }
+}
+
+/// A ceiling hit while reading becomes [`Error::Limit`]; everything else
+/// becomes [`Error::Read`].
+impl From<pdfrum_parser::Error> for Error {
+    fn from(e: pdfrum_parser::Error) -> Self {
+        match e {
+            pdfrum_parser::Error::Limit(limit) => Error::Limit(limit),
+            other => Error::Read(other),
+        }
+    }
+}
+
+/// A ceiling hit while rendering becomes [`Error::Limit`]; everything else
+/// becomes [`Error::Render`].
+impl From<pdfrum_render::Error> for Error {
+    fn from(e: pdfrum_render::Error) -> Self {
+        match e {
+            pdfrum_render::Error::Limit(limit) => Error::Limit(limit),
+            other => Error::Render(other),
         }
     }
 }

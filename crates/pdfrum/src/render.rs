@@ -12,7 +12,10 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 /// antialiased text — what a viewer shows.
 ///
 /// It says nothing about *which* rasterizer draws the page: that is an
-/// argument to [`Page::render_on`](crate::Page::render_on).
+/// argument to [`Page::render_on`](crate::Page::render_on). Nor about how
+/// much a render may cost: the pixel cap and the deadline are the
+/// document's, set once in [`OpenOptions::limits`](crate::OpenOptions::limits)
+/// and applied to every render of it.
 ///
 /// `pdfrum_render::RenderOptions` is a **different type**, and the engine's
 /// own. This one's flags are positive and default to the common case, so

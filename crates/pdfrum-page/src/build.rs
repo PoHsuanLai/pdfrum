@@ -45,7 +45,7 @@ use crate::state::{
 };
 use crate::transparency::Transparency;
 use kurbo::{Affine, BezPath, Point, Rect};
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Operation, Severity};
 use pdfrum_font::{Font, FontCache};
 use pdfrum_object::{Dict, Name, Object, Resolve};
 use std::any::Any;
@@ -733,11 +733,20 @@ fn interpret<R: Resolve>(
     .0
 }
 
+/// How many operators the interpreter applies between deadline checks: a
+/// batch, so the clock is read a few hundred times on the largest content
+/// streams and not once per operator.
+const DEADLINE_STRIDE: usize = 256;
+
 /// Interpret a run of operators whose `/Contents` boundaries are known.
 ///
 /// Each object records the element it came from, and the transform each
 /// element leaves behind is returned alongside — the two facts a regenerated
 /// page needs and a rendered one does not.
+///
+/// Stops at `limits.deadline`, checked every [`DEADLINE_STRIDE`] operators:
+/// the objects built so far are returned and
+/// [`DiagKind::TimeLimitReached`] records that the rest were not.
 #[expect(
     clippy::too_many_arguments,
     reason = "as `interpret`, plus the stream boundaries the editor needs"
@@ -771,6 +780,12 @@ fn interpret_streams<R: Resolve>(
         stream_ctms: BTreeMap::new(),
     };
     for (index, op) in ops.iter().enumerate() {
+        if index.is_multiple_of(DEADLINE_STRIDE)
+            && limits.check_deadline(Operation::Interpret).is_err()
+        {
+            diags.record(Severity::Suspicious, DiagKind::TimeLimitReached, None);
+            break;
+        }
         interp.stream = bounds.stream_of(index);
         interp.apply(op, ctx, limits, diags);
     }
@@ -2339,12 +2354,50 @@ mod tests {
     }
 
     fn build_with(src: &[u8], resources: &Resources) -> (crate::page::Page, Diagnostics) {
-        let limits = Limits::default();
+        build_under(src, resources, &Limits::default())
+    }
+
+    fn build_under(
+        src: &[u8],
+        resources: &Resources,
+        limits: &Limits,
+    ) -> (crate::page::Page, Diagnostics) {
         let mut diags = Diagnostics::default();
-        let ops = crate::parse_content(src, &limits, &mut diags);
+        let ops = crate::parse_content(src, limits, &mut diags);
         let mut ctx = BuildContext::new();
-        let page = build_page(&ops, resources, &NoResolve, &mut ctx, &limits, &mut diags);
+        let page = build_page(&ops, resources, &NoResolve, &mut ctx, limits, &mut diags);
         (page, diags)
+    }
+
+    /// The interpreter reads the deadline every 256 operators, the first
+    /// time before the first one: a spent budget builds nothing and says so.
+    #[test]
+    fn a_spent_deadline_stops_the_interpreter_with_a_diagnostic() {
+        let spent = Limits {
+            deadline: Some(pdfrum_common::Deadline::after(std::time::Duration::ZERO)),
+            ..Limits::default()
+        };
+        let (page, diags) = build_under(
+            b"0 0 10 10 re f 0 0 20 20 re f",
+            &Resources::default(),
+            &spent,
+        );
+        assert!(page.objects.is_empty());
+        assert!(diags.contains(&DiagKind::TimeLimitReached));
+
+        let generous = Limits {
+            deadline: Some(pdfrum_common::Deadline::after(
+                std::time::Duration::from_hours(1),
+            )),
+            ..Limits::default()
+        };
+        let (page, diags) = build_under(
+            b"0 0 10 10 re f 0 0 20 20 re f",
+            &Resources::default(),
+            &generous,
+        );
+        assert_eq!(page.objects.len(), 2);
+        assert!(!diags.contains(&DiagKind::TimeLimitReached));
     }
 
     // -----------------------------------------------------------------

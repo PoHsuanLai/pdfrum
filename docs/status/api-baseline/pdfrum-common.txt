@@ -87,6 +87,7 @@ pub pdfrum_common::DiagKind::TextObjectDropped
 pub pdfrum_common::DiagKind::TextObjectDuplicate
 pub pdfrum_common::DiagKind::TilingRangeOverflow
 pub pdfrum_common::DiagKind::TilingStepInvalid
+pub pdfrum_common::DiagKind::TimeLimitReached
 pub pdfrum_common::DiagKind::TintTransformDropped
 pub pdfrum_common::DiagKind::ToUnicodeBlockRejected
 pub pdfrum_common::DiagKind::TreeDepthExceeded
@@ -103,9 +104,45 @@ pub pdfrum_common::DiagKind::XrefEntriesShifted
 pub pdfrum_common::DiagKind::XrefPrevLoop
 pub pdfrum_common::DiagKind::XrefRebuilt
 pub pdfrum_common::DiagKind::XrefStreamEntryDropped
+#[non_exhaustive] pub enum pdfrum_common::LimitExceeded
+pub pdfrum_common::LimitExceeded::RenderPixels
+pub pdfrum_common::LimitExceeded::RenderPixels::allowed: u64
+pub pdfrum_common::LimitExceeded::RenderPixels::height: u32
+pub pdfrum_common::LimitExceeded::RenderPixels::width: u32
+pub pdfrum_common::LimitExceeded::Stopped
+pub pdfrum_common::LimitExceeded::Stopped::during: pdfrum_common::Operation
+pub pdfrum_common::LimitExceeded::Stopped::page: core::option::Option<pdfrum_common::PageIndex>
+pub pdfrum_common::LimitExceeded::Time
+pub pdfrum_common::LimitExceeded::Time::budget: core::time::Duration
+pub pdfrum_common::LimitExceeded::Time::during: pdfrum_common::Operation
+pub pdfrum_common::LimitExceeded::Time::page: core::option::Option<pdfrum_common::PageIndex>
+impl pdfrum_common::LimitExceeded
+pub fn pdfrum_common::LimitExceeded::on_page(self, pdfrum_common::PageIndex) -> pdfrum_common::LimitExceeded
+impl core::error::Error for pdfrum_common::LimitExceeded
+impl core::fmt::Display for pdfrum_common::LimitExceeded
+pub fn pdfrum_common::LimitExceeded::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_common::Operation
+pub pdfrum_common::Operation::Extract
+pub pdfrum_common::Operation::Interpret
+pub pdfrum_common::Operation::Open
+pub pdfrum_common::Operation::PageLoad
+pub pdfrum_common::Operation::Render
+pub pdfrum_common::Operation::Script
 pub enum pdfrum_common::Severity
 pub pdfrum_common::Severity::Recovered
 pub pdfrum_common::Severity::Suspicious
+pub struct pdfrum_common::Deadline
+impl pdfrum_common::Deadline
+pub fn pdfrum_common::Deadline::after(core::time::Duration) -> pdfrum_common::Deadline
+pub fn pdfrum_common::Deadline::at(std::time::Instant) -> pdfrum_common::Deadline
+pub fn pdfrum_common::Deadline::budget(&self) -> core::option::Option<core::time::Duration>
+pub fn pdfrum_common::Deadline::check(&self, pdfrum_common::Operation) -> core::result::Result<(), pdfrum_common::LimitExceeded>
+pub fn pdfrum_common::Deadline::manual() -> pdfrum_common::Deadline
+pub fn pdfrum_common::Deadline::passed(&self) -> bool
+pub fn pdfrum_common::Deadline::stop(&self)
+impl core::cmp::Eq for pdfrum_common::Deadline
+impl core::cmp::PartialEq for pdfrum_common::Deadline
+pub fn pdfrum_common::Deadline::eq(&self, &pdfrum_common::Deadline) -> bool
 pub struct pdfrum_common::Diagnostic
 pub pdfrum_common::Diagnostic::at: core::option::Option<u64>
 pub pdfrum_common::Diagnostic::severity: pdfrum_common::Severity
@@ -135,6 +172,7 @@ pub fn pdfrum_common::FxHasher::write_u64(&mut self, u64)
 pub fn pdfrum_common::FxHasher::write_u8(&mut self, u8)
 pub fn pdfrum_common::FxHasher::write_usize(&mut self, usize)
 pub struct pdfrum_common::Limits
+pub pdfrum_common::Limits::deadline: core::option::Option<pdfrum_common::Deadline>
 pub pdfrum_common::Limits::header_scan: u64
 pub pdfrum_common::Limits::max_array_len: usize
 pub pdfrum_common::Limits::max_calculate_depth: u32
@@ -145,12 +183,15 @@ pub pdfrum_common::Limits::max_object_nesting: u32
 pub pdfrum_common::Limits::max_object_number: u32
 pub pdfrum_common::Limits::max_page_count: u32
 pub pdfrum_common::Limits::max_page_tree_depth: u32
+pub pdfrum_common::Limits::max_render_pixels: core::option::Option<u64>
 pub pdfrum_common::Limits::max_script_loop_iterations: u64
 pub pdfrum_common::Limits::max_script_recursion: usize
 pub pdfrum_common::Limits::max_script_stack: usize
 pub pdfrum_common::Limits::max_word_len: usize
 pub pdfrum_common::Limits::max_xref_size: u32
 pub pdfrum_common::Limits::startxref_scan: u64
+impl pdfrum_common::Limits
+pub fn pdfrum_common::Limits::check_deadline(&self, pdfrum_common::Operation) -> core::result::Result<(), pdfrum_common::LimitExceeded>
 impl core::default::Default for pdfrum_common::Limits
 pub fn pdfrum_common::Limits::default() -> Self
 pub struct pdfrum_common::PageIndex(_)

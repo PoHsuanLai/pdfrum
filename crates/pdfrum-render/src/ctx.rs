@@ -4,6 +4,7 @@
 //! and none of which is read by all; [`RenderCaches`] is owned by the session
 //! rather than by a global.
 
+use pdfrum_common::Deadline;
 use pdfrum_font::{FontId, GlyphCache};
 use pdfrum_page::Transparency;
 
@@ -57,6 +58,10 @@ pub struct RenderCtx<'a> {
     /// Whether this context is already inside a transparency group, which
     /// stops a nested group re-applying the enclosing group's alpha.
     pub in_group: bool,
+    /// The run's deadline, borrowed from the [`RenderSession`](crate::RenderSession)
+    /// so that the record every nested context clones grows by a pointer and
+    /// not by the deadline itself. `None` is no limit.
+    pub deadline: Option<&'a Deadline>,
 }
 
 impl RenderCtx<'_> {
@@ -72,7 +77,15 @@ impl RenderCtx<'_> {
             type3_fonts: &[],
             transparency,
             in_group: false,
+            deadline: None,
         }
+    }
+
+    /// Whether the run's deadline is set and has passed — the per-object
+    /// read, kept to a branch when unset.
+    #[must_use]
+    pub fn out_of_time(&self) -> bool {
+        self.deadline.is_some_and(Deadline::passed)
     }
 
     /// Whether another level of recursion is permitted.

@@ -87,6 +87,7 @@ pub pdfrum_render::ColorMode::Gray
 pub pdfrum_render::ColorMode::Normal
 #[non_exhaustive] pub enum pdfrum_render::Error
 pub pdfrum_render::Error::Io(alloc::string::String)
+pub pdfrum_render::Error::Limit(pdfrum_common::limits::LimitExceeded)
 pub pdfrum_render::Error::Png(alloc::string::String)
 pub pdfrum_render::Error::TargetEmpty
 pub pdfrum_render::Error::TargetEmpty::height: u32
@@ -199,6 +200,7 @@ impl core::default::Default for pdfrum_render::RenderOptions
 pub fn pdfrum_render::RenderOptions::default() -> Self
 pub struct pdfrum_render::RenderSession<'a>
 pub pdfrum_render::RenderSession::caches: core::option::Option<&'a mut pdfrum_render::RenderCaches>
+pub pdfrum_render::RenderSession::deadline: core::option::Option<&'a pdfrum_common::deadline::Deadline>
 pub pdfrum_render::RenderSession::visible: core::option::Option<&'a pdfrum_page::optional::Visibility>
 pub const pdfrum_render::MAX_TARGET_DIMENSION: u32
 pub trait pdfrum_render::RasterBackend

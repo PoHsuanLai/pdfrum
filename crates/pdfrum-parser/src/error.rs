@@ -4,7 +4,7 @@
 //! *recovery* recorded in `Diagnostics`, not a failure, so the error type
 //! only names the conditions under which reading genuinely stops.
 
-use pdfrum_common::PageIndex;
+use pdfrum_common::{LimitExceeded, PageIndex};
 use pdfrum_object::ObjRef;
 
 /// A failure below the document level: a token that is not an object, a
@@ -41,6 +41,11 @@ pub enum Error {
     /// found nothing.
     #[error("no page at index {0}")]
     NoPage(PageIndex),
+
+    /// The caller's `Limits::deadline` passed while the cross-reference was
+    /// being rebuilt by scanning the file.
+    #[error(transparent)]
+    Limit(LimitExceeded),
 }
 
 impl From<Error> for pdfrum_object::Error {

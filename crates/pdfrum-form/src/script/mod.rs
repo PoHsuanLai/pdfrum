@@ -31,7 +31,7 @@ pub mod transcript;
 use std::rc::Rc;
 
 use boa_engine::context::Context;
-use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_common::{Deadline, Diagnostics, Limits};
 
 use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
 use event::EventState;
@@ -280,6 +280,11 @@ pub struct ScriptCascade {
     /// Whether a script is running: one running inside another is refused
     /// rather than re-entered.
     busy: bool,
+    /// `Limits::deadline`, read before each run: a script that starts past
+    /// it is refused as one that exhausted its loop budget. `boa` has no
+    /// wall-clock hook, so the budget is the bound *inside* a run and the
+    /// deadline the bound *between* runs.
+    deadline: Option<Deadline>,
 }
 
 impl std::fmt::Debug for ScriptCascade {
@@ -353,6 +358,7 @@ impl ScriptCascade {
             stops: Vec::new(),
             max_calculate_depth: config.limits.max_calculate_depth,
             busy: false,
+            deadline: config.limits.deadline.clone(),
         })
     }
 
@@ -472,6 +478,13 @@ impl ScriptCascade {
             self.stops.push(ScriptFailure {
                 whence: whence.to_string(),
                 stop: ScriptStop::Threw("System is busy.".to_string()),
+            });
+            return false;
+        }
+        if self.deadline.as_ref().is_some_and(Deadline::passed) {
+            self.stops.push(ScriptFailure {
+                whence: whence.to_string(),
+                stop: ScriptStop::LimitReached,
             });
             return false;
         }

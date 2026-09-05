@@ -52,6 +52,9 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<DiagKind>();
     nameable::<Diagnostic>();
     nameable::<Limits>();
+    nameable::<LimitExceeded>();
+    nameable::<Deadline>();
+    nameable::<Operation>();
     nameable::<Severity>();
     nameable::<PdfVersion>();
     nameable::<PageIndex>();
@@ -217,6 +220,9 @@ fn every_error_variant_payload_is_nameable() {
             }
             Error::Text(payload) => {
                 let _: TextError = payload;
+            }
+            Error::Limit(payload) => {
+                let _: LimitExceeded = payload;
             }
             Error::Io(payload) => {
                 let _: std::io::Error = payload;

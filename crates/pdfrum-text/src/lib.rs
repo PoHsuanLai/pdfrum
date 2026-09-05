@@ -61,7 +61,7 @@ pub use word::Word;
 pub use links::{FoundLink, check_mail_link, check_web_link};
 
 use kurbo::{Affine, Point, Rect, Size};
-use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Operation, Severity};
 use pdfrum_object::Resolve;
 use pdfrum_page::Page;
 use std::collections::BTreeMap;
@@ -117,7 +117,9 @@ pub struct TextPage {
 ///
 /// Infallible and never panicking: every place something is silently dropped
 /// records a [`Diagnostic`](pdfrum_common::Diagnostic) into `diags` and
-/// carries on.
+/// carries on. A `limits.deadline` that has passed is read once, here on
+/// entry — a page is the extractor's unit of work — and answers an empty
+/// page with [`DiagKind::TimeLimitReached`].
 #[must_use]
 pub fn extract<R: Resolve>(
     page: &Page,
@@ -126,7 +128,10 @@ pub fn extract<R: Resolve>(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> TextPage {
-    let _ = limits;
+    if limits.check_deadline(Operation::Extract).is_err() {
+        diags.record(Severity::Suspicious, DiagKind::TimeLimitReached, None);
+        return TextPage::default();
+    }
     if page.objects.is_empty() {
         return TextPage::default();
     }
