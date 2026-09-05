@@ -1,14 +1,14 @@
 //! `pdfrum info`: what a document is, on one screen.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Result;
 use pdfrum::{Document, Rotation};
 use serde::Serialize;
 
-use crate::out::{self, JsonRect};
+use crate::out::{self, JsonRect, outln};
 use crate::term::{Style, Term};
 
 /// The whole report, which is also the JSON schema.
@@ -87,15 +87,22 @@ struct PageBoxes {
     art_box: Option<JsonRect>,
 }
 
-pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
-    let report = report(&doc, file);
+pub fn run(files: &[PathBuf], password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+    let (reports, failed) = out::per_file(files, term, |file| {
+        let doc = out::open(file, password)?;
+        Ok(report(&doc, file))
+    });
     if json {
-        out::json(&report)?;
+        out::documents(files, &reports)?;
     } else {
-        print(&report, term);
+        for (i, report) in reports.iter().enumerate() {
+            if i > 0 {
+                outln!();
+            }
+            print(report, term);
+        }
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(out::exit(failed, ExitCode::SUCCESS))
 }
 
 fn report(doc: &Document, file: &Path) -> Report {

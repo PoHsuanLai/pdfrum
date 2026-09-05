@@ -111,7 +111,7 @@ struct XrefReport {
     rows: Vec<XrefRow>,
 }
 
-pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
     let doc = out::open_quietly(file, password)?;
     let parser = doc.parser();
     let table = parser.xref();
@@ -162,8 +162,11 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
         trailer,
         rows,
     };
-    if json {
+    if json == out::Json::Document {
         out::json(&report)?;
+    } else if json == out::Json::Lines {
+        // The entries, one per line; the trailer is `inspect object`'s.
+        out::items(&report.rows, json)?;
     } else {
         let mut rows = vec![
             ("file", Some(report.file.clone())),
@@ -230,7 +233,12 @@ struct RevisionRow {
     end: usize,
 }
 
-pub fn revisions(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
+pub fn revisions(
+    file: &Path,
+    password: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let rows: Vec<RevisionRow> = doc
         .revisions()
@@ -242,8 +250,8 @@ pub fn revisions(file: &Path, password: Option<&str>, json: bool, term: Term) ->
             end: r.end,
         })
         .collect();
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if rows.is_empty() {
         out::none("revisions");
     } else {
@@ -279,6 +287,7 @@ pub fn revision(
     output: &Path,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let count = doc.revisions().len();
     if rev == 0 || rev > count {
@@ -294,13 +303,12 @@ pub fn revision(
     let bytes = doc
         .revision_bytes(rev - 1)
         .context("the revision's end could not be found")?;
-    std::fs::write(output, bytes).with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    sink.finish(
         term,
-        output,
+        bytes,
         &format!("revision {rev} of {count}"),
         Some(&out::bytes(bytes.len() as u64)),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -323,7 +331,7 @@ pub fn structure(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
-    json: bool,
+    json: out::Json,
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -342,8 +350,8 @@ pub fn structure(
             }
         }
     }
-    if json {
-        out::json(&rows)?;
+    if json.is_on() {
+        out::items(&rows, json)?;
     } else if !tagged {
         out::none("structure tree");
     } else {

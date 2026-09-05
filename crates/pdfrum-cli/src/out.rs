@@ -2,21 +2,69 @@
 //! shares.
 
 use std::io::IsTerminal;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::sync::atomic::{AtomicU8, Ordering};
 
-use anyhow::{Context, Result};
-use pdfrum::{Document, Rect};
+use anyhow::{Context, Result, bail};
+use pdfrum::{Document, OpenOptions, Rect};
 use serde::Serialize;
 
 use crate::term::{Style, Term};
 
+/// How much commentary stderr gets: `--quiet` drops the notices, `--verbose`
+/// adds every parser diagnostic. Set once by `main` before any command
+/// runs, and read wherever a notice is printed, so no command carries it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verbosity {
+    Quiet,
+    Normal,
+    Verbose,
+}
+
+static VERBOSITY: AtomicU8 = AtomicU8::new(1);
+
+pub fn set_verbosity(level: Verbosity) {
+    VERBOSITY.store(
+        match level {
+            Verbosity::Quiet => 0,
+            Verbosity::Normal => 1,
+            Verbosity::Verbose => 2,
+        },
+        Ordering::Relaxed,
+    );
+}
+
+/// Whether `--quiet` is on: notices stay unprinted, errors do not.
+pub fn quiet() -> bool {
+    VERBOSITY.load(Ordering::Relaxed) == 0
+}
+
+/// Whether `--verbose` is on.
+pub fn verbose() -> bool {
+    VERBOSITY.load(Ordering::Relaxed) == 2
+}
+
 /// Open `file`, with `password` when one was given.
 ///
 /// An encrypted file with no password is the one error a user hits most, so
-/// it names the flag that fixes it.
+/// it names the flag that fixes it. A file that needed recovery gets one
+/// notice — or, under `--verbose`, one line per diagnostic, the same list
+/// `doctor` prints — and under `--quiet` nothing.
 pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
     let doc = open_quietly(file, password)?;
-    if doc.diagnostics().is_empty() {
+    if doc.diagnostics().is_empty() || quiet() {
+        return Ok(doc);
+    }
+    if verbose() {
+        for d in doc.diagnostics().entries() {
+            let severity = match d.severity {
+                pdfrum::Severity::Recovered => "recovered",
+                pdfrum::Severity::Suspicious => "suspicious",
+            };
+            let at = d.at.map_or(String::new(), |o| format!(" at byte {o}"));
+            notice(file, &format!("{severity}{at}: {:?}", d.what));
+        }
         return Ok(doc);
     }
     let n = doc.diagnostics().len();
@@ -36,6 +84,9 @@ pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
 /// [`open`] without the notice — for `doctor`, whose whole output is the
 /// notices.
 pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
+    if is_stdin(file) {
+        return open_input(password);
+    }
     let first = match password {
         Some(password) => Document::open_with_password(file, password.as_bytes()),
         None => Document::open(file),
@@ -57,11 +108,210 @@ pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
     doc.with_context(|| format!("cannot open {}", file.display()))
 }
 
+/// Whether `file` is `-`, the name every reading command gives stdin.
+pub fn is_stdin(file: &Path) -> bool {
+    file == Path::new("-")
+}
+
+/// The document on stdin, read whole: a PDF's cross-reference table is at
+/// its end, so there is nothing to stream.
+fn open_input(password: Option<&str>) -> Result<Document> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .lock()
+        .read_to_end(&mut bytes)
+        .context("cannot read stdin")?;
+    open_bytes(bytes, password).context("cannot open -")
+}
+
+/// A document from bytes already in hand — stdin, or a file this run wrote
+/// and reads back.
+pub fn open_bytes(bytes: Vec<u8>, password: Option<&str>) -> Result<Document> {
+    let options = OpenOptions {
+        password: password.map(|p| p.as_bytes().to_vec()),
+        ..OpenOptions::default()
+    };
+    Ok(Document::from_bytes_with(bytes.into(), &options)?)
+}
+
+/// The input's name without directory or extension, for the files a command
+/// derives from it (`{stem}-{n}.png`); `stdin` when the input was `-`.
+pub fn stem(file: &Path) -> String {
+    if is_stdin(file) {
+        return "stdin".to_owned();
+    }
+    file.file_stem()
+        .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
+}
+
+/// A notice: `pdfrum: <file>: <what happened>` on stderr, one line; nothing
+/// under `--quiet`.
+pub fn notice(file: &Path, what: &str) {
+    if quiet() {
+        return;
+    }
+    eprintln!("pdfrum: {}: {what}", file.display());
+}
+
+/// An error: `pdfrum: <what failed>: <why>` on stderr, in `Error`.
+pub fn error(term: Term, err: &anyhow::Error) {
+    eprintln!(
+        "{}",
+        term.paint(Style::Error, &format!("pdfrum: {}", error_line(err)))
+    );
+}
+
+/// The error's causes, outermost first, joined by `: ` — with a cause
+/// left out when the message above it already quotes it, which the
+/// library's errors do, so nothing is said twice.
+pub fn error_line(err: &anyhow::Error) -> String {
+    let mut line = String::new();
+    for cause in err.chain() {
+        let text = cause.to_string();
+        if line.contains(&text) {
+            continue;
+        }
+        if !line.is_empty() {
+            line.push_str(": ");
+        }
+        line.push_str(&text);
+    }
+    line
+}
+
+/// `each` over several files the way `grep` goes: a file that fails is
+/// reported on stderr and the run continues with the next. Returns what
+/// the files that worked gave, and whether any failed — which is exit 1 at
+/// the end, after everything that could be answered was.
+pub fn per_file<T>(
+    files: &[PathBuf],
+    term: Term,
+    mut each: impl FnMut(&Path) -> Result<T>,
+) -> (Vec<T>, bool) {
+    let mut results = Vec::with_capacity(files.len());
+    let mut failed = false;
+    for file in files {
+        match each(file) {
+            Ok(result) => results.push(result),
+            Err(err) => {
+                error(term, &err);
+                failed = true;
+            }
+        }
+    }
+    (results, failed)
+}
+
+/// The JSON of a command given several files: the one document when one
+/// file was named, the array of per-file documents otherwise.
+pub fn documents<T: Serialize>(files: &[PathBuf], reports: &[T]) -> Result<()> {
+    if files.len() == 1 {
+        return match reports.first() {
+            Some(report) => json(report),
+            None => Ok(()),
+        };
+    }
+    json(&reports)
+}
+
+/// Exit 1 when a file among several failed, else `otherwise`.
+pub fn exit(failed: bool, otherwise: ExitCode) -> ExitCode {
+    if failed { ExitCode::from(1) } else { otherwise }
+}
+
+/// Where a writing command's result goes: the file named, or stdout for
+/// `-`. A command makes one first, so `-` on a terminal is refused before
+/// any work is done, produces its bytes through the facade's `write_*_to`
+/// twin of the save it wants, and hands them to [`Sink::finish`].
+pub struct Sink<'a> {
+    path: &'a Path,
+}
+
+impl<'a> Sink<'a> {
+    /// `kind` names what the bytes are, for the refusal: `PDF`, `PNG`.
+    pub fn new(path: &'a Path, kind: &str) -> Result<Self> {
+        if is_stdin(path) && std::io::stdout().is_terminal() {
+            bail!("refusing to write a {kind} to a terminal; give -o a path or pipe it");
+        }
+        Ok(Self { path })
+    }
+
+    /// Whether the bytes go to stdout.
+    pub fn is_stdout(&self) -> bool {
+        is_stdin(self.path)
+    }
+
+    /// Write the bytes, then say what was done: the summary line on stdout
+    /// for a file, or — when stdout is the file — the same words as a
+    /// notice on stderr, `pdfrum: -: 3 pages`.
+    pub fn finish(&self, term: Term, bytes: &[u8], what: &str, detail: Option<&str>) -> Result<()> {
+        if self.is_stdout() {
+            write_bytes(bytes);
+            match detail {
+                Some(d) if !d.is_empty() => notice(self.path, &format!("{what}, {d}")),
+                _ => notice(self.path, what),
+            }
+        } else {
+            std::fs::write(self.path, bytes)
+                .with_context(|| format!("cannot write {}", self.path.display()))?;
+            summary(term, self.path, what, detail);
+        }
+        Ok(())
+    }
+}
+
 /// Print `value` as one pretty JSON document.
 pub fn json(value: &impl Serialize) -> Result<()> {
     let text = serde_json::to_string_pretty(value).context("cannot encode JSON")?;
     write_all(format_args!("{text}\n"));
     Ok(())
+}
+
+/// How a command whose answer is a list of items prints it: for people,
+/// as one JSON document (the array), or as one compact JSON object per
+/// line (`--jsonl`), which `jq -c`, `xargs` and `while read` take a line
+/// at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Json {
+    Off,
+    Document,
+    Lines,
+}
+
+impl Json {
+    /// From the `--json` and `--jsonl` flags, which clap keeps exclusive.
+    pub fn from_flags(json: bool, jsonl: bool) -> Self {
+        if jsonl {
+            Self::Lines
+        } else if json {
+            Self::Document
+        } else {
+            Self::Off
+        }
+    }
+
+    /// Whether anything but the human form was asked for.
+    pub fn is_on(self) -> bool {
+        self != Self::Off
+    }
+}
+
+/// The items of a list command in the JSON form asked for: the pretty
+/// array, or one compact object per line. Nothing for [`Json::Off`], which
+/// is the caller's human form.
+pub fn items<T: Serialize>(rows: &[T], mode: Json) -> Result<()> {
+    match mode {
+        Json::Off => Ok(()),
+        Json::Document => json(&rows),
+        Json::Lines => {
+            for row in rows {
+                let line = serde_json::to_string(row).context("cannot encode JSON")?;
+                write_all(format_args!("{line}\n"));
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Write to stdout, and treat a closed pipe as the reader being done rather

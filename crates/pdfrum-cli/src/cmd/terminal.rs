@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
@@ -62,6 +62,9 @@ pub fn preview(
     width: Option<u16>,
     term: Term,
 ) -> Result<ExitCode> {
+    if out::is_stdin(file) {
+        bail!("preview draws on a terminal, and reads no document from stdin; give a path");
+    }
     let doc = out::open(file, password)?;
     if page == 0 || page > doc.page_count() {
         bail!("page {page} is not in 1..={}", doc.page_count());
@@ -450,6 +453,11 @@ pub fn view(file: &Path, password: Option<&str>, start: u32, term: Term) -> Resu
     use crossterm::event::{Event, KeyEvent, read};
     use crossterm::{cursor, execute, terminal};
 
+    if out::is_stdin(file) {
+        bail!(
+            "view reads its keys from stdin, so the document cannot come from there; give a path"
+        );
+    }
     let doc = out::open(file, password)?;
     let count = doc.page_count();
     if count == 0 {
@@ -600,21 +608,105 @@ struct Hit {
     rects: Vec<out::JsonRect>,
 }
 
-/// `grep` for a document: every hit with its line, and the page it is on.
-pub fn search(
-    file: &Path,
-    password: Option<&str>,
-    needle: &str,
-    ignore_case: bool,
-    spec: Option<&str>,
-    json: bool,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// What `search` was asked for.
+pub struct Search<'a> {
+    pub files: &'a [PathBuf],
+    pub password: Option<&'a str>,
+    pub needle: &'a str,
+    pub ignore_case: bool,
+    pub spec: Option<&'a str>,
+    /// `-H` (`Some(true)`), `--no-filename` (`Some(false)`), or neither: a
+    /// hit names its file when more than one file is searched.
+    pub with_filename: Option<bool>,
+    pub json: out::Json,
+}
+
+/// One file's hits: the JSON shape when several files are searched.
+#[derive(Serialize)]
+struct FileHits {
+    file: String,
+    hits: Vec<Hit>,
+}
+
+/// One hit with its file, for `--jsonl` when the text form would name it.
+#[derive(Serialize)]
+struct NamedHit<'a> {
+    file: &'a str,
+    #[serde(flatten)]
+    hit: &'a Hit,
+}
+
+/// `grep` for documents: every hit with its line, the page it is on, and
+/// — with several files, or `-H` — the file, as `a.pdf:page 2:…`. Exit 1
+/// when no file had a hit.
+pub fn search(req: &Search<'_>, term: Term) -> Result<ExitCode> {
     let options = FindOptions {
-        match_case: !ignore_case,
+        match_case: !req.ignore_case,
         ..FindOptions::default()
     };
+    let named = req.with_filename.unwrap_or(req.files.len() > 1);
+    let (found, failed) = out::per_file(req.files, term, |file| {
+        let doc = out::open(file, req.password)?;
+        let hits = find(&doc, req.needle, options, req.spec)?;
+        if req.json == out::Json::Lines {
+            // As each file is done, like the text form.
+            if named {
+                let file = file.display().to_string();
+                let lines: Vec<NamedHit<'_>> = hits
+                    .iter()
+                    .map(|hit| NamedHit { file: &file, hit })
+                    .collect();
+                out::items(&lines, req.json)?;
+            } else {
+                out::items(&hits, req.json)?;
+            }
+        } else if !req.json.is_on() {
+            // Printed as each file is done, as `grep` does, so a long
+            // list of files answers as it goes.
+            let prefix = if named {
+                format!("{}:", term.paint(Style::Ident, &file.display().to_string()))
+            } else {
+                String::new()
+            };
+            for hit in &hits {
+                outln!(
+                    "{prefix}{}:{}",
+                    term.paint(Style::Ident, &format!("page {}", hit.page)),
+                    painted(hit, req.needle, req.ignore_case, term)
+                );
+            }
+        }
+        Ok(FileHits {
+            file: file.display().to_string(),
+            hits,
+        })
+    });
+    let any = found.iter().any(|f| !f.hits.is_empty());
+    if req.json == out::Json::Document {
+        // One file is the array of hits it always was; several files, or
+        // a file asked for by name, are per-file documents.
+        match found.as_slice() {
+            [one] if req.files.len() == 1 && !named => out::json(&one.hits)?,
+            _ => out::json(&found)?,
+        }
+    }
+    Ok(out::exit(
+        failed,
+        if any {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        },
+    ))
+}
+
+/// Every hit of `needle` on the selected pages.
+fn find(
+    doc: &Document,
+    needle: &str,
+    options: FindOptions,
+    spec: Option<&str>,
+) -> Result<Vec<Hit>> {
     let mut hits = Vec::new();
     for index in pages::select(spec, doc.page_count())? {
         let page = doc.page(index)?;
@@ -659,44 +751,33 @@ pub fn search(
             });
         }
     }
-    if json {
-        out::json(&hits)?;
-    } else {
-        for h in &hits {
-            let chars: Vec<char> = h.line.chars().collect();
-            // The hit's offset within its line, to paint it.
-            let full_len = chars.len();
-            let hit_len = h.end - h.start;
-            let painted = if term.color && hit_len <= full_len {
-                let at = chars
-                    .windows(hit_len)
-                    .position(|w| {
-                        let candidate: String = w.iter().collect();
-                        if ignore_case {
-                            candidate.eq_ignore_ascii_case(needle)
-                        } else {
-                            candidate == needle
-                        }
-                    })
-                    .unwrap_or(0);
-                let before: String = chars.get(..at).unwrap_or(&[]).iter().collect();
-                let hit: String = chars.get(at..at + hit_len).unwrap_or(&[]).iter().collect();
-                let after: String = chars.get(at + hit_len..).unwrap_or(&[]).iter().collect();
-                format!("{before}{}{after}", term.paint(Style::Match, &hit))
-            } else {
-                h.line.clone()
-            };
-            outln!(
-                "{}:{painted}",
-                term.paint(Style::Ident, &format!("page {}", h.page))
-            );
-        }
+    Ok(hits)
+}
+
+/// The hit's line with the hit itself in `Match` when colour is on.
+fn painted(hit: &Hit, needle: &str, ignore_case: bool, term: Term) -> String {
+    let chars: Vec<char> = hit.line.chars().collect();
+    // The hit's offset within its line, to paint it.
+    let full_len = chars.len();
+    let hit_len = hit.end - hit.start;
+    if !term.color || hit_len > full_len {
+        return hit.line.clone();
     }
-    Ok(if hits.is_empty() {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    })
+    let at = chars
+        .windows(hit_len)
+        .position(|w| {
+            let candidate: String = w.iter().collect();
+            if ignore_case {
+                candidate.eq_ignore_ascii_case(needle)
+            } else {
+                candidate == needle
+            }
+        })
+        .unwrap_or(0);
+    let before: String = chars.get(..at).unwrap_or(&[]).iter().collect();
+    let found: String = chars.get(at..at + hit_len).unwrap_or(&[]).iter().collect();
+    let after: String = chars.get(at + hit_len..).unwrap_or(&[]).iter().collect();
+    format!("{before}{}{after}", term.paint(Style::Match, &found))
 }
 
 #[cfg(test)]

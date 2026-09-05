@@ -23,6 +23,32 @@ fn run(args: &[&str]) -> std::io::Result<Output> {
         .output()
 }
 
+/// [`run`] with bytes on stdin and extra environment variables.
+fn run_with(args: &[&str], stdin: &[u8], env: &[(&str, &str)]) -> std::io::Result<Output> {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
+        .args(args)
+        .envs(env.iter().copied())
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    if let Some(mut pipe) = child.stdin.take() {
+        pipe.write_all(stdin)?;
+    }
+    child.wait_with_output()
+}
+
+/// A fixture's bytes, for feeding stdin.
+fn fixture(name: &str) -> std::io::Result<Vec<u8>> {
+    std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name),
+    )
+}
+
 /// Stdout of a run that must succeed; the error names the exit code and
 /// carries stderr.
 fn stdout(args: &[&str]) -> Result<String, String> {
@@ -1494,6 +1520,509 @@ fn completions_and_manual_pages_come_from_the_command_tree() {
     );
     let count = std::fs::read_dir(&dir).unwrap().count();
     assert!(count > 40, "{count} pages");
+}
+
+// ---- M20 phase 1: composition ----------------------------------------------
+
+#[test]
+fn a_dash_reads_the_document_from_stdin() {
+    let bytes = fixture("two_signatures.pdf").unwrap();
+    let piped = run_with(&["info", "-"], &bytes, &[]).unwrap();
+    assert!(
+        piped.status.success(),
+        "{}",
+        String::from_utf8_lossy(&piped.stderr)
+    );
+    let piped = String::from_utf8(piped.stdout).unwrap();
+    let from_file = expected("info_two_signatures.txt").unwrap();
+    assert!(piped.starts_with("file         -\n"), "{piped}");
+    assert_eq!(
+        piped.lines().skip(1).collect::<Vec<_>>(),
+        from_file.lines().skip(1).collect::<Vec<_>>(),
+        "the same report but for the file line"
+    );
+
+    let text = run_with(
+        &["extract", "text", "-"],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert_eq!(
+        String::from_utf8(text.stdout).unwrap(),
+        expected("text_hello_world_2_pages.txt").unwrap()
+    );
+
+    let locked = run_with(
+        &["info", "-", "--password", "1234", "--json"],
+        &fixture("encrypted.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert!(locked.status.success(), "{locked:?}");
+    let v: serde_json::Value = serde_json::from_slice(&locked.stdout).unwrap();
+    assert_eq!(v["file"], "-");
+    assert_eq!(v["encrypted"], true);
+    let refused = run_with(&["info", "-"], &fixture("encrypted.pdf").unwrap(), &[]).unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("cannot open -"),
+        "{refused:?}"
+    );
+
+    // `hash -` is the file's own hash: the bytes are the bytes.
+    let h = run_with(
+        &["hash", "-", "--json"],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&h.stdout).unwrap();
+    assert_eq!(
+        v["sha256"],
+        "67431cbec27df7cc86a57da5ff11b5151628fa93f661da79b9d272ec85bcdb03"
+    );
+
+    // Files derived from stdin are named after it.
+    let dir = scratch("stdin-render").unwrap();
+    let template = dir.join("{stem}-{n}.png");
+    let out = run_with(
+        &[
+            "render",
+            "--dpi",
+            "36",
+            "-o",
+            template.to_str().unwrap(),
+            "-",
+        ],
+        &fixture("hello_world_2_pages.pdf").unwrap(),
+        &[],
+    )
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert!(dir.join("stdin-1.png").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    for verb in ["preview", "view"] {
+        let out = run_with(&[verb, "-"], &bytes, &[]).unwrap();
+        assert_eq!(out.status.code(), Some(1), "{verb} refuses stdin");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("give a path"),
+            "{out:?}"
+        );
+    }
+}
+
+#[test]
+fn a_dash_output_writes_the_pdf_to_stdout_and_the_summary_to_stderr() {
+    // The chain from PLAN.md: slice to stdout, read it back from stdin.
+    let sliced = run(&[
+        "pages",
+        "slice",
+        "fixtures/hello_world_2_pages.pdf",
+        "--pages",
+        "1",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(sliced.status.success(), "{sliced:?}");
+    assert!(
+        sliced.stdout.starts_with(b"%PDF-"),
+        "the PDF and nothing else"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&sliced.stderr),
+        "pdfrum: -: 1 pages\n",
+        "the summary is a notice"
+    );
+    let text = run_with(&["extract", "text", "-"], &sliced.stdout, &[]).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&text.stdout),
+        "Hello, world!\nGoodbye, world!\n",
+        "page 1 alone, no form feed"
+    );
+    let info = run_with(&["info", "-", "--json"], &sliced.stdout, &[]).unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&info.stdout).unwrap();
+    assert_eq!(v["pages"], 1);
+}
+
+#[test]
+fn every_writing_command_takes_a_dash_output() {
+    let dir = scratch("dash-out").unwrap();
+    let data = dir.join("fill.json");
+    std::fs::write(&data, r#"{"Text Box": "x"}"#).unwrap();
+    let data = data.to_str().unwrap();
+    let commands: Vec<Vec<&str>> = vec![
+        vec![
+            "pages",
+            "merge",
+            "fixtures/hello_world_2_pages.pdf",
+            "fixtures/bookmarks.pdf",
+        ],
+        vec![
+            "pages",
+            "reorder",
+            "fixtures/hello_world_2_pages.pdf",
+            "--pages",
+            "2,1",
+        ],
+        vec!["pages", "create", "fixtures/mona_lisa.jpg"],
+        vec!["pages", "nup", "fixtures/bookmarks.pdf"],
+        vec!["pages", "booklet", "fixtures/hello_world_2_pages.pdf"],
+        vec!["forms", "fill", "fixtures/text_form.pdf", "--data", data],
+        vec!["forms", "flatten", "fixtures/text_form.pdf"],
+        vec!["repair", "fixtures/parser_rebuildxref_correct.pdf"],
+        vec!["optimize", "fixtures/bookmarks.pdf"],
+        vec![
+            "security",
+            "decrypt",
+            "--password",
+            "1234",
+            "fixtures/encrypted.pdf",
+        ],
+        vec![
+            "security",
+            "encrypt",
+            "fixtures/bookmarks.pdf",
+            "--owner-password",
+            "x",
+        ],
+        vec![
+            "inspect",
+            "revision",
+            "fixtures/bug_1484283.pdf",
+            "--rev",
+            "1",
+        ],
+    ];
+    for mut args in commands {
+        args.extend(["-o", "-"]);
+        let out = run(&args).unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        assert!(out.stdout.starts_with(b"%PDF-"), "{args:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("pdfrum: -: "), "{args:?}: {err}");
+    }
+    let png = run(&[
+        "render",
+        "--pages",
+        "1",
+        "fixtures/hello_world_2_pages.pdf",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(png.stdout.starts_with(b"\x89PNG"));
+    assert!(
+        String::from_utf8_lossy(&png.stderr).starts_with("pdfrum: -: page 1, "),
+        "{png:?}"
+    );
+    let split = run(&[
+        "pages",
+        "split",
+        "fixtures/hello_world_2_pages.pdf",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert_eq!(split.status.code(), Some(1), "split writes many files");
+    assert!(String::from_utf8_lossy(&split.stderr).contains("directory"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn info_hash_and_doctor_take_several_files_and_go_on_past_a_bad_one() {
+    assert_eq!(
+        stdout(&[
+            "info",
+            "fixtures/two_signatures.pdf",
+            "fixtures/bookmarks.pdf"
+        ])
+        .unwrap(),
+        expected("info_two_files.txt").unwrap(),
+        "one record per file, a blank line between"
+    );
+    let v = json(&[
+        "info",
+        "fixtures/two_signatures.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["file"], "fixtures/two_signatures.pdf");
+    assert_eq!(v[1]["file"], "fixtures/bookmarks.pdf");
+    assert_eq!(v[1]["pages"], 2);
+    let one = json(&["info", "fixtures/bookmarks.pdf", "--json"]).unwrap();
+    assert!(one.is_object(), "one file stays one document");
+
+    let v = json(&[
+        "hash",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v.as_array().map(Vec::len), Some(2));
+    assert_eq!(v[0]["objects"], 7);
+
+    // A missing file is reported and the rest are still answered; exit 1.
+    let out = run(&[
+        "hash",
+        "fixtures/nonesuch.pdf",
+        "fixtures/hello_world_2_pages.pdf",
+    ])
+    .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("nonesuch.pdf"));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).starts_with("file          fixtures/hello_world"),
+        "{out:?}"
+    );
+
+    let strict = run(&[
+        "doctor",
+        "--strict",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/parser_rebuildxref_correct.pdf",
+    ])
+    .unwrap();
+    assert_eq!(strict.status.code(), Some(3), "any file with notices");
+    let text = String::from_utf8_lossy(&strict.stdout);
+    assert!(
+        text.starts_with("file   fixtures/hello_world_2_pages.pdf\nstate  clean\n\nfile"),
+        "{text}"
+    );
+    let v = json(&[
+        "doctor",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/parser_rebuildxref_correct.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[1]["recovered"], 4);
+}
+
+#[test]
+fn search_names_the_file_for_several_files_like_grep() {
+    let two = run(&[
+        "search",
+        "-i",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert!(two.status.success(), "{two:?}");
+    let text = String::from_utf8_lossy(&two.stdout);
+    assert!(
+        text.starts_with("fixtures/hello_world_2_pages.pdf:page 1:Hello, world!\n"),
+        "{text}"
+    );
+    assert_eq!(text.lines().count(), 4);
+    let quiet = stdout(&[
+        "search",
+        "world",
+        "--no-filename",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert!(quiet.starts_with("page 1:"), "{quiet}");
+    let named = stdout(&["search", "-H", "world", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert!(
+        named.starts_with("fixtures/hello_world_2_pages.pdf:page 1:"),
+        "{named}"
+    );
+
+    let none = run(&[
+        "search",
+        "nonesuch",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+    ])
+    .unwrap();
+    assert_eq!(none.status.code(), Some(1), "no file had a hit");
+    let bad = run(&[
+        "search",
+        "world",
+        "fixtures/nonesuch.pdf",
+        "fixtures/hello_world_2_pages.pdf",
+    ])
+    .unwrap();
+    assert_eq!(bad.status.code(), Some(1), "hits, but a file failed");
+    assert!(String::from_utf8_lossy(&bad.stdout).contains(":page 1:"));
+
+    let v = json(&[
+        "search",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["file"], "fixtures/hello_world_2_pages.pdf");
+    assert_eq!(v[0]["hits"].as_array().map(Vec::len), Some(4));
+    assert_eq!(v[1]["hits"].as_array().map(Vec::len), Some(0));
+}
+
+#[test]
+fn quiet_drops_the_notices_and_verbose_lists_every_diagnostic() {
+    let damaged = "fixtures/parser_rebuildxref_correct.pdf";
+    let normal = run(&["info", damaged]).unwrap();
+    assert!(
+        String::from_utf8_lossy(&normal.stderr).contains("needed recovery (4 notices"),
+        "{normal:?}"
+    );
+    let quiet = run(&["info", "-q", damaged]).unwrap();
+    assert!(quiet.status.success());
+    assert!(quiet.stderr.is_empty(), "{quiet:?}");
+    assert_eq!(quiet.stdout, normal.stdout);
+    let verbose = run(&["info", "--verbose", damaged]).unwrap();
+    let err = String::from_utf8_lossy(&verbose.stderr);
+    let lines: Vec<&str> = err.lines().collect();
+    assert_eq!(lines.len(), 4, "{err}");
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.starts_with("pdfrum: fixtures/parser_rebuildxref_correct.pdf: ")),
+        "{err}"
+    );
+    assert!(
+        err.contains("recovered at byte 471: KeywordResync"),
+        "{err}"
+    );
+    assert!(
+        !err.contains("needed recovery"),
+        "the list, not the pointer"
+    );
+
+    let both = run(&["info", "-q", "-v", damaged]).unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
+    let error = run(&["info", "--quiet", "fixtures/nonesuch.pdf"]).unwrap();
+    assert_eq!(error.status.code(), Some(1));
+    assert!(!error.stderr.is_empty(), "errors still print");
+    let piped = run(&[
+        "pages",
+        "slice",
+        "-q",
+        "fixtures/hello_world_2_pages.pdf",
+        "--pages",
+        "1",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(piped.stdout.starts_with(b"%PDF-"));
+    assert!(piped.stderr.is_empty(), "{piped:?}");
+}
+
+#[test]
+fn the_password_comes_from_the_environment_when_the_flag_is_absent() {
+    let from_env = run_with(
+        &["info", "fixtures/encrypted.pdf", "--json"],
+        b"",
+        &[("PDFRUM_PASSWORD", "1234")],
+    )
+    .unwrap();
+    assert!(from_env.status.success(), "{from_env:?}");
+    let v: serde_json::Value = serde_json::from_slice(&from_env.stdout).unwrap();
+    assert_eq!(v["encrypted"], true);
+    let wrong_env = run_with(
+        &["info", "fixtures/encrypted.pdf"],
+        b"",
+        &[("PDFRUM_PASSWORD", "nope")],
+    )
+    .unwrap();
+    assert_eq!(wrong_env.status.code(), Some(1));
+    // The flag wins over the variable.
+    let flag_wins = run_with(
+        &["info", "--password", "1234", "fixtures/encrypted.pdf"],
+        b"",
+        &[("PDFRUM_PASSWORD", "nope")],
+    )
+    .unwrap();
+    assert!(flag_wins.status.success(), "{flag_wins:?}");
+    // The value never shows in the help.
+    let help = run_with(&["info", "--help"], b"", &[("PDFRUM_PASSWORD", "s3cret")]).unwrap();
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(text.contains("PDFRUM_PASSWORD"), "{text}");
+    assert!(!text.contains("s3cret"), "{text}");
+}
+
+/// Every line parses as one JSON object, and together they are what
+/// `--json` gives as an array.
+fn jsonl_matches_json(args: &[&str]) -> Result<(), String> {
+    let mut lines_args = args.to_vec();
+    lines_args.push("--jsonl");
+    let text = stdout(&lines_args)?;
+    let lines: Vec<serde_json::Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).map_err(|e| format!("{args:?}: {l}: {e}")))
+        .collect::<Result<_, _>>()?;
+    if lines.iter().any(|l| !l.is_object()) {
+        return Err(format!("{args:?}: a line is not an object: {text}"));
+    }
+    let mut json_args = args.to_vec();
+    json_args.push("--json");
+    let array = json(&json_args)?;
+    if array.as_array().map(Vec::as_slice) != Some(lines.as_slice()) {
+        return Err(format!(
+            "{args:?}: --jsonl and --json disagree\n{text}\n{array}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn jsonl_prints_one_object_per_line_on_every_list_command() {
+    for args in [
+        vec!["search", "world", "fixtures/hello_world_2_pages.pdf"],
+        vec!["extract", "links", "fixtures/annots_action_handling.pdf"],
+        vec!["extract", "annotations", "fixtures/annotiter.pdf"],
+        vec!["extract", "images", "fixtures/rotated_image.pdf"],
+        vec!["extract", "fonts", "fixtures/bigtable_mini.pdf"],
+        vec![
+            "extract",
+            "attachments",
+            "fixtures/embedded_attachments_with_desc.pdf",
+        ],
+        vec!["inspect", "revisions", "fixtures/bug_1484283.pdf"],
+        vec!["inspect", "structure", "fixtures/tagged_actual_text.pdf"],
+        vec!["forms", "dump", "fixtures/text_form.pdf"],
+    ] {
+        jsonl_matches_json(&args).unwrap();
+    }
+    // `inspect xref --json` is the table with its trailer; `--jsonl` is its
+    // entries, one per line.
+    let lines = stdout(&["inspect", "xref", "fixtures/bug_1484283.pdf", "--jsonl"]).unwrap();
+    assert_eq!(lines.lines().count(), 6, "{lines}");
+    let first: serde_json::Value = serde_json::from_str(lines.lines().next().unwrap()).unwrap();
+    assert!(first["object"].is_number(), "{first}");
+    // Nothing found is no lines at all, and exit 0.
+    let none = stdout(&["forms", "dump", "fixtures/bookmarks.pdf", "--jsonl"]).unwrap();
+    assert!(none.is_empty(), "{none:?}");
+    // Several files: each hit names its file.
+    let two = stdout(&[
+        "search",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "--jsonl",
+    ])
+    .unwrap();
+    let hit: serde_json::Value = serde_json::from_str(two.lines().next().unwrap()).unwrap();
+    assert_eq!(hit["file"], "fixtures/hello_world_2_pages.pdf");
+    assert_eq!(hit["page"], 1);
+    let both = run(&[
+        "extract",
+        "links",
+        "fixtures/weblinks.pdf",
+        "--json",
+        "--jsonl",
+    ])
+    .unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
 }
 
 // ---- javascript (a feature, off by default) --------------------------------
