@@ -321,6 +321,55 @@ impl<'a> FormSession<'a> {
     /// itself, and an empty list is the honest answer for one that has not —
     /// `getPageNumWords` answering 0, which is what an empty page gives.
     #[cfg(feature = "javascript")]
+    /// Runs what the document asks for on open, in the order a viewer
+    /// does: every script in the catalog's `/Names /JavaScript` tree, by
+    /// index (name-tree order), then `/OpenAction` when it is a dictionary
+    /// — an array there is a destination and runs nothing — and everything
+    /// its `/Next` chain reaches, depth-first, each dictionary once (ISO
+    /// 32000-1 §12.6.4.16; `/Named` actions are recorded, not run, since
+    /// they are verbs for the viewer). A script that throws is written
+    /// down and the next one still runs. Finally any focus a script asked
+    /// for is honoured. Nothing happens on an unscripted session.
+    #[cfg(feature = "javascript")]
+    pub fn open_document(&mut self) {
+        if !matches!(self.cascade, Cascades::Scripted(_)) {
+            return;
+        }
+        let requests = {
+            let catalog = self.doc.catalog();
+            let parser = self.doc.parser();
+            let mut found = Vec::new();
+            open_requests::name_tree_scripts(&catalog, parser, &mut found);
+            open_requests::open_action(&catalog, parser, &mut found);
+            found
+        };
+        if let Cascades::Scripted(cascade) = &mut self.cascade {
+            for request in requests {
+                match request {
+                    open_requests::Request::Script { whence, source } => {
+                        cascade.run(&source, &whence);
+                    }
+                    open_requests::Request::Named(name) => cascade.record_named_action(name),
+                }
+            }
+        }
+        self.honour_focus_requests();
+    }
+
+    /// The scripts that stopped since the last call, each recorded in
+    /// `diags` too; empty on an unscripted session.
+    #[cfg(feature = "javascript")]
+    pub fn script_failures(
+        &mut self,
+        diags: &mut pdfrum_common::Diagnostics,
+    ) -> Vec<crate::ScriptFailure> {
+        match &mut self.cascade {
+            Cascades::Scripted(cascade) => cascade.drain_diagnostics(diags),
+            Cascades::Plain(_) => Vec::new(),
+        }
+    }
+
+    #[cfg(feature = "javascript")]
     fn install_document_model(&mut self) {
         let catalog = self.doc.catalog();
         let info = self
@@ -1365,5 +1414,79 @@ mod tests {
         assert!(!session.is_index_selected(0));
         assert!(!session.set_index_selected(0, true));
         assert!(!session.is_index_selected(usize::MAX));
+    }
+}
+
+/// What a document asks for on open, found through the facade's own
+/// resolver: the walk [`FormSession::open_document`] runs.
+#[cfg(feature = "javascript")]
+mod open_requests {
+    use pdfrum_common::{Diagnostics, Limits};
+    use pdfrum_doc::nav::{Action, ActionKind, NameTree};
+    use pdfrum_object::{Dict, Name, Object, names};
+
+    pub enum Request {
+        /// `/S /JavaScript`: the source and the name a diagnostic uses for
+        /// it — its name-tree key, or nothing for `/OpenAction`.
+        Script { whence: String, source: String },
+        /// `/S /Named`: the verb, as `/N` spells it.
+        Named(String),
+    }
+
+    /// `/Names /JavaScript`, by index, which is name-tree order.
+    pub fn name_tree_scripts(
+        catalog: &Dict,
+        r: &pdfrum_parser::Document,
+        found: &mut Vec<Request>,
+    ) {
+        let limits = Limits::default();
+        let mut diags = Diagnostics::default();
+        let Some(tree) = NameTree::open(catalog, names::JAVA_SCRIPT, r) else {
+            return;
+        };
+        for index in 0..tree.count(r, &limits, &mut diags) {
+            let Some((name, Object::Dict(dict))) =
+                tree.lookup_by_index(index, r, &limits, &mut diags)
+            else {
+                continue;
+            };
+            let action = Action::new(dict);
+            if action.kind() != ActionKind::JavaScript {
+                continue;
+            }
+            if let Some(source) = action.javascript(r).filter(|s| !s.is_empty()) {
+                found.push(Request::Script {
+                    whence: name,
+                    source,
+                });
+            }
+        }
+    }
+
+    /// `/OpenAction` when it is a dictionary, then its `/Next` chain.
+    pub fn open_action(catalog: &Dict, r: &pdfrum_parser::Document, found: &mut Vec<Request>) {
+        let limits = Limits::default();
+        let mut diags = Diagnostics::default();
+        let Some(dict) = catalog.dict(&Name::new(*b"OpenAction"), r) else {
+            return;
+        };
+        let root = Action::new(dict);
+        for action in std::iter::once(root.clone()).chain(root.chain(r, &limits, &mut diags)) {
+            match action.kind() {
+                ActionKind::JavaScript => {
+                    if let Some(source) = action.javascript(r).filter(|s| !s.is_empty()) {
+                        found.push(Request::Script {
+                            whence: String::new(),
+                            source,
+                        });
+                    }
+                }
+                ActionKind::Named => {
+                    let name = String::from_utf8_lossy(&action.named_action(r)).into_owned();
+                    found.push(Request::Named(name));
+                }
+                _ => {}
+            }
+        }
     }
 }
