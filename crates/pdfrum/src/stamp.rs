@@ -39,6 +39,50 @@ pub enum StampPosition {
     BottomRight,
 }
 
+/// The error [`StampPosition`]'s [`FromStr`](std::str::FromStr) returns.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("not a stamp position: {0}")]
+pub struct UnknownStampPosition(String);
+
+impl std::fmt::Display for StampPosition {
+    /// The kebab-case corner name, which round-trips through
+    /// [`FromStr`](std::str::FromStr).
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::StampPosition::TopLeft.to_string(), "top-left");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            StampPosition::Center => "center",
+            StampPosition::TopLeft => "top-left",
+            StampPosition::TopRight => "top-right",
+            StampPosition::BottomLeft => "bottom-left",
+            StampPosition::BottomRight => "bottom-right",
+        })
+    }
+}
+
+impl std::str::FromStr for StampPosition {
+    type Err = UnknownStampPosition;
+
+    /// The inverse of [`Display`](std::fmt::Display) — what a `--position`
+    /// flag parses.
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownStampPosition`] when the string names no corner.
+    fn from_str(s: &str) -> core::result::Result<StampPosition, UnknownStampPosition> {
+        match s {
+            "center" => Ok(StampPosition::Center),
+            "top-left" => Ok(StampPosition::TopLeft),
+            "top-right" => Ok(StampPosition::TopRight),
+            "bottom-left" => Ok(StampPosition::BottomLeft),
+            "bottom-right" => Ok(StampPosition::BottomRight),
+            other => Err(UnknownStampPosition(other.to_owned())),
+        }
+    }
+}
+
 /// How a stamp is drawn.
 ///
 /// A config struct with [`Default`], filled in with struct-update syntax.
@@ -93,6 +137,134 @@ impl Default for StampOptions {
             font_size: 36.0,
             color: Color::BLACK,
         }
+    }
+}
+
+/// Builds a [`StampOptions`] a setting at a time.
+///
+/// Sugar over the struct-update syntax, which still works. Every method
+/// consumes and returns the builder; [`build`](Self::build) hands back the
+/// options.
+///
+/// ```
+/// use pdfrum::{Color, StampOptions, StampPosition};
+///
+/// let draft = StampOptions::builder()
+///     .position(StampPosition::Center)
+///     .angle(45.0)
+///     .opacity(0.3)
+///     .font_size(96.0)
+///     .color(Color::from_rgb8(200, 0, 0))
+///     .build();
+///
+/// assert_eq!(draft.margin, 36.0);
+/// ```
+#[derive(Debug, Clone, PartialEq, Default)]
+#[must_use]
+pub struct StampOptionsBuilder(StampOptions);
+
+impl StampOptionsBuilder {
+    /// Where the stamp's box sits — [`StampOptions::position`].
+    ///
+    /// ```
+    /// use pdfrum::{StampOptions, StampPosition};
+    ///
+    /// let options = StampOptions::builder().position(StampPosition::TopRight).build();
+    /// ```
+    pub fn position(mut self, position: StampPosition) -> Self {
+        self.0.position = position;
+        self
+    }
+
+    /// Points between a corner-placed stamp and the crop box —
+    /// [`StampOptions::margin`].
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().margin(18.0).build();
+    /// assert_eq!(options.margin, 18.0);
+    /// ```
+    pub fn margin(mut self, margin: f64) -> Self {
+        self.0.margin = margin;
+        self
+    }
+
+    /// Degrees counter-clockwise — [`StampOptions::angle`].
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().angle(45.0).build();
+    /// assert_eq!(options.angle, 45.0);
+    /// ```
+    pub fn angle(mut self, angle: f64) -> Self {
+        self.0.angle = angle;
+        self
+    }
+
+    /// Constant alpha, `0.0` to `1.0` — [`StampOptions::opacity`].
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().opacity(0.3).build();
+    /// assert_eq!(options.opacity, 0.3);
+    /// ```
+    pub fn opacity(mut self, opacity: f32) -> Self {
+        self.0.opacity = opacity;
+        self
+    }
+
+    /// The face for a text stamp — [`StampOptions::font`].
+    ///
+    /// ```
+    /// use pdfrum::{StampOptions, StandardFont};
+    ///
+    /// let options = StampOptions::builder().font(StandardFont::Courier).build();
+    /// ```
+    pub fn font(mut self, font: StandardFont) -> Self {
+        self.0.font = font;
+        self
+    }
+
+    /// The text size in points — [`StampOptions::font_size`].
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().font_size(96.0).build();
+    /// assert_eq!(options.font_size, 96.0);
+    /// ```
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.0.font_size = size;
+        self
+    }
+
+    /// The text colour — [`StampOptions::color`].
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder()
+    ///     .color(pdfrum::Color::from_rgb8(200, 0, 0))
+    ///     .build();
+    /// ```
+    pub fn color(mut self, color: Color) -> Self {
+        self.0.color = color;
+        self
+    }
+
+    /// The options as built.
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().build();
+    /// assert_eq!(options, pdfrum::StampOptions::default());
+    /// ```
+    #[must_use]
+    pub fn build(self) -> StampOptions {
+        self.0
+    }
+}
+
+impl StampOptions {
+    /// A builder starting from the defaults.
+    ///
+    /// ```
+    /// let options = pdfrum::StampOptions::builder().angle(45.0).build();
+    /// ```
+    pub fn builder() -> StampOptionsBuilder {
+        StampOptionsBuilder::default()
     }
 }
 

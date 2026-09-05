@@ -39,6 +39,89 @@ pub struct AttachmentOptions {
     pub modified: Option<String>,
 }
 
+/// Builds an [`AttachmentOptions`] a setting at a time.
+///
+/// Sugar over the struct-update syntax, which still works. Each method takes
+/// an `impl Into<String>`, so the `Some(…into())` the fields need is written
+/// once here rather than at every call site.
+///
+/// ```
+/// use pdfrum::AttachmentOptions;
+///
+/// let options = AttachmentOptions::builder()
+///     .description("The source data")
+///     .mime_type("text/csv")
+///     .build();
+///
+/// assert_eq!(options.description.as_deref(), Some("The source data"));
+/// assert!(options.modified.is_none());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[must_use]
+pub struct AttachmentOptionsBuilder(AttachmentOptions);
+
+impl AttachmentOptionsBuilder {
+    /// The text a viewer shows beside the name —
+    /// [`AttachmentOptions::description`].
+    ///
+    /// ```
+    /// let options = pdfrum::AttachmentOptions::builder().description("notes").build();
+    /// assert_eq!(options.description.as_deref(), Some("notes"));
+    /// ```
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.0.description = Some(description.into());
+        self
+    }
+
+    /// The embedded file's MIME type — [`AttachmentOptions::mime_type`].
+    ///
+    /// ```
+    /// let options = pdfrum::AttachmentOptions::builder().mime_type("text/csv").build();
+    /// assert_eq!(options.mime_type.as_deref(), Some("text/csv"));
+    /// ```
+    pub fn mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.0.mime_type = Some(mime_type.into());
+        self
+    }
+
+    /// The file's modification time as a PDF date string —
+    /// [`AttachmentOptions::modified`]. [`pdf_date`](crate::pdf_date) spells
+    /// a `SystemTime` that way.
+    ///
+    /// ```
+    /// let options = pdfrum::AttachmentOptions::builder()
+    ///     .modified("D:20260906120000Z")
+    ///     .build();
+    /// assert!(options.modified.is_some());
+    /// ```
+    pub fn modified(mut self, modified: impl Into<String>) -> Self {
+        self.0.modified = Some(modified.into());
+        self
+    }
+
+    /// The options as built.
+    ///
+    /// ```
+    /// let options = pdfrum::AttachmentOptions::builder().build();
+    /// assert_eq!(options, pdfrum::AttachmentOptions::default());
+    /// ```
+    #[must_use]
+    pub fn build(self) -> AttachmentOptions {
+        self.0
+    }
+}
+
+impl AttachmentOptions {
+    /// A builder starting from the defaults.
+    ///
+    /// ```
+    /// let options = pdfrum::AttachmentOptions::builder().mime_type("text/csv").build();
+    /// ```
+    pub fn builder() -> AttachmentOptionsBuilder {
+        AttachmentOptionsBuilder::default()
+    }
+}
+
 /// The embedded file stream (ISO 32000-1 §7.11.4): `/Type /EmbeddedFile`,
 /// the MIME type as `/Subtype`, `/DL` and `/Params` with the size, an MD5
 /// `/CheckSum` and the modification date when one was given. The save

@@ -74,7 +74,173 @@ impl Default for RenderOptions {
     }
 }
 
+/// Builds a [`RenderOptions`] a setting at a time.
+///
+/// The alternative to struct-update syntax, which still works and is still
+/// the shorter way to change one field. This reads better when several
+/// settings are chosen, when they are chosen conditionally, or from a
+/// language binding where `..Default::default()` has no equivalent.
+///
+/// Every method consumes and returns the builder; [`build`](Self::build)
+/// hands back the options.
+///
+/// ```
+/// use pdfrum::{ColorMode, RenderOptions};
+///
+/// let options = RenderOptions::builder()
+///     .scale(2.0)
+///     .grayscale()
+///     .annotations(false)
+///     .build();
+///
+/// assert_eq!(options.color_mode, ColorMode::Gray);
+/// assert!(!options.annotations);
+///
+/// // The same thing, written the way it always could be.
+/// assert_eq!(options, RenderOptions {
+///     transform: kurbo::Affine::scale(2.0),
+///     color_mode: ColorMode::Gray,
+///     annotations: false,
+///     ..RenderOptions::default()
+/// });
+/// ```
+#[derive(Debug, Clone, PartialEq, Default)]
+#[must_use]
+pub struct RenderOptionsBuilder(RenderOptions);
+
+impl RenderOptionsBuilder {
+    /// Page space to device space — [`RenderOptions::transform`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder()
+    ///     .transform(kurbo::Affine::scale(1.5))
+    ///     .build();
+    /// ```
+    pub fn transform(mut self, transform: Affine) -> Self {
+        self.0.transform = transform;
+        self
+    }
+
+    /// Render at `scale` pixels per PDF point.
+    ///
+    /// Shorthand for [`transform`](Self::transform) with a uniform scale, and
+    /// the same thing [`RenderOptions::scaled`] constructs.
+    ///
+    /// ```
+    /// // 300 DPI.
+    /// let options = pdfrum::RenderOptions::builder().scale(300.0 / 72.0).build();
+    /// ```
+    pub fn scale(self, scale: f64) -> Self {
+        self.transform(Affine::scale(scale))
+    }
+
+    /// The colour mode — [`RenderOptions::color_mode`].
+    ///
+    /// ```
+    /// use pdfrum::{ColorMode, RenderOptions};
+    ///
+    /// let options = RenderOptions::builder().color_mode(ColorMode::Gray).build();
+    /// ```
+    pub fn color_mode(mut self, color_mode: ColorMode) -> Self {
+        self.0.color_mode = color_mode;
+        self
+    }
+
+    /// Render greyscale — [`ColorMode::Gray`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().grayscale().build();
+    /// assert_eq!(options.color_mode, pdfrum::ColorMode::Gray);
+    /// ```
+    pub fn grayscale(self) -> Self {
+        self.color_mode(ColorMode::Gray)
+    }
+
+    /// How glyphs are antialiased — [`RenderOptions::text_aa`].
+    ///
+    /// ```
+    /// use pdfrum::{RenderOptions, TextAa};
+    ///
+    /// let options = RenderOptions::builder().text_aa(TextAa::None).build();
+    /// ```
+    pub fn text_aa(mut self, text_aa: TextAa) -> Self {
+        self.0.text_aa = text_aa;
+        self
+    }
+
+    /// Antialias path fills and strokes — [`RenderOptions::smooth_paths`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().smooth_paths(false).build();
+    /// assert!(!options.smooth_paths);
+    /// ```
+    pub fn smooth_paths(mut self, smooth: bool) -> Self {
+        self.0.smooth_paths = smooth;
+        self
+    }
+
+    /// Interpolate a scaled image where the file asks for it —
+    /// [`RenderOptions::interpolate_images`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().interpolate_images(false).build();
+    /// assert!(!options.interpolate_images);
+    /// ```
+    pub fn interpolate_images(mut self, interpolate: bool) -> Self {
+        self.0.interpolate_images = interpolate;
+        self
+    }
+
+    /// Force a page background — [`RenderOptions::background`].
+    ///
+    /// Unset, the default follows the file. This sets it; pass `None` to
+    /// [`RenderOptions::background`] directly to unset it again.
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder()
+    ///     .background(pdfrum::Color::WHITE)
+    ///     .build();
+    /// assert!(options.background.is_some());
+    /// ```
+    pub fn background(mut self, background: peniko::Color) -> Self {
+        self.0.background = Some(background);
+        self
+    }
+
+    /// Draw the page's annotations over its content —
+    /// [`RenderOptions::annotations`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().annotations(false).build();
+    /// assert!(!options.annotations);
+    /// ```
+    pub fn annotations(mut self, annotations: bool) -> Self {
+        self.0.annotations = annotations;
+        self
+    }
+
+    /// The options as built.
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().build();
+    /// assert_eq!(options, pdfrum::RenderOptions::default());
+    /// ```
+    #[must_use]
+    pub fn build(self) -> RenderOptions {
+        self.0
+    }
+}
+
 impl RenderOptions {
+    /// A builder starting from the defaults.
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder().scale(2.0).build();
+    /// ```
+    pub fn builder() -> RenderOptionsBuilder {
+        RenderOptionsBuilder::default()
+    }
+
     /// Options rendering at `scale` pixels per PDF point, everything else
     /// left at its default.
     ///
