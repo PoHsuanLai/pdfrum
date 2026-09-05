@@ -1,11 +1,12 @@
 //! `pdfrum extract …`: text, words, links, the outline, attachments,
 //! annotations, signatures, images, fonts.
 
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use pdfrum::{Document, LinkTarget};
+use pdfrum::{Block, Document, LinkTarget, PageImage, PageIndex};
 use serde::Serialize;
 
 use crate::out::{self, Align, JsonRect, Table, out, outln};
@@ -146,19 +147,59 @@ struct PageMarkdown {
 }
 
 /// The pages as Markdown, one document, a horizontal rule between pages.
+/// More than one page is read as a document, running headers and footers
+/// dropped; one page alone is read as a page. `-o DIR` writes every image
+/// the Markdown shows into DIR as `<stem>-p<page>-<n>.<ext>`, `n` the
+/// image's place on its page in drawing order, and links it; without it
+/// every image is `![alt](image)`.
 pub fn markdown(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
+    dir: Option<&Path>,
     json: bool,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
-    let mut out_pages = Vec::new();
-    for index in pages::select(spec, doc.page_count())? {
-        let page = doc.page(index)?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let stem = out::stem(file);
+    let selected = pages::select(spec, doc.page_count())?;
+    let blocks = match selected.as_slice() {
+        [only] => vec![doc.page(*only)?.markdown_blocks()],
+        many => doc.markdown_blocks(many.iter().copied().map(PageIndex::from))?,
+    };
+    let mut out_pages = Vec::with_capacity(blocks.len());
+    for (&index, blocks) in selected.iter().zip(&blocks) {
+        let number = out::page_number(PageIndex::from(index));
+        let mut links: HashMap<usize, String> = HashMap::new();
+        if let Some(dir) = dir {
+            let wanted: BTreeSet<usize> = blocks
+                .iter()
+                .filter_map(|b| match b {
+                    Block::Image { index: Some(i), .. } => Some(*i),
+                    _ => None,
+                })
+                .collect();
+            if !wanted.is_empty() {
+                let images = doc.page(index)?.images();
+                for i in wanted {
+                    let Some(image) = images.get(i) else {
+                        continue;
+                    };
+                    let path = dir.join(format!(
+                        "{stem}-p{number}-{}.{}",
+                        i + 1,
+                        image_format(image)
+                    ));
+                    write_image(image, &path)?;
+                    links.insert(i, path.display().to_string());
+                }
+            }
+        }
         out_pages.push(PageMarkdown {
-            page: out::page_number(page.index()),
-            markdown: page.markdown(),
+            page: number,
+            markdown: pdfrum::markdown::render_with_images(blocks, |i| links.get(&i).cloned()),
         });
     }
     if json {
@@ -608,18 +649,10 @@ pub fn images(
         }
     }
     for (row, image) in rows.iter_mut().zip(&pictures) {
-        let native = image
-            .raw
-            .as_ref()
-            .map(|r| (r.encoding.extension(), &r.data));
-        row.format = native.map_or("png", |(ext, _)| ext);
+        row.format = image_format(image);
         if let Some(dir) = dir {
             let path = dir.join(format!("{stem}-{}.{}", row.index, row.format));
-            match native {
-                Some((_, data)) => std::fs::write(&path, data).map_err(anyhow::Error::from),
-                None => image.pixmap().save_png(&path).map_err(anyhow::Error::from),
-            }
-            .with_context(|| format!("cannot write {}", path.display()))?;
+            write_image(image, &path)?;
             row.written = Some(path.display().to_string());
         }
     }
@@ -661,6 +694,25 @@ pub fn images(
         table.print(term, 0);
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// The file an image is written as: its own encoding when a file can hold
+/// the stream as it is (`jpg`, `jp2`, `jb2`, `ccitt`), else `png`.
+fn image_format(image: &PageImage) -> &'static str {
+    image
+        .raw
+        .as_ref()
+        .map_or("png", |raw| raw.encoding.extension())
+}
+
+/// `image` written to `path`: the stream as the file holds it when its
+/// format is one, else the decoded pixels as PNG.
+fn write_image(image: &PageImage, path: &Path) -> Result<()> {
+    match &image.raw {
+        Some(raw) => std::fs::write(path, &raw.data).map_err(anyhow::Error::from),
+        None => image.pixmap().save_png(path).map_err(anyhow::Error::from),
+    }
+    .with_context(|| format!("cannot write {}", path.display()))
 }
 
 // ---- fonts ----------------------------------------------------------------

@@ -11,7 +11,7 @@ pdfrum render report.pdf --pages 1-3 --dpi 200 -o out/{stem}-{n}.png
 pdfrum extract text report.pdf --pages 2,5-end
 pdfrum extract text --layout two-column.pdf     # columns stay columns
 pdfrum extract words paper.pdf --json           # every word: page, box, font, size, character range
-pdfrum extract markdown paper.pdf > paper.md    # tags if present, typography if not
+pdfrum extract markdown paper.pdf -o images/ > paper.md   # tags if present, typography if not; running headers dropped; -o writes and links the images
 pdfrum extract links report.pdf --json
 pdfrum extract toc report.pdf
 pdfrum extract attachments invoice.pdf -o attachments/
