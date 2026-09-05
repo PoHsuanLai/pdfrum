@@ -449,7 +449,7 @@ impl ImageBuilder {
         let placeholder = pdfrum_page::ImageData {
             width: 1,
             height: 1,
-            pixels: pdfrum_page::Pixels::Gray8(Box::new([0])),
+            samples: pdfrum_page::Samples::Whole(pdfrum_page::Pixels::Gray8(Box::new([0]))),
             mask: None,
             matte: None,
             interpolate: false,

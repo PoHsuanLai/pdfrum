@@ -112,6 +112,42 @@ pub fn scanline(data: &[u8], line: u32, pitch: usize) -> (Vec<u8>, Availability)
     (out, Availability::Partial)
 }
 
+/// One scanline's raw sample bytes into a caller-owned buffer.
+///
+/// [`scanline`] allocates a `Vec` per row, which for a pull pipeline is one
+/// allocation per row of every image on the page. This is the same function
+/// against a buffer the caller reuses: `out` is filled to its own length, so
+/// the caller sizes it to the pitch once.
+pub fn scanline_into(data: &[u8], line: usize, pitch: usize, out: &mut [u8]) -> Availability {
+    let Some(start) = line.checked_mul(pitch) else {
+        out.fill(0);
+        return Availability::Absent;
+    };
+    if start >= data.len() {
+        out.fill(0);
+        return Availability::Absent;
+    }
+    let available = data.get(start..).unwrap_or(&[]);
+    if available.len() >= pitch {
+        let n = out.len().min(pitch);
+        if let (Some(dest), Some(src)) = (out.get_mut(..n), available.get(..n)) {
+            dest.copy_from_slice(src);
+        }
+        if let Some(tail) = out.get_mut(n..) {
+            tail.fill(0);
+        }
+        return Availability::Whole;
+    }
+    let n = out.len().min(available.len());
+    if let (Some(dest), Some(src)) = (out.get_mut(..n), available.get(..n)) {
+        dest.copy_from_slice(src);
+    }
+    if let Some(tail) = out.get_mut(n..) {
+        tail.fill(0);
+    }
+    Availability::Partial
+}
+
 /// Invert a one-bit scanline in place, which is what a default-decode stencil
 /// mask does.
 pub fn invert_line(line: &mut [u8]) {

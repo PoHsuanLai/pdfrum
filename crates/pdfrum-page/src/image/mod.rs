@@ -31,6 +31,7 @@ mod jbig2;
 #[cfg(feature = "jpx")]
 mod jpx;
 mod mask;
+mod packed;
 mod rows;
 mod scanline;
 
@@ -47,6 +48,7 @@ pub(crate) use jpx::SpaceOverride;
 pub use jpx::{JpxImage, decode_jpx};
 pub use mask::ImageMask;
 pub(crate) use mask::{ColorKey, matte_color};
+pub use packed::{Depth, Packed, Unpacked};
 pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Source};
 
 use crate::color::{ColorSpace, Rgb};
@@ -109,6 +111,93 @@ impl Pixels {
     }
 }
 
+/// An image's samples, in whichever state the decode ladder left them.
+///
+/// The two states are genuinely different things, not one thing with a flag.
+/// [`Samples::Packed`] is what every path that does not run a codec of its own
+/// produces: the filter chain's bytes, still at the dictionary's
+/// `/BitsPerComponent`, which the row pipeline widens as it walks
+/// ([`Unpacked`]). [`Samples::Whole`] is what a codec produced — DCT, JPEG
+/// 2000 and JBIG2 all hand back eight-bit samples — together with the two
+/// arms that cannot be lazy at all: a stencil's bits, and the palettes an
+/// indexed or tint image resolves once.
+///
+/// Nothing widens a packed image until someone asks for whole-image
+/// [`Pixels`], which is [`Samples::to_pixels`] and nowhere else.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum Samples {
+    /// Still packed, walked by [`Unpacked`].
+    Packed(Packed),
+    /// Already one byte per component, or a shape that has no packed form.
+    Whole(Pixels),
+}
+
+impl Samples {
+    /// How many components each pixel carries.
+    #[must_use]
+    pub fn components(&self) -> usize {
+        match self {
+            Self::Packed(p) => p.components(),
+            Self::Whole(p) => p.components(),
+        }
+    }
+
+    /// Bytes held, for the render cache's budget.
+    ///
+    /// Honest about what is *actually* held: a packed image is its packed
+    /// bytes and its decode table, which is what the cache is keeping alive,
+    /// and is smaller than the widened form it never builds.
+    #[must_use]
+    pub fn byte_size(&self) -> usize {
+        match self {
+            Self::Packed(p) => p.byte_size(),
+            Self::Whole(p) => p.byte_size(),
+        }
+    }
+
+    /// Whether these samples are a stencil mask's bits.
+    ///
+    /// A stencil never has a packed form — its bits are its representation —
+    /// so this is a question about the [`Whole`](Self::Whole) arm alone.
+    #[must_use]
+    pub const fn is_stencil(&self) -> bool {
+        matches!(self, Self::Whole(Pixels::Stencil(_)))
+    }
+
+    /// The resolved palette, when these samples are indices into one.
+    ///
+    /// Only [`Pixels::Indexed`] has one; every other representation carries
+    /// its colours in the samples themselves.
+    #[must_use]
+    pub fn palette(&self) -> Option<&[Rgb]> {
+        match self {
+            Self::Whole(Pixels::Indexed { palette, .. }) => Some(palette),
+            _ => None,
+        }
+    }
+
+    /// The whole image as [`Pixels`], widening a packed one if it has to.
+    ///
+    /// The one place the full-size buffer the row pipeline exists to avoid is
+    /// built. Three callers want it and no more: the CLI's image export, the
+    /// facade's edit path, and a test that names the representation.
+    #[must_use]
+    pub fn to_pixels(&self) -> Pixels {
+        match self {
+            Self::Whole(p) => p.clone(),
+            Self::Packed(p) => {
+                let data = Unpacked::new(p).collect_all();
+                match p.components() {
+                    1 => Pixels::Gray8(data),
+                    4 => Pixels::Cmyk8(data),
+                    _ => Pixels::Rgb8(data),
+                }
+            }
+        }
+    }
+}
+
 /// A fully decoded image.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageData {
@@ -117,8 +206,8 @@ pub struct ImageData {
     pub width: u32,
     /// Height in samples.
     pub height: u32,
-    /// The pixels.
-    pub pixels: Pixels,
+    /// The samples, in whichever state the decode left them.
+    pub samples: Samples,
     /// The alpha, however it was expressed.
     pub mask: Option<ImageMask>,
     /// The `/Matte` colour a pre-blended soft-masked image was composed
@@ -132,7 +221,7 @@ impl ImageData {
     /// Bytes held, for the cache's budget.
     #[must_use]
     pub fn byte_size(&self) -> usize {
-        self.pixels.byte_size()
+        self.samples.byte_size()
             + match &self.mask {
                 Some(ImageMask::Alpha { alpha, .. }) => alpha.len(),
                 _ => 0,
@@ -202,7 +291,7 @@ pub fn decode_image<R: Resolve>(
     // only the JPEG 2000 decoder, which is the one that carries a pyramid.
     #[cfg(not(feature = "jpx"))]
     let _ = size;
-    let (width, height, pixels, jpx_alpha) = match info.last_filter {
+    let (width, height, samples, jpx_alpha) = match info.last_filter {
         #[cfg(feature = "jpx")]
         Some(Filter::Jpx) => {
             let smask_in_data = stream.dict.int(names::SMASK_IN_DATA, r).unwrap_or(0);
@@ -259,7 +348,12 @@ pub fn decode_image<R: Resolve>(
                 (_, 4) => Pixels::Cmyk8(image.data.into()),
                 _ => Pixels::Rgb8(image.data.into()),
             };
-            (image.width, image.height, pixels, image.alpha)
+            (
+                image.width,
+                image.height,
+                Samples::Whole(pixels),
+                image.alpha,
+            )
         }
         #[cfg(not(feature = "jpx"))]
         Some(Filter::Jpx) => {
@@ -297,14 +391,19 @@ pub fn decode_image<R: Resolve>(
             // The bit layout is already right: a one-bit, one-component row is
             // `width.div_ceil(8)` bytes, which is exactly `ImageDict::pitch`.
             if info.image_mask {
-                (info.width, info.height, Pixels::Stencil(bits), None)
+                (
+                    info.width,
+                    info.height,
+                    Samples::Whole(Pixels::Stencil(bits)),
+                    None,
+                )
             } else {
                 let mut samples = bits.bits;
                 for byte in &mut samples {
                     *byte = !*byte;
                 }
-                let pixels = unpack(&info, space.as_ref(), &samples, diags)?;
-                (info.width, info.height, pixels, None)
+                let samples = unpack(&info, space.as_ref(), &samples, diags)?;
+                (info.width, info.height, samples, None)
             }
         }
         #[cfg(not(feature = "jbig2"))]
@@ -338,15 +437,15 @@ pub fn decode_image<R: Resolve>(
                 4 => Pixels::Cmyk8(data.into()),
                 _ => Pixels::Rgb8(data.into()),
             };
-            (image.width, image.height, pixels, None)
+            (image.width, image.height, Samples::Whole(pixels), None)
         }
         // A one-bit fax image with a colour space of its own: the bits are the
         // samples, so they go through `unpack` like any other 1-bit picture and
         // pick up `/Decode` and the palette on the way.
         Some(Filter::CcittFax) => {
             let samples = ccitt_samples(&info, &decoded.data, r, diags)?;
-            let pixels = unpack(&info, space.as_ref(), &samples, diags)?;
-            (info.width, info.height, pixels, None)
+            let samples = unpack(&info, space.as_ref(), &samples, diags)?;
+            (info.width, info.height, samples, None)
         }
         _ => {
             if decoded.image.is_some() && info.last_filter.is_none() {
@@ -354,8 +453,8 @@ pub fn decode_image<R: Resolve>(
                     what: "an unrecognised filter left no decoder",
                 });
             }
-            let pixels = unpack(&info, space.as_ref(), &decoded.data, diags)?;
-            (info.width, info.height, pixels, None)
+            let samples = unpack(&info, space.as_ref(), &decoded.data, diags)?;
+            (info.width, info.height, samples, None)
         }
     };
 
@@ -393,7 +492,7 @@ pub fn decode_image<R: Resolve>(
     Ok(ImageData {
         width,
         height,
-        pixels,
+        samples,
         mask,
         matte,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
@@ -537,12 +636,12 @@ fn decode_stencil<R: Resolve>(
     Ok(ImageData {
         width: info.width,
         height: info.height,
-        pixels: Pixels::Stencil(BitImage {
+        samples: Samples::Whole(Pixels::Stencil(BitImage {
             width: info.width,
             height: info.height,
             row_bytes,
             bits,
-        }),
+        })),
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
@@ -662,7 +761,7 @@ fn stencil_from_jbig2<R: Resolve>(
     Ok(ImageData {
         width: info.width,
         height: info.height,
-        pixels: Pixels::Stencil(image),
+        samples: Samples::Whole(Pixels::Stencil(image)),
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
@@ -836,13 +935,20 @@ fn tint_per_pixel(
     Ok(Pixels::Rgb8(bgr.into()))
 }
 
-/// Unpack raw or losslessly-filtered samples into pixels.
+/// Prepare raw or losslessly-filtered samples for the row pipeline.
+///
+/// The two families that cannot be walked lazily resolve here and return
+/// [`Samples::Whole`]: an indexed or single-colorant tint image, whose samples
+/// are *positions in a palette* the caller must be handed with them, and a
+/// multi-colorant `DeviceN`, whose tint transform is per pixel and has no
+/// table. Everything else -- which is the common case, and the whole of the
+/// guide -- becomes a [`Packed`] the row stages widen as they walk it.
 fn unpack(
     info: &ImageDict,
     space: Option<&ColorSpace>,
     data: &[u8],
     diags: &mut Diagnostics,
-) -> Result<Pixels, Error> {
+) -> Result<Samples, Error> {
     let space = space.ok_or(Error::ImageNoColorSpace)?;
     let components = usize::try_from(info.components).unwrap_or(0);
     if components == 0 || info.bpc == 0 {
@@ -881,7 +987,7 @@ fn unpack(
         let palette = (0..=indexed.max_index)
             .map(|i| space.to_rgb(&[f32::from(i)]))
             .collect();
-        return Ok(Pixels::Indexed { indices, palette });
+        return Ok(Samples::Whole(Pixels::Indexed { indices, palette }));
     }
 
     // A `Separation` or `DeviceN` sample is a **tint**, not a colour, so it
@@ -910,20 +1016,65 @@ fn unpack(
     // tint of PANTONE 327 CV, teal `(0, 182, 162)` through the tint transform
     // and grey `(198, 198, 198)` without it.
     if components == 1 && space.needs_image_conversion() {
-        return Ok(tint_palette(info, space, data, &decode, &layout, diags));
+        return Ok(Samples::Whole(tint_palette(
+            info, space, data, &decode, &layout, diags,
+        )));
     }
 
-    // Everything else widens to eight bits per component in the space's own
-    // component order.
+    // A multi-colorant `DeviceN` cannot be tabulated -- its sample tuple is
+    // too wide -- so it takes `TranslateScanline24bpp`'s own shape instead,
+    // which is per pixel and therefore eager.
+    if space.needs_image_conversion() {
+        let out = widen_whole(info, data, &decode, &layout, diags)?;
+        return Ok(Samples::Whole(tint_per_pixel(space, &out, total_pixels)?));
+    }
+
+    // Everything else stays packed. The `/Decode` mapping is folded into the
+    // table `Packed` builds, and the widening itself happens one row at a time
+    // inside [`Unpacked`] as the pipeline pulls.
+    let depth = Depth::new(info.bpc).ok_or(Error::ImageUndecodable {
+        what: "a bit depth that is not 1, 2, 4, 8 or 16",
+    })?;
+    let packed = Packed::with_map(
+        data.into(),
+        depth,
+        components,
+        pitch,
+        info.width,
+        info.height,
+        &decode,
+    );
+    // The eager pass recorded this while it walked; a lazy one answers the
+    // same question from the stream length, which is the same answer.
+    if packed.truncated() {
+        diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
+    }
+    Ok(Samples::Packed(packed))
+}
+
+/// Widen every sample to a byte, over the whole image.
+///
+/// The one caller left is the multi-colorant tint path, whose transform is per
+/// pixel over a component tuple and so has to see the whole thing at once.
+fn widen_whole(
+    info: &ImageDict,
+    data: &[u8],
+    decode: &DecodeMap,
+    layout: &SampleLayout,
+    diags: &mut Diagnostics,
+) -> Result<Vec<u8>, Error> {
+    let components = usize::try_from(info.components).unwrap_or(0);
     let mut out = vec![
         0u8;
-        total_pixels
+        layout
+            .total_pixels
             .checked_mul(components)
             .ok_or(Error::ImageTooLarge)?
     ];
     let mut padded = false;
-    for y in 0..rows {
-        let (line, availability) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+    for y in 0..layout.rows {
+        let (line, availability) =
+            scanline::scanline(data, u32::try_from(y).unwrap_or(0), layout.pitch);
         padded |= availability != scanline::Availability::Whole;
         // An absent row never reaches `TranslateScanline24bpp`: PDFium returns
         // a zeroed *output* buffer, so the pixels are literal black rather
@@ -931,29 +1082,18 @@ fn unpack(
         if availability == scanline::Availability::Absent {
             continue;
         }
-        for x in 0..pixels_per_row {
+        for x in 0..layout.pixels_per_row {
             for c in 0..components {
                 let bit_pos = (x * components + c) * info.bpc as usize;
                 let raw = scanline::get_bits(&line, bit_pos, info.bpc);
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "raw samples cap at 16 bits, exact in f32"
-                )]
-                let value = decode.apply(c, raw as f32);
-                // Rounded, not truncated. At 1, 2, 4 and 8 bits the two agree
-                // on every raw value — `step` is exactly `1/max` and the
-                // products are small enough to be exact in `f32` — so this
-                // changes nothing there, and it matches `decode_table`, which
-                // rounds for the same reason. At **16** bits they diverge on
-                // 32 648 of the 65 536 samples and truncation is a count low
-                // on every one: see the module doc's 16-bit note.
+                let value = decode.apply(c, f64_to_f32(raw));
                 #[expect(
                     clippy::cast_possible_truncation,
                     clippy::cast_sign_loss,
                     reason = "the clamp bounds the product to 0..=255"
                 )]
                 let byte = (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-                if let Some(slot) = out.get_mut((y * pixels_per_row + x) * components + c) {
+                if let Some(slot) = out.get_mut((y * layout.pixels_per_row + x) * components + c) {
                     *slot = byte;
                 }
             }
@@ -962,17 +1102,7 @@ fn unpack(
     if padded {
         diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
     }
-    // A multi-colorant `DeviceN` cannot be tabulated — its sample tuple is
-    // too wide — so it takes `TranslateScanline24bpp`'s own shape instead.
-    if space.needs_image_conversion() {
-        return tint_per_pixel(space, &out, total_pixels);
-    }
-
-    Ok(match components {
-        1 => Pixels::Gray8(out.into()),
-        4 => Pixels::Cmyk8(out.into()),
-        _ => Pixels::Rgb8(out.into()),
-    })
+    Ok(out)
 }
 
 /// Apply a non-default `/Decode` to a codec's eight-bit output, in place.
@@ -1167,7 +1297,7 @@ fn load_mask_image<R: Resolve>(
         diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
         return None;
     };
-    let alpha = mask_plane(&image.pixels, image.width, image.height)?;
+    let alpha = mask_plane(&image.samples, image.width, image.height)?;
     Some(ImageMask::Alpha {
         width: image.width,
         height: image.height,
@@ -1188,26 +1318,27 @@ fn load_mask_image<R: Resolve>(
 /// `image_en_fqa` builds 29.8 million mask samples per page and never
 /// converts more than four of the base image's.
 ///
-/// `Gray8` keeps a direct arm because it is the shape every `/SMask` in the
-/// corpus takes and its sample already *is* the alpha — the row pipeline
-/// would widen each byte to RGBA only for this to take the first channel
-/// back. Every other kind goes through the rows, which is the same answer:
+/// A codec's `Gray8` keeps a direct arm because its sample already *is* the
+/// alpha — the row pipeline would widen each byte to RGBA only for this to
+/// take the first channel back. Every other kind, packed samples included,
+/// goes through the rows, which is the same answer:
 /// `the_mask_planes_fast_arms_are_the_general_one` pins the equality.
 ///
 /// `None` only when the dimensions do not multiply inside a `usize`.
-fn mask_plane(pixels: &Pixels, width: u32, height: u32) -> Option<Box<[u8]>> {
+fn mask_plane(samples: &Samples, width: u32, height: u32) -> Option<Box<[u8]>> {
     let len = usize::try_from(width)
         .ok()?
         .checked_mul(usize::try_from(height).ok()?)?;
     let mut alpha = Vec::with_capacity(len);
-    if let Pixels::Gray8(data) = pixels {
+    if let Samples::Whole(Pixels::Gray8(data)) = samples {
         alpha.extend(data.iter().take(len).copied());
     } else {
-        let palette = match pixels {
-            Pixels::Indexed { palette, .. } => Some(rows::Palette::new(palette)),
+        let palette = match samples {
+            Samples::Whole(Pixels::Indexed { palette, .. }) => Some(rows::Palette::new(palette)),
             _ => None,
         };
-        let mut converted = rows::Converted::new(rows::Source::new(pixels, width, height), palette);
+        let mut converted =
+            rows::Converted::new(rows::Source::new(samples, width, height), palette);
         while let Some(row) = rows::Rows::next(&mut converted) {
             alpha.extend(row.pixels().iter().map(|px| px.0[0]));
         }
@@ -1234,7 +1365,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ImageData, Pixels, RequestedSize, decode_image};
+    use super::{ImageData, Pixels, RequestedSize, Samples, decode_image};
     use crate::color::Rgb;
     use crate::function::FunctionCache;
     use crate::image::BitImage;
@@ -1265,16 +1396,13 @@ mod tests {
     /// The pipeline is row-at-a-time by design, so a test that wants a single
     /// pixel walks to its row and indexes it. Tests are the only caller that
     /// ever wants one pixel — the render path wants all of them, in order.
-    fn converted_row(pixels: &Pixels, width: u32, y: u32) -> Vec<[u8; 3]> {
-        let palette = match pixels {
-            Pixels::Indexed { palette, .. } => Some(super::rows::Palette::new(palette)),
-            _ => None,
-        };
+    fn converted_row(samples: &Samples, width: u32, y: u32) -> Vec<[u8; 3]> {
+        let palette = samples.palette().map(super::rows::Palette::new);
         // Only the wanted row is converted. Walking down to row `y` from the
         // top would be quadratic in `y`, and these tests reach for row 9999 to
         // check the out-of-range fallback.
         let mut converted =
-            super::rows::Converted::new(super::rows::Source::at_row(pixels, width, y), palette);
+            super::rows::Converted::new(super::rows::Source::at_row(samples, width, y), palette);
         super::rows::Rows::next(&mut converted)
             .map(|row| {
                 row.pixels()
@@ -1290,8 +1418,8 @@ mod tests {
     /// A caller comparing a whole row should take [`converted_row`] once
     /// instead: this rebuilds the row buffer on every call, which is the right
     /// trade for a handful of pixels and the wrong one for thousands.
-    fn sample_at(pixels: &Pixels, x: u32, y: u32, width: u32) -> [u8; 3] {
-        converted_row(pixels, width, y)
+    fn sample_at(samples: &Samples, x: u32, y: u32, width: u32) -> [u8; 3] {
+        converted_row(samples, width, y)
             .get(x as usize)
             .copied()
             .unwrap_or([0, 0, 0])
@@ -1376,7 +1504,7 @@ mod tests {
         );
         let image = decode(&s).expect("should decode");
         assert_eq!(
-            image.pixels,
+            image.samples.to_pixels(),
             Pixels::Rgb8(Box::from(&[0u8; 12][..])),
             "both rows are black; the absent one never reaches `/Decode`"
         );
@@ -1399,7 +1527,7 @@ mod tests {
         let image = decode(&s).expect("should decode");
         assert_eq!((image.width, image.height), (2, 2));
         assert_eq!(
-            image.pixels,
+            image.samples.to_pixels(),
             Pixels::Gray8(Box::from(&[0u8, 85, 170, 255][..]))
         );
         assert!(image.mask.is_none());
@@ -1444,8 +1572,9 @@ mod tests {
         );
         let image = decode(&s).expect("should decode");
         assert_eq!((image.width, image.height), (400, 400));
-        let Pixels::Gray8(gray) = &image.pixels else {
-            panic!("expected grey samples, got {:?}", image.pixels);
+        let pixels = image.samples.to_pixels();
+        let Pixels::Gray8(gray) = &pixels else {
+            panic!("expected grey samples, got {pixels:?}");
         };
         assert_eq!(gray.len(), 400 * 400);
         assert!(
@@ -1492,11 +1621,11 @@ mod tests {
         // come from the codec — reading the compressed bytes as if they were
         // already one bit per pixel paints noise.
         let image = decode(&jbig2_stencil(&JBIG2_RIGHT_HALF_BLACK, None)).expect("should decode");
-        let Pixels::Stencil(BitImage {
+        let Samples::Whole(Pixels::Stencil(BitImage {
             bits, row_bytes, ..
-        }) = &image.pixels
+        })) = &image.samples
         else {
-            panic!("expected a stencil, got {:?}", image.pixels);
+            panic!("expected a stencil, got {:?}", image.samples);
         };
         assert_eq!(*row_bytes, 1);
         assert_eq!(
@@ -1512,8 +1641,8 @@ mod tests {
         // the half the codestream left white.
         let image =
             decode(&jbig2_stencil(&JBIG2_RIGHT_HALF_BLACK, Some([1, 0]))).expect("should decode");
-        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
-            panic!("expected a stencil, got {:?}", image.pixels);
+        let Samples::Whole(Pixels::Stencil(BitImage { bits, .. })) = &image.samples else {
+            panic!("expected a stencil, got {:?}", image.samples);
         };
         assert_eq!(&bits[..], &[0b1111_0000u8; 8][..]);
     }
@@ -1559,8 +1688,8 @@ mod tests {
             &[0b1010_1010],
         );
         let image = decode(&s).expect("should decode");
-        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
-            panic!("expected a stencil, got {:?}", image.pixels);
+        let Samples::Whole(Pixels::Stencil(BitImage { bits, .. })) = &image.samples else {
+            panic!("expected a stencil, got {:?}", image.samples);
         };
         assert_eq!(bits.first(), Some(&0b0101_0101));
     }
@@ -1580,7 +1709,7 @@ mod tests {
             &[0b1010_1010],
         );
         let image = decode(&s).expect("should decode");
-        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
+        let Samples::Whole(Pixels::Stencil(BitImage { bits, .. })) = &image.samples else {
             panic!("expected a stencil");
         };
         assert_eq!(bits.first(), Some(&0b1010_1010));
@@ -1603,7 +1732,7 @@ mod tests {
         );
         let image = decode(&s).expect("should still decode");
         assert_eq!(
-            image.pixels,
+            image.samples.to_pixels(),
             Pixels::Gray8(Box::from(&[10u8, 20, 0, 0][..]))
         );
     }
@@ -1629,8 +1758,8 @@ mod tests {
             &[0b00_01_10_11],
         );
         let image = decode(&s).expect("should decode");
-        let Pixels::Indexed { indices, palette } = &image.pixels else {
-            panic!("expected indexed pixels, got {:?}", image.pixels);
+        let Samples::Whole(Pixels::Indexed { indices, palette }) = &image.samples else {
+            panic!("expected indexed pixels, got {:?}", image.samples);
         };
         assert_eq!(&**indices, &[0, 1, 2, 3]);
         assert_eq!(palette.len(), 4);
@@ -1692,7 +1821,7 @@ mod tests {
 
     #[test]
     fn pixel_lookup_is_bounds_checked() {
-        let pixels = Pixels::Rgb8(Box::from(&[255u8, 0, 0, 0, 255, 0][..]));
+        let pixels = Samples::Whole(Pixels::Rgb8(Box::from(&[255u8, 0, 0, 0, 255, 0][..])));
         assert_eq!(sample_at(&pixels, 0, 0, 2), [255, 0, 0]);
         // Out of range reads as black rather than panicking.
         assert_eq!(sample_at(&pixels, 99, 99, 2), [0, 0, 0]);
@@ -1783,14 +1912,16 @@ mod tests {
         }
 
         // Grey: every byte, widened to three equal channels.
-        let gray = Pixels::Gray8((0..=255u8).collect());
+        let gray = Samples::Whole(Pixels::Gray8((0..=255u8).collect()));
         for x in 0..256u32 {
             let v = u8::try_from(x).expect("x < 256");
             assert_eq!(sample_at(&gray, x, 0, 256), [v, v, v], "gray {x}");
         }
 
         // RGB: a walk that puts every byte in every channel position.
-        let rgb = Pixels::Rgb8((0..=255u8).flat_map(|v| [v, 255 - v, v / 2]).collect());
+        let rgb = Samples::Whole(Pixels::Rgb8(
+            (0..=255u8).flat_map(|v| [v, 255 - v, v / 2]).collect(),
+        ));
         for x in 0..256u32 {
             let v = u8::try_from(x).expect("x < 256");
             assert_eq!(sample_at(&rgb, x, 0, 256), [v, 255 - v, v / 2], "rgb {x}");
@@ -1812,7 +1943,7 @@ mod tests {
         }
         let count = cmyk.len() / 4;
         let raw = cmyk.clone();
-        let cmyk = Pixels::Cmyk8(cmyk.into());
+        let cmyk = Samples::Whole(Pixels::Cmyk8(cmyk.into()));
         // The whole lattice is one row, converted once — which is how the
         // pipeline is meant to be used. Calling `sample_at` per point would
         // rebuild the row buffer for each of the 65 536 of them.
@@ -1839,10 +1970,10 @@ mod tests {
                 b: 0.25,
             })
             .collect();
-        let indexed = Pixels::Indexed {
+        let indexed = Samples::Whole(Pixels::Indexed {
             indices: (0..=255u8).collect(),
             palette: palette.clone(),
-        };
+        });
         for x in 0..256u32 {
             let want = palette[x as usize].to_bytes();
             assert_eq!(sample_at(&indexed, x, 0, 256), want, "indexed {x}");
@@ -1857,7 +1988,7 @@ mod tests {
             row_bytes: 1,
             bits: vec![0b1000_0000],
         };
-        let stencil = Pixels::Stencil(bits);
+        let stencil = Samples::Whole(Pixels::Stencil(bits));
         assert_eq!(sample_at(&stencil, 0, 0, 2), [0, 0, 0], "a set bit is ink");
         assert_eq!(
             sample_at(&stencil, 1, 0, 2),
@@ -1883,7 +2014,7 @@ mod tests {
     /// carry and an `Indexed` `/SMask` is not one of them.
     #[test]
     fn the_mask_planes_fast_arms_are_the_general_one() {
-        let general = |pixels: &Pixels, w: u32, h: u32| -> Vec<u8> {
+        let general = |pixels: &Samples, w: u32, h: u32| -> Vec<u8> {
             (0..h)
                 .flat_map(|y| (0..w).map(move |x| (x, y)))
                 .map(|(x, y)| sample_at(pixels, x, y, w)[0])
@@ -1893,7 +2024,7 @@ mod tests {
         // Grey, at the exact length, short, and long.
         for (w, h, len) in [(4_u32, 3_u32, 12_usize), (4, 3, 7), (4, 3, 20), (1, 1, 1)] {
             let data: Box<[u8]> = (0..len).map(|i| (i * 31 % 256) as u8).collect();
-            let pixels = Pixels::Gray8(data);
+            let pixels = Samples::Whole(Pixels::Gray8(data));
             let got = super::mask_plane(&pixels, w, h).expect("dimensions multiply");
             let mut want = general(&pixels, w, h);
             want.resize((w * h) as usize, 0);
@@ -1909,10 +2040,10 @@ mod tests {
             })
             .collect();
         for (w, h, len) in [(8_u32, 4_u32, 32_usize), (8, 4, 10)] {
-            let pixels = Pixels::Indexed {
+            let pixels = Samples::Whole(Pixels::Indexed {
                 indices: (0..len).map(|i| (i * 7 % 256) as u8).collect(),
                 palette: palette.clone(),
-            };
+            });
             let got = super::mask_plane(&pixels, w, h).expect("dimensions multiply");
             let mut want = general(&pixels, w, h);
             want.resize((w * h) as usize, 0);
@@ -1921,7 +2052,7 @@ mod tests {
 
         // And the general arm still answers for the kinds that have no fast
         // one, so a mask that is not grey is not silently dropped.
-        let rgb = Pixels::Rgb8((0..24u8).collect());
+        let rgb = Samples::Whole(Pixels::Rgb8((0..24u8).collect()));
         let got = super::mask_plane(&rgb, 4, 2).expect("dimensions multiply");
         assert_eq!(&got[..], &general(&rgb, 4, 2)[..]);
     }
@@ -2075,7 +2206,7 @@ mod tests {
         for y in 0..3 {
             for x in 0..20 {
                 assert_eq!(
-                    sample_at(&image.pixels, x, y, 20),
+                    sample_at(&image.samples, x, y, 20),
                     [255, 255, 255],
                     "({x},{y}) should be white"
                 );
@@ -2105,7 +2236,7 @@ mod tests {
             for x in 0..20 {
                 let want = if y < 2 && x < 8 { black } else { white };
                 assert_eq!(
-                    sample_at(&image.pixels, x, y, 20),
+                    sample_at(&image.samples, x, y, 20),
                     want,
                     "({x},{y}) — a shear puts the black run somewhere else"
                 );
@@ -2119,7 +2250,7 @@ mod tests {
         // repack keeps that, so damage is blank rather than black or an error.
         let s = ccitt_stream(20, 3, false, &[0x00, 0x00]);
         let image = decode(&s).expect("damage is not a failure");
-        assert_eq!(sample_at(&image.pixels, 0, 0, 20), [255, 255, 255]);
+        assert_eq!(sample_at(&image.samples, 0, 0, 20), [255, 255, 255]);
     }
 
     /// Build a `[/Separation /Name /DeviceCMYK <tint transform>]` array whose
@@ -2183,17 +2314,17 @@ mod tests {
         );
         let image = decode(&s).expect("should decode");
         assert_eq!(
-            sample_at(&image.pixels, 0, 0, 1),
+            sample_at(&image.samples, 0, 0, 1),
             [0, 182, 162],
             "the tint must reach the alternate space, not the page as grey"
         );
         // The shape matters as much as the colour: a palette is what the
         // renderer's indexed fast path consumes, and it must span the whole
         // eight-bit sample domain rather than only the values in use.
-        let Pixels::Indexed { palette, .. } = &image.pixels else {
+        let Samples::Whole(Pixels::Indexed { palette, .. }) = &image.samples else {
             panic!(
                 "a resolved Separation image is a palette, got {:?}",
-                image.pixels
+                image.samples
             );
         };
         assert_eq!(palette.len(), 256);
@@ -2224,7 +2355,7 @@ mod tests {
             &[0xC6],
         );
         let image = decode(&s).expect("should decode");
-        let inverted = sample_at(&image.pixels, 0, 0, 1);
+        let inverted = sample_at(&image.samples, 0, 0, 1);
         let s_plain = stream(
             vec![
                 (Name::from("Width"), Object::Int(1)),
@@ -2240,7 +2371,7 @@ mod tests {
         let plain = decode(&s_plain).expect("should decode");
         assert_eq!(
             inverted,
-            sample_at(&plain.pixels, 0, 0, 1),
+            sample_at(&plain.samples, 0, 0, 1),
             "`/Decode [1 0]` on a tint is the complement of the sample"
         );
     }
@@ -2298,15 +2429,16 @@ mod tests {
         );
         let image = decode(&s).expect("should decode");
         assert!(
-            matches!(image.pixels, Pixels::Rgb8(_)),
-            "a two-colorant DeviceN resolves per pixel, got {:?}",
-            image.pixels
+            matches!(image.samples, Samples::Whole(Pixels::Rgb8(_))),
+            "a two-colorant DeviceN resolves per pixel and cannot stay packed, \
+             got {:?}",
+            image.samples
         );
         // A zero tint vector is `C0` — CMYK all-zero, paper white — and a
         // full one is `C1`, pure red in the alternate. Neither is the raw
         // sample pair, which is the whole point.
-        assert_eq!(sample_at(&image.pixels, 0, 0, 2), [255, 255, 255]);
-        let full = sample_at(&image.pixels, 1, 0, 2);
+        assert_eq!(sample_at(&image.samples, 0, 0, 2), [255, 255, 255]);
+        let full = sample_at(&image.samples, 1, 0, 2);
         assert!(
             full[0] > 200 && full[1] < 80 && full[2] < 80,
             "a full tint must reach the alternate space's red, got {full:?}"

@@ -11,7 +11,7 @@
 use std::borrow::Cow;
 
 use kurbo::Affine;
-use pdfrum_page::{BlendMode, ColorSpace, Converted, ImageData, Pixels, Rgba8, Source};
+use pdfrum_page::{BlendMode, ColorSpace, Converted, ImageData, Pixels, Rgba8, Samples, Source};
 
 use crate::color::Argb;
 use crate::device::ImageQuality;
@@ -78,7 +78,7 @@ pub fn resample_quality(
     // The huge-image rule, which fires regardless of `/Interpolate`.
     let bytes = u64::from(src_width)
         .saturating_mul(u64::from(src_height))
-        .saturating_mul(image.pixels.components() as u64);
+        .saturating_mul(image.samples.components() as u64);
     if bytes > HUGE_IMAGE_SIZE && !opts.force_halftone {
         bilinear = true;
     }
@@ -240,12 +240,9 @@ pub fn to_pixmap(
 /// An `Indexed` image's palette is resolved into bytes once here rather than
 /// once per pixel, which is what [`pdfrum_page::Palette`] exists for.
 pub(crate) fn converted_rows(image: &ImageData) -> Converted<'_> {
-    let palette = match &image.pixels {
-        Pixels::Indexed { palette, .. } => Some(pdfrum_page::Palette::new(palette)),
-        _ => None,
-    };
+    let palette = image.samples.palette().map(pdfrum_page::Palette::new);
     Converted::new(
-        Source::new(&image.pixels, image.width, image.height),
+        Source::new(&image.samples, image.width, image.height),
         palette,
     )
 }
@@ -288,7 +285,7 @@ impl<'a> RowFinish<'a> {
     ) -> Self {
         Self {
             fused: image.mask.as_ref().filter(|m| is_coregistered(m, image)),
-            stencil: matches!(image.pixels, Pixels::Stencil(_)).then_some(stencil_color),
+            stencil: image.samples.is_stencil().then_some(stencil_color),
             matte: image.matte.map(pdfrum_page::Rgb::to_bytes),
             // A stencil takes the transfer function through its *colour*
             // instead: it has no samples, and `GetFillArgb` already ran the
@@ -435,7 +432,7 @@ pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Cow<'_
     let dict = ImageData {
         width: w,
         height: h,
-        pixels: Pixels::Gray8(Box::default()),
+        samples: Samples::Whole(Pixels::Gray8(Box::default())),
         mask: None,
         matte: None,
         interpolate: false,
@@ -545,7 +542,9 @@ mod tests {
         ImageData {
             width: w,
             height: h,
-            pixels: Pixels::Gray8(vec![128; (w * h) as usize].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Gray8(
+                vec![128; (w * h) as usize].into_boxed_slice(),
+            )),
             mask: None,
             matte: None,
             interpolate,
@@ -597,7 +596,7 @@ mod tests {
     fn huge_image_forces_bilinear_unless_halftoning() {
         // A 5000x5000 RGB image is 75 million bytes, past the threshold.
         let mut img = gray_image(5000, 5000, false);
-        img.pixels = Pixels::Rgb8(vec![0; 3].into_boxed_slice());
+        img.samples = Samples::Whole(Pixels::Rgb8(vec![0; 3].into_boxed_slice()));
         let opts = RenderOptions::default();
         assert_eq!(
             resample_quality(&img, &opts, 5000, 5000, 100_000, 100_000),
@@ -688,7 +687,7 @@ mod tests {
         let img = ImageData {
             width: 2,
             height: 1,
-            pixels: Pixels::Stencil(bits),
+            samples: Samples::Whole(Pixels::Stencil(bits)),
             mask: None,
             matte: None,
             interpolate: false,
@@ -707,7 +706,7 @@ mod tests {
         let img = ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice())),
             mask: Some(ImageMask::Alpha {
                 width: 1,
                 height: 1,
@@ -746,7 +745,7 @@ mod tests {
         let img = ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice())),
             mask: Some(mask.clone()),
             matte: None,
             interpolate: false,
@@ -829,7 +828,7 @@ mod tests {
             let image = ImageData {
                 width: w,
                 height: h,
-                pixels: Pixels::Cmyk8(data.clone()),
+                samples: Samples::Whole(Pixels::Cmyk8(data.clone())),
                 mask: None,
                 matte: None,
                 interpolate: false,
@@ -903,7 +902,7 @@ mod tests {
         };
         let (dict, plane) = separate_mask(&mask).expect("an alpha mask yields a plane");
         assert_eq!(
-            dict.pixels.components(),
+            dict.samples.components(),
             1,
             "the component count is the use"
         );
@@ -980,7 +979,7 @@ mod tests {
         let img = ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice())),
             mask: None,
             matte: None,
             interpolate: false,
@@ -1036,7 +1035,7 @@ mod tests {
         let img = ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Gray8(vec![64].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Gray8(vec![64].into_boxed_slice())),
             mask: Some(ImageMask::Alpha {
                 width: 1,
                 height: 1,
@@ -1067,7 +1066,7 @@ mod tests {
         let img = ImageData {
             width: 1,
             height: 1,
-            pixels: Pixels::Gray8(vec![64].into_boxed_slice()),
+            samples: Samples::Whole(Pixels::Gray8(vec![64].into_boxed_slice())),
             mask: Some(ImageMask::Alpha {
                 width: 1,
                 height: 1,
@@ -1089,7 +1088,7 @@ mod tests {
         let img = ImageData {
             width: 2,
             height: 1,
-            pixels: Pixels::Indexed {
+            samples: Samples::Whole(Pixels::Indexed {
                 indices: vec![0, 1].into_boxed_slice(),
                 palette: vec![
                     Rgb {
@@ -1104,7 +1103,7 @@ mod tests {
                     },
                 ]
                 .into_boxed_slice(),
-            },
+            }),
             mask: None,
             matte: None,
             interpolate: false,
