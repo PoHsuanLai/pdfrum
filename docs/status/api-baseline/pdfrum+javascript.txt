@@ -270,6 +270,7 @@ pub fn pdfrum::Document::page_label(&self, impl core::convert::Into<pdfrum_commo
 pub fn pdfrum::Document::pages(&self) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Page<'_>> + '_
 pub fn pdfrum::Document::parser(&self) -> &pdfrum_parser::doc::Document
 pub fn pdfrum::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
+pub fn pdfrum::Document::render_session(&self) -> pdfrum::RenderSession
 pub fn pdfrum::Document::revision_bytes(&self, usize) -> core::option::Option<&[u8]>
 pub fn pdfrum::Document::revisions(&self) -> alloc::vec::Vec<pdfrum::Revision>
 pub fn pdfrum::Document::stream_data(&self, pdfrum_object::object::ObjRef) -> pdfrum::Result<alloc::vec::Vec<u8>>

@@ -132,9 +132,11 @@ pub use type3::{MAX_TYPE3_DEPTH, Type3Font};
 
 use pdfrum_common::kurbo::{BezPath, Rect};
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_object::{Dict, Resolve};
+use pdfrum_object::{Dict, ObjRef, Resolve};
 use smallvec::SmallVec;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
 /// A loaded PDF font, ready to decode strings and produce glyphs.
 ///
@@ -687,14 +689,42 @@ fn truncate(value: f32) -> i32 {
     truncated
 }
 
-/// Per-document caches: parsed faces, resolved substitutions, font identities.
+/// Per-document caches: loaded fonts, and the font-identity counter.
 ///
 /// A value the document owns rather than process-wide state, so two documents
-/// loaded on two threads never share a face or a font identity. Cheap to
-/// create and `Send + Sync`; the only mutable state is the identity counter.
+/// loaded on two threads never share a face or a font identity. `Send + Sync`
+/// and shared by `Arc`, so every session over one document — every worker of
+/// a parallel render, and a text run and a render run alike — loads each font
+/// once between them rather than once each.
+///
+/// # What is cached, and what is not
+///
+/// The key is the [`ObjRef`] that named the `/Font` resource. A font
+/// dictionary written **inline**, with no reference of its own, is not cached
+/// and is loaded afresh at every use: two inline copies genuinely are two
+/// fonts, and there is no document-scoped identity to key them on.
+///
+/// The value is an `Arc<Font>`, so a hit shares the whole loaded font — its
+/// parsed `/ToUnicode`, its CID tables and its glyph cache — rather than
+/// rebuilding them. Text extraction's duplicate suppression compares fonts by
+/// that pointer, so sharing is load-bearing for correctness as well as speed.
+///
+/// A dictionary that would not load caches its `None` too: that is as stable
+/// an answer as a font, and re-deriving it per page is the same wasted work.
+///
+/// # Why the substitution options are not part of the key
+///
+/// Every load under one document must make the same substitution choice — a
+/// substitution that varied between two `Tf` operators naming the same
+/// resource would give one line of text different metrics from the next — so
+/// a cache is created for one set of options and used with those. The caller
+/// that owns the options owns the cache: `pdfrum_page::BuildContext` carries
+/// both, in one value, and hands this out by `Arc`.
 #[derive(Debug, Default)]
 pub struct FontCache {
     next_id: AtomicU64,
+    /// Loaded fonts, keyed on the reference that named them.
+    loaded: RwLock<HashMap<ObjRef, Option<Arc<Font>>>>,
 }
 
 impl FontCache {
@@ -702,6 +732,34 @@ impl FontCache {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The font `reference` names, loading it on the first ask and sharing it
+    /// on every later one.
+    ///
+    /// `load` runs at most once per reference per cache in the uncontended
+    /// case, and never under the lock — two threads asking for two different
+    /// fonts do not serialize on each other. Two threads racing on the *same*
+    /// reference may both load; whichever inserts first is the shared
+    /// instance and both callers get that one `Arc`, so the loser's copy is
+    /// dropped rather than replacing an instance another page already holds.
+    /// That costs one duplicate parse and keeps the loader off the lock.
+    pub fn get_or_load<F>(&self, reference: ObjRef, load: F) -> Option<Arc<Font>>
+    where
+        F: FnOnce() -> Option<Font>,
+    {
+        if let Ok(map) = self.loaded.read()
+            && let Some(hit) = map.get(&reference)
+        {
+            return hit.clone();
+        }
+        let font = load().map(Arc::new);
+        match self.loaded.write() {
+            Ok(mut map) => map.entry(reference).or_insert(font).clone(),
+            // A poisoned lock means another thread panicked mid-load. The
+            // font itself is fine; hand it back uncached rather than panic.
+            Err(_) => font,
+        }
     }
 
     /// Hand out the next font identity.
@@ -1134,5 +1192,98 @@ mod send_sync {
         assert_send_sync::<subst::Substitution>();
         assert_send_sync::<subst::TestFontDb>();
         assert_send_sync::<subst::SystemFontDb>();
+        assert_send_sync::<FontCache>();
+    }
+
+    /// The cache exists so a font is loaded once per reference, and so every
+    /// later ask gets *that* instance: text extraction's duplicate
+    /// suppression compares fonts by pointer, so a fresh instance per page
+    /// would silently stop it firing.
+    #[test]
+    fn one_reference_loads_once_and_shares_the_instance() {
+        let cache = FontCache::new();
+        let reference = ObjRef::new(7, 0);
+        let mut loads = 0;
+
+        let first = cache
+            .get_or_load(reference, || {
+                loads += 1;
+                Some(Font::load_standard(StandardFont::Helvetica, &cache))
+            })
+            .expect("the standard font always loads");
+        let second = cache
+            .get_or_load(reference, || {
+                loads += 1;
+                Some(Font::load_standard(StandardFont::Helvetica, &cache))
+            })
+            .expect("the cached font is still there");
+
+        assert_eq!(loads, 1, "the second ask must not reach the loader");
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "both asks must yield one instance"
+        );
+    }
+
+    /// A different reference is a different font, and `None` is as cacheable
+    /// an answer as a font: a dictionary that will not load is stable.
+    #[test]
+    fn a_second_reference_loads_separately_and_a_failure_is_cached() {
+        let cache = FontCache::new();
+        let mut loads = 0;
+        let mut load = |cache: &FontCache, reference| {
+            cache.get_or_load(reference, || {
+                loads += 1;
+                Some(Font::load_standard(StandardFont::Helvetica, cache))
+            })
+        };
+
+        let first = load(&cache, ObjRef::new(7, 0)).expect("loads");
+        let second = load(&cache, ObjRef::new(8, 0)).expect("loads");
+        assert_eq!(loads, 2, "two references are two fonts");
+        assert!(!Arc::ptr_eq(&first, &second));
+
+        let mut failures = 0;
+        let missing = ObjRef::new(9, 0);
+        for _ in 0..2 {
+            assert!(
+                cache
+                    .get_or_load(missing, || {
+                        failures += 1;
+                        None
+                    })
+                    .is_none()
+            );
+        }
+        assert_eq!(failures, 1, "a failure is derived once, not per page");
+    }
+
+    /// The cache is what many threads share, so two threads asking at once
+    /// must both come away with a font and neither must panic.
+    #[test]
+    fn threads_sharing_one_cache_all_get_a_font() {
+        let cache = Arc::new(FontCache::new());
+        let reference = ObjRef::new(7, 0);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| {
+                    let cache = Arc::clone(&cache);
+                    scope.spawn(move || {
+                        cache
+                            .get_or_load(reference, || {
+                                Some(Font::load_standard(StandardFont::Helvetica, &cache))
+                            })
+                            .is_some()
+                    })
+                })
+                .collect();
+            for handle in handles {
+                assert!(handle.join().expect("no thread panics"));
+            }
+        });
+        // Whoever inserted first is the shared instance from then on, so a
+        // ninth ask after the race reaches no loader at all.
+        let after = cache.get_or_load(reference, || panic!("must be cached by now"));
+        assert!(after.is_some());
     }
 }

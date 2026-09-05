@@ -9,7 +9,7 @@ use pdfrum_object::{Dict, Name, ObjRef, Object, Resolve, names};
 
 #[cfg(feature = "forms")]
 use crate::form::Form;
-use crate::{Outline, Page, Result};
+use crate::{Outline, Page, RenderSession, Result};
 
 /// How to open a document.
 ///
@@ -43,6 +43,16 @@ pub struct OpenOptions {
 pub struct Document {
     pub(crate) inner: pdfrum_parser::Document,
     pub(crate) limits: Limits,
+    /// The loaded fonts every session over this document shares.
+    ///
+    /// One document, one cache: a font named by an `ObjRef` is parsed once —
+    /// its `/ToUnicode`, its CID tables, its glyph cache — and every session
+    /// [`Document::render_session`] hands out reads that one instance. Before
+    /// this, each session reloaded every font it met, which is what made a
+    /// parallel render's per-thread work grow with the thread count.
+    ///
+    /// Dropped with the document, so nothing outlives the file it came from.
+    fonts: Arc<pdfrum_font::FontCache>,
     /// What *this crate's* reads have repaired since the file opened.
     ///
     /// Interior mutability for a lazy record: every read below this crate
@@ -153,6 +163,7 @@ impl Document {
             inner: pdfrum_parser::load(bytes, &load)?,
             limits: options.limits.clone(),
             session: Mutex::new(Diagnostics::default()),
+            fonts: Arc::default(),
         })
     }
 
@@ -183,6 +194,41 @@ impl Document {
     /// ```
     pub fn page(&self, index: impl Into<PageIndex>) -> Result<Page<'_>> {
         Page::load(self, index.into())
+    }
+
+    /// A [`RenderSession`] wired to this document's shared font cache.
+    ///
+    /// Prefer this to [`RenderSession::new`] whenever the session is for a
+    /// document you hold: the fonts a session meets are then loaded once for
+    /// the document rather than once per session, which is what makes a
+    /// parallel render scale. Everything else about the session — its colour
+    /// space, function and image caches, its glyph outlines — is still the
+    /// session's own, because those are the caches a `&mut` run owns.
+    ///
+    /// ```
+    /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
+    ///
+    /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
+    /// let backend = VelloCpuBackend::new();
+    ///
+    /// // Two sessions, one set of loaded fonts.
+    /// let mut first = doc.render_session();
+    /// let mut second = doc.render_session();
+    /// let a = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut first)?;
+    /// let b = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut second)?;
+    /// assert_eq!(a.width(), b.width());
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn render_session(&self) -> RenderSession {
+        let mut session = RenderSession::new();
+        session.build.fonts = self.fonts();
+        session
+    }
+
+    /// This document's shared loaded-font cache, for a context built here.
+    pub(crate) fn fonts(&self) -> Arc<pdfrum_font::FontCache> {
+        Arc::clone(&self.fonts)
     }
 
     /// Every page in order, interpreted lazily as the iterator advances.

@@ -171,10 +171,20 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
      per-document font cache of item 3). The ratchet was measured for
      `pdfrum-text` only (163 improved); a full workspace bench on an idle
      box is owed before `ratchet update`.
-  3. Parallel scaling flattens after 4 threads (39 → 71 → 75 pages/s;
-     hayro 70 → 156 → 167, mupdf 149 → 220 → 229): each new
-     `RenderSession` enumerates fonts — share the font database and glyph
-     caches across sessions. mupdf's row was re-measured threaded on
+  3. ~~Parallel scaling flattens after 4 threads~~ — **partly landed**
+     2026-09-05 (`docs/status/font-cache.md`). The stated cause was wrong:
+     the system font database is already scanned once per process behind a
+     `OnceLock` and appears in no profile at any thread count. What grows
+     with the thread count is font *loading* — each session carried its own
+     `ObjRef` memo, so N workers loaded every font N times, and 55% of all
+     the extra work at 8 threads was that. A document-owned `FontCache`
+     shared by `Document::render_session()` cuts `load_with_options` at 8
+     threads by 75.1% and the whole 8-thread process by 4.6% in `Ir`;
+     throughput on the 18-file set, both runs back to back at load ~10,
+     48.3 → 47.1 / 82.9 → 93.5 / 87.3 → 98.1 pages/s (+12.8% at 4, +12.4%
+     at 8). Board byte-identical, 1759 rows, 0 changed. Still open: the gap
+     to hayro and mupdf is not closed, and the glyph caches are still
+     per-session. mupdf's row was re-measured threaded on
      2026-09-05 (214c597) in MuPDF's own model — display lists recorded on
      one thread, rasterized on N cloned contexts, 17.7% serial share — after
      the user pointed out the "single-thread-only" label was wrong; only
