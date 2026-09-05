@@ -858,11 +858,13 @@ fn markdown_falls_back_to_typography_and_layout_keeps_columns() {
         laid.lines().next().unwrap().starts_with("      "),
         "indented by its x: {laid:?}"
     );
-    assert_eq!(
-        plain.split_whitespace().collect::<Vec<_>>(),
-        laid.split_whitespace().collect::<Vec<_>>(),
-        "the same words, only placed"
-    );
+    // Plain text is content order; the layout view is page order, top to
+    // bottom, and this fixture draws its last line first. Same words, then.
+    let mut plain_words: Vec<&str> = plain.split_whitespace().collect();
+    let mut laid_words: Vec<&str> = laid.split_whitespace().collect();
+    plain_words.sort_unstable();
+    laid_words.sort_unstable();
+    assert_eq!(plain_words, laid_words, "the same words, only placed");
 }
 
 // ---- phase 5: security encrypt -------------------------------------------

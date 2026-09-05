@@ -16,6 +16,7 @@ impl pdfrum_markdown::ast::Block
 pub fn pdfrum_markdown::ast::Block::text(&self) -> alloc::string::String
 pub mod pdfrum_markdown::heuristics
 pub fn pdfrum_markdown::heuristics::blocks(&[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
+pub fn pdfrum_markdown::heuristics::blocks_among(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
 pub fn pdfrum_markdown::heuristics::normalize(&str) -> alloc::string::String
 pub mod pdfrum_markdown::layout
 pub fn pdfrum_markdown::layout::layout(&[pdfrum_markdown::lines::Line], kurbo::rect::Rect) -> alloc::string::String
@@ -26,14 +27,22 @@ pub pdfrum_markdown::lines::Line::bold: bool
 pub pdfrum_markdown::lines::Line::font_size: f32
 pub pdfrum_markdown::lines::Line::mcids: alloc::vec::Vec<i64>
 pub pdfrum_markdown::lines::Line::mono: bool
-pub pdfrum_markdown::lines::Line::segments: alloc::vec::Vec<(core::option::Option<i64>, alloc::string::String)>
+pub pdfrum_markdown::lines::Line::segments: alloc::vec::Vec<pdfrum_markdown::lines::Segment>
 pub pdfrum_markdown::lines::Line::text: alloc::string::String
 pub struct pdfrum_markdown::lines::McidText(_)
 impl pdfrum_markdown::lines::McidText
-pub fn pdfrum_markdown::lines::McidText::get(&self, i64) -> core::option::Option<&str>
+pub fn pdfrum_markdown::lines::McidText::runs(&self, i64) -> &[pdfrum_markdown::lines::Run]
 pub struct pdfrum_markdown::lines::ObjectFacts
 impl pdfrum_markdown::lines::ObjectFacts
 pub fn pdfrum_markdown::lines::ObjectFacts::from_page(&pdfrum_page::page::Page) -> Self
+pub struct pdfrum_markdown::lines::Run
+pub pdfrum_markdown::lines::Run::bbox: kurbo::rect::Rect
+pub pdfrum_markdown::lines::Run::line: usize
+pub pdfrum_markdown::lines::Run::text: alloc::string::String
+pub struct pdfrum_markdown::lines::Segment
+pub pdfrum_markdown::lines::Segment::bbox: kurbo::rect::Rect
+pub pdfrum_markdown::lines::Segment::mcid: core::option::Option<i64>
+pub pdfrum_markdown::lines::Segment::text: alloc::string::String
 pub fn pdfrum_markdown::lines::lines(&pdfrum_text::TextPage, &pdfrum_markdown::lines::ObjectFacts) -> alloc::vec::Vec<pdfrum_markdown::lines::Line>
 pub fn pdfrum_markdown::lines::text_by_mcid(&[pdfrum_markdown::lines::Line]) -> pdfrum_markdown::lines::McidText
 pub mod pdfrum_markdown::render
@@ -60,7 +69,7 @@ pub pdfrum_markdown::Line::bold: bool
 pub pdfrum_markdown::Line::font_size: f32
 pub pdfrum_markdown::Line::mcids: alloc::vec::Vec<i64>
 pub pdfrum_markdown::Line::mono: bool
-pub pdfrum_markdown::Line::segments: alloc::vec::Vec<(core::option::Option<i64>, alloc::string::String)>
+pub pdfrum_markdown::Line::segments: alloc::vec::Vec<pdfrum_markdown::lines::Segment>
 pub pdfrum_markdown::Line::text: alloc::string::String
 pub struct pdfrum_markdown::Options
 pub pdfrum_markdown::Options::rtl: bool

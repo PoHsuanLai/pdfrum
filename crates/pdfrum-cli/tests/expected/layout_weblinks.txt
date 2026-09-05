@@ -1,14 +1,14 @@
-      Hello, world! This is not a link.
-
-
-      http://example.com?q=foo. This might be a link.
-
-      https://example.com?q=foo. This might be a link in another font.
-
-      javascript:alert(0). This might be a JS link.
-
-      ftp://example.org. This might be a FTP link.
+      This is a rather long and pointless piece of non-link text.
 
       file:///home/foo/example.txt. This might be a file link.
 
-      This is a rather long and pointless piece of non-link text.
+      ftp://example.org. This might be a FTP link.
+
+      javascript:alert(0). This might be a JS link.
+
+      https://example.com?q=foo. This might be a link in another font.
+
+      http://example.com?q=foo. This might be a link.
+
+
+      Hello, world! This is not a link.
