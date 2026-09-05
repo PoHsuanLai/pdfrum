@@ -30,7 +30,7 @@ use crate::charinfo::{
     transform_distance, transform_rect,
 };
 use crate::line::{Line, Output};
-use crate::object::{Item, TextRun, ladder_char_width};
+use crate::object::{GlyphWidth, Item, TextRun, ladder_char_width};
 use crate::orientation::{Orientation, object_flow};
 use crate::unicode::{is_alnum, is_alpha, is_print};
 use kurbo::{Affine, Point, Rect};
@@ -230,14 +230,17 @@ impl<'a, R: Resolve> Builder<'a, R> {
 
         let previous_width = previous
             .item(previous.count() - 1)
-            .map_or(0.0, |item| ladder_char_width(previous, Some(item.code)));
-        let previous_width = f64::from(previous_width * previous.font_size / 1000.0).abs();
+            .map_or(GlyphWidth::ZERO, |item| {
+                ladder_char_width(previous, Some(item.code))
+            });
+        let previous_width =
+            (previous_width.as_f64() * f64::from(previous.font_size) / 1000.0).abs();
         let previous_width = transform_distance(previous.text_matrix, previous_width);
 
-        let this_width = run
-            .item(0)
-            .map_or(0.0, |item| ladder_char_width(run, Some(item.code)));
-        let this_width = f64::from(this_width * run.font_size / 1000.0).abs();
+        let this_width = run.item(0).map_or(GlyphWidth::ZERO, |item| {
+            ladder_char_width(run, Some(item.code))
+        });
+        let this_width = (this_width.as_f64() * f64::from(run.font_size) / 1000.0).abs();
         let this_width = transform_distance(run.text_matrix, this_width);
 
         // Dimensionally inconsistent on purpose: the widths never pass through
@@ -731,9 +734,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
 
         let last_pos = previous_item.origin.x;
         let last_glyph_width = ladder_char_width(previous, Some(previous_item.code));
-        let last_width = f64::from(last_glyph_width * previous.font_size / 1000.0).abs();
+        let last_width = (last_glyph_width.as_f64() * f64::from(previous.font_size) / 1000.0).abs();
         let this_glyph_width = ladder_char_width(run, Some(item.code));
-        let this_width = f64::from(this_glyph_width * run.font_size / 1000.0).abs();
+        let this_width = (this_glyph_width.as_f64() * f64::from(run.font_size) / 1000.0).abs();
         let mut threshold = last_width.max(this_width) / 4.0;
 
         let previous_inverse = inverse_or_zero(previous.text_matrix);
@@ -764,7 +767,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
         // The space threshold is computed in **glyph units** and only then
         // scaled, which is why it is bucketed by the four-hundreds rather
         // than by anything in page space.
-        let mut threshold2 = f64::from(last_glyph_width.max(this_glyph_width));
+        let mut threshold2 = last_glyph_width.max(this_glyph_width).as_f64();
         threshold2 = normalize_threshold(threshold2, 400.0, 700.0, 800.0);
         if last_glyph_width >= this_glyph_width {
             threshold2 *= f64::from(previous.font_size.abs());
@@ -981,7 +984,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
         let run = previous.object.and_then(|index| self.find_run(index));
         let width = match (run, previous.code) {
             (Some(run), Some(code)) => ladder_char_width(run, Some(code)),
-            _ => 0.0,
+            _ => GlyphWidth::ZERO,
         };
         let mut font_size = run.map_or_else(
             || {
@@ -1000,7 +1003,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
             font_size = DEFAULT_FONT_SIZE;
         }
         let origin = Point::new(
-            previous.origin.x + f64::from(width * font_size / 1000.0),
+            previous.origin.x + width.as_f64() * f64::from(font_size) / 1000.0,
             previous.origin.y,
         );
         let info = CharBox {
@@ -1122,7 +1125,7 @@ pub(crate) fn space_threshold(run: &TextRun, code: CharCode) -> f64 {
         threshold /= 2.0;
     }
     if threshold == 0.0 {
-        threshold = f64::from(ladder_char_width(run, Some(code)));
+        threshold = ladder_char_width(run, Some(code)).as_f64();
         threshold = normalize_threshold(threshold, 300.0, 500.0, 700.0);
         threshold = font_size_h * threshold / 1000.0;
     }

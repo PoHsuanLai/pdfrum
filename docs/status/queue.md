@@ -1181,3 +1181,29 @@ is one part in 10^6, byte-exact count unmoved at 499. The kernel line is
 reverted; the proposal for the user is a type-driven per-backend mode knob
 defaulting to `OptimizeQuality`, not a flipped pin. Also drafted
 `docs/upstream/vello/pack-unpack-simd.md` for the underlying upstream fix.
+
+## `text_quick_start` F1 0.641 — both named causes refuted, still undiagnosed (2026-09-06)
+
+`docs/benchmarks/losses-explained.md`, the text rows. The two causes that
+document named are now both eliminated by measurement. (1) The **harness
+stream** defect was real and is fixed — the comparison adapter wrote our
+`Display` (the search text) against `pdfium_test --txt`'s unfiltered char
+list; it now writes the `chars` stream, which took `mixed_en_uicase` to
+1.000 byte-exact and `text_bug_1029` to 1.000, but left `text_quick_start`
+at exactly 0.641. (2) The **integer character width** is a measured
+**no-op**: `ladder_char_width` now returns a `GlyphWidth` newtype truncating
+as `FX_Number::GetSigned` does, and it changed nothing — the 1759-file board
+is byte-identical row for row, all 44 benchmark text rows are unchanged, and
+instrumented the truncation fired **zero times over 1 420 corpus PDFs**,
+because `pdfrum-font` already truncates `/Widths` (`raw: [u16; 256]`), `/W`
+(`records: Vec<[i32; 3]>`) and the face fallback (`advance_tt as i16`) at the
+same point PDFium does. The newtype is kept as an invariant, not as a fix.
+
+So the spurious generated space on `text_quick_start` and
+`image_ccitt_3bigpreview` is **not** a width difference and **not** a stream
+artefact, and the space-generation rules themselves are already transcribed
+line for line. What is left is the *positions* feeding them: `GetPos`, the
+text-matrix composition, or `FindPreviousTextObject`'s choice of previous
+run. Separating those needs `GetCharWidth`/`GetPos` instrumented per item in
+a PDFium build — the same instrumentation `text_tcpdf_055`'s C0 row has been
+waiting on. Worth doing once, for both rows.
