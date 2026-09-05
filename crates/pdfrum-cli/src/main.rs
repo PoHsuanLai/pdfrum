@@ -585,7 +585,7 @@ enum Extract {
 /// The document every command reads.
 #[derive(Args)]
 struct Input {
-    /// The PDF file.
+    /// The PDF file; `-` reads it from stdin.
     #[arg(value_name = "FILE")]
     file: PathBuf,
 }

@@ -494,9 +494,7 @@ pub fn images(
     if let Some(dir) = dir {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     }
-    let stem = file
-        .file_stem()
-        .map_or_else(|| "page".to_owned(), |s| s.to_string_lossy().into_owned());
+    let stem = out::stem(file);
     // One row per picture, not per draw: the same XObject placed on ten
     // pages is one image with ten uses. Only what has no object (an
     // inline image) is listed per draw.

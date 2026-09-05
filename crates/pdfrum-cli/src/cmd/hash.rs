@@ -11,7 +11,7 @@ use std::fmt::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use pdfrum::{Dict, Name, Object, Resolve};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -30,9 +30,10 @@ struct Report {
 }
 
 pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
-    let bytes = std::fs::read(file).with_context(|| format!("cannot read {}", file.display()))?;
-    let sha256 = hex(&Sha256::digest(&bytes));
     let doc = out::open_quietly(file, password)?;
+    // The document keeps the file's bytes whole, so the file hash is over
+    // them — which is also what makes `-` work.
+    let sha256 = hex(&Sha256::digest(doc.bytes()));
     let id = doc.id().map(|[a, b]| [hex(&a), hex(&b)]);
     let (semantic, objects) = semantic(&doc);
     let report = Report {

@@ -41,11 +41,6 @@ fn seed(input: &[u8]) -> [u8; 16] {
     seed
 }
 
-fn stem(path: &Path) -> String {
-    path.file_stem()
-        .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
-}
-
 /// A `WxH` size in points, e.g. `612x792`, or the two paper names everyone
 /// types.
 pub fn parse_size(text: &str) -> Result<(f64, f64)> {
@@ -155,7 +150,7 @@ pub fn split(
     for index in selected {
         let mut edit = doc.edit();
         edit.delete_pages((0..count).filter(|&i| i != index))?;
-        let path = dir.join(format!("{}-{}.pdf", stem(file), index + 1));
+        let path = dir.join(format!("{}-{}.pdf", out::stem(file), index + 1));
         edit.save(&path, &options)
             .with_context(|| format!("cannot write {}", path.display()))?;
         outln!("{}", term.paint(Style::Ident, &path.display().to_string()));
