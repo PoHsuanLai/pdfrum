@@ -20,8 +20,9 @@ fn open(path: &Path, ctx: &Ctx<'_>) -> Result<Document> {
     Ok(doc)
 }
 
-/// Every page, one thread, through the wrapper's single context.
-pub fn render_all(path: &Path, ctx: &Ctx<'_>) -> Result<usize> {
+/// Every page, one thread. The `threads` argument is accepted and ignored
+/// until the display-list path lands in the next commit.
+pub fn render_all(path: &Path, ctx: &Ctx<'_>, _threads: usize) -> Result<usize> {
     let doc = open(path, ctx)?;
     let count = doc.page_count().map_err(|err| anyhow!("mupdf: {err}"))?;
     let scale = ctx.scale() as f32;
