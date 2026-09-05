@@ -74,12 +74,6 @@ impl Depth {
         }
     }
 
-    /// The largest raw value this depth can express.
-    #[must_use]
-    pub const fn max_raw(self) -> u32 {
-        (1u32 << self.bits()) - 1
-    }
-
     /// How many distinct raw values this depth can express — the width of one
     /// row of the decode table.
     #[must_use]

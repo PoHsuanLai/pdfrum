@@ -60,7 +60,6 @@ pub pdfrum_page::Depth::Two
 impl pdfrum_page::Depth
 pub const fn pdfrum_page::Depth::bits(self) -> u32
 pub const fn pdfrum_page::Depth::levels(self) -> usize
-pub const fn pdfrum_page::Depth::max_raw(self) -> u32
 pub const fn pdfrum_page::Depth::new(u32) -> core::option::Option<Self>
 #[non_exhaustive] pub enum pdfrum_page::Error
 pub pdfrum_page::Error::CodecRejected
