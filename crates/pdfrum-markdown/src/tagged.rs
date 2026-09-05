@@ -4,19 +4,32 @@
 //! are what [`pdfrum_doc::StructElement::kind`] holds. Grouping elements
 //! (`Document`, `Part`, `Sect`, `Div`, `Art`) are walked through; block
 //! elements become blocks; inline ones (`Span`, `Link`, `Lbl`, `Quote`,
-//! `Code` inside a paragraph) contribute their text. An element's text is
-//! its `/ActualText` when it has one, else its kids' text in order, each
-//! marked-content kid read through the id the page's lines were stamped
-//! with.
+//! `Code` inside a paragraph) contribute their text.
+//!
+//! An element's text is its kids' text in order, each marked-content kid
+//! read through the id the page's lines were stamped with. The pieces are
+//! joined as the page drew them: the text page's spacing is the contract,
+//! so two pieces on one line are put end to end — a producer that cuts
+//! `documents` into `d` and `ocuments` gets its word back — and two pieces
+//! on different lines meet across a line break, with a space, or with a
+//! wrapped word de-hyphenated. An `/ActualText` replaces what its element
+//! drew, keeping the whitespace at the drawn text's edges so the join
+//! still knows where the words end.
+//!
+//! A piece that says what the piece before it said, drawn on top of it or
+//! not drawn at all, is the producer's second copy — faux bold, a shadow,
+//! an `/ActualText` span whose own characters the extractor already dropped
+//! as a repeat — and is kept once.
 
 use std::collections::HashSet;
 
+use kurbo::Rect;
 use pdfrum_doc::structure::{Kid, StructElement, StructTree};
 use pdfrum_object::Resolve;
 
 use crate::ast::Block;
-use crate::heuristics::normalize;
-use crate::lines::McidText;
+use crate::heuristics::{join, normalize, strip_bullet};
+use crate::lines::{McidText, Run};
 
 /// The blocks the tree describes, and the marked-content ids it claimed on
 /// the way — what it did not claim is the caller's to keep.
@@ -99,6 +112,9 @@ fn visit<R: Resolve>(
                         || text_of(tree, item, text_by_mcid, r),
                         |b| text_of(tree, b, text_by_mcid, r),
                     );
+                    // A producer that draws the bullet into the body
+                    // instead of a `Lbl` still gets one bullet, not two.
+                    let body = strip_bullet(&body).to_owned();
                     if !body.trim().is_empty() {
                         items.push(body);
                     }
@@ -115,43 +131,49 @@ fn visit<R: Resolve>(
                 out.push(Block::Table(rows));
             }
         }
-        "FIGURE" | "FORMULA" => {
-            let alt = element.alt_text(r);
-            let alt = if alt.is_empty() {
-                element.actual_text(r)
-            } else {
-                alt
-            };
-            out.push(Block::Image {
-                alt: normalize(&alt),
-            });
-        }
+        "FIGURE" | "FORMULA" => out.push(figure(element, r)),
         _ => {
             // A grouping element, or something unknown: the kids decide. Text
             // sitting directly on it becomes a paragraph of its own.
-            let mut direct = String::new();
+            let mut direct: Vec<Piece> = Vec::new();
             for kid in &element.kids {
                 match kid {
                     Kid::Element {
                         linked: Some(i), ..
                     } => {
-                        if !direct.trim().is_empty() {
-                            out.push(Block::Paragraph(std::mem::take(&mut direct)));
-                        }
+                        flush_direct(&mut direct, out);
                         visit(tree, *i, depth.saturating_add(1), text_by_mcid, r, out);
                     }
                     Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
-                        if let Some(t) = text_by_mcid.get(*content_id) {
-                            append(&mut direct, t);
-                        }
+                        direct.extend(text_by_mcid.runs(*content_id).iter().map(Piece::drawn));
                     }
                     _ => {}
                 }
             }
-            if !direct.trim().is_empty() {
-                out.push(Block::Paragraph(direct));
-            }
+            flush_direct(&mut direct, out);
         }
+    }
+}
+
+/// The paragraph a grouping element's own text makes, if it says anything.
+fn flush_direct(direct: &mut Vec<Piece>, out: &mut Vec<Block>) {
+    let text = normalize(concat(direct).text.trim());
+    direct.clear();
+    if !text.is_empty() {
+        out.push(Block::Paragraph(text));
+    }
+}
+
+/// A figure's block: its alternative text, else its actual text.
+fn figure<R: Resolve>(element: &StructElement, r: &R) -> Block {
+    let alt = element.alt_text(r);
+    let alt = if alt.is_empty() {
+        element.actual_text(r)
+    } else {
+        alt
+    };
+    Block::Image {
+        alt: normalize(alt.trim()),
     }
 }
 
@@ -174,15 +196,7 @@ fn figures_within<R: Resolve>(
         };
         if child.kind.eq_ignore_ascii_case(b"FIGURE") || child.kind.eq_ignore_ascii_case(b"FORMULA")
         {
-            let alt = child.alt_text(r);
-            let alt = if alt.is_empty() {
-                child.actual_text(r)
-            } else {
-                alt
-            };
-            out.push(Block::Image {
-                alt: normalize(&alt),
-            });
+            out.push(figure(child, r));
         } else {
             figures_within(tree, child, r, out);
         }
@@ -247,44 +261,205 @@ fn collect_rows<R: Resolve>(
     }
 }
 
-/// An element's text: `/ActualText` if it has one, else its kids' in order.
-fn text_of<R: Resolve>(
+/// A stretch of an element's text: what it says, which lines drew it and
+/// where.
+#[derive(Debug, Clone, Default)]
+struct Piece {
+    /// The text, spacing as drawn.
+    text: String,
+    /// The first and last of the page's lines that drew it, when any did.
+    lines: Option<(usize, usize)>,
+    /// The union of its characters' boxes, when any had area.
+    bbox: Option<Rect>,
+}
+
+impl Piece {
+    fn drawn(run: &Run) -> Self {
+        Self {
+            text: run.text.clone(),
+            lines: Some((run.line, run.line)),
+            bbox: (run.bbox.area() > 0.0).then_some(run.bbox),
+        }
+    }
+
+    /// Whether this piece says what `previous` said, in the same place —
+    /// or in no place at all, when one of the two was never drawn.
+    fn repeats(&self, previous: &Self) -> bool {
+        let said = self.text.trim();
+        !said.is_empty()
+            && said == previous.text.trim()
+            && match (self.bbox, previous.bbox) {
+                (Some(a), Some(b)) => overlaps_by_half(a, b),
+                _ => true,
+            }
+    }
+}
+
+/// Whether two boxes overlap by half the smaller one on each axis.
+fn overlaps_by_half(a: Rect, b: Rect) -> bool {
+    let overlap_x = a.x1.min(b.x1) - a.x0.max(b.x0);
+    let overlap_y = a.y1.min(b.y1) - a.y0.max(b.y0);
+    overlap_x >= a.width().min(b.width()) * 0.5 && overlap_y >= a.height().min(b.height()) * 0.5
+}
+
+/// The pieces end to end: on one line as drawn, across lines with a space
+/// or a de-hyphenation, a repeat kept once.
+fn concat(pieces: &[Piece]) -> Piece {
+    let mut out = Piece::default();
+    let mut last_said: Option<&Piece> = None;
+    for piece in pieces {
+        if piece.text.trim().is_empty() {
+            // Spaces keep their place; they are the text page's.
+            out.text.push_str(&piece.text);
+            continue;
+        }
+        if last_said.is_some_and(|previous| piece.repeats(previous)) {
+            continue;
+        }
+        let line_break = match (out.lines, piece.lines) {
+            (Some((_, last)), Some((first, _))) => last != first,
+            _ => false,
+        };
+        if line_break {
+            join(&mut out.text, &piece.text);
+        } else {
+            out.text.push_str(&piece.text);
+        }
+        out.lines = match (out.lines, piece.lines) {
+            (Some((first, _)), Some((_, last))) => Some((first, last)),
+            (None, lines) | (lines, None) => lines,
+        };
+        out.bbox = match (out.bbox, piece.bbox) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (None, b) | (b, None) => b,
+        };
+        last_said = Some(piece);
+    }
+    out
+}
+
+/// An element's text and where it was drawn: `/ActualText` if it has one,
+/// over what its kids drew, else the kids' pieces end to end.
+fn piece_of<R: Resolve>(
     tree: &StructTree,
     element: &StructElement,
     text_by_mcid: &McidText,
     r: &R,
-) -> String {
-    let actual = element.actual_text(r);
-    if !actual.is_empty() {
-        return normalize(&actual);
-    }
-    let mut text = String::new();
+) -> Piece {
+    let mut pieces: Vec<Piece> = Vec::new();
     for kid in &element.kids {
         match kid {
             Kid::Element {
                 linked: Some(i), ..
             } => {
                 if let Some(child) = tree.elements.get(*i) {
-                    append(&mut text, &text_of(tree, child, text_by_mcid, r));
+                    pieces.push(piece_of(tree, child, text_by_mcid, r));
                 }
             }
             Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
-                if let Some(t) = text_by_mcid.get(*content_id) {
-                    append(&mut text, t);
-                }
+                pieces.extend(text_by_mcid.runs(*content_id).iter().map(Piece::drawn));
             }
             _ => {}
         }
     }
-    normalize(&text)
+    let drawn = concat(&pieces);
+    let actual = element.actual_text(r);
+    if actual.trim().is_empty() {
+        return drawn;
+    }
+    // The actual text stands for the drawn characters; the whitespace at
+    // the drawn text's edges is where the words end, and stays.
+    let leading = drawn.text.len() - drawn.text.trim_start().len();
+    let trailing = drawn.text.len() - drawn.text.trim_end().len();
+    let mut text = String::with_capacity(actual.len() + leading + trailing);
+    text.push_str(drawn.text.get(..leading).unwrap_or_default());
+    text.push_str(actual.trim());
+    text.push_str(
+        drawn
+            .text
+            .get(drawn.text.len() - trailing..)
+            .unwrap_or_default(),
+    );
+    Piece { text, ..drawn }
 }
 
-fn append(text: &mut String, piece: &str) {
-    if piece.is_empty() {
-        return;
+/// An element's text, normalized and trimmed.
+fn text_of<R: Resolve>(
+    tree: &StructTree,
+    element: &StructElement,
+    text_by_mcid: &McidText,
+    r: &R,
+) -> String {
+    normalize(piece_of(tree, element, text_by_mcid, r).text.trim())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Piece, concat};
+    use kurbo::Rect;
+
+    fn on_line(text: &str, line: usize, x: f64) -> Piece {
+        Piece {
+            text: text.to_owned(),
+            lines: Some((line, line)),
+            bbox: Some(Rect::new(
+                x,
+                700.0,
+                x + 6.0 * f64::from(u16::try_from(text.len()).unwrap_or(u16::MAX)),
+                710.0,
+            )),
+        }
     }
-    if !text.is_empty() && !text.ends_with(' ') && !piece.starts_with(' ') {
-        text.push(' ');
+
+    fn said(text: &str) -> Piece {
+        Piece {
+            text: text.to_owned(),
+            lines: None,
+            bbox: None,
+        }
     }
-    text.push_str(piece);
+
+    #[test]
+    fn pieces_on_one_line_keep_the_text_page_spacing() {
+        let got = concat(&[
+            on_line("Local d", 0, 73.0),
+            on_line("ocuments view: list ", 0, 104.0),
+            on_line("all", 0, 226.0),
+        ]);
+        assert_eq!(got.text, "Local documents view: list all");
+        assert_eq!(got.lines, Some((0, 0)));
+    }
+
+    #[test]
+    fn pieces_on_different_lines_meet_across_the_break() {
+        let got = concat(&[
+            on_line("a wrapped para-", 0, 73.0),
+            on_line("graph of two ", 1, 73.0),
+            on_line("lines", 1, 160.0),
+        ]);
+        assert_eq!(got.text, "a wrapped paragraph of two lines");
+        assert_eq!(got.lines, Some((0, 1)));
+    }
+
+    #[test]
+    fn a_span_that_repeats_its_neighbour_is_kept_once() {
+        // An `/ActualText` span whose own characters the extractor dropped,
+        // followed by the drawn copy: the guide's `Welcome to Foxit
+        // MobilePDF Welcome to Foxit MobilePDF`.
+        let got = concat(&[
+            said("Welcome to Foxit MobilePDF"),
+            on_line("Welcome to Foxit MobilePDF ", 0, 168.0),
+        ]);
+        assert_eq!(got.text, "Welcome to Foxit MobilePDF");
+        // Drawn twice, a fraction of a point apart.
+        let got = concat(&[
+            on_line("Instructions", 0, 55.0),
+            on_line("Instructions", 0, 55.4),
+            on_line("：", 0, 130.0),
+        ]);
+        assert_eq!(got.text, "Instructions：");
+        // The same words somewhere else are just the same words.
+        let got = concat(&[on_line("no ", 0, 55.0), on_line("no", 0, 80.0)]);
+        assert_eq!(got.text, "no no");
+    }
 }
