@@ -1,4 +1,5 @@
-//! `pdfrum pages …`: merge, split, slice, reorder, create, nup, booklet.
+//! `pdfrum pages …`: merge, split, slice, delete, rotate, reorder, create,
+//! nup, booklet.
 //!
 //! Every command here writes a new file and never touches the input. A
 //! rewrite drops whatever nothing points at, so the output of `split` and
@@ -8,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{Document, IdSource, PageBox, Rect, SaveOptions};
+use pdfrum::{DocEdit, Document, EmbeddedImage, IdSource, PageBox, Rect, Rotation, SaveOptions};
 
 use crate::out::outln;
 use crate::term::{Style, Term};
@@ -181,7 +182,8 @@ pub struct Slice<'a> {
     pub password: Option<&'a str>,
     pub spec: Option<&'a str>,
     pub rotate: Option<i32>,
-    pub crop: Option<Rect>,
+    /// The `--crop` box as typed, `x0,y0,x1,y1`.
+    pub crop: Option<&'a str>,
     pub output: &'a Path,
     pub deterministic: bool,
 }
@@ -216,10 +218,131 @@ pub fn slice_bytes(
 
 /// Keep the selected pages in document order, rotated or cropped as asked.
 pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
+    let crop = req.crop.map(parse_rect).transpose()?;
     let sink = out::Sink::new(req.output, "PDF")?;
     let doc = out::open(req.file, req.password)?;
-    let (bytes, kept) = slice_bytes(&doc, req.spec, req.rotate, req.crop, req.deterministic)?;
+    let (bytes, kept) = slice_bytes(&doc, req.spec, req.rotate, crop, req.deterministic)?;
     sink.finish(term, &bytes, &format!("{kept} pages"), None)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+// ---- delete ---------------------------------------------------------------
+
+/// The pages `spec` deletes from `doc`, sorted and deduplicated, and how
+/// many are left. Deleting every page is refused.
+pub fn deletion(doc: &Document, spec: &str) -> Result<(Vec<u32>, u32)> {
+    let count = doc.page_count();
+    let mut gone = pages::select(Some(spec), count)?;
+    gone.sort_unstable();
+    gone.dedup();
+    let left = count.saturating_sub(u32::try_from(gone.len()).unwrap_or(u32::MAX));
+    if left == 0 {
+        bail!("deleting every page leaves nothing; `pages slice` keeps some");
+    }
+    Ok((gone, left))
+}
+
+/// `doc` without `gone` — [`deletion`]'s pages — as the bytes of a saved
+/// file.
+pub fn delete_bytes(doc: &Document, gone: &[u32], deterministic: bool) -> Result<Vec<u8>> {
+    let mut edit = doc.edit();
+    edit.delete_pages(gone.iter().copied())?;
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    Ok(bytes)
+}
+
+/// Drop the selected pages; the rest keep their order.
+pub fn delete(
+    file: &Path,
+    password: Option<&str>,
+    spec: &str,
+    output: &Path,
+    deterministic: bool,
+    term: Term,
+) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
+    let doc = out::open(file, password)?;
+    let (gone, left) = deletion(&doc, spec)?;
+    let bytes = delete_bytes(&doc, &gone, deterministic)?;
+    let deleted = gone.len();
+    sink.finish(
+        term,
+        &bytes,
+        &format!(
+            "{deleted} page{} deleted",
+            if deleted == 1 { "" } else { "s" }
+        ),
+        Some(&format!("{left} left")),
+    )?;
+    Ok(ExitCode::SUCCESS)
+}
+
+// ---- rotate ---------------------------------------------------------------
+
+/// The `--by` turn: a multiple of 90 that is not zero, either way round.
+pub fn parse_turn(by: i32) -> Result<i32> {
+    if by == 0 || by % 90 != 0 {
+        bail!("--by takes 90, 180, 270 or -90, not {by}");
+    }
+    Ok(by)
+}
+
+/// The selected pages turned `by` degrees clockwise from where each one
+/// stands — a page already at 90 turned by 90 is at 180 — as the bytes of a
+/// saved file, and how many pages were turned.
+pub fn rotate_bytes(
+    doc: &Document,
+    spec: Option<&str>,
+    by: i32,
+    deterministic: bool,
+) -> Result<(Vec<u8>, usize)> {
+    let by = parse_turn(by)?;
+    let mut turned = pages::select(spec, doc.page_count())?;
+    turned.sort_unstable();
+    turned.dedup();
+    let mut edit = doc.edit();
+    for &index in &turned {
+        let current = standing(doc.page(index)?.rotation());
+        edit.set_rotation(index, (current + by).rem_euclid(360))?;
+    }
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    Ok((bytes, turned.len()))
+}
+
+/// A page's `/Rotate` as the signed degrees the turn is added to.
+fn standing(rotation: Rotation) -> i32 {
+    match rotation {
+        Rotation::None => 0,
+        Rotation::Quarter => 90,
+        Rotation::Half => 180,
+        Rotation::ThreeQuarter => 270,
+    }
+}
+
+/// Turn the selected pages, relative to how each one already stands.
+pub fn rotate(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    by: i32,
+    output: &Path,
+    deterministic: bool,
+    term: Term,
+) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
+    let doc = out::open(file, password)?;
+    let (bytes, turned) = rotate_bytes(&doc, spec, by, deterministic)?;
+    sink.finish(
+        term,
+        &bytes,
+        &format!(
+            "{turned} page{} rotated by {by}",
+            if turned == 1 { "" } else { "s" }
+        ),
+        None,
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -261,10 +384,10 @@ pub struct Nup<'a> {
     pub file: &'a Path,
     pub password: Option<&'a str>,
     pub spec: Option<&'a str>,
-    /// Columns by rows per sheet.
-    pub grid: (u32, u32),
-    /// Sheet width and height in points.
-    pub sheet: (f64, f64),
+    /// The `--grid` as typed, columns by rows per sheet: `2x2`.
+    pub grid: &'a str,
+    /// The `--sheet` as typed: `WIDTHxHEIGHT` in points, `letter` or `a4`.
+    pub sheet: &'a str,
     pub output: &'a Path,
     pub deterministic: bool,
 }
@@ -279,6 +402,8 @@ pub fn nup(req: &Nup<'_>, term: Term) -> Result<ExitCode> {
         output,
         deterministic,
     } = *req;
+    let grid = parse_grid(grid)?;
+    let sheet = parse_size(sheet)?;
     let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let selected = pages::select(spec, doc.page_count())?;
@@ -415,10 +540,7 @@ pub fn create(
     let mut edit = doc.edit();
     let mut page_edits = Vec::with_capacity(decoded.len());
     for (i, d) in decoded.iter().enumerate() {
-        let embedded = match &d.pixels {
-            Pixels::Jpeg(bytes) => edit.embed_jpeg(bytes)?,
-            Pixels::Raw { data, format } => edit.embed_image(data, d.width, d.height, *format)?,
-        };
+        let embedded = embed(&mut edit, d)?;
         let (w, h) = size(d);
         let page = doc.page(u32::try_from(i).unwrap_or(u32::MAX))?;
         let mut page_edit = page.edit();
@@ -445,27 +567,49 @@ pub fn create(
     Ok(ExitCode::SUCCESS)
 }
 
+/// An image's samples as the file will hold them.
 enum Pixels {
+    /// A JPEG, embedded as it is.
     Jpeg(Vec<u8>),
+    /// Decoded samples, flate-compressed by the save.
     Raw {
         data: Vec<u8>,
         format: pdfrum::PixelFormat,
     },
 }
 
-struct Decoded {
-    width: u32,
-    height: u32,
+/// A JPEG or PNG file read and, for a PNG, decoded: what `pages create`
+/// puts on a page and `stamp image` draws over one.
+pub struct Decoded {
+    pub width: u32,
+    pub height: u32,
     pixels: Pixels,
     /// The file's bytes, for the deterministic seed.
     source: Vec<u8>,
 }
 
-fn decode(path: &Path) -> Result<Decoded> {
+/// `image` as a new image object of `edit`.
+pub fn embed(edit: &mut DocEdit<'_>, image: &Decoded) -> Result<EmbeddedImage> {
+    Ok(match &image.pixels {
+        Pixels::Jpeg(bytes) => edit.embed_jpeg(bytes)?,
+        Pixels::Raw { data, format } => {
+            edit.embed_image(data, image.width, image.height, *format)?
+        }
+    })
+}
+
+/// The image file at `path`.
+pub fn decode(path: &Path) -> Result<Decoded> {
     let source = std::fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+    decode_bytes(source, &path.display().to_string())
+}
+
+/// The image `source` holds — a JPEG kept as it is, a PNG decoded —
+/// `what` naming it in an error.
+pub fn decode_bytes(source: Vec<u8>, what: &str) -> Result<Decoded> {
     if source.starts_with(&[0xFF, 0xD8]) {
         let (width, height) = jpeg_size(&source)
-            .with_context(|| format!("{}: cannot find the JPEG frame size", path.display()))?;
+            .with_context(|| format!("{what}: cannot find the JPEG frame size"))?;
         return Ok(Decoded {
             width,
             height,
@@ -478,17 +622,16 @@ fn decode(path: &Path) -> Result<Decoded> {
         decoder.set_transformations(png::Transformations::normalize_to_color8());
         let mut reader = decoder
             .read_info()
-            .with_context(|| format!("{}: not a readable PNG", path.display()))?;
+            .with_context(|| format!("{what}: not a readable PNG"))?;
         let mut data = vec![
             0;
-            reader.output_buffer_size().with_context(|| format!(
-                "{}: too large to decode",
-                path.display()
-            ))?
+            reader
+                .output_buffer_size()
+                .with_context(|| format!("{what}: too large to decode"))?
         ];
         let info = reader
             .next_frame(&mut data)
-            .with_context(|| format!("{}: cannot decode", path.display()))?;
+            .with_context(|| format!("{what}: cannot decode"))?;
         data.truncate(info.buffer_size());
         let format = match info.color_type {
             png::ColorType::Grayscale => pdfrum::PixelFormat::Gray8,
@@ -500,7 +643,7 @@ fn decode(path: &Path) -> Result<Decoded> {
                 pdfrum::PixelFormat::Gray8
             }
             png::ColorType::Indexed => {
-                bail!("{}: indexed PNG survived normalization", path.display())
+                bail!("{what}: indexed PNG survived normalization")
             }
         };
         return Ok(Decoded {
@@ -510,7 +653,7 @@ fn decode(path: &Path) -> Result<Decoded> {
             source,
         });
     }
-    bail!("{}: not a JPEG or PNG file", path.display())
+    bail!("{what}: not a JPEG or PNG file")
 }
 
 /// The width and height from a JPEG's first frame header (SOF0–SOF15,
@@ -536,7 +679,7 @@ fn jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{booklet_order, parse_grid, parse_rect, parse_size, seed};
+    use super::{booklet_order, parse_grid, parse_rect, parse_size, parse_turn, seed};
 
     #[test]
     fn a_booklet_reads_in_order_once_folded() {
@@ -565,5 +708,14 @@ mod tests {
         let r = parse_rect("1, 2, 3, 4").unwrap();
         assert_eq!((r.x0, r.y1), (1.0, 4.0));
         assert!(parse_rect("1,2,3").is_err());
+    }
+
+    #[test]
+    fn a_turn_is_a_quarter_turn_or_more_either_way_and_never_nothing() {
+        assert_eq!(parse_turn(90).unwrap(), 90);
+        assert_eq!(parse_turn(-90).unwrap(), -90);
+        assert_eq!(parse_turn(270).unwrap(), 270);
+        assert!(parse_turn(0).is_err());
+        assert!(parse_turn(45).is_err());
     }
 }
