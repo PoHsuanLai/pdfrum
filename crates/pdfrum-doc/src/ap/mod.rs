@@ -965,7 +965,7 @@ pub(crate) fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) ->
     let state = Dict::from_pairs([
         (
             obj_names::TYPE.clone(),
-            Object::Name(names::EXT_GSTATE.clone()),
+            Object::Name(names::EXT_G_STATE.clone()),
         ),
         (names::CA.clone(), Object::Real(opacity)),
         (names::CA_LOWER.clone(), Object::Real(opacity)),
@@ -979,7 +979,7 @@ pub(crate) fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) ->
 #[must_use]
 pub(crate) fn resources_dict(ext_gstate: Dict, font: Option<Dict>) -> Dict {
     let mut resources = Dict::new();
-    resources.push(names::EXT_GSTATE.clone(), Object::Dict(ext_gstate));
+    resources.push(names::EXT_G_STATE.clone(), Object::Dict(ext_gstate));
     if let Some(font) = font {
         resources.push(names::FONT.clone(), Object::Dict(font));
     }
