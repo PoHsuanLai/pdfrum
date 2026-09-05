@@ -187,7 +187,8 @@ Everything else the pass touched was checked against its callers and kept:
   already builds exactly that `Range::Consecutive` value before flattening it
   in `commit_range`. That is a `ToUnicode` storage change with its own
   reverse-map and collision-ordering consequences, so it is a named item for
-  a later pass rather than something to fold into a caching one.
+  a later pass rather than something to fold into a caching one. **Done — see
+  §9.**
 - **Diagnostics are first-loader-wins.** A font loaded first through the
   `/ExtGState` path records into `Diagnostics::with_limit(0)` and a later
   `Tf` for the same object sees none. This was already true within a session
@@ -225,3 +226,109 @@ and a ninth ask afterwards reaches no loader.
 `Document::render_session`, `FontCache::get_or_load`, and `BuildContext`'s
 `fonts` field becoming `Arc<FontCache>`. The wasm32 check confirms the cache
 pulls in nothing std-only beyond what was already there.
+
+## 9. ToUnicode storage — §7 item 1, fixed
+
+The first "found, not fixed" item above, done as its own pass on top of
+`036b675`. Same method: callgrind `Ir` inclusive, the board row by row.
+
+### 9.1 The measurement
+
+`benches/src/bin/profile --op text --iterations 1`, `Ir` inclusive:
+
+| | before | after | |
+|---|---:|---:|---|
+| `text_tcpdf_063` `tounicode::parse` | 75,903,236 | 269,022 | −99.6% |
+| `text_tcpdf_063` `ToUnicode::lookup` | 14,292,480 | 11,662,200 | −18.4% |
+| `text_tcpdf_063` whole run | 307,311,379 | 222,314,992 | **−27.7%** |
+| `text_quick_start` `tounicode::parse` | 31,381 | 31,597 | flat |
+| `text_quick_start` whole run | 137,713,610 | 137,736,939 | +0.02%, noise |
+
+`text_quick_start` has no `bfrange` at all, which is why it is flat — it is
+here as the control that the change costs nothing where it does not apply.
+
+Entry counts for `text_tcpdf_063`'s object 30, the identity `/ToUnicode`,
+measured with a temporary `eprintln` in `parse` (removed):
+
+| | before | after |
+|---|---:|---:|
+| forward `BTreeMap` entries | 65,536 | 0 |
+| reverse `BTreeMap` entries | 65,536 | 0 |
+| stored runs | — | 256 |
+
+### 9.2 The rule, and the test that pins it
+
+The oracle inserts every code of a range one at a time
+(`core/fpdfapi/font/cpdf_tounicodemap.cpp`, `HandleBeginBFRange`'s
+`MultimapSingleDestRange` arm: `for (code = low; code <= high; ++code)
+InsertIntoMaps(code, value++)`), and `InsertIntoMaps` is:
+
+```c++
+auto [it, inserted] = map_.insert({code, destcode});
+if (!inserted) { it->second = std::min(it->second, destcode); }
+auto [reverse_it, reverse_inserted] = reverse_map_.insert({destcode, code});
+if (!reverse_inserted) { reverse_it->second = std::min(reverse_it->second, code); }
+```
+
+**Lowest value wins in both directions.** The rule that makes storing ranges
+safe is that `min` is commutative and associative: the winner of a set of
+candidate values does not depend on the order they were offered in. So
+folding the singles map and every covering run *at read time* — which is what
+`ToUnicode::forward` and `ToUnicode::reverse_code` do, and everything else
+reads through them — gives exactly the value the C++'s sequential inserts
+leave behind. It is also why `seal` may sort the runs.
+
+Pinned by `a_code_covered_by_both_a_run_and_a_single_takes_the_smaller_value`
+in `crates/pdfrum-font/src/tounicode_tests.rs`, which asserts the same
+forward value, the same reverse code and the same `len` for a run and a
+`bfchar` overlapping on one code **in both declaration orders** — the
+order-independence is the thing under test, not a side effect of it.
+`a_char_inside_a_stored_run_reads_both_ways` pins a code strictly inside a
+run in both directions plus one past each end. Every assertion of the Tier-A
+core ported from `cpdf_tounicodemap_unittest.cpp` is unchanged and passing.
+
+The search is bounded rather than linear over the runs, and that mattered:
+the first version scanned all 256 runs per lookup, which moved 75.9 M out of
+`parse` and put 92 M into `lookup`, for a whole run of 315.7 M — *slower*
+than before. `ToUnicode::window` binary-searches instead, using the fact that
+the high-code mask pins a range inside one 256-code block, so a run covering
+a target has its key within 255 of it.
+
+### 9.3 Board
+
+`conformance run --jobs 8`: 1759 files, 1537 pass, 222 fail. Compared row by
+row against main's `board-imgrows-main.json`: **0 changed rows, 0 changed
+`tierA` blocks**, no rows added or dropped. The two files the
+`--check-regressions` line names (`resources/javascript/util_printd.in`,
+`util_scand.in`) fail identically on main — a missing golden and a JS date
+row, neither reachable from `/ToUnicode`.
+
+### 9.4 Dead-code sweep
+
+Its own commit. One item:
+
+- `Range::Consecutive { low, high, start }` — the collected form and the
+  stored `Run` were the same three fields, so the variant now carries a
+  `Run` and `commit_range` hands it straight to `insert_run` with no
+  field-by-field rebuild.
+
+Nothing else became unreachable: `Range::Array` and `Range::Incremented`
+still carry per-code destination strings and are still flattened, which is
+correct — they have nothing to compress.
+
+### 9.5 Gates
+
+Per commit, all green:
+
+```
+cargo fmt --all --check
+cargo clippy -p pdfrum-font --all-targets -- -D warnings
+cargo nextest run -p pdfrum-font -p pdfrum-text -p pdfrum   # 869 passed, 2 skipped
+cargo test --doc -p pdfrum-font                             # 6 passed
+RUSTDOCFLAGS='-D warnings' cargo doc --no-deps -p pdfrum-font
+nu scripts/api-snapshot.nu check                            # green, unchanged
+```
+
+The public surface does not move: `ToUnicode` is `pub(crate)`, and the one
+public function over it, `invert_to_unicode`, keeps its signature — it reads
+through `reverse_pairs`, which now expands the runs on demand.
