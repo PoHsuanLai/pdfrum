@@ -239,7 +239,7 @@ pub fn to_pixmap(
 ///
 /// An `Indexed` image's palette is resolved into bytes once here rather than
 /// once per pixel, which is what [`pdfrum_page::Palette`] exists for.
-fn converted_rows(image: &ImageData) -> Converted<'_> {
+pub(crate) fn converted_rows(image: &ImageData) -> Converted<'_> {
     let palette = match &image.pixels {
         Pixels::Indexed { palette, .. } => Some(pdfrum_page::Palette::new(palette)),
         _ => None,
@@ -257,7 +257,7 @@ fn converted_rows(image: &ImageData) -> Converted<'_> {
 /// one of an image's samples even though all four are properties of the
 /// image. Here they are resolved once, when the struct is built, and the row
 /// loop reads fields it cannot get wrong.
-struct RowFinish<'a> {
+pub(crate) struct RowFinish<'a> {
     /// The mask to fold into the alpha, when it shares the image's grid.
     ///
     /// A mask on a grid of its own is drawn separately ([`separate_mask`]);
@@ -281,7 +281,7 @@ struct RowFinish<'a> {
 
 impl<'a> RowFinish<'a> {
     /// Resolve the four per-image decisions, once.
-    fn new(
+    pub(crate) fn new(
         image: &'a ImageData,
         stencil_color: Argb,
         transfer: Option<&'a crate::transfer::TransferFunc<'a>>,
@@ -298,7 +298,7 @@ impl<'a> RowFinish<'a> {
     }
 
     /// Fold the alpha, matte, transfer and stencil colour into one row.
-    fn apply(&self, row: &mut [Rgba8], y: u32) {
+    pub(crate) fn apply(&self, row: &mut [Rgba8], y: u32) {
         for (x, slot) in (0_u32..).zip(row.iter_mut()) {
             let alpha = self.fused.map_or(255, |m| m.alpha_at(x, y));
             *slot = Rgba8(match self.stencil {

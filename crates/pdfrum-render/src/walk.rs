@@ -2054,13 +2054,17 @@ fn render_image<B: RasterBackend>(
             out_w,
             out_h,
         );
-        caches.images.get_or_render(object.source, key, || {
-            let unreduced = to_pixmap(image, fill, transfer.as_ref());
-            match reduction {
-                Some((new_w, new_h)) => crate::stretch::reduce_to(&unreduced, new_w, new_h),
-                None => unreduced,
-            }
-        })
+        caches
+            .images
+            .get_or_render(object.source, key, || match reduction {
+                // The conversion and the reduction are one pull pipeline, so
+                // neither the full-size RGBA pixmap nor the two full-height
+                // intermediates are ever built.
+                Some((new_w, new_h)) => {
+                    crate::stretch::convert_and_reduce(image, fill, transfer.as_ref(), new_w, new_h)
+                }
+                None => to_pixmap(image, fill, transfer.as_ref()),
+            })
     });
     let pixels = &*pixels;
     let blend = overprint_blend(None, &state.general);
