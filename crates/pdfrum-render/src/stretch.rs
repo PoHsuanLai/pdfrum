@@ -919,6 +919,101 @@ fn snapped_for(to_device: kurbo::Affine, src_width: u32, src_height: u32) -> Opt
     })
 }
 
+/// A reduction whose destination *is* upstream's integer rect.
+///
+/// [`Placement::Snapped`] records that an axis-aligned image is stretched
+/// onto `GetUnitRect().GetOuterRect()` rather than through the fractional
+/// device matrix. That is as true of a **reduction** as of the
+/// magnification `Snapped` was introduced for — `CStretchEngine`'s `scale`
+/// is `src_len / integer_dest_len` in both branches
+/// (`cstretchengine.cpp:106` and the box-filter loop at `:136`), because
+/// both are driven by the `dest_width` / `dest_height`
+/// `GetDimensionsFromUnitRect` (`cpdf_imagerenderer.cpp:667-698`) derived
+/// from that integer rect.
+///
+/// The reason `Snapped` could not simply be widened to cover reductions is
+/// that snapping a *placement* leaves the pixels alone, and our reduction
+/// had already chosen a different size: [`reduced_len`] rounds the
+/// fractional footprint **up**, so a 484-wide mask over a 363.18-pixel
+/// footprint became 364 pixels placed at x = 357.93, where upstream makes
+/// 365 pixels placed at x = 357. The pixmap then needed the backend's
+/// sampler a second time, at a scale near 1 and a subpixel phase — one
+/// resample too many, and each one spreads a mask edge by a pixel.
+///
+/// This type closes that by making the two decisions one: reduce to the
+/// integer rect's own extent, and the reduced pixmap lands on the device
+/// grid one texel per pixel, which [`placement_for`] then classifies as
+/// [`Placement::Exact`] and draws with the nearest sampler. There is no
+/// second resample left to phase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnappedReduction {
+    /// The whole-pixel size to box-filter the source down to.
+    size: (u32, u32),
+    /// Device position of the reduced pixmap's top-left corner.
+    origin: (i32, i32),
+}
+
+impl SnappedReduction {
+    /// The reduction target, as [`reduce_to`] and [`reduce_gray_to`] want it.
+    #[must_use]
+    pub const fn size(self) -> (u32, u32) {
+        self.size
+    }
+
+    /// The transform that places the reduced pixmap — a whole-pixel
+    /// translation, so [`placement_for`] resolves it to [`Placement::Exact`].
+    #[must_use]
+    pub fn transform(self) -> kurbo::Affine {
+        kurbo::Affine::translate((f64::from(self.origin.0), f64::from(self.origin.1)))
+    }
+}
+
+/// The snapped reduction for `to_device`, or `None` when it does not apply.
+///
+/// Applies only where upstream's geometry is the one being reproduced and
+/// the reduced pixmap can land on the integer grid unmirrored: an
+/// axis-aligned transform (no rotation or shear), reducing in **both** axes,
+/// with neither axis flipped. Everything else keeps the existing
+/// footprint-based reduction and the backend's sampler, which is what those
+/// cases were already getting.
+///
+/// A single-axis reduction is excluded deliberately: the other axis is then
+/// being magnified or left alone, and its samples must still reach the
+/// backend's kernel at the fractional scale — snapping only one axis would
+/// quantise a placement the other axis still needs whole.
+#[must_use]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..d are the four affine scale/shear coefficients, named as in the PDF `cm` operands"
+)]
+pub fn snapped_reduction(
+    to_device: kurbo::Affine,
+    src_width: u32,
+    src_height: u32,
+) -> Option<SnappedReduction> {
+    if src_width > MAX_SOURCE_AXIS || src_height > MAX_SOURCE_AXIS {
+        return None;
+    }
+    let [a, b, c, d, _, _] = to_device.as_coeffs();
+    // Axis-aligned, reducing in both axes, neither axis mirrored. A mirrored
+    // axis would need the reduced pixmap flipped as well as placed, which is
+    // pixel work this pre-pass does not do.
+    if b.abs() > EXACTNESS || c.abs() > EXACTNESS || a <= 0.0 || d <= 0.0 || a >= 1.0 || d >= 1.0 {
+        return None;
+    }
+    let rect = snapped_for(to_device, src_width, src_height)?;
+    let (w, h) = (
+        u32::try_from(rect.width).ok()?,
+        u32::try_from(rect.height).ok()?,
+    );
+    // A reduction, or nothing: at or above the source size the box filter is
+    // the wrong kernel and upstream takes its magnification branch.
+    (w > 0 && h > 0 && w < src_width && h < src_height).then_some(SnappedReduction {
+        size: (w, h),
+        origin: (rect.left, rect.top),
+    })
+}
+
 /// The largest source axis this pre-pass will process.
 ///
 /// A reduction is `O(source pixels)`, which is the same order as decoding the

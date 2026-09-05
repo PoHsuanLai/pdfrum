@@ -483,6 +483,18 @@ pub fn reduced_mask_pixmap(
     dest_width: f64,
     dest_height: f64,
 ) -> (Pixmap, kurbo::Affine) {
+    // Upstream stretches a mask onto the **integer** rect of its footprint
+    // and no further ([`crate::stretch::SnappedReduction`]), so where that
+    // applies the reduced plane already is the device pixels: it is placed
+    // whole and never meets the backend's sampler. Reducing to the ceiled
+    // fractional footprint instead left a residual scale near 1 and a
+    // subpixel phase for the sampler to resolve, and that second resample
+    // spread every mask edge by a pixel — `image_en_fqa`'s whole loss.
+    if let Some(snapped) = crate::stretch::snapped_reduction(to_device, width, height) {
+        let (new_w, new_h) = snapped.size();
+        let reduced = crate::stretch::reduce_gray_to(plane, width, height, new_w, new_h);
+        return (mask_pixmap(&reduced, new_w, new_h), snapped.transform());
+    }
     match crate::stretch::reduction_for(width, height, dest_width, dest_height) {
         Some((new_w, new_h)) => {
             let reduced = crate::stretch::reduce_gray_to(plane, width, height, new_w, new_h);
@@ -962,6 +974,59 @@ mod tests {
                 "{w}x{h} -> {dw}x{dh}"
             );
         }
+    }
+
+    /// A reducing, axis-aligned mask lands on the **integer** rect of its
+    /// footprint and is placed whole, so nothing is left for the backend's
+    /// sampler to resolve.
+    ///
+    /// The sizes are `image_en_fqa`'s own: a 1572x85 mask over a 393.13 x
+    /// 21.24 footprint. Upstream's destination is
+    /// `GetUnitRect().GetOuterRect()`, which is 394 x 22 at (0, 0) here —
+    /// not the 394 x 22 at (0.4837, 0.6594) the ceiled fractional footprint
+    /// produced, whose residual near-unit scale and subpixel phase cost a
+    /// second resample and a pixel of spread at every mask edge.
+    #[test]
+    fn a_reducing_axis_aligned_mask_lands_on_the_integer_rect() {
+        let (w, h) = (1572_u32, 85_u32);
+        let plane: Vec<u8> = (0..w * h).map(|i| (i * 37 % 251) as u8).collect();
+        let (sx, sy) = (393.1291 / f64::from(w), 21.2379 / f64::from(h));
+        let at = kurbo::Affine::new([sx, 0.0, 0.0, sy, 0.4837, 0.6594]);
+
+        let (pixmap, placed) = reduced_mask_pixmap(&plane, w, h, at, 393.1291, 21.2379);
+
+        // The outer rect of (0.4837, 0.6594)-(393.6128, 21.8973).
+        assert_eq!((pixmap.width(), pixmap.height()), (394, 22));
+        // Placed whole, at the integer rect's origin: `placement_for` sees an
+        // identity scale on whole pixels and answers `Exact`, which draws
+        // with the nearest sampler and cannot be filtered again.
+        assert_eq!(
+            crate::stretch::placement_for(placed, pixmap.width(), pixmap.height()),
+            crate::stretch::Placement::Exact { x: 0.0, y: 0.0 }
+        );
+    }
+
+    /// The snap is for a genuine two-axis reduction and nothing else: a
+    /// magnification runs upstream's own bilinear branch, and a rotation or
+    /// a mirror has no integer rect the pixmap can be laid onto unaltered.
+    #[test]
+    fn only_an_unmirrored_axis_aligned_reduction_is_snapped() {
+        let (w, h) = (64_u32, 40_u32);
+        let reduce = kurbo::Affine::new([0.25, 0.0, 0.0, 0.25, 3.2, 4.7]);
+        assert!(crate::stretch::snapped_reduction(reduce, w, h).is_some());
+        // Magnification: upstream's `:106` branch, not the box filter.
+        let grow = kurbo::Affine::new([2.0, 0.0, 0.0, 2.0, 3.2, 4.7]);
+        assert!(crate::stretch::snapped_reduction(grow, w, h).is_none());
+        // One axis reducing, one growing: the growing axis still needs the
+        // backend's kernel at its fractional scale.
+        let mixed = kurbo::Affine::new([0.25, 0.0, 0.0, 2.0, 3.2, 4.7]);
+        assert!(crate::stretch::snapped_reduction(mixed, w, h).is_none());
+        // Mirrored: the reduced pixmap would need flipping, not only placing.
+        let mirrored = kurbo::Affine::new([-0.25, 0.0, 0.0, 0.25, 3.2, 4.7]);
+        assert!(crate::stretch::snapped_reduction(mirrored, w, h).is_none());
+        // Rotated: no axis-aligned integer rect to land on.
+        let rotated = kurbo::Affine::new([0.2, 0.1, -0.1, 0.2, 3.2, 4.7]);
+        assert!(crate::stretch::snapped_reduction(rotated, w, h).is_none());
     }
 
     #[test]
