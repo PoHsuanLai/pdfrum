@@ -1,0 +1,77 @@
+# `pdfrum` for the web — the WebAssembly binding over the facade.
+# PLAN.md §M22.4, docs/design/wasm.md.
+#
+# The same shape as `pdfrum-capi` (docs/design/capi.md) in JavaScript terms:
+# opaque handles, an explicit `free()`, a code on every error. It holds no
+# logic — every export is a handle plus one call into `pdfrum`.
+[package]
+name = "pdfrum-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The WebAssembly binding for pdfrum: open, render, extract and fill PDFs in a browser or Node"
+# Nothing `cargo add`s a cdylib. The published surface of this crate is the
+# npm package `pkg/` that `wasm-pack` builds from it.
+publish = false
+
+[lib]
+# `cdylib` is the WebAssembly module; `rlib` so `cargo test`, `cargo doc` and
+# clippy on the host target have a Rust library to look at. Without the
+# `rlib`, `--all-targets` on the host has nothing to lint.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The facade, with exactly the features a `wasm32-unknown-unknown` target
+# supports. `default-features = false` and then named back:
+#
+# - `vello-cpu` — the rasterizer. Pure Rust, no threads, no GPU handshake.
+# - `codecs-all` — JPX, JBIG2 and CCITT; a PDF on the web is no less likely to
+#   carry them than one on a disk.
+# - `forms`, `edit` — reading and filling a form and saving the result, which
+#   is half of what a browser embedder wants.
+# - `markdown` — `Page::markdown`, cheap to carry and the one text shape a web
+#   page actually wants to paste.
+#
+# Off, and PLAN.md §M22.4 says why:
+#
+# - `system-fonts` — there is no host font directory in a browser. The bundled
+#   Foxit base-14 faces carry text, which is what the facade's own wasm32
+#   check has always assumed.
+# - `javascript` — `boa`'s `getrandom` needs its `wasm_js` feature on this
+#   target, and running a document's own script in a page is a different
+#   security proposition from rendering it. A caller who wants it builds
+#   their own module.
+#
+# Declared by path rather than `workspace = true` because cargo refuses
+# `default-features = false` on an inherited dependency, and turning the
+# facade's defaults off is the whole point of this row: `system-fonts` is in
+# that default set and cannot be compiled for this target.
+pdfrum = { path = "../pdfrum", version = "=0.1.0", default-features = false, features = [
+    "vello-cpu",
+    "codecs-all",
+    "forms",
+    "edit",
+    "markdown",
+] }
+# The binding itself: the `#[wasm_bindgen]` attribute, `JsValue`, and the
+# `.d.ts` generator. DEPS.md, "The web binding's crates".
+wasm-bindgen = "0.2.128"
+# `Uint8Array`, `Uint8ClampedArray` and `Error` — the three JavaScript types
+# this crate names. `js-sys` is `wasm-bindgen`'s own companion and adds
+# nothing to the tree that `wasm-bindgen` did not already put there.
+js-sys = "0.3.78"
+
+[dev-dependencies]
+# The Node test harness. `wasm-bindgen-test` is to `wasm32` what `#[test]` is
+# to the host, and its runner is `wasm-bindgen-test-runner`, configured in
+# `.cargo/config.toml`.
+wasm-bindgen-test = "0.3.78"
+
+[lints]
+workspace = true
+
+# The release profile this crate is built under lives at the workspace root as
+# `[profile.wasm]`, because cargo ignores a `[profile.*]` table in a member.
+# `wasm-pack build --profile wasm` is the build; the settings and the
+# measurement behind them are in the root manifest and docs/status/M22.md.
