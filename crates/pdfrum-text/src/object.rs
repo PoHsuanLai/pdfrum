@@ -79,8 +79,6 @@ pub struct TextRun {
     /// The object's bounding box in page space, stroke-inflated when the
     /// render mode strokes.
     pub rect: Rect,
-    /// The bounding box in the object's own text space, before the matrix.
-    pub original_rect: Rect,
     /// Total advance width in page space: `w0` summed over the object's
     /// glyphs (ISO 32000-1 §9.4.3), measured through the text matrix.
     ///
@@ -208,7 +206,7 @@ pub fn ladder_char_width(run: &TextRun, code: Option<CharCode>) -> f32 {
 ///
 /// Returns `None` for an object with no font, which cannot show anything.
 #[must_use]
-pub fn build(content: &Content<TextObject>, index: ObjectIndex) -> Option<TextRun> {
+pub(crate) fn build(content: &Content<TextObject>, index: ObjectIndex) -> Option<TextRun> {
     let object = &content.object;
     let (font, font_size) = object.font.as_ref()?;
     let state = &content.state;
@@ -257,7 +255,6 @@ pub fn build(content: &Content<TextObject>, index: ObjectIndex) -> Option<TextRu
         // it from the stored four coefficients plus `pos_`.
         text_matrix: with_translation(object.matrix, object.position),
         rect: Rect::ZERO,
-        original_rect: Rect::ZERO,
         advance: 0.0,
         marks: content.marks.clone(),
         type3: object.type3_metrics.clone(),
@@ -358,13 +355,13 @@ fn layout(run: &mut TextRun, codes: &[CharCode], mode: TextRenderMode, line_widt
         min_y = min_y * font_size / 1000.0;
         max_y = max_y * font_size / 1000.0;
     }
-    run.original_rect = Rect::new(
+    let original_rect = Rect::new(
         f64::from(min_x),
         f64::from(min_y),
         f64::from(max_x),
         f64::from(max_y),
     );
-    let mut rect = transform_rect(run.text_matrix, run.original_rect);
+    let mut rect = transform_rect(run.text_matrix, original_rect);
     if matches!(
         mode,
         TextRenderMode::Stroke
@@ -427,4 +424,39 @@ fn collect(objects: &[PageObject], next: &mut u32, out: &mut Vec<TextRun>) {
             }
         }
     }
+}
+
+/// The flattened walk index of each *page-level* text object, ascending.
+///
+/// [`walk`] numbers every object it reaches, descending into forms; the
+/// page-global orientation guess counts only the objects the page itself
+/// lists (a form object is not a text object, so its contents never reach
+/// the mask). This reproduces `collect`'s numbering without building
+/// anything, so the guess can read the runs [`walk`] already built instead
+/// of building them a second time.
+#[must_use]
+pub fn top_level_text_indices(objects: &[PageObject]) -> Vec<ObjectIndex> {
+    let mut out = Vec::new();
+    let mut next = 0u32;
+    for object in objects {
+        let index = ObjectIndex(next);
+        next = next.saturating_add(1);
+        match object {
+            PageObject::Text(_) => out.push(index),
+            PageObject::Form(content) => next = skip(&content.object.objects, next),
+            PageObject::Path(_) | PageObject::Image(_) | PageObject::Shading(_) => {}
+        }
+    }
+    out
+}
+
+/// Advances the walk counter past a subtree without building anything.
+fn skip(objects: &[PageObject], mut next: u32) -> u32 {
+    for object in objects {
+        next = next.saturating_add(1);
+        if let PageObject::Form(content) = object {
+            next = skip(&content.object.objects, next);
+        }
+    }
+    next
 }
