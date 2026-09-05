@@ -9,7 +9,8 @@ issue text ready to paste. Nothing above the rule is meant to be posted.
 Reproduction inputs live in `repro/`, shared across issues.
 
 **Layout.** `pdfium/` for PDFium (crbug.com/pdfium), `zune/` for `zune-jpeg`,
-`hayro/` for `hayro-jbig2` — one directory per upstream project.
+`hayro/` for `hayro-jbig2`, `vello/` for `vello_cpu`
+(github.com/linebender/vello) — one directory per upstream project.
 
 **A filed issue keeps its file.** The header records the tracker ID and the
 date; the text stays as filed so a later reader can see what was reported
@@ -50,6 +51,7 @@ unchanged; line shifts are noted in each file's header).
 
 | Issue | Project | Re-checked 2026-09-05 |
 |---|---|---|
+| [`F32Kernel::pack`/`unpack` are scalar — ~48 `Ir`/px/render](vello/pack-unpack-simd.md) | `vello_cpu` | **New 2026-09-06.** Not a duplicate: both `// TODO: SIMDify` comments are still on upstream `main` at the released line numbers, and no issue or PR (open or closed) matches. 0.2.0 is the latest release and its `[Unreleased]` changelog is empty of fine-kernel work. Measurement in `docs/design/mupdf-comparison.md` §1.1 and §8 |
 | [Truncated JBIG2: segment bodies read at declared length](hayro/jbig2-segment-lengths.md) | `hayro-jbig2` | 0.3.0 still latest; no upstream issue covers it — file as drafted |
 | [`scale_denom`: decode at 1/2, 1/4 or 1/8 inside the IDCT](zune/scaled-decode.md) | `zune-jpeg` | **Already asked for** as zune-image #434 (2026-08-18, open); post ours as a comment there with the measurements. PDFium itself moved to zune-jpeg on 2026-09-03 and box-averages after a full decode, which the draft now says |
 

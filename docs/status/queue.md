@@ -1112,7 +1112,10 @@ not-achievable bucket. The two divergences are written up as A72 and A73 in
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 
 Four PDFium rendering issues, the `EnableStdConversion` dead-mechanism
-note, one `hayro-jbig2`, one `zune-jpeg`. The user files these.
+note, one `hayro-jbig2`, one `zune-jpeg`, and (new 2026-09-06) one
+`vello_cpu` — `docs/upstream/vello/pack-unpack-simd.md`, the scalar
+`F32Kernel::pack`/`unpack` behind §1.1 of the mupdf study, verified
+unfixed on upstream `main`. The user files these.
 
 Re-checked 2026-09-05 against upstream `a043bed4a` (`docs/upstream/README.md`):
 five of the eight filed issues were fixed upstream on 2026-09-03 (leap year,
