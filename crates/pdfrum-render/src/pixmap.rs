@@ -281,6 +281,54 @@ impl Pixmap {
         }
     }
 
+    /// Lay `next` over this pixmap under the **fill-and-stroke knockout**:
+    /// wherever `next` has coverage it replaces what is here outright, its
+    /// own alpha included.
+    ///
+    /// This is [`Self::knockout_over`]'s sibling, and the one place they
+    /// differ is what happens to the destination's *alpha*. `knockout_over`
+    /// mixes toward `next` by coverage, so a translucent `next` over an
+    /// opaque `self` stays opaque — right for a knockout *group*, whose
+    /// members all composite against one already-painted backdrop that is
+    /// itself part of the buffer.
+    ///
+    /// It is wrong for `CFX_RenderDevice::DrawFillStrokePath`
+    /// (`core/fxge/cfx_renderdevice.cpp:832-889`). There the buffer is seeded
+    /// with a **copy of the backdrop** (`:864-871`) before being handed to a
+    /// device built with `group_knockout=true` (`:873-875`), so each paint
+    /// composites against the page and the stroke never sees the fill at all.
+    /// Our buffer is seeded transparent instead — the engine draws into a
+    /// sub-target and blits — so the equivalent is to carry the stroke's own
+    /// premultiplied value out of the buffer and let the blit composite it
+    /// against the page exactly once.
+    ///
+    /// `fx/path/transparent1.pdf` is the witness, and the arithmetic is
+    /// decisive. Its stroke is red at `/CA 0.58`, premultiplied
+    /// `(148, 0, 0, 148)`. Blended over the opaque black fill the alpha comes
+    /// back to 255 and the colour to 148 — `#930000`, which the oracle never
+    /// produces anywhere on the page. Replaced outright it stays
+    /// `(148, 0, 0, 148)` and the blit over the white page gives `#ff6c6c`,
+    /// the single uniform ring the oracle paints.
+    ///
+    /// A mismatch in dimensions is a no-op, on the same invariant as
+    /// [`Self::multiply_alpha_mask`].
+    pub(crate) fn knockout_replace(&mut self, next: &Self) {
+        if next.width != self.width || next.height != self.height {
+            return;
+        }
+        for (chunk, over) in self.data.chunks_exact_mut(4).zip(next.data.chunks_exact(4)) {
+            let Some(&a) = over.get(3) else { continue };
+            if a == 0 {
+                continue;
+            }
+            // Any coverage at all knocks the destination out: the stroke's
+            // premultiplied value *is* the result, alpha included. There is
+            // no blend term, which is exactly what separates this from
+            // `knockout_over`.
+            chunk.copy_from_slice(over);
+        }
+    }
+
     /// Multiply every channel by a coverage mask, PDFium's
     /// `MultiplyAlphaMask`. The mask must match the pixmap's dimensions
     /// exactly — an invariant, not a preference: a mismatched mask silently
@@ -648,6 +696,38 @@ mod tests {
         let mut base = Pixmap::filled(1, 1, red);
         base.knockout_over(&Pixmap::new(1, 1));
         assert_eq!(base.pixel(0, 0), Some([255, 0, 0, 255]));
+    }
+
+    /// The fill-and-stroke knockout keeps the stroke's own alpha, which is
+    /// what separates it from [`Pixmap::knockout_over`].
+    ///
+    /// `fx/path/transparent1.pdf`'s numbers exactly: a red stroke at
+    /// `/CA 0.58` is premultiplied `(148, 0, 0, 148)`, and it lands on the
+    /// opaque black fill the same path already painted. Blending returns the
+    /// pixel to opaque and yields `#930000` once blitted; replacing keeps
+    /// `(148, 0, 0, 148)`, which composites against the white page as
+    /// `#ff6c6c` — the one colour the oracle paints there.
+    #[test]
+    fn the_fill_stroke_knockout_keeps_the_strokes_alpha() {
+        let black_fill = Pixmap::filled(1, 1, peniko::Color::from_rgba8(0, 0, 0, 255));
+        let translucent_stroke =
+            Pixmap::from_vec(1, 1, vec![148, 0, 0, 148]).expect("one premultiplied pixel");
+
+        let mut blended = black_fill.clone();
+        blended.knockout_over(&translucent_stroke);
+        assert_eq!(
+            blended.pixel(0, 0),
+            Some([148, 0, 0, 255]),
+            "knockout_over promotes the overlap to opaque, which is the defect"
+        );
+
+        let mut replaced = black_fill;
+        replaced.knockout_replace(&translucent_stroke);
+        assert_eq!(
+            replaced.pixel(0, 0),
+            Some([148, 0, 0, 148]),
+            "the stroke's own alpha must survive so the blit composites it once"
+        );
     }
 
     /// Audit item **A13**. A mismatched overlay is a no-op, on the same
