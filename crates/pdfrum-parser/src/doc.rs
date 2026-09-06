@@ -209,15 +209,19 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let body: Arc<[u8]> = Arc::from(bytes.get(header_offset..).unwrap_or_default());
     let version = read_version(&body);
 
-    let (mut xref, mut trailer, mut xref_shape) =
+    let (xref, mut trailer, mut xref_shape) =
         crate::xref::read_xref_full(&body, &opts.limits, &mut diags).map_err(|e| match e {
             crate::Error::Limit(limit) => LoadError::Limit(limit),
             other => LoadError::Broken(other.to_string()),
         })?;
 
     // First attempt: the catalog has to be reachable *and* have pages in it.
-    let mut security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
-    let mut store = build_store(&body, &xref, opts, &trailer.dict, security);
+    // Shared from here on: the stores below only read the table, and a slot
+    // vector is expensive to copy — see `ObjectStore`'s `xref` field. The
+    // rebuild path below re-shares after it mutates.
+    let mut shared_xref = Arc::new(xref);
+    let mut security = build_security(&body, &shared_xref, &trailer.dict, opts, &mut diags)?;
+    let mut store = build_store(&body, &shared_xref, opts, &trailer.dict, security);
     let mut page_count = catalog_page_count(&store, &trailer.dict, &opts.limits);
 
     if page_count.is_none() {
@@ -240,12 +244,18 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         if !rebuilt {
             return Err(LoadError::Broken("no document catalog".into()));
         }
-        xref.merge_up(&fresh);
+        // The recovery path, so the copy this makes is not the common case:
+        // the first attempt's store still holds a reference, and the merged
+        // table has to be a fresh value for the second attempt's stores to
+        // share in turn.
+        let mut merged = (*shared_xref).clone();
+        merged.merge_up(&fresh);
         crate::xref::merge_trailers(&mut trailer, &fresh_trailer);
         xref_shape = XrefShape::rebuilt();
 
-        security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
-        store = build_store(&body, &xref, opts, &trailer.dict, security);
+        shared_xref = Arc::new(merged);
+        security = build_security(&body, &shared_xref, &trailer.dict, opts, &mut diags)?;
+        store = build_store(&body, &shared_xref, opts, &trailer.dict, security);
         // Second attempt asks only for a catalog. A rebuilt document whose
         // catalog is reachable but describes no pages still opens — it is
         // then a document of zero pages, which is a thing a file can be.
@@ -258,7 +268,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let page_count = page_count.unwrap_or(0);
     // Read last, from the trailer as it finally stands, so a rebuild that
     // replaced the trailer is reflected.
-    let encrypt = encrypt_dict_located(&body, &xref, &trailer.dict, &opts.limits);
+    let encrypt = encrypt_dict_located(&body, &shared_xref, &trailer.dict, &opts.limits);
 
     diags.extend(&store.drain_diags());
 
@@ -313,7 +323,7 @@ fn read_version(body: &[u8]) -> Option<PdfVersion> {
 /// Build the security handler the trailer's `/Encrypt` calls for.
 fn build_security(
     body: &Arc<[u8]>,
-    xref: &Xref,
+    xref: &Arc<Xref>,
     trailer: &Dict,
     opts: &LoadOptions,
     diags: &mut Diagnostics,
@@ -361,7 +371,12 @@ fn build_security(
 /// defines. So the lookup goes through a throwaway store that decrypts
 /// nothing. That is not a shortcut: the encryption dictionary is the one
 /// object in a document that is always plaintext.
-fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: &Limits) -> Option<Dict> {
+fn encrypt_dict(
+    body: &Arc<[u8]>,
+    xref: &Arc<Xref>,
+    trailer: &Dict,
+    limits: &Limits,
+) -> Option<Dict> {
     encrypt_dict_located(body, xref, trailer, limits).map(|(d, _)| d)
 }
 
@@ -374,7 +389,7 @@ fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: &Limits) 
 /// requires `/Encrypt` be indirect).
 fn encrypt_dict_located(
     body: &Arc<[u8]>,
-    xref: &Xref,
+    xref: &Arc<Xref>,
     trailer: &Dict,
     limits: &Limits,
 ) -> Option<(Dict, bool)> {
@@ -383,7 +398,7 @@ fn encrypt_dict_located(
         Object::Ref(r) => {
             let plain = ObjectStore::new(
                 Arc::clone(body),
-                xref.clone(),
+                Arc::clone(xref),
                 limits.clone(),
                 SecurityHandler::Identity,
             );
@@ -413,14 +428,14 @@ fn exempt_metadata(store: &mut ObjectStore, trailer: &Dict) {
 /// Build a store over the table, with the metadata exemption applied.
 fn build_store(
     body: &Arc<[u8]>,
-    xref: &Xref,
+    xref: &Arc<Xref>,
     opts: &LoadOptions,
     trailer: &Dict,
     security: SecurityHandler,
 ) -> Arc<ObjectStore> {
     let mut store = ObjectStore::new(
         Arc::clone(body),
-        xref.clone(),
+        Arc::clone(xref),
         opts.limits.clone(),
         security,
     );

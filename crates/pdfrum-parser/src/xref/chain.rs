@@ -54,11 +54,18 @@ struct Section {
 /// returned flag says which happened, because a rebuilt table means the file
 /// cannot be incrementally saved.
 pub(crate) fn load(
-    file: &[u8],
+    file: &Arc<[u8]>,
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Trailer, XrefShape), Error> {
-    let shared: Arc<[u8]> = Arc::from(file);
+    // The body arrives already reference-counted, because the caller holds
+    // it that way for the store it is about to build. Taking it as `&[u8]`
+    // and re-wrapping it here copied the whole document a second time: on
+    // the corpus's 3.3 MB `forms_widgets_407` that was a megabyte-scale
+    // `memcpy` inside `open`, invisible to an instruction count — an AVX
+    // copy moves 32 bytes per instruction — and plainly visible in wall
+    // clock, where it also evicts every cache line the parse wanted.
+    let shared = Arc::clone(file);
     let start = start_xref(file, limits, diags);
 
     let mut xref = Xref::new();
@@ -415,6 +422,8 @@ fn apply_size(xref: &mut Xref, trailer: &Trailer, limits: &Limits) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::{load, start_xref};
     use crate::xref::Entry;
     use pdfrum_common::{DiagKind, Diagnostics, Limits};
@@ -433,7 +442,7 @@ mod tests {
         Diagnostics,
     )> {
         let mut diags = Diagnostics::default();
-        load(file, &Limits::default(), &mut diags)
+        load(&Arc::from(file), &Limits::default(), &mut diags)
             .ok()
             .map(|(x, t, s)| (x, t, s, diags))
     }
