@@ -1920,6 +1920,7 @@ version = "0.1.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-crypt",
  "pdfrum-doc",
  "pdfrum-edit",

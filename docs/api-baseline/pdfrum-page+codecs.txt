@@ -277,9 +277,15 @@ pub pdfrum_page::Rotation::None
 pub pdfrum_page::Rotation::Quarter
 pub pdfrum_page::Rotation::ThreeQuarter
 impl pdfrum_page::Rotation
+pub fn pdfrum_page::Rotation::degrees(self) -> u32
 pub fn pdfrum_page::Rotation::display_matrix(self, kurbo::rect::Rect) -> kurbo::affine::Affine
 pub fn pdfrum_page::Rotation::from_degrees(i64) -> Self
 pub fn pdfrum_page::Rotation::quarters(self) -> u8
+impl core::fmt::Display for pdfrum_page::Rotation
+pub fn pdfrum_page::Rotation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum_page::Rotation
+pub type pdfrum_page::Rotation::Err = pdfrum_page::NotAQuarterTurn
+pub fn pdfrum_page::Rotation::from_str(&str) -> core::result::Result<pdfrum_page::Rotation, pdfrum_page::NotAQuarterTurn>
 #[non_exhaustive] pub enum pdfrum_page::Samples
 pub pdfrum_page::Samples::Packed(pdfrum_page::Packed)
 pub pdfrum_page::Samples::Whole(pdfrum_page::Pixels)
@@ -539,6 +545,7 @@ pub fn pdfrum_page::MeshReader<'a>::read_lattice(&mut self, usize) -> alloc::vec
 pub fn pdfrum_page::MeshReader<'a>::read_patches(&mut self, pdfrum_page::ShadingKind) -> alloc::vec::Vec<pdfrum_page::Patch>
 pub fn pdfrum_page::MeshReader<'a>::read_vertex(&mut self) -> core::option::Option<(u8, pdfrum_page::Vertex)>
 pub fn pdfrum_page::MeshReader<'a>::read_vertex_row(&mut self, usize) -> alloc::vec::Vec<pdfrum_page::Vertex>
+pub struct pdfrum_page::NotAQuarterTurn(_)
 pub struct pdfrum_page::OcContext
 impl pdfrum_page::OcContext
 pub fn pdfrum_page::OcContext::content_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> bool

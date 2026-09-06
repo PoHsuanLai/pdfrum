@@ -198,6 +198,10 @@ resvg.workspace = true
 # lists for it: `tests/svg_ingest.rs` names `Diagnostics` to render the page
 # it ingested into. Already a normal dependency of this crate.
 pdfrum-common.workspace = true
+# The 44-file benchmark corpus, for `tests/pdfa_oracle.rs`. It is the same
+# list `pdfrum-svg`'s round trip scores over, so the two oracle stories
+# describe the same documents. A leaf crate with no dependencies of its own.
+pdfrum-corpus.workspace = true
 
 # Which features each integration test needs. The three not listed —
 # signatures, searchex, thumbnails — run on any feature set; the rest
@@ -324,3 +328,9 @@ required-features = ["vello-cpu", "svg"]
 [[test]]
 name = "svg_ingest"
 required-features = ["svg-ingest", "tinyskia"]
+
+# M26's PDF/A oracle. Runs on the default set — the checker adds no
+# dependency — but names `Document::open`, so it needs a build that parses.
+[[test]]
+name = "pdfa_oracle"
+required-features = ["vello-cpu", "edit", "forms"]
