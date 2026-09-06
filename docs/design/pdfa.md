@@ -350,9 +350,10 @@ PDFRUM_VERAPDF=~/verapdf/verapdf \
   cargo nextest run -p pdfrum --test pdfa_convert --no-capture
 ```
 
-> `veraPDF A-2b over 44 corpus files: 0 passed before conversion, 10 after`
+> `veraPDF A-2b over 44 corpus files: 0 passed before conversion, 11 after`
 
-**0 to 10 of 44.** Not one corpus document is a PDF/A file to begin with — they
+**0 to 11 of 44** — 10 when the conversion landed, and 11 once the CMYK output
+intent joined it (§9.1). Not one corpus document is a PDF/A file to begin with — they
 are rendering fixtures, and veraPDF fails every one — so the before-number is
 asserted to be zero rather than assumed. That is what makes the after-number a
 conversion result rather than a statement about the corpus. `A2B_PASS_FLOOR`
@@ -370,7 +371,7 @@ an opinion on:
 |---|---|---|
 | the XMP packet, with the PDF/A identification schema | 6.6.4-1 | 27 |
 | the packet rewritten so it parses, as UTF-8 | 6.6.2.1-1/-4/-5 | 14/11/11 |
-| the sRGB output intent | 6.2.4.3-2/-4 | 33/28 |
+| the output intent, sRGB or CMYK | 6.2.4.3-2/-3/-4 | 33/5/28 |
 | a trailer `/ID` | 6.1.3-1 | 11 |
 | legal object spacing | 6.1.9-1 | 7 |
 | JavaScript and the forbidden actions stripped | 6.5.1-1, 6.4.1-1/-2 | 1, 2/2 |
@@ -385,6 +386,62 @@ incremental save — answers 6.1.3 and 6.1.9 as a side effect of writing the fil
 at all. That is also why `remove_security` is set unconditionally: the trailer
 is the writer's to build, and it is the only way to drop the `/Encrypt` PDF/A
 forbids.
+
+### 9.1 The CMYK output intent, and why it is worth exactly one file
+
+§11's third debt, closed. The rule is 6.2.4.3-3: `/DeviceCMYK` is legal only
+when the output intent's destination profile is a **CMYK** profile, and the
+sRGB profile does not become one by covering RGB and Gray well.
+
+Three things about it are worth recording, because each was measured rather
+than reasoned and two of them contradict the obvious plan.
+
+**A file gets one intent, so this is a choice and not an addition.** 6.2.4.2
+requires every `/OutputIntents` entry to share a `/DestOutputProfile`. Writing
+the CMYK profile therefore *withdraws* the sRGB one, and a document that paints
+in both spaces cannot be satisfied at all. Measured directly by giving the
+whole corpus a CMYK intent: 6.2.4.3-3 disappeared everywhere and **seven files
+that pass today stopped passing**, on the -2 the swap introduced. So the
+converter chooses per document — CMYK when the document paints in
+`/DeviceCMYK` and in neither of the other two device spaces — and `IntentProfile`
+is an enum rather than a flag because the choice carries three coordinated
+values: the profile bytes, `/N`, and the condition string.
+
+**The profile is vendored, and takes no dependency.** M26's original rule was
+that no new colour dependency is taken; the user lifted it for this. It turned
+out not to be needed. crates.io has colour-management crates in quantity but
+essentially none that ship a permissively-licensed CMYK *profile*, and a
+profile is what was wanted — `moxcms` is already the engine. So
+`crates/pdfrum-page/assets/CGATS001Compat-v2-micro.icc` is 8464 bytes of
+**CC0-1.0** data from Compact-ICC-Profiles, colorimetrically CGATS TR 001
+(SWOP). `deny.toml` already allowed CC0-1.0, admitted in M12c for
+`hexf-parse`, so no policy line moved either. The crates that were examined and
+declined are in DEPS.md.
+
+**The vendored bytes are re-encoded, and the oracle is why.** Upstream declares
+device class `scnr` — an input profile, which is what its author uses it for —
+and 6.2.3 requires an output intent's profile be `prtr` or `mntr`. veraPDF
+fails the file on that header field alone, with the colour space and version
+both already correct, which is precisely the "a profile that is present but
+wrong still fails validation" case. `cmyk_profile_bytes` parses it, sets
+`ProfileClass::OutputDevice` and re-encodes, which states what the profile is
+being used as here and keeps the tag data intact; patching four header bytes
+would do the same without the parser proving the result is still a profile.
+
+**And it is worth one file, not five.** Five corpus files fail 6.2.4.3-3, which
+invites the arithmetic 10 + 5 = 15. Only `image_bug_718762` actually clears:
+three of the other four are blocked on unembedded fonts (6.2.11.4.1) whatever
+their intent, and `shading_tensor` is the mixed case above. `image_ccitt_3bigpreview`
+does take the CMYK intent and trades -3 for -2 — its RGB usage is named only in
+a content stream, which the scan below cannot see — a lateral move on a file
+that fails three other rules regardless.
+
+The scan is deliberately the shallow one, over each object's `/ColorSpace` and
+`/CS` keys and the `/ColorSpace` resource dictionary, following `/Indexed` and
+`/Separation` down to the space they are built over. It is §4's no-interpreter
+limit again, and the failure it can have is the safe one: a `/DeviceCMYK` named
+only as a content-stream operand is invisible, and the file keeps the sRGB
+intent it would have had anyway.
 
 ### Three findings the oracle forced, which reading the standard would not have
 
@@ -432,12 +489,17 @@ Every item is a rule veraPDF still fails converted files on.
   bytes that are not valid UTF-8. Renaming it means rewriting every content
   stream that names it, which needs the interpreter §4's first bullet says this
   code does without. Not attempted rather than attempted badly.
-- **DeviceCMYK without a CMYK output intent — 6.2.4.3-3, 5 files.** The sRGB
-  intent we write covers RGB and Gray; CMYK needs a CMYK profile, and `moxcms`
-  has a built-in sRGB profile but no built-in CMYK one. A correct CMYK profile
-  is LUT data, not a formula, so this is a **dependency or a vendored asset
-  question and is left for the user** rather than decided here. Nothing else in
-  the pass needs one.
+- **DeviceCMYK in a file that also paints in RGB — 6.2.4.3, 4 files.** The
+  CMYK output intent below answers the pure-CMYK case; what it cannot answer is
+  a *mixed* file, and that is a property of the standard rather than a gap in
+  the code. 6.2.4.2 requires every `/OutputIntents` entry to share one
+  `/DestOutputProfile`, and 6.2.4.3 then wants an RGB profile for `/DeviceRGB`
+  (-2) and a CMYK one for `/DeviceCMYK` (-3). A file using both needs two and
+  is allowed one, so whichever is written it fails on the other space. Three
+  corpus files are like this — `shading_tensor` mixes RGB and CMYK shadings on
+  one page — and they keep the sRGB intent, which is the smaller loss because
+  sRGB also answers `/DeviceGray`. Repairing it means *converting* the CMYK
+  content to RGB, which is a content rewrite and not an intent choice.
 - **Rasterizing a page — the `unrepresentable_content` concession.** The
   concession is live and refuses, naming the page; the *repair* does not exist.
   Two reasons it was not written: A-2b permits transparency, so no corpus file
@@ -486,10 +548,17 @@ For the roadmap, and each one is a decision rather than an oversight:
    corpus files are blocked on it. The largest single item.
 2. **Page rasterization** — likewise for `unrepresentable_content`, and wiring
    the repair needs `to_pdfa` to take a backend.
-3. **A CMYK output intent** — needs a profile `moxcms` does not carry.
-   **The user's call**, per M26's "no new colour dependency is taken".
+3. ~~**A CMYK output intent**~~ — **done**, §9.1. The user lifted M26's "no new
+   colour dependency is taken" for it and it proved unnecessary: the profile is
+   8 KB of CC0-1.0 data vendored in `pdfrum-page/assets/`, re-encoded as an
+   output profile through the `moxcms` already in the tree. Worth one corpus
+   file. What remains under this heading is not a profile problem: a document
+   that paints in **both** CMYK and RGB needs two destination profiles and the
+   standard allows one, so repairing those three files means converting their
+   CMYK content to RGB — a content rewrite, and a new item rather than this one.
 4. **The checker gaps §4 lists are inherited**, and two are now load-bearing
    rather than theoretical: the conversion writes an ICC profile without
-   validating it (it comes from `moxcms`, so it is well-formed by
-   construction — asserted in `pdfrum-page`'s own test), and the
+   validating it (both profiles come out of `moxcms`'s encoder, so they are
+   well-formed by construction — asserted in `pdfrum-page`'s own tests, which
+   check the header fields 6.2.3 reads), and the
    content-stream gap is what blocks the UTF-8 resource-name repair.
