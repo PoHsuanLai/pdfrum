@@ -56,8 +56,7 @@ is not read by a default build: `tests/form_scripts.rs` is behind
 |---|---:|---|
 | `public_methods.pdf` | 30 KB | `testing/resources/javascript/public_methods.pdf`, verbatim. One `/Tx` field named `Text Box` whose `/AA` carries **all four hooks** — `/C`, `/F`, `/K` and `/V` — which makes it the one file in the oracle's corpus that exercises every wire `FormSession::with_scripts` installs. Its `/AA /K` opens with an `app.alert` naming itself, and that line is what the seam test keys on: it is produced by the document's own JavaScript and by nothing else. It is by far the largest fixture here, and that is the trade — every smaller `/AA` fixture in the corpus either carries one hook or needs the `Doc`/`Field` object model M15 has not built (`this.getField(…)`), and a fixture whose script cannot run proves nothing about a seam. |
 
-One arrived with WP1's `Error::WrongPassword`
-(`docs/design/idiomatic-api.md` §WP1), because a doctest that shows a caller
+One arrived with `Error::WrongPassword`, because a doctest that shows a caller
 matching that variant needs a file that produces it, and until now none of
 these was encrypted:
 

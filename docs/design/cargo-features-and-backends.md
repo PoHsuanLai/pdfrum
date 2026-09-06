@@ -3,7 +3,7 @@
 **Status:** Landed 2026-09-04 (`893e153`..), with the deviations noted at the end  
 **Date:** 2026-09-04  
 **Scope:** `pdfrum`, `pdfrum-form`, `pdfrum-tool`, `pdfrum-render`, `pdfrum-page`, `pdfrum-doc`, `pdfrum-edit`, `pdfrum-font`, `pdfrum-filters`, `benches`, and CI scripts  
-**Related Documents:** [STYLE.md](STYLE.md), [DEPS.md](DEPS.md), [docs/design/idiomatic-api.md](docs/design/idiomatic-api.md)
+**Related Documents:** [STYLE.md](STYLE.md), [DEPS.md](DEPS.md)
 
 ---
 

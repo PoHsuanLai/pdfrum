@@ -50,9 +50,8 @@ const fn mask(position: u32) -> u32 {
 /// assert!(print_only.print);
 /// assert!(!print_only.copy);
 /// ```
-// Eight booleans is exactly the shape `docs/design/idiomatic-api.md` §6 rules
-// for this type, against the `bitflags`-newtype alternative it considers and
-// rejects: table 22's bits are eight independent questions with reserved holes
+// Eight booleans is exactly the shape this type wants, against the
+// `bitflags`-newtype alternative: table 22's bits are eight independent questions with reserved holes
 // between them, not a set that composes, and `struct_excessive_bools`'s usual
 // advice — collapse them into an enum or a flags type — is the design that was
 // weighed and declined. The lint is right about most structs and wrong about

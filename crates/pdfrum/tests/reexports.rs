@@ -1,7 +1,7 @@
 //! Every type a `pdfrum` signature names is nameable from `pdfrum` alone.
 //!
-//! This is the gate `docs/design/idiomatic-api.md` WP7 exists to install, and
-//! the reason it is a **separate integration test** rather than a `#[cfg(test)]`
+//! This is the gate that installs that rule, and the reason it is a
+//! **separate integration test** rather than a `#[cfg(test)]`
 //! module inside `lib.rs`: a unit test compiles with the crate, so it can see
 //! `pdfrum-render`, `pdfrum-object` and every other member crate through the
 //! facade's own `Cargo.toml`. An integration test compiles *against* the
@@ -259,9 +259,8 @@ fn the_object_store_escape_hatch_is_writable() {
 /// The escape hatches are the deliberate second category, and they are
 /// reachable *by inference* even though their spelled-out type is not.
 ///
-/// `docs/design/idiomatic-api.md` WP7 rules that a method documented as an
-/// escape hatch in the first sentence of its rustdoc may name a sibling-crate
-/// type, precisely so the collision with the facade's own [`Document`] and
+/// A method documented as an escape hatch in the first sentence of its
+/// rustdoc may name a sibling-crate type, precisely so the collision with the facade's own [`Document`] and
 /// [`Page`] stays visible at the call site. A caller who wants to *write* one
 /// of these types adds the member crate — that is what the hatch is for and
 /// what its first sentence tells them to do. What must still hold from

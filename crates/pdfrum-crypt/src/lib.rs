@@ -1112,7 +1112,7 @@ mod tests {
 
     // The two public methods are the private word, decoded. This is the
     // assertion the facade used to make for itself with `bits & 0x100`
-    // (`docs/design/idiomatic-api.md` §A.3): the AESV2 fixture's `/P` reports
+    // before the decode moved here: the AESV2 fixture's `/P` reports
     // `0xFFFF_F2C0`, which grants neither form filling (bit 9) nor annotation
     // modification (bit 6) — and the owner's view of the same document grants
     // everything.

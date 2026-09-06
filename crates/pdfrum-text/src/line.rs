@@ -17,8 +17,9 @@
 // The staging text is `Vec<u32>`, not a `String`: it legitimately holds the
 // `0xFFFE` charcode-zero placeholder and lone zeroes that the final string
 // will not contain. That placeholder is private and dies here — its record is
-// never `normal`, so it is dropped before the buffer a caller reads, which is
-// the shape §C.1 of `docs/design/idiomatic-api.md` permits a sentinel to keep.
+// never `normal`, so it is dropped before the buffer a caller reads. That is
+// the only shape in which a sentinel is allowed to stay: private, and dead
+// before any caller can observe it.
 
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
