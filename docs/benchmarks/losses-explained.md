@@ -46,8 +46,8 @@ taken at `e08d7cc`.
 > defect above was real and is fixed, but it was never the engine's loss.
 > The engine's loss was a single conjunct in our own degenerate-object gate,
 > found by instrumenting `ProcessInsertObject` in a private PDFium build:
-> byte-exact went **22/44 -> 43/44**, whitespace-normalized **41/44 ->
-> 43/44**, and the board's text pages **1785/2067 -> 2055/2067** with no row
+> byte-exact went **22/44 -> 42/44**, whitespace-normalized **41/44 ->
+> 43/44**, and the board's text pages **1785/2067 -> 2027/2067** with no row
 > moving down. See
 > [The generated space was our own rescue](#the-generated-space-was-our-own-rescue).
 
@@ -60,8 +60,8 @@ taken at `e08d7cc`.
 | **`vector_tcpdf_009.pdf` render** — SSIM 0.9593 vs pdfium-render 0.9995 | **A second resample.** The page is 22 draws of a 1181x1772 `DeviceRGB` JPEG reduced 2.67x-8.0x. PDFium box-filters straight onto the *integer* destination rect — `GetUnitRect().GetOuterRect()` at `core/fpdfapi/render/cpdf_imagerenderer.cpp:488-497` feeds the integer `dest_width`/`dest_height` to the area loop at `core/fxge/dib/cstretchengine.cpp:135-172` — one resample, ending on the device grid. We box-filter to the **ceiled fractional** footprint (`crates/pdfrum-render/src/stretch.rs:186` `reduced_len`, `:1103` `prescale` → `reduction_for`), which leaves a residual scale of 0.9990-0.9998 and a subpixel phase, and the backend's bilinear sampler then resamples a second time (quality is Bilinear here: `dh/8 = 83 < (1181x1772)/443 = 4724`, `crates/pdfrum-render/src/image.rs:37-56`). Measured: we carry **76.5% of the oracle's high-frequency energy** page-wide and 58.5% in the worst tile — a page-wide low-pass, no geometric drift. | **inferior — fixed 2026-09-06** | Small and already designed, and now landed. `stretch::snapped_reduction` (`stretch.rs:989`) is exactly this fix and already existed — it reduces to the integer rect so `placement_for` resolves the draw to `Placement::Exact` and the backend never samples again — but it was wired **only to soft-mask planes** (`crates/pdfrum-render/src/image.rs:493`, the `image_en_fqa` fix). The colour path now takes it too, through a `Reduction` type that carries the size and the placement as one value so the two cannot come apart, restricted away from type-3 char procs. **SSIM 0.959381 -> 0.999960**; see the note below the table. |
 | **`shading_tcpdf_058.pdf` render** — SSIM 0.9908 vs pdfium-render 0.9962 | **Edge antialiasing coverage — not shading.** 3.72% of pixels differ. Splitting the total absolute difference by the oracle's own gradient magnitude: **95.3% of it sits on 5.3% of pixels, all of them edges**. The flat shaded interiors (137 399 px) are **81% bit-identical**, and where they differ it is 1-2 LSB on one channel (12 838 px at delta 1, 9 825 at delta 2) — function-sample quantisation, not banding and not dithering. The file's 37 shadings are types 2 and 3 only, and run 3e scores us 0.988 / 0.989 on those, *identical to pdfium-render*. The worst tiles are glyph edges (`www.tc…`, `TCPDF Ex…`), same outlines, different edge coverage. Our AA: `crates/pdfrum-raster-agg`; PDFium's: analytic AGG coverage, `core/fxge/agg/fx_agg_driver.cpp`. | **tradeoff** | So the answer to "shading dithering, edge antialiasing, or function sampling density" is **edge antialiasing**, measured. Note pdfium-render is 0.9962 and not 1.0 on the *same* file, which is the pypdfium2 `libpdfium.so` being a different build from `pdfium_test` — so part of the 0.005 gap is not ours to close. Matching PDFium's AA exactly means reproducing its scanline coverage arithmetic bit for bit; §3.1 of `docs/design/mupdf-comparison.md` is the cost side. |
 | **`image_jpx_123.pdf` render** — SSIM 0.9874 vs pdfium-render 1.0000 | **Upstream JPX decoder numerics** — confirmed, previously ruled at the internal working notes "M21 losses". 96.99% of pixels differ but the *modal* delta is 6 (2 per channel) and the per-channel signed bias is R **-0.20**, G **+1.75**, B **-1.23** — a sub-2-LSB systematic offset with no structure. High-frequency energy matches the oracle to **0.06%** (104.29 vs 104.35), so there is no blur, no geometry error and no resample difference; only 1.92% of pixels exceed \|d\|>12 and those correlate with edges (r=0.70), i.e. where wavelet reconstruction rounding diverges most. That is the signature of the irreversible MCT and the 9/7 inverse DWT rounding differently, not of a decode defect. PDFium: `opj_mct_decode_real`, `third_party/libopenjpeg/mct.c:329-338` (f32 `y + v*1.402f`, `y - u*0.34413f - v*0.71414f`, `y + u*1.772f`) and `third_party/libopenjpeg/tcd.c:2350`. Ours: `hayro-jpeg2000`, a different but equally legal rounding of the same normative equations. | **tradeoff** (third-party) | Both roundings are legal under ISO/IEC 15444-1 for the irreversible path, which specifies real arithmetic without pinning a fixed-point schedule. Closing it means either vendoring OpenJPEG's exact f32 schedule into a Rust JPX decoder or taking a C dependency — the latter gives up `cargo add pdfrum` with no native build crate (run 3d), which is a headline property. Not proposed. |
-| **`text_quick_start.pdf` text** — F1 0.641, unmoved by the harness fix | **The dot-leader hypothesis is refuted** — leaders are one line on both sides. Two causes, in order of size. (1) **The harness compares the wrong streams**: `pdfium_test --txt` writes the unfiltered char list (`testing/pdfium_test/write.cc:364-370`), our harness writes `Display` = `search_text` (`benches/compare/src/engines/pdfrum.rs:109`, documented as *not* the `chars` stream at `crates/pdfrum-text/src/lib.rs:417-419`). (2) A **spurious generated space** at object boundaries — leading, before the leader run, before the page number, trailing, plus ~14 whitespace-only lines. The rules are transcribed identically on both sides; the input is not — `GetCharWidth` returns `int` (`core/fpdftext/cpdf_textpage.cpp:185-208`), our `ladder_char_width` returns `f32` (`crates/pdfrum-text/src/object.rs:176-202`). | **inferior — fixed 2026-09-06 (M28)** | **Closed, and the other text rows with it.** The cause was ours, not a positional difference in the oracle. The degenerate-object gate in `crates/pdfrum-text/src/pipeline.rs` carried an extra `run.advance < SIZE_EPSILON` conjunct beside the box test, ruled an `[oracle-bug]` on the reasoning that PDFium's `fabs(GetRect().Width()) < kSizeEpsilon` (`core/fpdftext/cpdf_textpage.cpp:886`, `:1081`) loses a spaces-only object's `w0` word separator. Instrumenting `ProcessInsertObject` in a private PDFium build refuted that: the separator is **not** lost, because `GenerateSpace` already emits a space wherever the geometry calls for one, so keeping the object as well double-counted it. Removing the conjunct took the benchmark from **22 to 43 of 44 byte-exact with none lost**, whitespace-normalized 41 → 43, and the board's text pages **1785 → 2055 of 2067** (non-empty 760 → 993 of 1005) with **0 rows down**. See "The generated space was our own rescue" below. |
-| **`text_tcpdf_055.pdf` text** — F1 0.953, **0.948** against the `chars` stream (4 peers closer) | Two residuals after correcting the stream. The same spurious leading space; and one row where we emit `^@ ^A ^B … ^_` and PDFium emits nothing — those C0 codes are legitimately in `char_list_` on both sides, so PDFium's empty row is an input-geometry or charcode-mapping difference, not a filtering rule. | **inferior — fixed 2026-09-06 (M28)** | **Closed, and the other text rows with it.** The cause was ours, not a positional difference in the oracle. The degenerate-object gate in `crates/pdfrum-text/src/pipeline.rs` carried an extra `run.advance < SIZE_EPSILON` conjunct beside the box test, ruled an `[oracle-bug]` on the reasoning that PDFium's `fabs(GetRect().Width()) < kSizeEpsilon` (`core/fpdftext/cpdf_textpage.cpp:886`, `:1081`) loses a spaces-only object's `w0` word separator. Instrumenting `ProcessInsertObject` in a private PDFium build refuted that: the separator is **not** lost, because `GenerateSpace` already emits a space wherever the geometry calls for one, so keeping the object as well double-counted it. Removing the conjunct took the benchmark from **22 to 43 of 44 byte-exact with none lost**, whitespace-normalized 41 → 43, and the board's text pages **1785 → 2055 of 2067** (non-empty 760 → 993 of 1005) with **0 rows down**. See "The generated space was our own rescue" below. |
+| **`text_quick_start.pdf` text** — F1 0.641, unmoved by the harness fix | **The dot-leader hypothesis is refuted** — leaders are one line on both sides. Two causes, in order of size. (1) **The harness compares the wrong streams**: `pdfium_test --txt` writes the unfiltered char list (`testing/pdfium_test/write.cc:364-370`), our harness writes `Display` = `search_text` (`benches/compare/src/engines/pdfrum.rs:109`, documented as *not* the `chars` stream at `crates/pdfrum-text/src/lib.rs:417-419`). (2) A **spurious generated space** at object boundaries — leading, before the leader run, before the page number, trailing, plus ~14 whitespace-only lines. The rules are transcribed identically on both sides; the input is not — `GetCharWidth` returns `int` (`core/fpdftext/cpdf_textpage.cpp:185-208`), our `ladder_char_width` returns `f32` (`crates/pdfrum-text/src/object.rs:176-202`). | **inferior — fixed 2026-09-06 (M28)** | **Closed, and the other text rows with it.** The cause was ours, not a positional difference in the oracle. The degenerate-object gate in `crates/pdfrum-text/src/pipeline.rs` carried an extra `run.advance < SIZE_EPSILON` conjunct beside the box test, ruled an `[oracle-bug]` on the reasoning that PDFium's `fabs(GetRect().Width()) < kSizeEpsilon` (`core/fpdftext/cpdf_textpage.cpp:886`, `:1081`) loses a spaces-only object's `w0` word separator. Instrumenting `ProcessInsertObject` in a private PDFium build refuted that: the separator is **not** lost, because `GenerateSpace` already emits a space wherever the geometry calls for one, so keeping the object as well double-counted it. Replacing the conjunct with the plain box test — plus a page-level rescue for the one case the upstream report actually pins, so `whitespace.pdf` keeps its space — took the benchmark from **22 to 42 of 44 byte-exact with none lost**, whitespace-normalized 41 → 43, and the board's text pages **1785 → 2027 of 2067** (non-empty 760 → 993 of 1005) with **0 rows down**. See "The generated space was our own rescue" below, which also records the one loss left on the table (`bug_921.pdf`) and why. |
+| **`text_tcpdf_055.pdf` text** — F1 0.953, **0.948** against the `chars` stream (4 peers closer) | Two residuals after correcting the stream. The same spurious leading space; and one row where we emit `^@ ^A ^B … ^_` and PDFium emits nothing — those C0 codes are legitimately in `char_list_` on both sides, so PDFium's empty row is an input-geometry or charcode-mapping difference, not a filtering rule. | **inferior — fixed 2026-09-06 (M28)** | **Closed, and the other text rows with it.** The cause was ours, not a positional difference in the oracle. The degenerate-object gate in `crates/pdfrum-text/src/pipeline.rs` carried an extra `run.advance < SIZE_EPSILON` conjunct beside the box test, ruled an `[oracle-bug]` on the reasoning that PDFium's `fabs(GetRect().Width()) < kSizeEpsilon` (`core/fpdftext/cpdf_textpage.cpp:886`, `:1081`) loses a spaces-only object's `w0` word separator. Instrumenting `ProcessInsertObject` in a private PDFium build refuted that: the separator is **not** lost, because `GenerateSpace` already emits a space wherever the geometry calls for one, so keeping the object as well double-counted it. Replacing the conjunct with the plain box test — plus a page-level rescue for the one case the upstream report actually pins, so `whitespace.pdf` keeps its space — took the benchmark from **22 to 42 of 44 byte-exact with none lost**, whitespace-normalized 41 → 43, and the board's text pages **1785 → 2027 of 2067** (non-empty 760 → 993 of 1005) with **0 rows down**. See "The generated space was our own rescue" below, which also records the one loss left on the table (`bug_921.pdf`) and why. |
 | **`text_bug_1029.pdf` text** — F1 0.957, **1.000** against the `chars` stream | Almost entirely the harness stream defect (see the row above): via `Display` we lost the whole first line, via the `chars` stream it is present and the soft hyphen matches. The residual is one trailing space before each `\r`. | **harness defect** + **inferior** (small residual) | Closed: the harness fix took this row to 1.000; the trailing space did not survive into the char stream. |
 | **`mixed_en_uicase.pdf` text** — F1 0.991, **1.000 and byte-exact** against the `chars` stream | **Pure harness artefact — the engine already matches.** Against the `chars` stream our output is byte-identical to the oracle modulo the BOM. Both engines write `0x2` to the record and `U+00AD` to the buffer (`crates/pdfrum-text/src/pipeline.rs:962-967` / `core/fpdftext/cpdf_textpage.cpp:1359-1361`) and both exempt `kHyphen` from `IsControlChar` (`cpdf_textpage.cpp:134-147` / `crates/pdfrum-text/src/charinfo.rs:93-108`). | **harness defect** — no engine loss | Closed: the harness fix took this row to 1.000, byte-exact, as predicted. |
 | **`image_ccitt_3bigpreview.pdf` text** — F1 0.994, **0.999** against the `chars` stream | The same spurious generated space, in the vertical CJK region: `Clips Clips` vs `Clips` on line 4, and four blank lines that are a lone space each. | **inferior — mostly fixed 2026-09-06 (M28)** | The generated-space half is closed by the `run.advance` fix described below: F1 0.994 → **0.9988**, and the four blank lines that were a lone space each are gone. The **remaining** difference is not a space — we emit `Clips` twice where the oracle emits it once, in the vertical CJK region, which is a duplicate-object question rather than a spacing one. It is the only one of the 44 still not byte-exact. |
@@ -242,24 +242,70 @@ and lowers another is not a fix:**
 
 | | before | after |
 |---|---|---|
-| benchmark, byte-exact | 22 / 44 | **43 / 44** |
+| benchmark, byte-exact | 22 / 44 | **42 / 44** |
 | benchmark, whitespace-normalized | 41 / 44 | **43 / 44** |
 | `text_quick_start.pdf` F1 | 0.641 | **1.000** |
 | `text_tcpdf_055.pdf` F1 | 0.948 | **1.000** |
-| board text pages matched | 1785 / 2067 | **2055 / 2067** |
+| board text pages matched | 1785 / 2067 | **2027 / 2067** |
 | board non-empty text pages | 760 / 1005 | **993 / 1005** |
-| board files passing | 1551 / 1759 | **1707 / 1759** |
+| board files passing | 1551 / 1759 | **1679 / 1759** |
 
-21 benchmark files gained and **none was lost**; on the board 159 files
-gained text pages and **none lost any**, 156 files changed status and all
-156 upward. The whitespace-normalized count *rising* is the direct evidence
+20 benchmark files gained and **none was lost**; on the board 131 files
+gained text pages and **none lost any**, 128 files changed status and all
+128 upward. The whitespace-normalized count *rising* is the direct evidence
 that no word boundary was destroyed — had the dropped objects been carrying
 separators, that column would have fallen.
 
+### The ruling this reversed was not wholly wrong, and the bound matters
+
+The conjunct was not a guess. It was ruled against a filed upstream report —
+`crbug.com/40643656`, `crbug.com/444176962` — with `whitespace.pdf` committed
+as its fixture, and three `pdfrum-text` embedder tests pinning it. A first
+attempt at this change removed the conjunct outright and left those three
+tests failing; that is corrected here.
+
+**Both halves are true, and the split is by page rather than by object.**
+
+- *With a neighbour*, the ruling is wrong. `GenerateSpace` already emits the
+  separator from the gap the object sits in, so keeping the object emits it
+  twice. `hello_world_with_invisible_spaces.pdf` is that shape, and so are
+  all 20 corpus files: its assertion is back to the oracle's plain string.
+- *Without a neighbour*, the ruling is right. When the page's single text
+  object draws only spaces there is no gap for the heuristic to span, and
+  PDFium's box gate discards the page's only content — `whitespace.pdf`
+  extracts as empty where a space is plainly drawn. `[oracle-bug]` stands,
+  and `pipeline::Builder::keep_spaces_only` keeps it.
+
+That rescue is deliberately the tightest bound that covers the report. It
+costs one benchmark file — `vector_en_system.pdf`, a corpus page of exactly
+this shape where we emit the space and the oracle emits nothing — which is
+the difference between 42 and 43 of 44, and it is a divergence we choose
+rather than one we failed to notice. Two looser bounds were measured and
+both lose more: rescuing *any* page with no width-occupying object also
+rescues multi-object whitespace pages, costing `image_en_fqa.pdf`,
+`vector_en_system.pdf` and `text_tcpdf_055.pdf`; rescuing any single-object
+page also rescues `bug_651304.pdf`, whose one object draws `U+0001`, and
+that moves a board row *down*.
+
+**One loss is left on the table deliberately.** On `bug_921.pdf` PDFium's
+gate drops five objects carrying running Russian prose — its output begins
+mid-sentence at "разве не выражает" where the page draws "И разве не
+выражает" — and we no longer recover them. No object-level rule can:
+those five have empty boxes, no Unicode mapping and `w0` 5.3–11.3, and the
+control runs the oracle *correctly* drops in `text_tcpdf_055.pdf` and
+`bug_651304.pdf` have empty boxes, no Unicode mapping and `w0` 9.6. A rule
+keyed on any property the gate can see keeps both or neither; measured,
+keeping both scores 41 of 44 and 1961 of 2067 board text pages with one row
+down, against 42 and 2027 with none. Five characters on one fixture is not
+worth two files and a board row, so the divergence stays filed upstream and
+the test records why in its own comment.
+
 **`text_tcpdf_055`'s C0 row is closed by the same change**, and it was
 neither a filtering rule nor a charcode mapping: the `^@ ^A … ^_` run lived
-in a spaces-only object that PDFium had already discarded before extraction,
-so its row is empty for the same reason every other row differed.
+in an empty-box object that PDFium had already discarded before extraction,
+so its row is empty for the same reason every other row differed. That this
+row and `bug_921.pdf`'s five recovered letters are *indistinguishable* to the
+gate is what settles the trade described above.
 
 **What remains.** `image_ccitt_3bigpreview.pdf` at 0.9988 is the only one of
 the 44 still not byte-exact, and its residual is no longer a space: we emit
@@ -268,10 +314,18 @@ That is a duplicate-object question and is not part of this defect.
 
 `TextRun::advance` had no reader left once the conjunct went, and was
 removed with it (a public field, so `docs/api-baseline/pdfrum-text.txt`
-records the removal). The two tests that asserted 45 words on
-`text_quick_start`'s first page now assert **33**, which is the oracle's own
-count for that page — the former 45 was counting the spurious spaces as word
-separators, so those tests had been pinning the bug.
+records the removal). The gate is now `object::gate` returning an
+`ObjectGate`, with the page-level exception passed in, so the two reasons an
+object survives cannot be confused.
+
+Five tests moved. The two that asserted 45 words on `text_quick_start`'s
+first page now assert **33**, the oracle's own count — the 45 was counting
+the spurious spaces as separators. `invisible_spaces_are_extracted_as_the_
+spaces_they_draw` is back to the oracle's plain string, and
+`a_cyrillic_run_comes_out_in_order` back to the oracle's 268; both carry the
+reasoning above in their own comments. `a_whitespace_only_page_yields_the_
+one_space_it_draws` is unchanged and still passing, which is the point of
+the page-level rescue.
 
 ### What this means for the board
 

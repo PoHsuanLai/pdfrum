@@ -107,18 +107,38 @@ right answer. Without it, a corpus-wide `0x20` → `0xA0` change appears at ever
 such space.
 
 **How often the mask holds, measured (2026-09-06).** pdfrum implemented the
-suggested advance-based predicate and then measured it against `pdfium_test`
-over 44 benchmark documents and a 1759-file conformance corpus. On real
-documents the mask described above holds essentially everywhere: keeping these
-objects made the extracted text *differ from PDFium's on 21 of the 44 files*
-and on 159 corpus files, and in every case the difference was a **duplicated**
-separator — the inter-object heuristic had already emitted one — never a
-recovered one. pdfrum has therefore reverted to PDFium's box gate.
+suggested advance-based predicate and measured it against `pdfium_test` over
+44 benchmark documents and a 1759-file conformance corpus. The result bounds
+this report rather than withdrawing it, and it also strengthens one half of
+it.
 
-This does not withdraw the report; it bounds it. The loss is real for the two
-repro files above, where the space is alone in its object with no neighbouring
-object for the heuristic to span. It is not observable wherever another text
-object precedes or follows, which is the overwhelming majority of real
-content. A fix should be scoped to the isolated case, and any change to the
-predicate needs to be scored against the extracted text of a large corpus,
-because the heuristic and the gate are load-bearing together.
+*Where the mask holds.* On pages that contain another text object, keeping
+these objects made the extracted text **differ** from PDFium's on 20 of the
+44 files and on 131 corpus files, and in every case the difference was a
+**duplicated** separator, never a recovered one — the inter-object heuristic
+had already emitted it. So the loss described above is genuinely not
+observable whenever a neighbour exists, which is the overwhelming majority
+of real content.
+
+*Where it does not.* When the spaces-only object is the page's **only** text
+object there is no neighbour for the heuristic to span, and the loss is
+total: `whitespace.pdf` extracts as the empty string. pdfrum diverges from
+PDFium for exactly this shape and keeps the space.
+
+*A stronger case than spaces.* The same gate drops objects that draw
+**letters**, not only spaces. On `testing/resources/bug_921.pdf`,
+`pdfium_test --txt` begins mid-sentence — "разве не выражает глубокого
+челове…" — where the page draws "И разве не выражает…". Five characters of
+running Russian prose are lost: an `И`, an em dash, a `в`, a `я` and a
+second `И`. Their glyph boxes are empty while their `w0` is 5.3–11.3, so
+this is the same defect, and here it silently corrupts extracted prose
+rather than dropping whitespace. **This is probably the strongest repro in
+the report and it does not depend on the space argument at all.**
+
+*What a fix must contend with.* A predicate keyed on the advance alone
+cannot distinguish `bug_921.pdf`'s five recovered letters from the C0
+control runs the current gate correctly discards in
+`testing/resources/text_tcpdf_055.pdf` and `bug_651304.pdf`: all of them
+have empty boxes, no `ToUnicode` mapping, and comparable `w0`. Any change
+here needs to be scored against the extracted text of a large corpus,
+because the gate and the spacing heuristic are load-bearing together.

@@ -477,6 +477,86 @@ fn layout(run: &mut TextRun, codes: &[CharCode], mode: TextRenderMode, line_widt
     run.rect = rect;
 }
 
+/// The width below which a text object is not worth extracting at all, and
+/// the height below which a character's box is rescued. In page space.
+///
+/// `kSizeEpsilon`, `cpdf_textpage.cpp:47`.
+pub(crate) const SIZE_EPSILON: f64 = 0.01;
+
+/// What the degenerate-object gate decides about one text object.
+///
+/// PDFium asks one question — `fabs(GetRect().Width()) < kSizeEpsilon` at
+/// `cpdf_textpage.cpp:886` and `:1081` — and drops everything that fails it.
+/// We ask the same question, and name the empty-box case so the page-level
+/// rescue in [`crate::pipeline`] can find it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectGate {
+    /// The glyphs occupy real width. Kept, as PDFium keeps it.
+    Occupies,
+    /// The glyph bounding box has no width, so extraction does not see the
+    /// object.
+    ///
+    /// PDFium drops it and so do we. The reason it is safe to drop is that
+    /// the inter-object rules (`GenerateSpace`) already emit a separator
+    /// from the gap the object sits in, so keeping it as well emits the
+    /// separator *twice* — that duplication was the whole of the "spurious
+    /// generated space" defect, and it cost 21 of the 44 benchmark files
+    /// their byte-exact match.
+    ///
+    /// `[oracle-bug]` That reasoning needs a gap, and a gap needs a
+    /// neighbour. The page that has none is a real loss, reported as
+    /// `crbug.com/40643656` and `crbug.com/444176962`, and is rescued by
+    /// [`keep_spaces_only`](crate::pipeline::Builder::keep_spaces_only)
+    /// rather than here — this classifier sees one object at a time and
+    /// cannot ask a question about the page.
+    EmptyBox,
+}
+
+impl ObjectGate {
+    /// Whether extraction should see the object at all.
+    ///
+    /// `rescue` is the page-level exception described on
+    /// [`Self::EmptyBox`]: the page's one object draws only spaces, so no
+    /// neighbour exists for a separator to be generated against.
+    #[must_use]
+    pub fn keeps(self, rescue: bool) -> bool {
+        match self {
+            Self::Occupies => true,
+            Self::EmptyBox => rescue,
+        }
+    }
+}
+
+/// Classifies one text object for the degenerate-object gate.
+///
+/// This is `fabs(GetRect().Width()) < kSizeEpsilon`, and nothing more. Two
+/// richer predicates were measured against the whole corpus and both lost:
+///
+/// - Gating on the object's **advance** as well — `w0` summed through the
+///   text matrix, ISO 32000-1 §9.4.3, which §9.2.2 keeps distinct from the
+///   bounding box — keeps every spaces-only object. That was this crate's
+///   behaviour until M28 and is the "spurious generated space": 22 of 44
+///   byte-exact instead of 43, board text pages 1785 of 2067 instead of 2055.
+/// - Gating on the advance *and* on the object drawing a non-space character
+///   recovers `bug_921.pdf`, where PDFium loses five characters of running
+///   Russian prose. But objects of identical shape — no Unicode mapping,
+///   `w0` 9.6 — are control runs the oracle rightly drops in
+///   `text_tcpdf_055.pdf` and `bug_651304.pdf`, so the rule keeps both or
+///   neither: 41 of 44, board 1961 of 2067, and one board row *down*.
+///
+/// The plain box test is therefore what ships, with the page-level rescue
+/// for the one case the upstream report pins. `bug_921.pdf`'s five
+/// characters stay lost, and that loss is recorded in the upstream draft
+/// rather than traded for two files and a board row.
+#[must_use]
+pub fn gate(run: &TextRun) -> ObjectGate {
+    if run.rect.width().abs() < SIZE_EPSILON {
+        ObjectGate::EmptyBox
+    } else {
+        ObjectGate::Occupies
+    }
+}
+
 /// Every text object on a page, in the order a pre-order walk reaches them,
 /// paired with the flattened index a [`CharBox`](crate::CharBox) refers to.
 ///

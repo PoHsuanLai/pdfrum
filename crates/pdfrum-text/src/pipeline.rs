@@ -40,7 +40,7 @@ use pdfrum_object::{Name, Resolve};
 
 /// The width below which a text object is not worth extracting at all, and
 /// the height below which a character's box is rescued. In page space.
-const SIZE_EPSILON: f64 = 0.01;
+pub(crate) use crate::object::SIZE_EPSILON;
 
 // `U+00AD` SOFT HYPHEN — what the text buffer carries at a hyphenated line
 // break.
@@ -164,7 +164,49 @@ pub(crate) struct Builder<'a, R: Resolve> {
     display: Affine,
     /// `/ViewerPreferences /Direction (R2L)`.
     rtl: bool,
+    /// Whether this page's spaces-only objects are kept.
+    ///
+    /// They are normally dropped, as PDFium drops them, because the
+    /// inter-object rules re-emit the separator from the gap the object sits
+    /// in — keeping it as well is a duplicate, and that duplicate was the
+    /// whole of the "spurious generated space" defect.
+    ///
+    /// `[oracle-bug]` That argument needs a gap, and a gap needs two
+    /// objects. When the page holds **exactly one** text object and it is
+    /// spaces-only, there is no neighbour for `GenerateSpace` to span at
+    /// all: PDFium's box gate discards the page's only content and `--txt`
+    /// comes back empty where the page plainly draws a space.
+    /// `whitespace.pdf` is that page, reported as `crbug.com/40643656`, and
+    /// we keep it.
+    ///
+    /// The bound is deliberately the tightest one that covers the report. A
+    /// looser reading — "no object on the page occupies width" — also
+    /// rescues pages of *several* spaces-only objects, and those do have
+    /// gaps between them, so the heuristic fires and we emit whitespace-only
+    /// lines the oracle does not: measured, that costs `image_en_fqa.pdf`,
+    /// `vector_en_system.pdf` and `text_tcpdf_055.pdf` their byte-exact
+    /// match for nothing gained. Deciding this per page rather than per
+    /// object is the point: the question is about the page.
+    keep_spaces_only: bool,
     resolver: &'a R,
+}
+
+/// Whether every code the object draws maps to `U+0020`.
+///
+/// The page-level rescue is for the space the upstream report names, not for
+/// any object the box gate discards: `bug_651304.pdf`'s single object draws
+/// `U+0001`, a control code the oracle is right to drop, and rescuing it
+/// costs a board row for nothing.
+fn draws_only_spaces(run: &TextRun) -> bool {
+    run.count() > 0
+        && (0..run.count())
+            .filter_map(|index| run.item(index))
+            .all(|item| {
+                run.font
+                    .unicode_from_charcode(item.code)
+                    .first()
+                    .is_some_and(|ch| *ch == ' ')
+            })
 }
 
 impl<'a, R: Resolve> Builder<'a, R> {
@@ -186,6 +228,11 @@ impl<'a, R: Resolve> Builder<'a, R> {
             line_rect: Rect::ZERO,
             display,
             rtl,
+            // Exactly one object on the page and it draws only spaces, so
+            // there is no second object to act as the neighbour a separator
+            // would be generated against, and what is lost is the space the
+            // upstream report is about.
+            keep_spaces_only: matches!(runs, [run] if draws_only_spaces(run)),
             resolver,
         }
     }
@@ -204,23 +251,14 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// of the reading-order machinery.
     pub(crate) fn offer(&mut self, index: usize, diags: &mut Diagnostics) {
         let Some(run) = self.run(index) else { return };
-        // Gate on the glyph bounding box, as `cpdf_textpage.cpp:1081` does
-        // with `fabs(GetRect().Width()) < kSizeEpsilon`, so an object whose
-        // glyphs occupy no width never reaches extraction.
+        // The degenerate-object gate: `fabs(GetRect().Width()) <
+        // kSizeEpsilon`, `cpdf_textpage.cpp:1081`. See
+        // [`crate::object::ObjectGate`] for what the two answers mean and
+        // for the two richer predicates that were measured and lost.
         //
-        // This used to carry an extra `run.advance < SIZE_EPSILON` conjunct,
-        // ruled an `[oracle-bug]` on the reasoning that an object made only
-        // of spaces has empty glyph boxes but a nonzero `w0` per §9.4.3, so
-        // PDFium was losing a word separator. **Measurement refuted that**
-        // (M28): the separator is not lost, because the inter-object rules
-        // below (`decide`/`GenerateSpace`) already emit a space wherever the
-        // geometry calls for one. Keeping the object as well double-counted
-        // it, which was the whole of the "spurious generated space" defect —
-        // it cost 21 of the 44 benchmark files their byte-exact match
-        // (22 → 43) and `text_quick_start.pdf` its F1 (0.641 → 1.000),
-        // while the whitespace-normalized count rose 41 → 43, so no token
-        // boundary was lost anywhere by dropping these objects.
-        if run.rect.width().abs() < SIZE_EPSILON {
+        // `keep_spaces_only` is the page-level rescue: see
+        // [`Builder::keep_spaces_only`].
+        if !crate::object::gate(run).keeps(self.keep_spaces_only) {
             diags.record(Severity::Recovered, DiagKind::TextObjectDegenerate, None);
             return;
         }
@@ -291,7 +329,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
             // Re-checked, because the batch may hold an object whose box
             // changed meaning since it was offered — the same gate as
             // `offer`, and `cpdf_textpage.cpp:886`.
-            if run.rect.width().abs() < SIZE_EPSILON {
+            if !crate::object::gate(run).keeps(self.keep_spaces_only) {
                 continue;
             }
             let state = self.pre_marked_content(run, diags);
