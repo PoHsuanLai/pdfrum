@@ -395,3 +395,66 @@ commit has not regressed**; it was measured in a different process state.
 And a re-baseline must gate on `pgrep` returning nothing rather than on load
 average, which a job between iterations can satisfy while still perturbing
 the box.
+
+**The durable lesson is larger than either rule: while the pathological
+documents shared a group, the ratchet's bands were tighter than the harness
+could resolve.** The bands are 3% to 5%, measured and correct for what they
+describe. The perturbation was reaching 20% and more. A threshold below a
+harness's own reproducibility does not detect regressions — it manufactures
+them, and it manufactures a fresh set each run. Two runs of the same binary at
+the same commit on the idle reference box reported 34 and 27 regressions
+sharing only **13** rows, and the warm cluster moved bodily from
+`render-warm-vello-cpu` (14 rows, 0 on tiny-skia) to `render-warm-tinyskia`
+(13 rows, 1 on vello-cpu). No code change can move between rasterizer
+backends, so that migration is the measurement, not the engine.
+
+The harness now orders the three heavy documents last within each render group
+(`crates/pdfrum-render/benches/render.rs`), which removes the one perturbation
+large enough to clear a band. **Rows in those six groups are not directly
+comparable across that change**: they previously measured the renderer plus
+whatever the allocator was still recovering from, and they now measure the
+renderer. The benchmark ids and the bands are unchanged, so the baseline keeps
+its history; the numbers in it were re-recorded in the same commit.
+
+What this does not do is make the suite immune. It removes the largest known
+source, and the test of whether a band is trustworthy remains empirical: two
+consecutive runs at the same commit should agree row for row within it.
+
+### What the 2026-09-06 re-baseline raised, and why
+
+Nineteen rows were raised by `ratchet update --accept-regressions`. **None of
+them is a regression between runs.** Seventeen are baseline entries that were
+always wrong and that the harness fix made visible by removing the noise that
+was masking them; the other three are the `vector_tcpdf_009` cold rows, the
+deliberate trade recorded above.
+
+The evidence is that every raised row reproduces across runs, including across
+the harness change itself — so the new number is what the file costs and the
+old one was not:
+
+| row | old harness | new harness | against baseline |
+|---|---|---|---|
+| `render-cold-agg/forms_push_button` | 45.32 ms | 45.35 ms | +6.5% |
+| `render-cold-tinyskia/forms_push_button` | 55.86 ms | 55.71 ms | +5.4% |
+| `render-cold-vello-cpu/forms_push_button` | 50.49 ms | 50.58 ms | +6.1% |
+| `render-cold-agg/mixed_tcpdf_006` | 20.61 ms | 20.56 ms | +16.0% |
+| `render-cold-tinyskia/mixed_tcpdf_006` | 24.32 ms | 24.34 ms | +16.3% |
+| `render-cold-vello-cpu/mixed_tcpdf_006` | 29.11 ms | 29.17 ms | +13.4% |
+
+Two trios, each stable to within 0.3% across a change that reordered the group
+they live in, each five to sixteen percent from its recorded baseline. A value
+that does not move cannot be regressing. The sharpest case is
+`text/vector_paths_1751`, flagged +16.3% against a baseline of 3.545 ms while
+measuring 4.1202 ms and 4.1297 ms in two runs a harness change apart —
+**p = 0.69**, statistically indistinguishable.
+
+The same reading applies to the `open` group, where it was found first: those
+entries were physically implausible for the work involved — an `open` median of
+15.6 us against `mixed_formfield` at 3,470 us — and the group is now recorded
+between 55% and 96% lower, partly from the `memcpy` fix above and partly
+because the old numbers were never right.
+
+The lesson for a reader of this file is the one in the subsection above: a
+regression list produced by a harness that cannot reproduce itself is not a
+list of regressions. Check that a row moves *between runs* before believing it
+moved at all.
