@@ -99,17 +99,6 @@ pub fn to_vello_pixmap(p: &Pixmap) -> Option<vello_cpu::Pixmap> {
     Some(out)
 }
 
-/// An engine [`Pixmap`] built from a vello one.
-#[must_use]
-pub fn from_vello_pixmap(p: &vello_cpu::Pixmap) -> Pixmap {
-    Pixmap::from_vec(
-        u32::from(p.width()),
-        u32::from(p.height()),
-        p.data_as_u8_slice().to_vec(),
-    )
-    .unwrap_or_else(|| Pixmap::new(u32::from(p.width()), u32::from(p.height())))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,10 +119,14 @@ mod tests {
     }
 
     #[test]
-    fn pixmap_round_trips() {
+    fn a_pixmap_converts_byte_for_byte() {
+        // The two pixmaps are the same premultiplied RGBA8 bytes in the same
+        // order, which is what lets the backend rasterize straight into an
+        // engine `Pixmap` through a `PixmapMut` instead of converting back.
         let p = Pixmap::filled(3, 2, peniko::Color::from_rgba8(10, 20, 30, 255));
         let v = to_vello_pixmap(&p).expect("converts");
-        let back = from_vello_pixmap(&v);
-        assert_eq!(back.pixel(1, 1), Some([10, 20, 30, 255]));
+        assert_eq!(v.width(), 3);
+        assert_eq!(v.height(), 2);
+        assert_eq!(v.data_as_u8_slice(), p.data());
     }
 }
