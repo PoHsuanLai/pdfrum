@@ -9,6 +9,21 @@ Three sources feed this file: the open rows of the internal work queue, the
 standing losses in `docs/benchmarks/losses-explained.md`, and the upstream bug
 drafts under `docs/upstream/`.
 
+**To file one.** The format is GitHub-Flavored Markdown with a fixed skeleton,
+which pastes unchanged into GitHub, GitLab, Gitea, Jira and Linear: the `##`
+line is the issue title, `**Labels:**` and `**Area:**` are metadata, and the
+four `###` sections are the body. Copy from the `##` line to the `---` that
+ends the entry, drop the two metadata lines into the tracker's own fields, and
+paste the rest as the description. For a bulk file:
+
+```sh
+gh issue create --title "<the ## line>" --body-file <entry.md> --label "<labels>"
+```
+
+Entries titled **Upstream (project)** go to that project's tracker, not ours;
+each names its target and the draft under `docs/upstream/` that carries the
+full write-up, source citations and repro files.
+
 ---
 
 ## Close the warm render gap against mupdf
@@ -69,16 +84,32 @@ render inside the image path. Wall time on it is 1.5 s against mupdf's 0.16 s.
 
 ### Proposed fix
 
-Decode at the size the page actually draws rather than at full resolution: the
-image-rows pipeline's reduction stage plus a scaled JPEG decode, the latter
-blocked on `zune-jpeg` gaining a `scale_denom` option (see the zune issue
-below). An interim nearest-neighbour 1/2, 1/4, 1/8 reduce immediately after
-decode, before the general resample, is available without the upstream change.
+**The image path was not the cause, and this entry's original diagnosis was
+wrong.** Probing `VmHWM` through the rasterize path found the page is 4473 pt
+square, so at 150 DPI the target is 9318x9318 and one page-sized RGBA8 buffer
+is 331 MiB -- and three existed at once. `VelloCpuDevice` allocated a `base`
+pixmap eagerly in `new_target`, read it once to seed the target and dropped
+it; `rasterize` then built a second `vello_cpu::Pixmap` and copied it back out
+with `to_vec`. That file's own image is drawn *above* 1:1, so there was
+nothing for a reduction to reduce.
+
+The fix is in `crates/pdfrum-raster-vello-cpu`: a `Seed::{Solid, Backdrop}`
+enum so a uniform clear colour costs four bytes rather than a target-sized
+buffer, and lending `vello_cpu` a `PixmapMut` over the result buffer so
+neither the second pixmap nor the copy exists.
+
+Decoding at the drawn size remains worth doing for the document shape this
+file was mistaken for, and the `zune-jpeg` `scale_denom` request below still
+stands -- but it is a separate issue, not this one.
 
 ### Acceptance
 
 Peak resident memory under 1 GiB on that file, with the conformance board
 unchanged row for row.
+
+**Met on a branch, not yet landed:** 1596 -> 916 MiB, corpus render median
+49.73 -> 30.95 MiB, and the file rendered faster rather than slower (warm
+1489 -> 1290 ms). Close this when that branch lands with its board verified.
 
 ---
 
@@ -628,29 +659,63 @@ Issue filed on the PDFium tracker.
 
 ---
 
-## Upstream (pdfium): the text-object bbox gate drops standalone spaces
+## Upstream (pdfium): the empty-box text gate drops real letters, not only spaces
 
-**Labels:** upstream, pdfium, bug
+**Labels:** upstream, pdfium, bug, text-extraction
 **Area:** `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`
 
 ### Context
 
-Goes to **pdfium**. Confidence is observed output.
+Goes to **pdfium**. Confidence is observed output, measured against
+`pdfium_test --txt` on the checkout's own fixtures.
+
+`CPDF_TextPage` gates each text object on the width of its glyph bounding box
+(`core/fpdftext/cpdf_textpage.cpp:881` and `:1076`, against `kSizeEpsilon` at
+`:42`). A glyph whose outline encloses no area -- a space, and some fonts'
+letters -- has an empty box while its `w0` displacement per ISO 32000-1
+Sec. 9.4.3 is not zero, so the object is discarded before extraction.
 
 ### Problem
 
-The bounding-box gate applied to text objects drops standalone space characters
-from extracted text. This is the root cause behind two existing Chromium bugs,
-crbug.com/40643656 and crbug.com/444176962, which report the symptom without
-naming it.
+The known symptom is lost spaces, reported twice upstream without the cause
+being named (crbug.com/40643656, crbug.com/444176962). **The stronger finding
+is that the same gate drops running prose.** On
+`testing/resources/bug_921.pdf`, `pdfium_test --txt` begins mid-sentence at
+"разве не выражает" where the page draws "И разве не выражает": five
+characters of Russian -- an `И`, an em dash, a `в`, a `я` and a second `И` --
+are absent from the output. Their glyph boxes are empty and their `w0` is
+5.3-11.3.
+
+This is a data-loss defect rather than a spacing one, and the letters case is
+the better repro because it cannot be mistaken for a whitespace-normalisation
+question.
 
 ### Proposed fix
 
-File the draft and link both existing bugs.
+Gate on the object's displacement rather than its glyph box, with two
+exclusions that a naive advance test gets wrong -- both found by measurement,
+not by reading:
+
+- **The scalar must not be Unicode whitespace**, not merely `U+0020`. Fifty
+  `annots/` fixtures draw `U+00A0` in an empty-box object; a `U+0020`-only
+  test appends a trailing space to every one.
+- **The scalar must not be a C0 or C1 control.** `text_tcpdf_055.pdf` and
+  `bug_651304.pdf` draw control codes in empty-box objects and the gate is
+  right to drop those.
+
+Where the object carries no `ToUnicode` mapping, read the character code, as
+`cpdf_textpage.cpp:1213-1215` already does elsewhere. That is the property
+that separates the letters worth keeping from the controls worth dropping:
+both families have an empty mapping, and only the code distinguishes them.
 
 ### Acceptance
 
-Issue filed and cross-linked.
+Issue filed against pdfium with both existing Chromium bugs cross-linked, and
+the `bug_921.pdf` letter loss leading rather than the whitespace symptom. A
+downstream implementation of the predicate above is measured over a 1759-file
+corpus: it recovers the five characters, keeps every control-code case the
+gate currently gets right, and moves 124 files from failing to passing on
+their text artifact with none moving down.
 
 ---
 
