@@ -863,6 +863,141 @@ Filed, or explicitly dropped.
 
 ---
 
+## A gated combo box draws nothing in its edit box while its dropdown is open
+
+**Labels:** form, appearance
+**Area:** `crates/pdfrum-form` (`route::live_state`, `route::highlight_of`)
+
+### Context
+
+`resources/pixel/bug_1372651.{in,pdf}#form-events` fails at SSIM 0.981722
+against the 0.990000 floor. Its `.evt` is three events that open the
+dropdown on a combo box carrying `/Ff 131072` — bit 18 (Combo) set, bit 19
+(Edit) clear, so the box is **gated**: read-only, not editable.
+
+M14's close named this row's mechanism as "the open combo dropdown window"
+and OWED item 4 closed that work. The popup itself is drawn correctly. The
+residue is elsewhere and was never diagnosed.
+
+### Problem
+
+Two independent defects, measured by differencing `pdfium_test --send-events`
+against `pdfrum-tool --send-events` on the same script:
+
+1. **The edit box is blank.** The oracle draws `Item3` — the selected row's
+   label — in the widget's own `/Rect` at rows y49-60. We draw white. The
+   cause is `route::live_state`, whose choice arm reads
+   `(_, false) => ""`: a non-editable combo is given empty live text. Its own
+   comment says "every other choice field shows the row it has selected,
+   which the generator resolves from `selected`", but
+   `ap::field_body::combo_box` takes `live.text` unconditionally when a live
+   state is present and never consults `selected`. The two sides disagree.
+
+   Upstream does not gate this. `CPWL_ComboBox::SetSelect`
+   (`fpdfsdk/pwl/cpwl_combo_box.cpp:129-136`) ends
+   `edit_->SetText(list_->GetText())` with no flag test, and `edit_` exists
+   for every combo; the read-only gate stops the edit being *typed into*, not
+   being *shown*.
+
+2. **The popup's row pitch is short.** The oracle stacks the three list rows
+   at a 14-device-row pitch (item text at y69, y83, y97) and its popup frame
+   spans y65-108. Ours stacks them at 11 (y67, y78, y89) and the frame spans
+   y65-99, leaving nine rows of page grey where the list should still be.
+   See the companion entry below; this is the same shortfall.
+
+The `highlight_of` comment claiming a gated combo "answers nothing" is also
+wrong on the C++ and should be corrected whether or not the band is drawn:
+`OnKeyDown` (`cpwl_combo_box.cpp:411,433`) and `NotifyLButtonUp` (`:509-511`)
+both reach `SetSelectText`, whose last statement is `edit_->SelectAllText()`
+(`:522-527`), and the `kComboboxAllowCustomText` test sits *below* them at
+`:437` — it gates typing a custom string, not showing the chosen row.
+
+### Proposed fix
+
+Resolve the selected row's label in `route` and pass it as the gated combo's
+live text, so `combo_box` draws the same string the unfocused path already
+resolves through `selected_indices`. A first attempt did exactly this and
+moved the edit box from wholly blank to a 526-pixel residue, but it also
+drew a selection band on a **second, unfocused widget of the same field** on
+another page (`bug_1445426` page 1, 340 -> 8121 differing pixels), so the
+scoping needs settling before it lands: the label must reach only the widget
+the session is actually editing. Neither this row nor that one crosses its
+floor on the text alone — defect 2 dominates — so the two want landing
+together with one measurement.
+
+### Acceptance
+
+`bug_1372651.{in,pdf}#form-events` at or above SSIM 0.990000, with no
+`form-events` row moving down.
+
+---
+
+## A list box's row pitch is short, by the substituted face's ascent and descent
+
+**Labels:** form, appearance, font
+**Area:** `crates/pdfrum-doc` (`ap::field_body::list_box`), `crates/pdfrum-form` (`route::row_height`)
+
+### Context
+
+`resources/pixel/scrollable_widgets1.{in,pdf}#form-events` fails at SSIM
+0.989732 against the 0.990000 floor — 0.000268 short. Its field is
+`/FT /Ch` with an explicit `/DA (0 0 0 rg /F1 12 Tf)`, `/F1` being base-14
+`/Helvetica`, in a `/Rect [100 400 200 430]` on a 300x600 page rendered 1:1.
+
+M14's close recorded this row as OWED item 5, "the erased scrollbar chrome",
+and dispositioned it as a ruling rather than a defect: roughly 1771 lines of
+`cpwl_scroll_bar.cpp`, `cpwl_sbbutton.cpp` and `cpwl_list_ctrl.cpp` that the
+milestone never accounted for, with the bar's 12-unit *reservation* honoured.
+
+### Problem
+
+**The scrollbar is not the whole residue, and is not most of it.** Of the
+2060 differing pixels, only **381 (18.5%)** lie in the scrollbar strip
+(columns 186-199). The other **1679** are in the text and selection area,
+columns 100-185.
+
+Those 1679 are a row-pitch shortfall. Measured on the rendered page:
+
+| | oracle | ours |
+|---|---:|---:|
+| selection band height | 24 rows | 21 rows |
+| band top / bottom | y175 / y198 | y173 / y193 |
+| list content rows | y174-198 | y172-193 |
+
+Our rows are about seven eighths of the oracle's and the whole content sits
+two rows high, leaving five rows of the widget's box unfilled at the bottom
+where the oracle's last row reaches the border.
+
+The ratio is the one `ap::mod`'s own `FormFonts` doc comment already names:
+"an ascent and descent taken from the base-14 metric tables are 718 and -219,
+while the ones taken from the **substituted face** ... are 905 and -211 ...
+On a list box the difference is the row pitch: 11.24 units per row against
+13.39, which is two extra rows in a thirty-unit box." `(718+219)/(905+211) =
+0.840`, and `21/24 = 0.875`. The same shortfall shows on `bug_1372651`'s
+popup, whose rows stack at 11 where the oracle's stack at 14.
+
+So the row height is being measured with the `/DA` font's own base-14
+metrics where the substituted face is what draws — the same class of defect
+as M14's OWED item 1, which fixed it for the caret and not for list rows.
+
+### Proposed fix
+
+Not settled, and deliberately so. M14 block 2 records that correcting
+`route::row_height` alone was tried and **reverted** (1877 -> 1916 differing
+pixels, worse), because `ap::field_body::list_box` computes each row's height
+itself from `vt::layout(...).content_rect_pdf()` and changing one of the two
+desynchronises them; that record concluded "the fix belongs in the `vt`
+metrics". Both computations have to move together, and the change is in
+`pdfrum-doc`'s shared layout metrics rather than in the form crate, so it
+wants its own measurement pass across every row that lays text into a widget.
+
+### Acceptance
+
+`scrollable_widgets1.{in,pdf}#form-events` at or above SSIM 0.990000, with
+the residue re-attributed and the scrollbar strip's 381 pixels named as
+what remains. No other `form-events` or `pixel` row moving down.
+
+---
 ## Markdown: tables come out as prose
 
 **Labels:** markdown, heuristics
