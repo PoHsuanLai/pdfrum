@@ -134,6 +134,22 @@ trip scores above the stated floor on each, the rasterized-region report is
 non-empty exactly where the file has a mesh shading or a non-isolated
 group, and `docs/design/svg.md` records the mapping and its limits.
 
+**MET 2026-09-07.** `crates/pdfrum-svg`: `SvgBackend` decorates any
+`RasterBackend`, so `RasterBackend` and the five rasterizer crates are
+untouched and the board is unchanged — **1759 files, 1675 pass, zero rows
+moved**, every tag bucket and both text rates identical. All 44 corpus files
+convert; 18 first pages are entirely vectors, 24 carry a reported region, 2
+draw nothing. Round trip through `resvg`: at least **0.9761** against our own
+render on every file, and against the oracle's PNG the published per-class
+floors are Vector 0.95, Text/Image/Mixed 0.90, Shading 0.80, Forms 0.75 — each
+set just below its class's worst file, listed with the run in
+`docs/design/svg.md` §5. The shipped crate added **no dependency**: base64 and
+a small lossless PNG encoder are in-crate, because `png` is tool-and-test-only.
+`resvg` is a dev-dependency of that crate alone, `default-features = false` +
+`raster-images`, 15 crates new to the lock, all pure Rust (DEPS.md). One
+render option is overridden — `subpixel_text_positioning`, without which text
+exports as thousands of glyph bitmaps rather than outlines.
+
 
 ## M25 — SVG ingestion: vector assets into a page
 

@@ -1,0 +1,45 @@
+pub mod pdfrum_svg
+#[non_exhaustive] pub enum pdfrum_svg::RasterCause
+pub pdfrum_svg::RasterCause::CompositedGroup
+pub pdfrum_svg::RasterCause::Knockout
+pub pdfrum_svg::RasterCause::MeshShading
+pub pdfrum_svg::RasterCause::NonIsolatedGroup
+pub pdfrum_svg::RasterCause::SampledSource
+pub pdfrum_svg::RasterCause::SoftMask
+impl pdfrum_svg::RasterCause
+pub const fn pdfrum_svg::RasterCause::is_composite(self) -> bool
+pub const fn pdfrum_svg::RasterCause::name(self) -> &'static str
+pub struct pdfrum_svg::RasterRegion
+pub pdfrum_svg::RasterRegion::bounds: kurbo::rect::Rect
+pub pdfrum_svg::RasterRegion::cause: pdfrum_svg::RasterCause
+pub struct pdfrum_svg::RasterReport
+impl pdfrum_svg::RasterReport
+pub fn pdfrum_svg::RasterReport::counts(&self) -> alloc::vec::Vec<(pdfrum_svg::RasterCause, usize)>
+pub fn pdfrum_svg::RasterReport::extend(&mut self, &Self)
+pub fn pdfrum_svg::RasterReport::is_empty(&self) -> bool
+pub fn pdfrum_svg::RasterReport::push(&mut self, pdfrum_svg::RasterRegion)
+pub fn pdfrum_svg::RasterReport::regions(&self) -> &[pdfrum_svg::RasterRegion]
+pub struct pdfrum_svg::SvgBackend<'a, B>
+impl<'a, B> pdfrum_svg::SvgBackend<'a, B>
+pub fn pdfrum_svg::SvgBackend<'a, B>::into_svg(self) -> (alloc::string::String, pdfrum_svg::RasterReport)
+pub fn pdfrum_svg::SvgBackend<'a, B>::new(&'a B) -> Self
+impl<B: pdfrum_render::device::RasterBackend> pdfrum_render::device::RasterBackend for pdfrum_svg::SvgBackend<'_, B>
+pub type pdfrum_svg::SvgBackend<'_, B>::Device = pdfrum_svg::SvgDevice<<B as pdfrum_render::device::RasterBackend>::Device>
+pub fn pdfrum_svg::SvgBackend<'_, B>::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_svg::SvgBackend<'_, B>::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn pdfrum_svg::SvgBackend<'_, B>::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn pdfrum_svg::SvgBackend<'_, B>::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub struct pdfrum_svg::SvgDevice<D>
+impl<D: pdfrum_render::device::RenderDevice> pdfrum_render::device::RenderDevice for pdfrum_svg::SvgDevice<D>
+pub fn pdfrum_svg::SvgDevice<D>::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
+pub fn pdfrum_svg::SvgDevice<D>::fill_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, pdfrum_render::device::FillRule, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_svg::SvgDevice<D>::pop(&mut self)
+pub fn pdfrum_svg::SvgDevice<D>::push_clip(&mut self, &kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub fn pdfrum_svg::SvgDevice<D>::push_clip_rect(&mut self, kurbo::rect::Rect)
+pub fn pdfrum_svg::SvgDevice<D>::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
+pub fn pdfrum_svg::SvgDevice<D>::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
+pub struct pdfrum_svg::SvgPage
+pub pdfrum_svg::SvgPage::report: pdfrum_svg::RasterReport
+pub pdfrum_svg::SvgPage::svg: alloc::string::String
+pub fn pdfrum_svg::page_to_svg<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_svg::SvgPage, pdfrum_render::error::Error>
+pub fn pdfrum_svg::page_to_svg_with<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, pdfrum_render::walk::RenderSession<'_>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_svg::SvgPage, pdfrum_render::error::Error>
