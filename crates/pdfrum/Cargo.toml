@@ -144,11 +144,22 @@ pdfrum-raster-agg.workspace = true
 # only way to check that inversion from outside the crate.
 pdfrum-render.workspace = true
 
+# The filter chain, for `tests/canvas.rs`. An integration test is its own
+# crate, and reading back what the canvas wrote means decoding the stream the
+# save flate-compressed on the way out — which is exactly the round trip the
+# M23 contract asks to be proved. Already a normal dependency; this adds
+# nothing to the tree a caller compiles.
+pdfrum-filters.workspace = true
+
 # Which features each integration test needs. The three not listed —
 # signatures, searchex, thumbnails — run on any feature set; the rest
 # exercise rendering, editing or forms, or name their types.
 [[test]]
 name = "attachments"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "canvas"
 required-features = ["vello-cpu", "edit", "forms"]
 
 [[test]]
@@ -225,6 +236,10 @@ name = "extract-text"
 required-features = ["vello-cpu", "edit", "forms"]
 
 [[example]]
+name = "header-rule"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
 name = "fill-form-and-save"
 required-features = ["vello-cpu", "edit", "forms"]
 
@@ -238,6 +253,10 @@ required-features = ["vello-cpu", "edit", "forms"]
 
 [[example]]
 name = "subset_dump"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
+name = "watermark"
 required-features = ["vello-cpu", "edit", "forms"]
 
 [[test]]

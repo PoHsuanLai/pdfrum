@@ -63,6 +63,8 @@
 mod annotation;
 #[cfg(feature = "edit")]
 mod attach;
+#[cfg(feature = "edit")]
+mod canvas;
 mod document;
 #[cfg(feature = "edit")]
 mod edit;
@@ -89,6 +91,10 @@ mod stamp;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
+/// Drawing on an existing page: [`Canvas`] from [`DocEdit::draw_page`],
+/// with [`Paint`], [`Stroke`] and [`Fill`] saying how a shape is painted.
+#[cfg(feature = "edit")]
+pub use canvas::{Canvas, Fill, Paint, Stroke};
 pub use document::{
     Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions,
     OpenOptionsBuilder, Revision, UnknownFontFileKind,
@@ -164,7 +170,7 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 /// [`FontEncoding`] choosing simple vs composite, and [`StandardFont`] for
 /// [`DocEdit::standard_font`].
 #[cfg(feature = "edit")]
-pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
+pub use pdfrum_edit::{EmbeddedFont, FontEncoding, MissingGlyph, StandardFont};
 
 /// What [`DocEdit::add_attachment`] writes beside the name and the bytes.
 #[cfg(feature = "edit")]
