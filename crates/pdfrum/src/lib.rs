@@ -271,6 +271,17 @@ pub use pdfrum_text::{
 /// Returned by [`Page::links`].
 pub use pdfrum_doc::{Action, ActionKind, Dest, Link};
 
+/// PDF/A conformance checking (ISO 19005): the level asked for, the report,
+/// and the clause and subject of each requirement failed.
+///
+/// Returned by [`Document::check_pdfa`]. In the default feature set — the
+/// checker reads the object graph the parser already builds and adds no
+/// dependency to any tree, so there is nothing for a feature to gate.
+pub use pdfrum_doc::pdfa::{
+    Clause as PdfaClause, Level as PdfaLevel, Report as PdfaReport, Subject as PdfaSubject,
+    Violation as PdfaViolation,
+};
+
 /// Everything a document reported repairing, working around, or refusing.
 ///
 /// Returned by [`Document::diagnostics`].

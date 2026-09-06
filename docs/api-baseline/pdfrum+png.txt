@@ -62,6 +62,11 @@ pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
 pub use pdfrum::PdfString
 pub use pdfrum::PdfVersion
+pub use pdfrum::PdfaClause
+pub use pdfrum::PdfaLevel
+pub use pdfrum::PdfaReport
+pub use pdfrum::PdfaSubject
+pub use pdfrum::PdfaViolation
 pub use pdfrum::Permissions
 pub use pdfrum::PixelFormat
 pub use pdfrum::Pixmap
@@ -325,6 +330,7 @@ pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::D
 pub fn pdfrum::Document::attachments(&self) -> alloc::vec::Vec<pdfrum::Attachment<'_>>
 pub fn pdfrum::Document::blank(f64, f64) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
+pub fn pdfrum::Document::check_pdfa(&self, pdfrum_doc::pdfa::report::Level) -> pdfrum_doc::pdfa::report::Report
 pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::embedded_fonts(&self) -> alloc::vec::Vec<pdfrum::EmbeddedFontFile>
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
