@@ -23,7 +23,6 @@ change could break without a gate noticing.
 | [`design/cli-style.md`](design/cli-style.md) | The output style every command follows: streams, modes, the four layout forms, the palette. |
 | [`design/pdfrum-cli.md`](design/pdfrum-cli.md) | The CLI's scope and command surface, and why it is separate from the conformance harness. |
 | [`design/cargo-features-and-backends.md`](design/cargo-features-and-backends.md) | Feature flags, backend selection, and the dependency boundaries between crates. |
-| [`design/idiomatic-api.md`](design/idiomatic-api.md) | The public API's shape: what is exposed, what is private, and the reasoning for each tier. |
 | [`design/rustdoc.md`](design/rustdoc.md) | What `///` and `//!` are for in this codebase, and the caps each crate page is held to. |
 | [`design/image-rows.md`](design/image-rows.md) | The type-driven image pipeline: decode, reduce, unpack, paint as separate stages. |
 | [`design/dod-layout.md`](design/dod-layout.md) | The data-layout pass: what the profile said to touch, and what it bought. |

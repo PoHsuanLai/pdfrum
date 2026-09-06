@@ -3,7 +3,7 @@
 **Status:** Implemented.  
 **Date:** 2026-09-04  
 **Scope:** `crates/pdfrum-cli`, `crates/pdfrum-markdown`, `crates/pdfrum-tool`, `Cargo.toml`, `DEPS.md`  
-**Related Documents:** [DEPS.md](DEPS.md), [STYLE.md](STYLE.md), [docs/design/cargo-features-and-backends.md](docs/design/cargo-features-and-backends.md), [docs/design/idiomatic-api.md](docs/design/idiomatic-api.md)  
+**Related Documents:** [DEPS.md](DEPS.md), [STYLE.md](STYLE.md), [docs/design/cargo-features-and-backends.md](docs/design/cargo-features-and-backends.md)  
 **Reference Implementations:**  
 * MinerU-rs Native Text Heuristics: `MinerU-rs/crates/mineru-pdf/src/text.rs` (MinerU-rs, a separate private checkout)  
 * MinerU-rs Markdown Block Renderer: `MinerU-rs/crates/mineru-render/src/markdown.rs` (MinerU-rs, a separate private checkout)  

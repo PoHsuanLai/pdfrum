@@ -34,8 +34,8 @@ impl ObjRef {
     // The object number no object may have; a cross-reference entry naming
     // it is a broken entry.
     //
-    // **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1
-    // item 2). PDFium exports this as `kInvalidObjNum`, but the PDF spec
+    // **Private on purpose**: no sentinel belongs in a public surface.
+    // PDFium exports this as `kInvalidObjNum`, but the PDF spec
     // reserves no such number — the 8388607-object limit simply puts it out
     // of reach — so a caller has nothing to compare against and no reason
     // to. `ObjRef::is_invalid` is the whole public surface: the sentinel

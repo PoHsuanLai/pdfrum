@@ -8,8 +8,8 @@
 # — a change to the baseline is a change to what `cargo add pdfrum` sees.
 #
 # Why it was held back. The files under docs/api-baseline/ were taken
-# first, at 9b8f74b (the commit that added docs/design/idiomatic-api.md), so
-# each idiomatic-API work package could measure its own blast radius against a
+# first, at 9b8f74b, so each idiomatic-API work package could measure its
+# own blast radius against a
 # surface that had not already moved under it. The script's original header
 # forbade wiring that measurement into ci.nu: a drift check during the pass
 # would have reddened every intentional break, and the pass would have spent
@@ -78,8 +78,8 @@ const SIMPLIFY = '-sss'
 #
 #   - `publish = false` (pdfrum-raster-vello, pdfrum-script). Nothing can
 #     `cargo add` them, so they have no public API in the sense this measures.
-#     docs/design/idiomatic-api.md §4 rules that the *published* members stay
-#     published; these two were never in that set.
+#     The *published* members stay published; these two were never in
+#     that set.
 #   - No library target (pdfrum-tool). A binary has no public API at all;
 #     `cargo public-api` fails on it rather than emitting an empty file.
 #

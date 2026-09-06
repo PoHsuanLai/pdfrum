@@ -16,9 +16,9 @@ else is not here" below.
 
 ## Why this exists, and why it is now a gate
 
-[`docs/design/idiomatic-api.md`](../../design/idiomatic-api.md) planned
-thirteen work packages that break the public surface **on purpose**. Its
-sequence put `cargo public-api` snapshotting last, as WP13, and called it a
+The idiomatic-API pass planned thirteen work packages that break the public
+surface **on purpose**. Its sequence put `cargo public-api` snapshotting
+last, and called it a
 drift gate — and held the check *out* of `scripts/ci.nu` for the length of
 the pass, because a drift check during those packages would have reddened
 every intentional break.
@@ -124,9 +124,9 @@ members are absent, for two different reasons:
 | `pdfrum-script` | `publish = false`. Same. |
 | `pdfrum-tool` | No library target — a binary has no public API, and `cargo public-api` errors rather than emitting an empty file. |
 
-`docs/design/idiomatic-api.md` §4 rules that the published member crates stay
-published and only their *surface* shrinks. The two `publish = false` crates
-were never in that set; §5 WP11 names only `pdfrum-raster-vello`, so
+The published member crates stay published and only their *surface* shrinks.
+The two `publish = false` crates were never in that set; the pass named only
+`pdfrum-raster-vello`, so
 `pdfrum-script` being the second one is worth knowing. `conformance/` and
 `benches/` are workspace members too and are excluded for both reasons at once.
 

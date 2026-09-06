@@ -83,7 +83,7 @@
 
 // Every module is private and the `pub use` block below is the whole surface,
 // so an item is reachable exactly one way and reading that block is reading
-// the API (`docs/design/idiomatic-api.md` §A.11 step 12). Siblings still reach
+// the API. Siblings still reach
 // across — `write` names `encrypt`, `content::marks` names `write::object` —
 // which is what the `pub(crate)` on a few *sub*modules is for; at this level
 // `mod` already means crate-visible.

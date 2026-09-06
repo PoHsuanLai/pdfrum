@@ -3,8 +3,8 @@
 **Status:** WP1–WP6 landed 2026-09-03, WP5 included: every library crate is at
 the §3 caps. §8 is ticked but for the one box a human has to tick. Not a `[spec]` change: no signatures move.
 **Date:** 2026-09-02. **Updated 2026-09-03:** names and counts re-measured
-after the idiomatic-API pass landed (`docs/design/idiomatic-api.md`), which
-renamed or removed most of the methods the first draft cited.
+after the idiomatic-API pass landed, which renamed or removed most of the
+methods the first draft cited.
 **Audience:** whoever edits `///` / `//!` in library crates. STYLE.md §6 stays
 in force; this file says what that section means for a caller reading
 `docs.rs/pdfrum`.
@@ -63,7 +63,7 @@ warns. No public item becomes undocumented.
 
 ## 2. Non-goals
 
-- No API changes. This is not `docs/design/idiomatic-api.md`.
+- No API changes. Signatures do not move in a rustdoc pass.
 - Do not delete doctests that are the *only* worked example of a type.
   Collapse duplicates; keep one.
 - Do not set `#![allow(missing_docs)]`. Do not weaken workspace lints.
@@ -74,8 +74,8 @@ warns. No public item becomes undocumented.
 - Do not hide public items with `#[doc(hidden)]` just to shorten rustdoc.
   Hidden is for sibling-crate plumbing that was never a host API
   (the fuzz-only link checkers). The hygiene pass that decided
-  what is hidden (idiomatic-api.md WP11, landed 2026-09-03) is done; this
-  pass inherits its answers and adds none.
+  what is hidden (landed 2026-09-03) is done; this pass inherits its
+  answers and adds none.
 
 ---
 
@@ -800,8 +800,8 @@ Not in done: comment ratio as a number — we are not optimizing 0.28.
 ## 10. Relationship to other docs
 
 - **STYLE.md §6** is the policy. This file is the cap and the queue.
-- **`docs/design/idiomatic-api.md`** is signatures. Do not mix a rustdoc
-  trim into an API rename; rustdoc PRs should be doc-only so
-  `cargo test --doc` is the whole gate.
+- **Signatures are a separate concern.** Do not mix a rustdoc trim into an
+  API rename; rustdoc PRs should be doc-only so `cargo test --doc` is the
+  whole gate.
 - **README** remains the manifesto (oracle, pure Rust, crate map). The
   crate page stops competing with it.
