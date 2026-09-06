@@ -184,7 +184,8 @@ pages that render within the M24 round-trip floor of rendering the same SVG
 directly, unsupported features are reported not swallowed, and
 `docs/design/svg.md` gains the ingestion half.
 
-**MET 2026-09-07, with two items partly met and named below.**
+**MET 2026-09-07.** Items 2 and 3 landed as named debt in the first pass and
+were both closed on the same day; each is recorded below with what it cost.
 `Canvas::draw_svg` in the facade (`crates/pdfrum/src/svg_ingest.rs`), behind
 the default-off `svg-ingest` feature. It walks a `usvg`-resolved tree and
 issues M23 canvas calls, so an SVG goes into a page as vectors.
@@ -212,19 +213,66 @@ any other one wrote a name into the stream with nothing behind it in
 `/Resources` — a `sh` that drew nothing at all. It now derives the categories
 from what the drawing actually added.
 
-**Item 2, the Form XObject: not met, named debt.** What shipped draws the SVG
-inline into the page's content stream. For one placement the two are
-equivalent in the file; for the same logo on twenty pages the XObject is one
-object rather than twenty copies, and it is the better answer. Nothing about
-the mapping changes when it lands (`docs/design/svg-ingest.md` §8).
+**Item 2, the Form XObject: MET 2026-09-07**, in the pass that closed both
+debts. `DocEdit::compile_svg` compiles a document once into a `/Subtype
+/Form` object with its own `/BBox` and `/Resources`; `Canvas::place_svg`
+writes one `Do` per placement. `Canvas::draw_svg` stays as the inline
+spelling, which is the right answer for a single placement.
 
-**Item 3, text: not met, named debt.** `usvg` is taken
-`--no-default-features`, which is the right call — its defaults are a second
-font stack, and SVG text must map through `pdfrum-font`, not through a rival.
-The consequence is that `<text>` leaves no node in the resolved tree at all,
-so it is detected in the source XML and **reported** as `Unsupported::Text`
-rather than drawn. Neither the outline default nor the embedded-font option
-exists yet; closing it is a font-and-layout problem (§6).
+Proved on the **file**, not the picture: `crates/pdfrum/tests/svg_form.rs`
+decodes every stream in the saved document and counts the ones carrying the
+SVG's operators — **2** under `draw_svg` on a two-page document, **1** under
+`compile_svg`, one `Do` per page either way. Decoding rather than searching
+raw bytes is load-bearing: the save compresses its streams, and a byte search
+would have passed vacuously. The picture is proved separately —
+`a_compiled_form_draws_what_the_inline_path_draws` scores all twelve carried
+fixtures through the form against the inline render and every one is
+**1.0000**. The fit is a placement property, so one compiled object serves
+`Contain` on one page and `Cover` on another.
+
+One API break: `Canvas::page()` now returns `Option<PageIndex>`. A canvas has
+a `Surface` — a page's, or a form's — and a form has no page to name; a
+sentinel index would have been a lie. Three call sites in the repository.
+
+**Item 3, text: MET 2026-09-07**, behind a **third** feature, `svg-text`.
+`usvg/text` lays `<text>` out and `Text::flattened()` hands it back as filled
+paths, so the existing walk draws it and **nothing in the §2 mapping
+changes** — glyph outlines are paths. Text goes in as outlines, which is the
+roadmap's own default; the trade is that it is not selectable, and a test
+asserts that rather than leaving it to be found.
+
+The dependency question was measured, not estimated. `svg-text` is **+10
+crates** over `svg-ingest`, one of them a genuine duplicate: `usvg 0.47` pins
+`fontdb 0.23` and this workspace pins `fontdb 0.24`. That is why it is a
+separate feature — a caller ingesting logos should not compile a shaper.
+The original refusal was of a rival *font source*, and `usvg/text` alone is
+not one: `system-fonts` and `memmap-fonts` stay off, nothing scans the host,
+and the database starts empty — faces come from the caller through
+`pdfrum::SvgFonts`. `usvg` shapes text in faces we hand it, which also keeps
+a reproducible save reproducible. Resolving `<text>` ourselves through
+`pdfrum-font` was weighed and **declined in writing**: `usvg` discards the
+element after the cascade, so it would mean a second XML parse, a second
+cascade, our own `tspan`/anchor/`textPath`/bidi, and a shaper the workspace
+does not have — the same second-incomplete-implementation this milestone
+already declined about SVG parsing (`docs/design/svg-ingest.md` §6).
+
+Scored the same way as everything else: three new `text_*` fixtures plus
+`declined_text`, both sides given the *same* committed face and neither
+allowed the host's fonts. All four score a flat **1.0000**; the Text floor is
+0.99, and that it is not set under a worst file is said plainly rather than
+dressed up. A missing face is still **reported** — an empty font set makes
+`usvg` drop the element exactly as a build without the feature does, so the
+pre-parse source scan runs whenever the session has no face, not merely when
+the feature is off. That was a defect before it was a test.
+
+**A measured correction to this entry's own numbers.** "Ten new crates" was
+wrong in both this section and `docs/design/svg-ingest.md` §7: it counted
+`usvg`'s subtree rather than the delta against a **default** `pdfrum`.
+Measured properly, `svg-ingest` adds **22** — fourteen behind `usvg`, six
+behind the `png` decoder, plus `tiny-skia-path` and `strict-num` — and one of
+them, `roxmltree 0.21.1`, enters beside a `roxmltree 0.20.0` the default tree
+already carries. DEPS.md now records the list, the duplicate and the
+reproduction command.
 
 **Stroke attributes beyond colour and width: named debt.** M23's
 `Canvas::Stroke` carries only those two, so `stroke-linecap`,

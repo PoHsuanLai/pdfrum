@@ -1,4 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
   <rect x="10" y="10" width="180" height="80" fill="#88bbdd"/>
-  <text x="20" y="140" font-size="24" fill="#000000">Hello</text>
+  <!-- A family nothing registers. Without `svg-text` this element leaves no
+       node in the tree at all and the loss is raised from the source XML;
+       with `svg-text` it reaches the walk and no face resolves, so the loss
+       is raised per element. Either way it is reported, never drawn, which is
+       what this fixture is here to prove. -->
+  <text x="20" y="140" font-family="NoSuchFaceIsRegistered" font-size="24" fill="#000000">Hello</text>
 </svg>

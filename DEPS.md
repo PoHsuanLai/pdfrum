@@ -364,17 +364,88 @@ than through a rival. Dropping them is the point rather than a saving.
 **The consequence is recorded, not hidden.** Without `text`, `usvg`'s
 converter has no arm for `EId::Text`: a `<text>` element leaves *no node* in
 the resolved tree. Ingestion therefore detects `<text>` in the source XML,
-before the parse, and reports it as unsupported rather than drawing it. That
-is named debt in the roadmap's M25 entry, and `docs/design/svg-ingest.md` §6
-states it in full.
+before the parse, and reports it as unsupported rather than drawing it. The
+`svg-text` feature below is what closes that, on its own budget;
+`docs/design/svg-ingest.md` §6 states both halves in full.
 
-**Measured, in that configuration.** 27 crates in the subtree, of which 17 are
-already in the workspace's normal tree. The increment is **10 crates**:
-`usvg`, `base64`, `data-url`, `float-cmp`, `imagesize`, `pico-args`,
-`simplecss`, `siphasher`, `svgtypes`, `xmlwriter`. All pure Rust; no `cc`, no
-`-sys`, so `scripts/ci.nu`'s pure-Rust check passes unchanged. `pico-args` and
-`xmlwriter` serve `usvg`'s CLI and its writer but are non-optional
-dependencies of its *library*; they are carried rather than patched around.
+**Measured, in that configuration — and the earlier number was wrong.** This
+paragraph said **10 crates** and it counted only `usvg`'s own subtree. The
+figure a caller pays is the delta against a **default** `pdfrum`, and
+measured that way `--features svg-ingest` adds **22**:
+
+```
+arrayref  base64  bitflags  crc32fast  data-url  fdeflate  flate2
+float-cmp  imagesize  memchr  miniz_oxide  pico-args  png  roxmltree
+simd-adler32  simplecss  siphasher  strict-num  svgtypes  tiny-skia-path
+usvg  xmlwriter
+```
+
+Fourteen behind `usvg` and six behind `png`, plus `tiny-skia-path` and
+`strict-num`, which the *default* tree does not carry — the workspace pins
+`tiny-skia-path 0.12.0`, but only the `tinyskia` backend feature pulls it, so
+it is new to a default build.
+
+**And one of the 22 is a second version of a crate already here**, which the
+original entry's claim that "no duplicate geometry or path crate enters the
+graph" was true about but silent on: `usvg` brings `roxmltree 0.21.1`, and
+the default tree already carries `roxmltree 0.20.0`, under
+`fontconfig-parser` under the `fontdb 0.24` that `system-fonts` — a *default*
+feature — resolves. Two 0.x versions, so they do not unify. Recorded here
+rather than left for `cargo deny` to find. Reproduce with
+
+```
+cargo tree -p pdfrum --features svg-ingest -e normal --prefix none
+```
+
+diffed against the same command without `--features`; measuring against
+`--no-default-features` undercounts, which is how the original figure was
+reached. All 22 are pure Rust; no `cc`, no `-sys`, so `scripts/ci.nu`'s
+pure-Rust check passes unchanged. `pico-args` and `xmlwriter` serve `usvg`'s
+CLI and its writer but are non-optional dependencies of its *library*; they
+are carried rather than patched around.
+
+### `svg-text`: `usvg`'s text stack, on its own budget (2026-09-07)
+
+M25's roadmap item 3 asks for SVG `<text>` as outlines. Closing it means
+letting `usvg` lay text out, which is the one thing the configuration above
+deliberately refused, so it is a **third** feature rather than part of
+`svg-ingest`: `pdfrum/svg-text = ["svg-ingest", "usvg/text"]`, default-off.
+
+| Crate | Version | Configuration | Why |
+|---|---|---|---|
+| `usvg` **lib, feature-gated** | `=0.47.0` | `+ text` | Lays `<text>` out — bidi, shaping, `text-anchor`, `tspan`, `textPath` — and flattens each span to filled paths the ingestion walk draws like any other |
+
+**What it costs, measured.** `svg-text` over `svg-ingest` is **+10 crates**:
+
+```
+core_maths  fontdb 0.23  libm  rustybuzz  ttf-parser
+unicode-bidi-mirroring  unicode-ccc  unicode-properties
+unicode-script  unicode-vo
+```
+
+**One of those is a duplicate and it is named rather than glossed.**
+`usvg 0.47` pins `fontdb = "0.23"`; this workspace pins `fontdb = "0.24"` for
+`pdfrum-font`'s `system-fonts`, which is a *default* feature of `pdfrum`. The
+two are 0.x-incompatible, so a `svg-text` build compiles **fontdb twice**.
+`rustybuzz` and `ttf-parser` are likewise a second shaper and a second font
+parser beside the workspace's `skrifa`/`read-fonts`. That is the real cost of
+the feature and it is why it is not folded into `svg-ingest`: a caller
+ingesting logos and never meeting a `<text>` should not compile a shaper.
+The duplicate collapses on its own the day `usvg` moves to `fontdb 0.24`; no
+patch here is warranted for it.
+
+**What it does not bring, and that is the DEPS rule doing its job.**
+`usvg`'s `system-fonts` and `memmap-fonts` stay **off**. Nothing scans the
+host, `fontdb`'s `fs`/`fontconfig`/`memmap` paths are not compiled, and the
+font database starts *empty*: the faces come from the caller through
+`pdfrum::SvgFonts`. So the second stack is a layout engine we hand faces to,
+not a rival font *source* — which was the actual objection the original
+`--no-default-features` decision was making. A document's appearance
+therefore cannot depend on which fonts a build machine happens to have
+installed, which also keeps a reproducible save reproducible.
+
+All ten are pure Rust; the pure-Rust check passes with the feature on.
+`libm` and `core_maths` arrive under `rustybuzz` for `no_std` float maths.
 
 0.47.0 is the same version as `resvg` above, which depends on it, so the two
 share one entry in the lock. It resolves `kurbo` **0.13.1** and

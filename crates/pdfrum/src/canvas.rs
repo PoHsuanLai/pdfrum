@@ -158,11 +158,33 @@ pub struct Canvas<'a, 'b> {
     taken: Vec<(&'static Name, Name)>,
     /// The displayed size, in points.
     size: kurbo::Size,
-    /// The page being drawn on.
-    index: PageIndex,
+    /// What the operators are being written into.
+    surface: Surface,
     /// The first error a drawing method hit. Reported once, from
     /// [`DocEdit::draw_page`], rather than at every call.
     failed: Option<Error>,
+}
+
+/// What a canvas's operators are being written into.
+///
+/// An enum rather than an `Option<PageIndex>`, because the two destinations
+/// differ in more than whether a page index exists: a page's drawing is
+/// *appended* to `/Contents` and merges into the page's own `/Resources`,
+/// while a form's becomes a standalone `/Subtype /Form` stream with a
+/// `/Resources` of its own and no page to collide with. [`Canvas::page`]
+/// answers for the first and has nothing to answer for the second, which is
+/// why it returns an `Option`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Surface {
+    /// One page's appended content stream.
+    Page(PageIndex),
+    /// A Form `XObject`'s own stream, placed later by [`Canvas::place_form`].
+    ///
+    /// Behind the feature that is the only thing that compiles a form: with
+    /// `svg-ingest` off nothing constructs it, and a variant nothing
+    /// constructs is the dead code STYLE.md §4 forbids.
+    #[cfg(feature = "svg-ingest")]
+    Form,
 }
 
 impl Canvas<'_, '_> {
@@ -200,17 +222,27 @@ impl Canvas<'_, '_> {
         Rect::from_origin_size(Point::ZERO, self.size)
     }
 
-    /// The page this canvas draws on.
+    /// The page this canvas draws on, or `None` when it is compiling a Form
+    /// `XObject` that no page owns yet.
+    ///
+    /// A canvas handed to [`DocEdit::draw_page`] or [`DocEdit::draw_pages`]
+    /// always answers `Some`; the `None` case is the form compiled by
+    /// [`DocEdit::compile_svg`], whose content belongs to no page until a
+    /// [`Canvas::place_svg`](crate::Canvas::place_svg) puts it on one.
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
-    /// edit.draw_pages(|c| assert!(u32::from(c.page()) < 2))?;
+    /// edit.draw_pages(|c| assert!(c.page().is_some_and(|p| u32::from(p) < 2)))?;
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     #[must_use]
-    pub fn page(&self) -> PageIndex {
-        self.index
+    pub fn page(&self) -> Option<PageIndex> {
+        match self.surface {
+            Surface::Page(index) => Some(index),
+            #[cfg(feature = "svg-ingest")]
+            Surface::Form => None,
+        }
     }
 
     /// Draw inside a saved graphics state, restored when `body` returns.
@@ -610,6 +642,16 @@ impl Canvas<'_, '_> {
             .ok()
     }
 
+    /// The session this canvas draws into.
+    ///
+    /// Ingestion reads the SVG font set off it before parsing; there is no
+    /// mutable access, because a drawing method that reached into the session
+    /// past the resource machinery could add an object nothing names.
+    #[cfg(feature = "svg-text")]
+    pub(crate) fn session(&self) -> &DocEdit<'_> {
+        self.edit
+    }
+
     /// Record the first failure; later ones are dropped, because the first is
     /// the one that explains the rest.
     fn fail(&mut self, error: Error) {
@@ -766,6 +808,154 @@ impl Canvas<'_, '_> {
         }
         Name::from("PdfrumC1")
     }
+}
+
+/// Drawing compiled once into a Form `XObject`, placeable on any number of
+/// pages.
+///
+/// A `/Subtype /Form` stream with its own `/BBox` and `/Resources`, held as a
+/// single object in the document. Placing it writes one `Do` — so the same
+/// logo on twenty pages is one copy of the content and twenty references,
+/// rather than twenty copies of the content.
+///
+/// Produced by [`DocEdit::compile_svg`] and placed by
+/// [`Canvas::place_svg`](crate::Canvas::place_svg).
+/// It carries no borrow of the session that made it, so a caller compiles
+/// once and then places inside as many `draw_page` closures as they like.
+#[cfg(feature = "svg-ingest")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct SvgForm {
+    /// The form's object in the session that compiled it.
+    object: ObjRef,
+    /// The form's own coordinate box, in its own space. A placement maps this
+    /// onto the destination rectangle.
+    bbox: Rect,
+}
+
+#[cfg(feature = "svg-ingest")]
+impl SvgForm {
+    /// The form's `/BBox`, in the form's own coordinate space.
+    ///
+    /// Its aspect ratio is what [`SvgFit`](crate::SvgFit) preserves when the
+    /// destination rectangle has a different one.
+    #[must_use]
+    pub fn bbox(&self) -> Rect {
+        self.bbox
+    }
+}
+
+#[cfg(feature = "svg-ingest")]
+impl Canvas<'_, '_> {
+    /// Place `form` so its [`SvgForm::bbox`] covers `into`.
+    ///
+    /// One `Do` operator against the form's single object, so placing the
+    /// same form on every page of a document costs one copy of the content
+    /// and one reference per page. The placement is scoped in its own `q`/`Q`
+    /// and clipped to `into`, so nothing the form draws escapes the rectangle
+    /// and the canvas's own state survives it.
+    ///
+    /// The form's box is stretched onto `into`, with no fit of its own — the
+    /// caller-facing spelling is
+    /// [`Canvas::place_svg`](crate::Canvas::place_svg), which chooses the
+    /// rectangle through an [`SvgFit`](crate::SvgFit) and then calls this.
+    /// Crate-internal because a second public placement that differs only in
+    /// taking a pre-fitted rectangle would be a way of saying the same thing
+    /// twice (STYLE.md §4).
+    pub(crate) fn place_form(&mut self, form: &SvgForm, into: Rect) {
+        if into.width() == 0.0 || into.height() == 0.0 || form.bbox.is_zero_area() {
+            return;
+        }
+        let name = self.realize(pdf_names::XOBJECT, Object::Ref(form.object));
+        // The form's `/BBox` is mapped onto `into`: scale by the ratio of the
+        // two, then carry the form's own origin to the destination's. `/BBox`
+        // is *not* assumed to start at the origin, because a compiled SVG's
+        // need not.
+        let scale_x = into.width() / form.bbox.width();
+        let scale_y = into.height() / form.bbox.height();
+        let placement = Affine::new([
+            scale_x,
+            0.0,
+            0.0,
+            scale_y,
+            into.x0 - form.bbox.x0 * scale_x,
+            into.y0 - form.bbox.y0 * scale_y,
+        ]);
+        self.out.push_str("q\n");
+        self.write_path(&into.into_path(0.1));
+        self.out.push_str(" W n\n");
+        write_matrix(&mut self.out, placement);
+        self.out.push_str(" cm /");
+        self.push_name(&name);
+        self.out.push_str(" Do\nQ\n");
+    }
+}
+
+#[cfg(feature = "svg-ingest")]
+impl DocEdit<'_> {
+    /// Compile `body`'s drawing into a Form `XObject` over `bbox`.
+    ///
+    /// The canvas `body` receives writes into the form's own stream and its
+    /// own `/Resources`, so nothing it names can collide with a page's — a
+    /// form is a fresh resource scope, which is why the placement is one
+    /// object rather than a merge per page.
+    ///
+    /// The shared half of [`DocEdit::compile_svg`]; it is crate-internal
+    /// because the caller-facing surface for "drawing a caller wrote once" is
+    /// [`DocEdit::draw_page`] with the caller's own closure, and a second
+    /// spelling of it would be an option with no reader (STYLE.md §4).
+    ///
+    /// # Errors
+    ///
+    /// Whatever `body` refused to draw, as [`DocEdit::draw_page`] reports it.
+    pub(crate) fn compile_form(
+        &mut self,
+        bbox: Rect,
+        body: impl FnOnce(&mut Canvas<'_, '_>),
+    ) -> Result<SvgForm> {
+        let mut canvas = Canvas {
+            out: String::new(),
+            edit: self,
+            added: Vec::new(),
+            // A form's resource scope is its own and starts empty: there is
+            // no page dictionary whose names it has to avoid.
+            taken: Vec::new(),
+            size: bbox.size(),
+            surface: Surface::Form,
+            failed: None,
+        };
+        body(&mut canvas);
+        if let Some(error) = canvas.failed {
+            return Err(error);
+        }
+        let Canvas { out, added, .. } = canvas;
+
+        let resources = merge_resources(&Dict::new(), &added);
+        let bytes = out.into_bytes();
+        let dict = Dict::from_pairs([
+            (
+                pdf_names::TYPE.clone(),
+                Object::Name(pdf_names::XOBJECT.clone()),
+            ),
+            (pdf_names::SUBTYPE.clone(), Object::Name(Name::from("Form"))),
+            (Name::from("FormType"), Object::Int(1)),
+            (Name::from("BBox"), Object::Array(rect_array(bbox))),
+            (pdf_names::RESOURCES.clone(), Object::Dict(resources)),
+            (
+                pdf_names::LENGTH.clone(),
+                Object::Int(i64::try_from(bytes.len()).unwrap_or(0)),
+            ),
+        ]);
+        let object = self
+            .inner
+            .add(Object::Stream(Box::new(Stream::new(dict, bytes.into()))));
+        Ok(SvgForm { object, bbox })
+    }
+}
+
+/// A rectangle as the four numbers a `/BBox` holds.
+#[cfg(feature = "svg-ingest")]
+fn rect_array(rect: Rect) -> Array {
+    Array::of([rect.x0, rect.y0, rect.x1, rect.y1].map(|value| Object::Real(as_f32(value))))
 }
 
 /// The rectangle `path` draws, when it draws exactly one.
@@ -936,7 +1126,7 @@ impl DocEdit<'_> {
             added: Vec::new(),
             taken,
             size,
-            index,
+            surface: Surface::Page(index),
             failed: None,
         };
         body(&mut canvas);
