@@ -30,6 +30,11 @@ members = [
     "crates/pdfrum",
     "crates/pdfrum-tool",
     "crates/pdfrum-markdown",
+    # M24. SVG export: a `RenderDevice` that accumulates vectors while an
+    # ordinary rasterizer supplies the offscreen targets the engine composites
+    # in. It adds no external dependency to the shipped tree; `resvg` is a
+    # dev-dependency of its round-trip test only.
+    "crates/pdfrum-svg",
     "crates/pdfrum-cli",
     # M22 phase 2. The C ABI: `libpdfrum.so`, `libpdfrum.a` and `pdfrum.h`.
     # The one member that overrides the workspace's `unsafe_code = "forbid"`,
@@ -101,6 +106,7 @@ pdfrum-script = { path = "crates/pdfrum-script", version = "=0.1.0" }
 pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
 pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "=0.1.0" }
+pdfrum-svg = { path = "crates/pdfrum-svg", version = "=0.1.0" }
 # The M12 bench corpus list. A leaf — it depends on nothing, which is what lets
 # five library crates dev-depend on it without any of them acquiring a
 # dependency on the facade that depends on them. `publish = false`.
@@ -176,6 +182,21 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 clap = { version = "=4.6.6", features = ["derive", "env"] }
 png = "=0.18.1"
+# M24's round trip: `pdfrum-svg`'s SVG rendered by a *second* engine and
+# scored against the oracle's PNG, so the export has a correctness story the
+# raster board cannot give it. **`pdfrum-svg`'s dev-dependency only** — it
+# never enters the shipped tree.
+#
+# `default-features = false` per the DEPS.md rule (take what we need, not what
+# a crate defaults to): the defaults are `text`, `system-fonts`, `memmap-fonts`
+# and `raster-images`, and the first three exist to *shape text*, which our SVG
+# never asks for — every glyph is already a filled outline. Dropping them drops
+# `fontdb`, `rustybuzz`, `ttf-parser`, `unicode-bidi`, `unicode-script`,
+# `unicode-vo` and `memmap2`. `raster-images` is the one feature kept: it is
+# what admits `<image>` decoding, and our images travel as PNG data URIs.
+# 0.47 resolves `tiny-skia` 0.12.0, the version the workspace already pins, so
+# no duplicate rasterizer enters the graph. Pure Rust throughout.
+resvg = { version = "=0.47.0", default-features = false, features = ["raster-images"] }
 # Criterion, for the five per-crate bench targets and `pdfrum-bench`. Declared
 # here rather than repeated in six manifests so the pin and its reason live in
 # one place.

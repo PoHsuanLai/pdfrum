@@ -295,6 +295,48 @@ So: `default-features = false` and an explicit feature list is the default
 posture for a new dependency, and a rejection on size has to name the
 configuration it measured.
 
+### The first application: `resvg`, M24 (2026-09-07)
+
+`pdfrum-svg` writes SVG; the conformance board scores pixels and cannot
+score SVG, so M24's proof is a round trip — render our own output with a
+*second* engine and compare that to the oracle's PNG with the board's SSIM.
+`resvg` is that second engine, and it is a **dev-dependency of
+`crates/pdfrum-svg` alone**. It never enters any shipped tree:
+`scripts/ci.nu`'s pure-Rust check walks `cargo tree -e normal`, which
+excludes dev-dependencies, and the check passes unchanged.
+
+| Crate | Version | Configuration | Why |
+|---|---|---|---|
+| `resvg` *test only* | `=0.47.0` | `default-features = false`, `features = ["raster-images"]` | The round-trip referee for `pdfrum-svg`. A second SVG rasterizer with its own antialiasing is the point: agreeing with ourselves proves nothing |
+
+**The configuration, named as the rule requires.** The defaults are `text`,
+`system-fonts`, `memmap-fonts` and `raster-images`. The first three exist to
+*shape text*, and our SVG never asks for it — every glyph is already a filled
+outline, so no font machinery is consulted. Dropping them drops `fontdb`,
+`rustybuzz`, `ttf-parser`, `unicode-bidi`, `unicode-script`, `unicode-vo` and
+`memmap2`. `raster-images` is the one feature kept, because it is what admits
+`<image>` decoding and our images travel as PNG data URIs.
+
+**Measured, in that configuration.** 27 crates in the subtree, of which 12 are
+already in the lock — `kurbo`, `tiny-skia`, `tiny-skia-path`, `flate2`,
+`bytemuck`, `byteorder-lite`, `log`, `memchr`, `roxmltree`, `strict-num`,
+`weezl`, `zune-jpeg` — so the increment is **15 crates**: `base64`,
+`color_quant`, `data-url`, `gif`, `image-webp`, `imagesize`, `pico-args`,
+`quick-error`, `resvg`, `rgb`, `simplecss`, `siphasher`, `svgtypes`, `usvg`,
+`xmlwriter`. All pure Rust; no `cc`, no `-sys`.
+
+0.47.0 resolves `tiny-skia` **0.12.0**, the version this workspace already
+pins, so no duplicate rasterizer enters the graph and `cargo deny`'s
+duplicate-version check is unaffected.
+
+**The shipped crate takes nothing new.** `pdfrum-svg`'s own dependencies are
+`pdfrum-render`, `pdfrum-page`, `pdfrum-common`, `kurbo` and `peniko`, all
+already here. The two things that would ordinarily be a dependency — base64,
+and a PNG encoder for the embedded images — are written in-crate under
+STYLE.md §5, the second because `png` is on the tool-and-test-only list above
+and a library crate may not reach for it. See `docs/design/svg.md` §2 for what
+that encoder does and does not do.
+
 ## Rejected: a machine-learning runtime for `pdfrum-markdown` (2026-09-06)
 
 Markdown extraction meets cases a model would answer better than a
