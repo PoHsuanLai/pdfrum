@@ -28,7 +28,7 @@ use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_object::{Array, Dict, Name, Object};
 
 use crate::Color;
-use crate::canvas::{Canvas, Fill, Paint, Stroke};
+use crate::canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 
 /// A construct in the source SVG that PDF drawing cannot carry.
 ///
@@ -467,10 +467,7 @@ impl Walk<'_, '_, '_> {
         };
         let stroke = path.stroke().and_then(|stroke| {
             let color = self.solid(Some(stroke.paint()), path.id())?;
-            Some(Stroke::new(
-                with_alpha(color, f64::from(stroke.opacity().get())),
-                f64::from(stroke.width().get()),
-            ))
+            Some(to_stroke(stroke, color))
         });
 
         let paint = match (fill, stroke) {
@@ -689,6 +686,41 @@ fn to_fill(rule: usvg::FillRule) -> Fill {
     match rule {
         usvg::FillRule::NonZero => Fill::NonZero,
         usvg::FillRule::EvenOdd => Fill::EvenOdd,
+    }
+}
+
+/// A `usvg` stroke as the canvas's, colour already resolved.
+///
+/// `usvg` resolves `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`,
+/// `stroke-dasharray` and `stroke-dashoffset` for us, and PDF has an operator
+/// for each, so all five cross. The one value that does not survive intact is
+/// `LineJoin::MiterClip`: SVG 2 clips the miter at the limit where PDF bevels
+/// it, and `j` offers no third spelling, so it lands on the miter join it is
+/// a variant of rather than on a bevel that would be visibly blunter.
+///
+/// A dash array `usvg` resolved can still be one PDF refuses — an all-zero
+/// `stroke-dasharray` is legal SVG and means solid. `Dash::new` catches those
+/// and the stroke stays solid, which is what the SVG asked for anyway.
+fn to_stroke(stroke: &usvg::Stroke, color: Color) -> Stroke {
+    let dash = stroke.dasharray().and_then(|lengths| {
+        let lengths: Vec<f64> = lengths.iter().map(|length| f64::from(*length)).collect();
+        Dash::new(&lengths, f64::from(stroke.dashoffset().max(0.0)))
+    });
+    Stroke {
+        color: with_alpha(color, f64::from(stroke.opacity().get())),
+        width: f64::from(stroke.width().get()),
+        cap: match stroke.linecap() {
+            usvg::LineCap::Butt => LineCap::Butt,
+            usvg::LineCap::Round => LineCap::Round,
+            usvg::LineCap::Square => LineCap::Square,
+        },
+        join: match stroke.linejoin() {
+            usvg::LineJoin::Miter | usvg::LineJoin::MiterClip => LineJoin::Miter,
+            usvg::LineJoin::Round => LineJoin::Round,
+            usvg::LineJoin::Bevel => LineJoin::Bevel,
+        },
+        miter_limit: MiterLimit::new(f64::from(stroke.miterlimit().get())),
+        dash,
     }
 }
 

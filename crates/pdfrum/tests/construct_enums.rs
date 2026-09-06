@@ -36,12 +36,13 @@ use pdfrum::*;
 /// Snapshot path, rustdoc enum path, facade name. The derivation index.
 const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum.txt", "pdfrum::Error", "Error"),
-    ("pdfrum.txt", "pdfrum::Rotation", "Rotation"),
     ("pdfrum.txt", "pdfrum::Update", "Update"),
     ("pdfrum.txt", "pdfrum::StampPosition", "StampPosition"),
     ("pdfrum.txt", "pdfrum::FlattenMode", "FlattenMode"),
     ("pdfrum.txt", "pdfrum::Paint", "Paint"),
     ("pdfrum.txt", "pdfrum::Fill", "Fill"),
+    ("pdfrum.txt", "pdfrum::LineCap", "LineCap"),
+    ("pdfrum.txt", "pdfrum::LineJoin", "LineJoin"),
     ("pdfrum.txt", "pdfrum::Flattened", "Flattened"),
     ("pdfrum-common.txt", "pdfrum_common::DiagKind", "DiagKind"),
     (
@@ -175,12 +176,9 @@ fn construct_default_feature_variants() -> usize {
     let _ = Operation::Script;
     n += 6;
 
-    // pdfrum::Rotation — 4
-    let _ = Rotation::None;
-    let _ = Rotation::Quarter;
-    let _ = Rotation::Half;
-    let _ = Rotation::ThreeQuarter;
-    n += 4;
+    // `pdfrum::Rotation` is a re-export of `pdfrum_page::Rotation` rather
+    // than an enum of its own, so `pdfrum.txt` no longer enumerates its
+    // variants and the member-crate half below constructs them instead.
 
     // pdfrum::Update — 2
     let _ = Update::Incremental;
@@ -205,11 +203,20 @@ fn construct_default_feature_variants() -> usize {
     // pdfrum::Paint — 3, pdfrum::Fill — 2
     let stroke = Stroke::new(Color::BLACK, 1.0);
     let _ = Paint::Fill(Color::BLACK);
-    let _ = Paint::Stroke(stroke);
+    let _ = Paint::Stroke(stroke.clone());
     let _ = Paint::FillStroke(Color::BLACK, stroke);
     let _ = Fill::NonZero;
     let _ = Fill::EvenOdd;
     n += 5;
+
+    // pdfrum::LineCap — 3, pdfrum::LineJoin — 3
+    let _ = LineCap::Butt;
+    let _ = LineCap::Round;
+    let _ = LineCap::Square;
+    let _ = LineJoin::Miter;
+    let _ = LineJoin::Round;
+    let _ = LineJoin::Bevel;
+    n += 6;
 
     // DiagKind — 102. Two variants carry a `u32` count.
     let diag: &[DiagKind] = &[
@@ -772,8 +779,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 324, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 37, "default-feature enum count");
+    assert_eq!(constructed, 326, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 38, "default-feature enum count");
 }
 
 #[test]
