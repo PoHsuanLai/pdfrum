@@ -1,0 +1,38 @@
+[
+  {
+    "engine": "pdfrum",
+    "version": "0.1.0",
+    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\" }",
+    "license": "MIT OR Apache-2.0",
+    "crates": 88,
+    "native_build_crates": [],
+    "clean_build_secs": 16.593906648,
+    "stripped_bytes": 1140648,
+    "unsafe_in_crate": 4,
+    "unsafe_in_tree": 6932
+  },
+  {
+    "engine": "pdfrum-parse-only",
+    "version": "0.1.0",
+    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\", default-features = false }",
+    "license": "MIT OR Apache-2.0",
+    "crates": 63,
+    "native_build_crates": [],
+    "clean_build_secs": 11.940332503,
+    "stripped_bytes": 1030952,
+    "unsafe_in_crate": 3,
+    "unsafe_in_tree": 1655
+  },
+  {
+    "engine": "pdfrum-render-only",
+    "version": "0.1.0",
+    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\", default-features = false, features = [\"vello-cpu\", \"codecs-all\"] }",
+    "license": "MIT OR Apache-2.0",
+    "crates": 78,
+    "native_build_crates": [],
+    "clean_build_secs": 14.356505988,
+    "stripped_bytes": 1077864,
+    "unsafe_in_crate": 3,
+    "unsafe_in_tree": 5984
+  }
+]

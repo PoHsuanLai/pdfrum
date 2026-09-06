@@ -41,6 +41,8 @@ pub struct Adoption {
 /// consumer of it alone would measure the same tree minus the rasterizer.
 pub const ENGINES: &[&str] = &[
     "pdfrum",
+    "pdfrum-parse-only",
+    "pdfrum-render-only",
     "hayro",
     "pdf-extract",
     "lopdf",
@@ -51,7 +53,14 @@ pub const ENGINES: &[&str] = &[
 ];
 
 struct Consumer {
+    /// The row label, which is also the scratch directory's name. Usually
+    /// the crate name; a second configuration of the same crate gets a
+    /// suffix so its build never collides with the first's.
     engine: &'static str,
+    /// The crate the row is about, for the licence lookup and the
+    /// `unsafe`-in-crate attribution. Differs from `engine` only where one
+    /// crate is measured under two feature sets.
+    package: &'static str,
     version: &'static str,
     dependency: String,
     main: &'static str,
@@ -65,42 +74,76 @@ fn consumers(repo_root: &Path, pdfium_lib: Option<&Path>) -> Vec<Consumer> {
     vec![
         Consumer {
             engine: "pdfrum",
+            package: "pdfrum",
             version: "0.1.0",
             dependency: format!("pdfrum = {{ path = \"{}\" }}", pdfrum_path.display()),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = pdfrum::Document::open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.page_count()); }",
         },
+        // Feature-matched pdfrum: the same crate cut down to what the peer
+        // beside it actually does, so the size and build-time columns compare
+        // like with like instead of charging `cargo add pdfrum`'s full
+        // default set against a peer that only parses or only renders.
+        // `engine` carries the suffix so each gets its own scratch build;
+        // `package` stays `pdfrum` so the licence and `unsafe` attribution
+        // are still the crate's.
+        Consumer {
+            engine: "pdfrum-parse-only",
+            package: "pdfrum",
+            version: "0.1.0",
+            dependency: format!(
+                "pdfrum = {{ path = \"{}\", default-features = false }}",
+                pdfrum_path.display()
+            ),
+            main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = pdfrum::Document::open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.page_count()); }",
+        },
+        Consumer {
+            engine: "pdfrum-render-only",
+            package: "pdfrum",
+            version: "0.1.0",
+            dependency: format!(
+                "pdfrum = {{ path = \"{}\", default-features = false, features = [\"vello-cpu\", \"codecs-all\"] }}",
+                pdfrum_path.display()
+            ),
+            main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = pdfrum::Document::open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.page_count()); }",
+        },
         Consumer {
             engine: "hayro",
+            package: "hayro",
             version: "0.7.1",
             dependency: "hayro = \"=0.7.1\"".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let b = std::fs::read(&p).unwrap_or_default(); let d = hayro::hayro_interpret::hayro_syntax::Pdf::new(b).unwrap_or_else(|e| { eprintln!(\"{e:?}\"); std::process::exit(1) }); println!(\"{}\", d.pages().len()); }",
         },
         Consumer {
             engine: "pdf-extract",
+            package: "pdf-extract",
             version: "0.12.0",
             dependency: "pdf-extract = \"=0.12.0\"".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let t = pdf_extract::extract_text(&p).unwrap_or_else(|e| { eprintln!(\"{e:?}\"); std::process::exit(1) }); println!(\"{}\", t.len()); }",
         },
         Consumer {
             engine: "lopdf",
+            package: "lopdf",
             version: "0.44.0",
             dependency: "lopdf = \"=0.44.0\"".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = lopdf::Document::load(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.get_pages().len()); }",
         },
         Consumer {
             engine: "pdf",
+            package: "pdf",
             version: "0.10.0",
             dependency: "pdf = \"=0.10.0\"".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let f = pdf::file::FileOptions::cached().open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", f.num_pages()); }",
         },
         Consumer {
             engine: "pdf_oxide",
+            package: "pdf_oxide",
             version: "0.3.77",
             dependency: "pdf_oxide = \"=0.3.77\"".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = pdf_oxide::PdfDocument::open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.page_count().unwrap_or(0)); }",
         },
         Consumer {
             engine: "pdfium-render",
+            package: "pdfium-render",
             version: "0.9.3",
             dependency: "pdfium-render = \"=0.9.3\"".to_owned(),
             main: Box::leak(format!(
@@ -109,6 +152,7 @@ fn consumers(repo_root: &Path, pdfium_lib: Option<&Path>) -> Vec<Consumer> {
         },
         Consumer {
             engine: "mupdf",
+            package: "mupdf",
             version: "0.8.0",
             dependency: "mupdf = { version = \"=0.8.0\", default-features = false, features = [\"base14-fonts\"] }".to_owned(),
             main: "fn main() { let p = std::env::args().nth(1).unwrap_or_default(); let d = mupdf::Document::open(&p).unwrap_or_else(|e| { eprintln!(\"{e}\"); std::process::exit(1) }); println!(\"{}\", d.page_count().unwrap_or(0)); }",
@@ -256,7 +300,7 @@ fn measure(consumer: &Consumer, scratch: &Path, repo_root: &Path) -> Result<Adop
         &target,
         &["metadata", "--format-version", "1"],
     )?)?;
-    let license = license_of(&metadata, consumer.engine);
+    let license = license_of(&metadata, consumer.package);
 
     let clock = Instant::now();
     cargo(&dir, &target, &["build", "--release"])?;
@@ -286,7 +330,7 @@ fn measure(consumer: &Consumer, scratch: &Path, repo_root: &Path) -> Result<Adop
         };
         let count = count_unsafe(&source);
         unsafe_in_tree += count;
-        if name == consumer.engine || name.starts_with("pdfrum") && consumer.engine == "pdfrum" {
+        if name == consumer.package || name.starts_with("pdfrum") && consumer.package == "pdfrum" {
             unsafe_in_crate += count;
         }
     }

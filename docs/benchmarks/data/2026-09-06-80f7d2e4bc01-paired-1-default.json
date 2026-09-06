@@ -1,0 +1,6860 @@
+{
+  "schema": 1,
+  "generated_at": "2026-09-06T08:31:54Z",
+  "commit": "80f7d2e4bc01",
+  "label": "d1",
+  "profile": "default",
+  "machine": {
+    "hostname": "frieren",
+    "cpus": 32,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "uptime_before": "16:31:54 up 11 days, 17:46,  3 users,  load average: 14.28, 20.63, 17.14",
+    "uptime_after": "16:33:29 up 11 days, 17:48,  3 users,  load average: 14.49, 18.45, 16.67",
+    "loadavg_before": "14.28 20.63 17.14 7/3119 1566168",
+    "loadavg_after": "14.49 18.45 16.67 7/3116 1568501"
+  },
+  "corpus": {
+    "root": "/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/benches/corpus",
+    "rule": "every .pdf of the recursive listing",
+    "files": 44
+  },
+  "oracle": {
+    "binary": "/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test",
+    "font_dir": "/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts",
+    "checkout_commit": "a043bed4a0d7"
+  },
+  "dpi": 150.0,
+  "timeout_secs": 10.0,
+  "warm_runs": 3,
+  "engines": [
+    {
+      "name": "pdfrum",
+      "version": "0.1.0",
+      "ops": [
+        "open",
+        "render",
+        "text"
+      ],
+      "c_in_build": false,
+      "ran": true,
+      "note": "the facade with default features: Document::open, Page::render_on with VelloCpuBackend, Page::text_on",
+      "work": [
+        {
+          "item": "path AA",
+          "answer": "yes",
+          "source": "crates/pdfrum/src/render.rs RenderOptions::default"
+        },
+        {
+          "item": "text AA",
+          "answer": "yes",
+          "source": "crates/pdfrum/src/render.rs RenderOptions::default"
+        },
+        {
+          "item": "image interp",
+          "answer": "yes",
+          "source": "crates/pdfrum/src/render.rs RenderOptions::default"
+        },
+        {
+          "item": "annotations",
+          "answer": "yes",
+          "source": "crates/pdfrum/src/render.rs RenderOptions::default"
+        },
+        {
+          "item": "form fields",
+          "answer": "yes",
+          "source": "crates/pdfrum/src/render.rs RenderOptions::default"
+        }
+      ]
+    },
+    {
+      "name": "hayro",
+      "version": "0.7.1",
+      "ops": [
+        "open",
+        "render"
+      ],
+      "c_in_build": false,
+      "ran": true,
+      "note": "hayro_syntax::Pdf::new, hayro::render with RenderCache held warm; no text API",
+      "work": [
+        {
+          "item": "path AA",
+          "answer": "no knob",
+          "source": "hayro-0.7.1/src/lib.rs:141 vello_cpu::RenderSettings (no AA knob)"
+        },
+        {
+          "item": "text AA",
+          "answer": "no knob",
+          "source": "hayro-0.7.1/src/lib.rs:141 vello_cpu::RenderSettings (no AA knob)"
+        },
+        {
+          "item": "image interp",
+          "answer": "yes",
+          "source": "hayro-0.7.1/src/renderer.rs:224 ImageQuality::Medium when /Interpolate, else Low"
+        },
+        {
+          "item": "annotations",
+          "answer": "yes",
+          "source": "hayro-interpret-0.7.0/src/interpret/mod.rs:121 render_annotations: true"
+        },
+        {
+          "item": "form fields",
+          "answer": "not determined"
+        }
+      ]
+    },
+    {
+      "name": "mupdf",
+      "version": "0.8.0",
+      "ops": [
+        "open",
+        "render",
+        "text"
+      ],
+      "c_in_build": true,
+      "ran": true,
+      "note": "Document::open, Page::to_pixmap(scale matrix, DeviceRGB, show_extras), Page::text(default options); built with default-features = false + base14-fonts",
+      "work": [
+        {
+          "item": "path AA",
+          "answer": "yes",
+          "source": "mupdf-0.8.0/src/context.rs:195 default aa_level == 8"
+        },
+        {
+          "item": "text AA",
+          "answer": "yes",
+          "source": "mupdf-0.8.0/src/context.rs:195 default aa_level == 8"
+        },
+        {
+          "item": "image interp",
+          "answer": "not determined"
+        },
+        {
+          "item": "annotations",
+          "answer": "yes",
+          "source": "mupdf-0.8.0/src/page.rs:49 to_pixmap(show_extras = true)"
+        },
+        {
+          "item": "form fields",
+          "answer": "yes",
+          "source": "mupdf-0.8.0/src/page.rs:49 to_pixmap(show_extras = true)"
+        }
+      ]
+    }
+  ],
+  "features": [],
+  "rows": [
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.546574,
+      "warm_ms": 0.813843,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11220,
+      "baseline_hwm_kb": 8772,
+      "pages": 2
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 109.805963,
+      "warm_ms": 13.557322,
+      "warm_samples": 3,
+      "vm_hwm_kb": 143452,
+      "baseline_hwm_kb": 8596,
+      "render": {
+        "ssim": 0.9992085543890291,
+        "exact": false,
+        "max_channel_diff": 100,
+        "differing_pct": 0.24428169221426863,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 29.092588,
+      "warm_ms": 0.430052,
+      "warm_samples": 3,
+      "vm_hwm_kb": 44412,
+      "baseline_hwm_kb": 8548,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 520,
+        "oracle_len": 454
+      }
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.33949,
+      "warm_ms": 0.045311,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9720,
+      "baseline_hwm_kb": 8552,
+      "pages": 2
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 15.195078,
+      "warm_ms": 7.802489,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39384,
+      "baseline_hwm_kb": 8572,
+      "render": {
+        "ssim": 0.9698479680685143,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 7.302688478736912,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.124032,
+      "warm_ms": 0.264017,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11500,
+      "baseline_hwm_kb": 8516,
+      "pages": 2
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 10.68457,
+      "warm_ms": 3.54384,
+      "warm_samples": 3,
+      "vm_hwm_kb": 43380,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9721843344171406,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 7.244125278324716,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_combo_box.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.654263,
+      "warm_ms": 0.243607,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13256,
+      "baseline_hwm_kb": 8692,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.7808219178082192,
+        "len": 823,
+        "oracle_len": 454
+      }
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.325657,
+      "warm_ms": 1.047679,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11864,
+      "baseline_hwm_kb": 8744,
+      "pages": 4
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 119.772759,
+      "warm_ms": 18.153969999999997,
+      "warm_samples": 3,
+      "vm_hwm_kb": 129020,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9994835939487893,
+        "exact": false,
+        "max_channel_diff": 100,
+        "differing_pct": 0.4091143293524465,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 23.559582,
+      "warm_ms": 0.432282,
+      "warm_samples": 3,
+      "vm_hwm_kb": 44744,
+      "baseline_hwm_kb": 8548,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 519,
+        "oracle_len": 453
+      }
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.450492,
+      "warm_ms": 0.081932,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10032,
+      "baseline_hwm_kb": 8756,
+      "pages": 4
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.902738,
+      "warm_ms": 7.671326,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39840,
+      "baseline_hwm_kb": 8740,
+      "render": {
+        "ssim": 0.9641246449185343,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 8.104125646357396,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.8120430000000001,
+      "warm_ms": 0.144824,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11576,
+      "baseline_hwm_kb": 8692,
+      "pages": 4
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.317318,
+      "warm_ms": 5.300089,
+      "warm_samples": 3,
+      "vm_hwm_kb": 43812,
+      "baseline_hwm_kb": 8520,
+      "render": {
+        "ssim": 0.966722895185999,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 7.7191174576302375,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_list_box.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.727674,
+      "warm_ms": 0.253297,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13024,
+      "baseline_hwm_kb": 8596,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.7808219178082192,
+        "len": 822,
+        "oracle_len": 453
+      }
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.30687899999999996,
+      "warm_ms": 0.119483,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9508,
+      "baseline_hwm_kb": 8608,
+      "pages": 1
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 67.089895,
+      "warm_ms": 7.323165,
+      "warm_samples": 3,
+      "vm_hwm_kb": 109400,
+      "baseline_hwm_kb": 8744,
+      "render": {
+        "ssim": 0.9865745527183362,
+        "exact": false,
+        "max_channel_diff": 249,
+        "differing_pct": 1.382075431282743,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 45.967189,
+      "warm_ms": 0.110983,
+      "warm_samples": 3,
+      "vm_hwm_kb": 60320,
+      "baseline_hwm_kb": 8656,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 168,
+        "oracle_len": 168
+      }
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.189206,
+      "warm_ms": 0.043431,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9624,
+      "baseline_hwm_kb": 8864,
+      "pages": 1
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.0675,
+      "warm_ms": 6.231405,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37776,
+      "baseline_hwm_kb": 8508,
+      "render": {
+        "ssim": 0.975595152644535,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 22.185321392633185,
+        "size": [
+          1275,
+          1649
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.663549,
+      "warm_ms": 0.054291,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11468,
+      "baseline_hwm_kb": 8532,
+      "pages": 1
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 3.94418,
+      "warm_ms": 2.798068,
+      "warm_samples": 3,
+      "vm_hwm_kb": 35612,
+      "baseline_hwm_kb": 8628,
+      "render": {
+        "ssim": 0.9755352430079168,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 22.180513759825896,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "forms_number.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.954457,
+      "warm_ms": 0.045851,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13004,
+      "baseline_hwm_kb": 8776,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9354838709677419,
+        "len": 171,
+        "oracle_len": 168
+      }
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 3.534219,
+      "warm_ms": 2.804449,
+      "warm_samples": 3,
+      "vm_hwm_kb": 16308,
+      "baseline_hwm_kb": 8824,
+      "pages": 4
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 122.352212,
+      "warm_ms": 9.124686,
+      "warm_samples": 3,
+      "vm_hwm_kb": 192900,
+      "baseline_hwm_kb": 8564,
+      "render": {
+        "ssim": 0.9999709840794373,
+        "exact": false,
+        "max_channel_diff": 50,
+        "differing_pct": 0.053318734703641686,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 22.104129,
+      "warm_ms": 0.402801,
+      "warm_samples": 3,
+      "vm_hwm_kb": 46188,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 523,
+        "oracle_len": 454
+      }
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.915016,
+      "warm_ms": 0.140554,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11196,
+      "baseline_hwm_kb": 8812,
+      "pages": 4
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 12.88084,
+      "warm_ms": 6.018919,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39832,
+      "baseline_hwm_kb": 8612,
+      "render": {
+        "ssim": 0.9740712941304738,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.6578860202786005,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.71621,
+      "warm_ms": 0.107003,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11460,
+      "baseline_hwm_kb": 8836,
+      "pages": 4
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 9.785874,
+      "warm_ms": 3.60102,
+      "warm_samples": 3,
+      "vm_hwm_kb": 36664,
+      "baseline_hwm_kb": 8468,
+      "render": {
+        "ssim": 0.9784395880767214,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.1759012200283383,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_push_button.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.999232,
+      "warm_ms": 0.245207,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12984,
+      "baseline_hwm_kb": 8448,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.7808219178082192,
+        "len": 782,
+        "oracle_len": 454
+      }
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.226986,
+      "warm_ms": 0.094053,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9448,
+      "baseline_hwm_kb": 8612,
+      "pages": 2
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 304.039011,
+      "warm_ms": 11.868482,
+      "warm_samples": 3,
+      "vm_hwm_kb": 399956,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.997618896186803,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.11671236405792834,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 52.971981,
+      "warm_ms": 0.451682,
+      "warm_samples": 3,
+      "vm_hwm_kb": 61864,
+      "baseline_hwm_kb": 8772,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 573,
+        "oracle_len": 504
+      }
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.144704,
+      "warm_ms": 0.02157,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9348,
+      "baseline_hwm_kb": 8624,
+      "pages": 2
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 15.281657,
+      "warm_ms": 10.816132,
+      "warm_samples": 3,
+      "vm_hwm_kb": 40448,
+      "baseline_hwm_kb": 8572,
+      "render": {
+        "ssim": 0.9774082988798947,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.249967797140386,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.3917389999999998,
+      "warm_ms": 0.233026,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11536,
+      "baseline_hwm_kb": 8760,
+      "pages": 2
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 8.756545,
+      "warm_ms": 3.102886,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37236,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9392960653507599,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.749958596323354,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_signature.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.935618,
+      "warm_ms": 0.285968,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13644,
+      "baseline_hwm_kb": 8748,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.7948717948717948,
+        "len": 835,
+        "oracle_len": 504
+      }
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.939687,
+      "warm_ms": 0.70539,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10844,
+      "baseline_hwm_kb": 8772,
+      "pages": 3
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 183.945775,
+      "warm_ms": 9.404483,
+      "warm_samples": 3,
+      "vm_hwm_kb": 270856,
+      "baseline_hwm_kb": 8500,
+      "render": {
+        "ssim": 0.9995434259540122,
+        "exact": false,
+        "max_channel_diff": 100,
+        "differing_pct": 0.3919548055867361,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 27.341634,
+      "warm_ms": 0.444183,
+      "warm_samples": 3,
+      "vm_hwm_kb": 44112,
+      "baseline_hwm_kb": 8616,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 547,
+        "oracle_len": 480
+      }
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.37121,
+      "warm_ms": 0.084662,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9852,
+      "baseline_hwm_kb": 8760,
+      "pages": 3
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.128105,
+      "warm_ms": 5.888713999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 40740,
+      "baseline_hwm_kb": 8740,
+      "render": {
+        "ssim": 0.9576288878703836,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 8.560854203853301,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.921176,
+      "warm_ms": 0.267638,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11588,
+      "baseline_hwm_kb": 8676,
+      "pages": 3
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 9.823344,
+      "warm_ms": 3.035625,
+      "warm_samples": 3,
+      "vm_hwm_kb": 36672,
+      "baseline_hwm_kb": 8644,
+      "render": {
+        "ssim": 0.9606773326421528,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 8.140790902232117,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "forms_text_field.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.735794,
+      "warm_ms": 0.25732700000000003,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13312,
+      "baseline_hwm_kb": 8684,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.7564102564102565,
+        "len": 861,
+        "oracle_len": 480
+      }
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 6.539853,
+      "warm_ms": 5.285587,
+      "warm_samples": 3,
+      "vm_hwm_kb": 22056,
+      "baseline_hwm_kb": 8512,
+      "pages": 5
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 27.26534,
+      "warm_ms": 15.80937,
+      "warm_samples": 3,
+      "vm_hwm_kb": 63476,
+      "baseline_hwm_kb": 8592,
+      "render": {
+        "ssim": 0.998833339571195,
+        "exact": false,
+        "max_channel_diff": 169,
+        "differing_pct": 1.9471162688049435,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1754
+        ]
+      }
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.065292,
+      "warm_ms": 0.004719999999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 18624,
+      "baseline_hwm_kb": 8748,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 2.214582,
+      "warm_ms": 0.437392,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13476,
+      "baseline_hwm_kb": 8832,
+      "pages": 5
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.376366,
+      "warm_ms": 7.210971,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37216,
+      "baseline_hwm_kb": 8600,
+      "render": {
+        "ssim": 0.9695501532739583,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 30.073472615588333,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1754
+        ]
+      }
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.609695,
+      "warm_ms": 0.684059,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12060,
+      "baseline_hwm_kb": 8612,
+      "pages": 5
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 26.878429,
+      "warm_ms": 4.777393,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37440,
+      "baseline_hwm_kb": 8516,
+      "render": {
+        "ssim": 0.9759190833198259,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 29.737098613307833,
+        "size": [
+          1240,
+          1755
+        ],
+        "oracle_size": [
+          1240,
+          1754
+        ]
+      }
+    },
+    {
+      "file": "forms_widgets_407.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.042061,
+      "warm_ms": 0.00603,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12288,
+      "baseline_hwm_kb": 8596,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.30557799999999996,
+      "warm_ms": 0.146994,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9468,
+      "baseline_hwm_kb": 8464,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 1880.21944,
+      "warm_ms": 1547.5602135,
+      "warm_samples": 2,
+      "vm_hwm_kb": 1643036,
+      "baseline_hwm_kb": 8536,
+      "render": {
+        "ssim": 0.9999975601593917,
+        "exact": false,
+        "max_channel_diff": 2,
+        "differing_pct": 0.0,
+        "size": [
+          9318,
+          9318
+        ],
+        "oracle_size": [
+          9318,
+          9318
+        ]
+      }
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.080572,
+      "warm_ms": 0.00399,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10496,
+      "baseline_hwm_kb": 8668,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.197126,
+      "warm_ms": 0.01285,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9396,
+      "baseline_hwm_kb": 8568,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 853.92982,
+      "warm_ms": 869.965478,
+      "warm_samples": 3,
+      "vm_hwm_kb": 980872,
+      "baseline_hwm_kb": 8672,
+      "render": {
+        "ssim": 0.9996496799249757,
+        "exact": false,
+        "max_channel_diff": 212,
+        "differing_pct": 0.04047330816366009,
+        "size": [
+          9318,
+          9318
+        ],
+        "oracle_size": [
+          9318,
+          9318
+        ]
+      }
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.6627080000000001,
+      "warm_ms": 0.04053100000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11276,
+      "baseline_hwm_kb": 8556,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 388.006531,
+      "warm_ms": 194.352005,
+      "warm_samples": 3,
+      "vm_hwm_kb": 944212,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9996440070747452,
+        "exact": false,
+        "max_channel_diff": 222,
+        "differing_pct": 0.04047330816366009,
+        "size": [
+          9319,
+          9319
+        ],
+        "oracle_size": [
+          9318,
+          9318
+        ]
+      }
+    },
+    {
+      "file": "image_bug_583804.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.242497,
+      "warm_ms": 0.01158,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11788,
+      "baseline_hwm_kb": 8628,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.065182,
+      "warm_ms": 0.009031,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9412,
+      "baseline_hwm_kb": 8580,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 448.237879,
+      "warm_ms": 0.090412,
+      "warm_samples": 3,
+      "vm_hwm_kb": 109056,
+      "baseline_hwm_kb": 8580,
+      "render": {
+        "ssim": 1.0,
+        "exact": true,
+        "max_channel_diff": 0,
+        "differing_pct": 0.0,
+        "size": [
+          133,
+          133
+        ],
+        "oracle_size": [
+          133,
+          133
+        ]
+      }
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.056192,
+      "warm_ms": 0.00395,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10012,
+      "baseline_hwm_kb": 8604,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.088613,
+      "warm_ms": 0.01089,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9468,
+      "baseline_hwm_kb": 8828,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 295.554582,
+      "warm_ms": 304.036338,
+      "warm_samples": 3,
+      "vm_hwm_kb": 184820,
+      "baseline_hwm_kb": 8676,
+      "render": {
+        "ssim": 0.9999945852163304,
+        "exact": false,
+        "max_channel_diff": 1,
+        "differing_pct": 0.0,
+        "size": [
+          133,
+          133
+        ],
+        "oracle_size": [
+          133,
+          133
+        ]
+      }
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.831332,
+      "warm_ms": 0.040901,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11320,
+      "baseline_hwm_kb": 8600,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 24.710715,
+      "warm_ms": 0.205136,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14200,
+      "baseline_hwm_kb": 8516,
+      "render": {
+        "ssim": 0.9999979296758372,
+        "exact": false,
+        "max_channel_diff": 1,
+        "differing_pct": 0.0,
+        "size": [
+          134,
+          134
+        ],
+        "oracle_size": [
+          133,
+          133
+        ]
+      }
+    },
+    {
+      "file": "image_bug_718762.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.500523,
+      "warm_ms": 0.00963,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12056,
+      "baseline_hwm_kb": 8772,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 4.794965,
+      "warm_ms": 6.213742000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 17604,
+      "baseline_hwm_kb": 8544,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 389.335725,
+      "warm_ms": 26.300957,
+      "warm_samples": 3,
+      "vm_hwm_kb": 211360,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.99506663292417,
+        "exact": false,
+        "max_channel_diff": 236,
+        "differing_pct": 0.5708230952968023,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.127463,
+      "warm_ms": 0.01712,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14772,
+      "baseline_hwm_kb": 8524,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.319744,
+      "warm_ms": 0.220566,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11472,
+      "baseline_hwm_kb": 8672,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 169.389686,
+      "warm_ms": 150.584516,
+      "warm_samples": 3,
+      "vm_hwm_kb": 274020,
+      "baseline_hwm_kb": 8596,
+      "render": {
+        "ssim": 0.9950778384314813,
+        "exact": false,
+        "max_channel_diff": 223,
+        "differing_pct": 0.6383679562229333,
+        "size": [
+          1275,
+          1649
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.664708,
+      "warm_ms": 0.045391,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11536,
+      "baseline_hwm_kb": 8688,
+      "pages": 1
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 239.885509,
+      "warm_ms": 31.244753,
+      "warm_samples": 3,
+      "vm_hwm_kb": 65296,
+      "baseline_hwm_kb": 8744,
+      "render": {
+        "ssim": 0.9953270260716574,
+        "exact": false,
+        "max_channel_diff": 216,
+        "differing_pct": 0.6221838457825636,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_bug_898443.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.797112,
+      "warm_ms": 0.018241,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13568,
+      "baseline_hwm_kb": 8636,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.605195,
+      "warm_ms": 0.408881,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10584,
+      "baseline_hwm_kb": 8836,
+      "pages": 1
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 104.48765,
+      "warm_ms": 40.458023,
+      "warm_samples": 3,
+      "vm_hwm_kb": 91824,
+      "baseline_hwm_kb": 8764,
+      "render": {
+        "ssim": 0.8860760286875711,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 13.87168666038977,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 45.798842,
+      "warm_ms": 2.643968,
+      "warm_samples": 3,
+      "vm_hwm_kb": 45056,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9988276670574443,
+        "len": 1988,
+        "oracle_len": 1970
+      }
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.231736,
+      "warm_ms": 0.06470100000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9536,
+      "baseline_hwm_kb": 8512,
+      "pages": 1
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 67.72165,
+      "warm_ms": 51.17413,
+      "warm_samples": 3,
+      "vm_hwm_kb": 44112,
+      "baseline_hwm_kb": 8608,
+      "render": {
+        "ssim": 0.8644988196831721,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 17.35741084697162,
+        "size": [
+          1275,
+          1649
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.6337670000000001,
+      "warm_ms": 0.047182,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11396,
+      "baseline_hwm_kb": 8472,
+      "pages": 1
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 73.49066,
+      "warm_ms": 23.46143,
+      "warm_samples": 3,
+      "vm_hwm_kb": 40800,
+      "baseline_hwm_kb": 8672,
+      "render": {
+        "ssim": 0.867096741403376,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 17.46784360056473,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_3bigpreview.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 29.010924,
+      "warm_ms": 2.145626,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15408,
+      "baseline_hwm_kb": 8564,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.5412748171368862,
+        "len": 2196,
+        "oracle_len": 1970
+      }
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.077512,
+      "warm_ms": 0.01174,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9380,
+      "baseline_hwm_kb": 8608,
+      "pages": 2
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 20.517083,
+      "warm_ms": 2.0242530000000003,
+      "warm_samples": 3,
+      "vm_hwm_kb": 16404,
+      "baseline_hwm_kb": 8620,
+      "render": {
+        "ssim": 0.9894534438023777,
+        "exact": false,
+        "max_channel_diff": 133,
+        "differing_pct": 0.32051282051282054,
+        "size": [
+          416,
+          625
+        ],
+        "oracle_size": [
+          416,
+          624
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.07297100000000001,
+      "warm_ms": 0.0102,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10048,
+      "baseline_hwm_kb": 8444,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.094373,
+      "warm_ms": 0.00973,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9272,
+      "baseline_hwm_kb": 8632,
+      "pages": 2
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 19.993199,
+      "warm_ms": 19.571288,
+      "warm_samples": 3,
+      "vm_hwm_kb": 18264,
+      "baseline_hwm_kb": 8740,
+      "render": {
+        "ssim": 0.989396940572016,
+        "exact": false,
+        "max_channel_diff": 223,
+        "differing_pct": 0.3208980522682446,
+        "size": [
+          416,
+          625
+        ],
+        "oracle_size": [
+          416,
+          624
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.8176410000000001,
+      "warm_ms": 0.051622,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11408,
+      "baseline_hwm_kb": 8624,
+      "pages": 2
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 12.461344,
+      "warm_ms": 1.032797,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15848,
+      "baseline_hwm_kb": 8748,
+      "render": {
+        "ssim": 0.9703400282223145,
+        "exact": false,
+        "max_channel_diff": 223,
+        "differing_pct": 0.6333210059171598,
+        "size": [
+          417,
+          625
+        ],
+        "oracle_size": [
+          416,
+          624
+        ]
+      }
+    },
+    {
+      "file": "image_ccitt_transfer.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.154934,
+      "warm_ms": 0.01209,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11604,
+      "baseline_hwm_kb": 8556,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 2.406202,
+      "warm_ms": 1.92722,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12892,
+      "baseline_hwm_kb": 8524,
+      "pages": 4
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 63.244282,
+      "warm_ms": 43.328495,
+      "warm_samples": 3,
+      "vm_hwm_kb": 65228,
+      "baseline_hwm_kb": 8612,
+      "render": {
+        "ssim": 0.9996709155493254,
+        "exact": false,
+        "max_channel_diff": 145,
+        "differing_pct": 0.02663636530923946,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.770702,
+      "warm_ms": 0.5654549999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13872,
+      "baseline_hwm_kb": 8748,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 16,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.77113,
+      "warm_ms": 0.28334699999999996,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10324,
+      "baseline_hwm_kb": 8624,
+      "pages": 4
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 328.830089,
+      "warm_ms": 257.146794,
+      "warm_samples": 3,
+      "vm_hwm_kb": 220240,
+      "baseline_hwm_kb": 8684,
+      "render": {
+        "ssim": 0.9485155023558977,
+        "exact": false,
+        "max_channel_diff": 200,
+        "differing_pct": 5.349815063577646,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.7285889999999999,
+      "warm_ms": 0.057731,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11556,
+      "baseline_hwm_kb": 8684,
+      "pages": 4
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 23.927899,
+      "warm_ms": 10.916652,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39996,
+      "baseline_hwm_kb": 8740,
+      "render": {
+        "ssim": 0.9703160114162417,
+        "exact": false,
+        "max_channel_diff": 204,
+        "differing_pct": 5.5968570009016805,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_en_fqa.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.165728,
+      "warm_ms": 0.091042,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13308,
+      "baseline_hwm_kb": 8468,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 18,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.061312,
+      "warm_ms": 0.009000000000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9568,
+      "baseline_hwm_kb": 8736,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 100.031849,
+      "warm_ms": 0.78542,
+      "warm_samples": 3,
+      "vm_hwm_kb": 28200,
+      "baseline_hwm_kb": 8688,
+      "render": {
+        "ssim": 0.9999996546523138,
+        "exact": false,
+        "max_channel_diff": 1,
+        "differing_pct": 0.0,
+        "size": [
+          416,
+          416
+        ],
+        "oracle_size": [
+          416,
+          416
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.052121,
+      "warm_ms": 0.0035099999999999997,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10284,
+      "baseline_hwm_kb": 8684,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.065331,
+      "warm_ms": 0.0087,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9288,
+      "baseline_hwm_kb": 8456,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 39.721778,
+      "warm_ms": 35.996922,
+      "warm_samples": 3,
+      "vm_hwm_kb": 46276,
+      "baseline_hwm_kb": 8724,
+      "render": {
+        "ssim": 0.17585244047367724,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 81.18528106508876,
+        "size": [
+          416,
+          416
+        ],
+        "oracle_size": [
+          416,
+          416
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.613486,
+      "warm_ms": 0.039480999999999995,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11412,
+      "baseline_hwm_kb": 8500,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 11.165789,
+      "warm_ms": 1.19281,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14660,
+      "baseline_hwm_kb": 8608,
+      "render": {
+        "ssim": 0.925907679181056,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 4.765509430473373,
+        "size": [
+          417,
+          417
+        ],
+        "oracle_size": [
+          416,
+          416
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_1478366.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.073332,
+      "warm_ms": 0.00935,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11832,
+      "baseline_hwm_kb": 8672,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.17069399999999998,
+      "warm_ms": 0.029531,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9784,
+      "baseline_hwm_kb": 8608,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 140.29246,
+      "warm_ms": 13.090798,
+      "warm_samples": 3,
+      "vm_hwm_kb": 63468,
+      "baseline_hwm_kb": 8468,
+      "render": {
+        "ssim": 0.995961222869643,
+        "exact": false,
+        "max_channel_diff": 254,
+        "differing_pct": 0.4290693279690941,
+        "size": [
+          1650,
+          1275
+        ],
+        "oracle_size": [
+          1649,
+          1274
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.615367,
+      "warm_ms": 0.022311,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12504,
+      "baseline_hwm_kb": 8512,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 8,
+        "oracle_len": 8
+      }
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.154964,
+      "warm_ms": 0.032100000000000004,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9668,
+      "baseline_hwm_kb": 8824,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 59.409674,
+      "warm_ms": 49.436527,
+      "warm_samples": 3,
+      "vm_hwm_kb": 46356,
+      "baseline_hwm_kb": 8560,
+      "render": {
+        "ssim": 0.9959389715646688,
+        "exact": false,
+        "max_channel_diff": 249,
+        "differing_pct": 0.47062441154098433,
+        "size": [
+          1649,
+          1275
+        ],
+        "oracle_size": [
+          1649,
+          1274
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.662307,
+      "warm_ms": 0.047982,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11800,
+      "baseline_hwm_kb": 8744,
+      "pages": 1
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 42.714983999999994,
+      "warm_ms": 14.71586,
+      "warm_samples": 3,
+      "vm_hwm_kb": 43476,
+      "baseline_hwm_kb": 8488,
+      "render": {
+        "ssim": 0.9959702773776444,
+        "exact": false,
+        "max_channel_diff": 233,
+        "differing_pct": 0.5091330743240992,
+        "size": [
+          1650,
+          1275
+        ],
+        "oracle_size": [
+          1649,
+          1274
+        ]
+      }
+    },
+    {
+      "file": "image_jbig2_880920.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.8389909999999999,
+      "warm_ms": 0.017870999999999998,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12624,
+      "baseline_hwm_kb": 8652,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 11,
+        "oracle_len": 8
+      }
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.7681100000000001,
+      "warm_ms": 0.715128,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10880,
+      "baseline_hwm_kb": 8692,
+      "pages": 1
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 126.729719,
+      "warm_ms": 40.30638,
+      "warm_samples": 3,
+      "vm_hwm_kb": 77944,
+      "baseline_hwm_kb": 8612,
+      "render": {
+        "ssim": 0.9874443386204999,
+        "exact": false,
+        "max_channel_diff": 129,
+        "differing_pct": 4.36500561249839,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.520435,
+      "warm_ms": 0.059772000000000006,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12820,
+      "baseline_hwm_kb": 8620,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 107,
+        "oracle_len": 42
+      }
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.560475,
+      "warm_ms": 0.090053,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9972,
+      "baseline_hwm_kb": 8744,
+      "pages": 1
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 68.648321,
+      "warm_ms": 62.02498,
+      "warm_samples": 3,
+      "vm_hwm_kb": 56356,
+      "baseline_hwm_kb": 8760,
+      "render": {
+        "ssim": 0.9893200769361712,
+        "exact": false,
+        "max_channel_diff": 174,
+        "differing_pct": 2.79893454538763,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.74438,
+      "warm_ms": 0.108452,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11484,
+      "baseline_hwm_kb": 8580,
+      "pages": 1
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 76.51274099999999,
+      "warm_ms": 17.663375,
+      "warm_samples": 3,
+      "vm_hwm_kb": 59904,
+      "baseline_hwm_kb": 8540,
+      "render": {
+        "ssim": 0.9907257790202361,
+        "exact": false,
+        "max_channel_diff": 160,
+        "differing_pct": 2.2041937324034375,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "image_jpx_123.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.238815,
+      "warm_ms": 0.032660999999999996,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13312,
+      "baseline_hwm_kb": 8772,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 108,
+        "oracle_len": 42
+      }
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.480972,
+      "warm_ms": 0.33125899999999997,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10328,
+      "baseline_hwm_kb": 8668,
+      "pages": 12
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 25.64912,
+      "warm_ms": 15.647054,
+      "warm_samples": 3,
+      "vm_hwm_kb": 62016,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9999884994401378,
+        "exact": false,
+        "max_channel_diff": 7,
+        "differing_pct": 0.0,
+        "size": [
+          1305,
+          1846
+        ],
+        "oracle_size": [
+          1305,
+          1846
+        ]
+      }
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.706455,
+      "warm_ms": 0.3926,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13172,
+      "baseline_hwm_kb": 8580,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 799,
+        "oracle_len": 799
+      }
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.232686,
+      "warm_ms": 0.03817,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9656,
+      "baseline_hwm_kb": 8760,
+      "pages": 12
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 12.075271,
+      "warm_ms": 7.647616999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39936,
+      "baseline_hwm_kb": 8688,
+      "render": {
+        "ssim": 0.9913687088242856,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.067761713220674,
+        "size": [
+          1305,
+          1846
+        ],
+        "oracle_size": [
+          1305,
+          1846
+        ]
+      }
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.670998,
+      "warm_ms": 0.044171,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11432,
+      "baseline_hwm_kb": 8836,
+      "pages": 12
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.753578999999998,
+      "warm_ms": 4.894876,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39280,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9936963613857782,
+        "exact": false,
+        "max_channel_diff": 241,
+        "differing_pct": 2.1576734204223276,
+        "size": [
+          1306,
+          1847
+        ],
+        "oracle_size": [
+          1305,
+          1846
+        ]
+      }
+    },
+    {
+      "file": "mixed_en_uicase.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.766068,
+      "warm_ms": 0.26679600000000003,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13312,
+      "baseline_hwm_kb": 8600,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9861751152073732,
+        "len": 779,
+        "oracle_len": 799
+      }
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 10.761267,
+      "warm_ms": 9.103114,
+      "warm_samples": 3,
+      "vm_hwm_kb": 29372,
+      "baseline_hwm_kb": 8628,
+      "pages": 1
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 231.800182,
+      "warm_ms": 7.531174,
+      "warm_samples": 3,
+      "vm_hwm_kb": 335328,
+      "baseline_hwm_kb": 8684,
+      "render": {
+        "ssim": 0.9976798039211857,
+        "exact": false,
+        "max_channel_diff": 65,
+        "differing_pct": 0.6732628345616947,
+        "size": [
+          1106,
+          1387
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.026731,
+      "warm_ms": 0.00227,
+      "warm_samples": 3,
+      "vm_hwm_kb": 23748,
+      "baseline_hwm_kb": 8756,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 2.745331,
+      "warm_ms": 0.41403,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14660,
+      "baseline_hwm_kb": 8624,
+      "pages": 1
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 27.724532,
+      "warm_ms": 20.668871,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39560,
+      "baseline_hwm_kb": 8512,
+      "render": {
+        "ssim": 0.9404145222305589,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 26.172310436225818,
+        "size": [
+          1106,
+          1387
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.0849080000000002,
+      "warm_ms": 0.41473,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11616,
+      "baseline_hwm_kb": 8580,
+      "pages": 1
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 37.544474,
+      "warm_ms": 3.4266880000000004,
+      "warm_samples": 3,
+      "vm_hwm_kb": 33636,
+      "baseline_hwm_kb": 8772,
+      "render": {
+        "ssim": 0.9509947401087347,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 26.542904860556106,
+        "size": [
+          1107,
+          1388
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "mixed_formfield.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.031881,
+      "warm_ms": 0.00206,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12632,
+      "baseline_hwm_kb": 8580,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.531644,
+      "warm_ms": 0.37743,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10324,
+      "baseline_hwm_kb": 8632,
+      "pages": 6
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 31.410977,
+      "warm_ms": 13.700462,
+      "warm_samples": 3,
+      "vm_hwm_kb": 61496,
+      "baseline_hwm_kb": 8644,
+      "render": {
+        "ssim": 0.999946562775111,
+        "exact": false,
+        "max_channel_diff": 54,
+        "differing_pct": 0.045774064736948644,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.912026,
+      "warm_ms": 0.963165,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14776,
+      "baseline_hwm_kb": 8472,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1180,
+        "oracle_len": 1179
+      }
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.224386,
+      "warm_ms": 0.050421,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9576,
+      "baseline_hwm_kb": 8640,
+      "pages": 6
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 23.838842,
+      "warm_ms": 8.758615,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38324,
+      "baseline_hwm_kb": 8744,
+      "render": {
+        "ssim": 0.9729572048074954,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 4.261818449478314,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 3.747516,
+      "warm_ms": 0.056831,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11396,
+      "baseline_hwm_kb": 8608,
+      "pages": 6
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 18.964006,
+      "warm_ms": 5.973382999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38728,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9723853700209856,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 4.154582926963914,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_006.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 6.924647,
+      "warm_ms": 0.540474,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14080,
+      "baseline_hwm_kb": 8744,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9781420765027322,
+        "len": 1196,
+        "oracle_len": 1179
+      }
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.487202,
+      "warm_ms": 0.255067,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9820,
+      "baseline_hwm_kb": 8544,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 30.574503999999997,
+      "warm_ms": 16.602866000000002,
+      "warm_samples": 3,
+      "vm_hwm_kb": 60032,
+      "baseline_hwm_kb": 8724,
+      "render": {
+        "ssim": 0.9999963080669574,
+        "exact": false,
+        "max_channel_diff": 14,
+        "differing_pct": 0.0008740776180924866,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.675219,
+      "warm_ms": 0.325508,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14300,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1173,
+        "oracle_len": 1173
+      }
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.249816,
+      "warm_ms": 0.055401,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9444,
+      "baseline_hwm_kb": 8544,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 25.523195,
+      "warm_ms": 17.971341,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37784,
+      "baseline_hwm_kb": 8624,
+      "render": {
+        "ssim": 0.9719106374343394,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.9753234087186942,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.6765169999999999,
+      "warm_ms": 0.060451,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11432,
+      "baseline_hwm_kb": 8512,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.540303,
+      "warm_ms": 3.86967,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37928,
+      "baseline_hwm_kb": 8640,
+      "render": {
+        "ssim": 0.9738838982911703,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.8603591998969509,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_045.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 8.845927,
+      "warm_ms": 0.318448,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13568,
+      "baseline_hwm_kb": 8472,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1189,
+        "oracle_len": 1173
+      }
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.199285,
+      "warm_ms": 0.053581,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9584,
+      "baseline_hwm_kb": 8688,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 29.974437,
+      "warm_ms": 11.252468,
+      "warm_samples": 3,
+      "vm_hwm_kb": 50928,
+      "baseline_hwm_kb": 8500,
+      "render": {
+        "ssim": 0.9999969876974505,
+        "exact": false,
+        "max_channel_diff": 13,
+        "differing_pct": 0.002208196087812598,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.49175,
+      "warm_ms": 0.419961,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15172,
+      "baseline_hwm_kb": 8616,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 325,
+        "oracle_len": 321
+      }
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.163925,
+      "warm_ms": 0.057392000000000006,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9332,
+      "baseline_hwm_kb": 8572,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 8.60827,
+      "warm_ms": 7.41751,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37152,
+      "baseline_hwm_kb": 8764,
+      "render": {
+        "ssim": 0.9898040353932601,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.2745891835194965,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.711059,
+      "warm_ms": 0.059081,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11472,
+      "baseline_hwm_kb": 8740,
+      "pages": 16
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.147032,
+      "warm_ms": 4.118685,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38080,
+      "baseline_hwm_kb": 8608,
+      "render": {
+        "ssim": 0.9904266071911358,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.2094473989290249,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "mixed_tcpdf_059.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.490781,
+      "warm_ms": 0.517313,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13392,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 387,
+        "oracle_len": 321
+      }
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.080662,
+      "warm_ms": 0.011791,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9452,
+      "baseline_hwm_kb": 8680,
+      "pages": 1
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 72.873643,
+      "warm_ms": 60.260741,
+      "warm_samples": 3,
+      "vm_hwm_kb": 47404,
+      "baseline_hwm_kb": 8608,
+      "render": {
+        "ssim": 0.9808813009501174,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.5481594985913255,
+        "size": [
+          833,
+          1875
+        ],
+        "oracle_size": [
+          833,
+          1874
+        ]
+      }
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.367609,
+      "warm_ms": 0.152133,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10552,
+      "baseline_hwm_kb": 8608,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.07480200000000001,
+      "warm_ms": 0.01261,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9436,
+      "baseline_hwm_kb": 8792,
+      "pages": 1
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 379.398221,
+      "warm_ms": 349.51288200000005,
+      "warm_samples": 3,
+      "vm_hwm_kb": 35724,
+      "baseline_hwm_kb": 8776,
+      "render": {
+        "ssim": 0.9222164669593303,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 26.595376677885668,
+        "size": [
+          833,
+          1874
+        ],
+        "oracle_size": [
+          833,
+          1874
+        ]
+      }
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.81414,
+      "warm_ms": 0.042011999999999994,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11664,
+      "baseline_hwm_kb": 8748,
+      "pages": 1
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 51.197495,
+      "warm_ms": 35.611618,
+      "warm_samples": 3,
+      "vm_hwm_kb": 29096,
+      "baseline_hwm_kb": 8616,
+      "render": {
+        "ssim": 0.94492868481173,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 17.55814385519416,
+        "size": [
+          834,
+          1875
+        ],
+        "oracle_size": [
+          833,
+          1874
+        ]
+      }
+    },
+    {
+      "file": "shading_axial_radial.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 13.089704,
+      "warm_ms": 0.033101,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14336,
+      "baseline_hwm_kb": 8628,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.090513,
+      "warm_ms": 0.013331,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9332,
+      "baseline_hwm_kb": 8628,
+      "pages": 1
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 24.397012,
+      "warm_ms": 15.7155,
+      "warm_samples": 3,
+      "vm_hwm_kb": 52648,
+      "baseline_hwm_kb": 8464,
+      "render": {
+        "ssim": 1.0,
+        "exact": false,
+        "max_channel_diff": 0,
+        "differing_pct": 0.0,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 1.145969,
+      "warm_ms": 0.045051,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11984,
+      "baseline_hwm_kb": 8548,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3,
+        "oracle_len": 3
+      }
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.118123,
+      "warm_ms": 0.01212,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9372,
+      "baseline_hwm_kb": 8604,
+      "pages": 1
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 6.424513,
+      "warm_ms": 5.984972,
+      "warm_samples": 3,
+      "vm_hwm_kb": 35920,
+      "baseline_hwm_kb": 8792,
+      "render_error": "size mismatch: oracle (1274, 1649), candidate (1240, 1753)"
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.959544,
+      "warm_ms": 0.068172,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11388,
+      "baseline_hwm_kb": 8536,
+      "pages": 0
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "error",
+      "detail": "mupdf: MuPDF error, code: 4, message: invalid page number: 1",
+      "cold_ms": 0.0,
+      "warm_ms": 0.0,
+      "warm_samples": 0,
+      "vm_hwm_kb": 11564,
+      "baseline_hwm_kb": 8520
+    },
+    {
+      "file": "shading_coons.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "error",
+      "detail": "mupdf: MuPDF error, code: 4, message: invalid page number: 1",
+      "cold_ms": 0.0,
+      "warm_ms": 0.0,
+      "warm_samples": 0,
+      "vm_hwm_kb": 11744,
+      "baseline_hwm_kb": 8760
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.121683,
+      "warm_ms": 0.011101,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9372,
+      "baseline_hwm_kb": 8604,
+      "pages": 1
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 21.757544,
+      "warm_ms": 19.603039,
+      "warm_samples": 3,
+      "vm_hwm_kb": 53148,
+      "baseline_hwm_kb": 8544,
+      "render": {
+        "ssim": 1.0,
+        "exact": false,
+        "max_channel_diff": 0,
+        "differing_pct": 0.0,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.839231,
+      "warm_ms": 0.029921,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11976,
+      "baseline_hwm_kb": 8604,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3,
+        "oracle_len": 3
+      }
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.072932,
+      "warm_ms": 0.01097,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9372,
+      "baseline_hwm_kb": 8604,
+      "pages": 1
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 7.1700230000000005,
+      "warm_ms": 6.572007,
+      "warm_samples": 3,
+      "vm_hwm_kb": 35796,
+      "baseline_hwm_kb": 8616,
+      "render_error": "size mismatch: oracle (1274, 1649), candidate (1240, 1753)"
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.7841499999999999,
+      "warm_ms": 0.065932,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11364,
+      "baseline_hwm_kb": 8512,
+      "pages": 0
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "error",
+      "detail": "mupdf: MuPDF error, code: 4, message: invalid page number: 1",
+      "cold_ms": 0.0,
+      "warm_ms": 0.0,
+      "warm_samples": 0,
+      "vm_hwm_kb": 11532,
+      "baseline_hwm_kb": 8744
+    },
+    {
+      "file": "shading_gouraud.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "error",
+      "detail": "mupdf: MuPDF error, code: 4, message: invalid page number: 1",
+      "cold_ms": 0.0,
+      "warm_ms": 0.0,
+      "warm_samples": 0,
+      "vm_hwm_kb": 11688,
+      "baseline_hwm_kb": 8836
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.250936,
+      "warm_ms": 0.01418,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9616,
+      "baseline_hwm_kb": 8728,
+      "pages": 2
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 54.967139,
+      "warm_ms": 32.927598,
+      "warm_samples": 3,
+      "vm_hwm_kb": 62904,
+      "baseline_hwm_kb": 8632,
+      "render": {
+        "ssim": 0.9999269342135272,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.0013801225548828735,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.363295,
+      "warm_ms": 0.101352,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12956,
+      "baseline_hwm_kb": 8672,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 163,
+        "oracle_len": 163
+      }
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.08984199999999999,
+      "warm_ms": 0.017620999999999998,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9372,
+      "baseline_hwm_kb": 8604,
+      "pages": 2
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 147.57251,
+      "warm_ms": 91.054084,
+      "warm_samples": 3,
+      "vm_hwm_kb": 50140,
+      "baseline_hwm_kb": 8600,
+      "render": {
+        "ssim": 0.9811680419602283,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.558802421655043,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.705858,
+      "warm_ms": 0.053611,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11476,
+      "baseline_hwm_kb": 8628,
+      "pages": 2
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 20.898801,
+      "warm_ms": 8.134837000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37280,
+      "baseline_hwm_kb": 8460,
+      "render": {
+        "ssim": 0.9824294846815051,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.287102294683768,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_030.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.829807,
+      "warm_ms": 0.100583,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12952,
+      "baseline_hwm_kb": 8580,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 193,
+        "oracle_len": 163
+      }
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.199695,
+      "warm_ms": 0.039801,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9496,
+      "baseline_hwm_kb": 8536,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 29.180131000000003,
+      "warm_ms": 16.329104,
+      "warm_samples": 3,
+      "vm_hwm_kb": 49576,
+      "baseline_hwm_kb": 8464,
+      "render": {
+        "ssim": 0.9999008766505356,
+        "exact": false,
+        "max_channel_diff": 64,
+        "differing_pct": 0.07811493660637064,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.905673,
+      "warm_ms": 0.39219,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12848,
+      "baseline_hwm_kb": 8516,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 168,
+        "oracle_len": 168
+      }
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.098622,
+      "warm_ms": 0.01827,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9492,
+      "baseline_hwm_kb": 8744,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 28.318978,
+      "warm_ms": 17.111565,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38436,
+      "baseline_hwm_kb": 8836,
+      "render": {
+        "ssim": 0.9866872627590019,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.5334081666451982,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.743019,
+      "warm_ms": 0.055531,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11460,
+      "baseline_hwm_kb": 8544,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 48.226344,
+      "warm_ms": 5.165181,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38744,
+      "baseline_hwm_kb": 8620,
+      "render": {
+        "ssim": 0.9900560968018287,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 1.2715529138987542,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_056.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.850288,
+      "warm_ms": 0.303358,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13316,
+      "baseline_hwm_kb": 8676,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 198,
+        "oracle_len": 168
+      }
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.258126,
+      "warm_ms": 0.118123,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9472,
+      "baseline_hwm_kb": 8644,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 38.410053,
+      "warm_ms": 25.994519,
+      "warm_samples": 3,
+      "vm_hwm_kb": 51648,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9994619944497956,
+        "exact": false,
+        "max_channel_diff": 99,
+        "differing_pct": 0.39066669120217873,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.279883,
+      "warm_ms": 0.647156,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13212,
+      "baseline_hwm_kb": 8600,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 375,
+        "oracle_len": 375
+      }
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.124323,
+      "warm_ms": 0.024371,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9328,
+      "baseline_hwm_kb": 8540,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 1084.791236,
+      "warm_ms": 1071.945978,
+      "warm_samples": 3,
+      "vm_hwm_kb": 71208,
+      "baseline_hwm_kb": 8644,
+      "render": {
+        "ssim": 0.9831456180035483,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.2048377895957163,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.7028479999999999,
+      "warm_ms": 0.057521,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11308,
+      "baseline_hwm_kb": 8572,
+      "pages": 1
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 27.004659,
+      "warm_ms": 13.798367,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37432,
+      "baseline_hwm_kb": 8552,
+      "render": {
+        "ssim": 0.9820536396773868,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.2256316360892847,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "shading_tcpdf_058.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.5923750000000005,
+      "warm_ms": 0.478842,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13288,
+      "baseline_hwm_kb": 8556,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 404,
+        "oracle_len": 375
+      }
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.08021199999999999,
+      "warm_ms": 0.00971,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9308,
+      "baseline_hwm_kb": 8472,
+      "pages": 1
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 25.943683,
+      "warm_ms": 20.530776,
+      "warm_samples": 3,
+      "vm_hwm_kb": 21324,
+      "baseline_hwm_kb": 8864,
+      "render": {
+        "ssim": 0.9952654789665843,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.14085938077292545,
+        "size": [
+          416,
+          1041
+        ],
+        "oracle_size": [
+          416,
+          1041
+        ]
+      }
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.173015,
+      "warm_ms": 0.062252,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10300,
+      "baseline_hwm_kb": 8488,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.092623,
+      "warm_ms": 0.01107,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9452,
+      "baseline_hwm_kb": 8748,
+      "pages": 1
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 46.665653,
+      "warm_ms": 29.203595,
+      "warm_samples": 3,
+      "vm_hwm_kb": 19644,
+      "baseline_hwm_kb": 8600,
+      "render": {
+        "ssim": 0.9258995897969167,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 9.652562255227961,
+        "size": [
+          416,
+          1041
+        ],
+        "oracle_size": [
+          416,
+          1041
+        ]
+      }
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.753228,
+      "warm_ms": 0.03895,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11524,
+      "baseline_hwm_kb": 8740,
+      "pages": 1
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 20.616339,
+      "warm_ms": 2.654076,
+      "warm_samples": 3,
+      "vm_hwm_kb": 17720,
+      "baseline_hwm_kb": 8564,
+      "render": {
+        "ssim": 0.9266367054847636,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 9.24915022537501,
+        "size": [
+          417,
+          1042
+        ],
+        "oracle_size": [
+          416,
+          1041
+        ]
+      }
+    },
+    {
+      "file": "shading_tensor.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.217656,
+      "warm_ms": 0.01686,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11808,
+      "baseline_hwm_kb": 8612,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.080702,
+      "warm_ms": 0.017471,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9436,
+      "baseline_hwm_kb": 8796,
+      "pages": 1
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 8.289088999999999,
+      "warm_ms": 4.981255,
+      "warm_samples": 3,
+      "vm_hwm_kb": 16032,
+      "baseline_hwm_kb": 8748,
+      "render": {
+        "ssim": 0.9999895288908474,
+        "exact": false,
+        "max_channel_diff": 1,
+        "differing_pct": 0.0,
+        "size": [
+          531,
+          531
+        ],
+        "oracle_size": [
+          531,
+          531
+        ]
+      }
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.107813,
+      "warm_ms": 0.00724,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10600,
+      "baseline_hwm_kb": 8744,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.092622,
+      "warm_ms": 0.01609,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9192,
+      "baseline_hwm_kb": 8488,
+      "pages": 1
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 105.240576,
+      "warm_ms": 61.400112,
+      "warm_samples": 3,
+      "vm_hwm_kb": 54996,
+      "baseline_hwm_kb": 8668,
+      "render": {
+        "ssim": 0.9978773905807187,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.18796925815981644,
+        "size": [
+          531,
+          531
+        ],
+        "oracle_size": [
+          531,
+          531
+        ]
+      }
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.79565,
+      "warm_ms": 0.070552,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11472,
+      "baseline_hwm_kb": 8684,
+      "pages": 1
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 0.962624,
+      "warm_ms": 0.926983,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15464,
+      "baseline_hwm_kb": 8644,
+      "render": {
+        "ssim": 0.9993000923693216,
+        "exact": false,
+        "max_channel_diff": 1,
+        "differing_pct": 0.0,
+        "size": [
+          532,
+          532
+        ],
+        "oracle_size": [
+          531,
+          531
+        ]
+      }
+    },
+    {
+      "file": "shading_type4_5.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 0.073972,
+      "warm_ms": 0.01168,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11612,
+      "baseline_hwm_kb": 8580,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.276707,
+      "warm_ms": 0.092282,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9768,
+      "baseline_hwm_kb": 8504,
+      "pages": 1
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 23.544201,
+      "warm_ms": 20.964107,
+      "warm_samples": 3,
+      "vm_hwm_kb": 54028,
+      "baseline_hwm_kb": 8740,
+      "render": {
+        "ssim": 0.9884277125058102,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.9006933463313954,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 1.478807,
+      "warm_ms": 0.238606,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12276,
+      "baseline_hwm_kb": 8608,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 290,
+        "oracle_len": 288
+      }
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.195905,
+      "warm_ms": 0.052462,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9512,
+      "baseline_hwm_kb": 8568,
+      "pages": 1
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 8.360100000000001,
+      "warm_ms": 7.641572,
+      "warm_samples": 3,
+      "vm_hwm_kb": 35128,
+      "baseline_hwm_kb": 8772,
+      "render": {
+        "ssim": 0.9876098687688022,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.8604234715297697,
+        "size": [
+          1275,
+          1649
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.632031,
+      "warm_ms": 0.072782,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11480,
+      "baseline_hwm_kb": 8672,
+      "pages": 1
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 19.324725,
+      "warm_ms": 6.361059,
+      "warm_samples": 3,
+      "vm_hwm_kb": 36000,
+      "baseline_hwm_kb": 8664,
+      "render": {
+        "ssim": 0.986819238364389,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.8775595884666317,
+        "size": [
+          1275,
+          1650
+        ],
+        "oracle_size": [
+          1274,
+          1649
+        ]
+      }
+    },
+    {
+      "file": "text_bug_1029.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 3.054747,
+      "warm_ms": 0.08493200000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12824,
+      "baseline_hwm_kb": 8756,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9375000000000001,
+        "len": 292,
+        "oracle_len": 288
+      }
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.675537,
+      "warm_ms": 0.467852,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10356,
+      "baseline_hwm_kb": 8772,
+      "pages": 4
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 28.723370000000003,
+      "warm_ms": 16.714499,
+      "warm_samples": 3,
+      "vm_hwm_kb": 59196,
+      "baseline_hwm_kb": 8772,
+      "render": {
+        "ssim": 0.9999776417288179,
+        "exact": false,
+        "max_channel_diff": 13,
+        "differing_pct": 0.0027142410246029846,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.3692150000000005,
+      "warm_ms": 0.779489,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13748,
+      "baseline_hwm_kb": 8588,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 840,
+        "oracle_len": 800
+      }
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.34641799999999995,
+      "warm_ms": 0.026901,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9772,
+      "baseline_hwm_kb": 8736,
+      "pages": 4
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 13.389106,
+      "warm_ms": 11.294134,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39076,
+      "baseline_hwm_kb": 8580,
+      "render": {
+        "ssim": 0.959480801364908,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.062841580332334,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.848921,
+      "warm_ms": 0.045721,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11428,
+      "baseline_hwm_kb": 8772,
+      "pages": 4
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 22.719039,
+      "warm_ms": 6.259075999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37556,
+      "baseline_hwm_kb": 8832,
+      "render": {
+        "ssim": 0.9478674835146547,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.160232228621902,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_functions.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 7.413496,
+      "warm_ms": 0.43575,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13056,
+      "baseline_hwm_kb": 8532,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 807,
+        "oracle_len": 800
+      }
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.520553,
+      "warm_ms": 0.277987,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10116,
+      "baseline_hwm_kb": 8452,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 31.358855,
+      "warm_ms": 15.496998,
+      "warm_samples": 3,
+      "vm_hwm_kb": 58716,
+      "baseline_hwm_kb": 8676,
+      "render": {
+        "ssim": 0.9999646592176731,
+        "exact": false,
+        "max_channel_diff": 72,
+        "differing_pct": 0.023370075262683327,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.2769869999999997,
+      "warm_ms": 0.842381,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12792,
+      "baseline_hwm_kb": 8764,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 876,
+        "oracle_len": 859
+      }
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.309757,
+      "warm_ms": 0.080462,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9884,
+      "baseline_hwm_kb": 8796,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 17.227460999999998,
+      "warm_ms": 11.696953,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39176,
+      "baseline_hwm_kb": 8608,
+      "render": {
+        "ssim": 0.9404925185916976,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 6.273531089560753,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.016575,
+      "warm_ms": 0.190255,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11540,
+      "baseline_hwm_kb": 8600,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 13.445576,
+      "warm_ms": 4.468832,
+      "warm_samples": 3,
+      "vm_hwm_kb": 43372,
+      "baseline_hwm_kb": 8768,
+      "render": {
+        "ssim": 0.9434567094780677,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.7930184200357,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_page.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 6.900563,
+      "warm_ms": 0.480472,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12908,
+      "baseline_hwm_kb": 8580,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.8205128205128205,
+        "len": 895,
+        "oracle_len": 859
+      }
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.486682,
+      "warm_ms": 0.17932399999999998,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9984,
+      "baseline_hwm_kb": 8672,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 27.775155,
+      "warm_ms": 14.302378,
+      "warm_samples": 3,
+      "vm_hwm_kb": 56920,
+      "baseline_hwm_kb": 8684,
+      "render": {
+        "ssim": 0.9999728472017467,
+        "exact": false,
+        "max_channel_diff": 73,
+        "differing_pct": 0.030086671696446646,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 1.261292,
+      "warm_ms": 0.487282,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12356,
+      "baseline_hwm_kb": 8524,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 467,
+        "oracle_len": 391
+      }
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.212815,
+      "warm_ms": 0.06786199999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9812,
+      "baseline_hwm_kb": 8820,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 8.208145,
+      "warm_ms": 6.227506,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37700,
+      "baseline_hwm_kb": 8700,
+      "render": {
+        "ssim": 0.9789510099052772,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.6784498463463557,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.7744,
+      "warm_ms": 0.143014,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11712,
+      "baseline_hwm_kb": 8740,
+      "pages": 7
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 10.148024,
+      "warm_ms": 3.956319,
+      "warm_samples": 3,
+      "vm_hwm_kb": 43080,
+      "baseline_hwm_kb": 8676,
+      "render": {
+        "ssim": 0.9791966258113406,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.441298787332315,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_cjk_structure.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.753068,
+      "warm_ms": 0.265897,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12788,
+      "baseline_hwm_kb": 8600,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.6440677966101696,
+        "len": 480,
+        "oracle_len": 391
+      }
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.221576,
+      "warm_ms": 0.08411199999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9532,
+      "baseline_hwm_kb": 8764,
+      "pages": 11
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 26.02405,
+      "warm_ms": 18.83843,
+      "warm_samples": 3,
+      "vm_hwm_kb": 59984,
+      "baseline_hwm_kb": 8468,
+      "render": {
+        "ssim": 0.9999579982727952,
+        "exact": false,
+        "max_channel_diff": 89,
+        "differing_pct": 0.007222641370553705,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.718087,
+      "warm_ms": 1.794355,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13196,
+      "baseline_hwm_kb": 8688,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3261,
+        "oracle_len": 3250
+      }
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.157204,
+      "warm_ms": 0.031121000000000003,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9536,
+      "baseline_hwm_kb": 8748,
+      "pages": 11
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.361048,
+      "warm_ms": 16.243296,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37916,
+      "baseline_hwm_kb": 8744,
+      "render": {
+        "ssim": 0.9671872658298555,
+        "exact": false,
+        "max_channel_diff": 224,
+        "differing_pct": 8.39776972195131,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.119918,
+      "warm_ms": 0.071811,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11416,
+      "baseline_hwm_kb": 8820,
+      "pages": 11
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 11.130298,
+      "warm_ms": 6.611523999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37324,
+      "baseline_hwm_kb": 8688,
+      "render": {
+        "ssim": 0.9645847783292596,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 8.255571094713211,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_foxit_products.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.114147,
+      "warm_ms": 0.850681,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13156,
+      "baseline_hwm_kb": 8740,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3234,
+        "oracle_len": 3250
+      }
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.231826,
+      "warm_ms": 0.062232,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9464,
+      "baseline_hwm_kb": 8504,
+      "pages": 1
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 33.530066,
+      "warm_ms": 22.107321,
+      "warm_samples": 3,
+      "vm_hwm_kb": 60200,
+      "baseline_hwm_kb": 8564,
+      "render": {
+        "ssim": 0.9999743031877711,
+        "exact": false,
+        "max_channel_diff": 8,
+        "differing_pct": 0.0,
+        "size": [
+          1239,
+          1752
+        ],
+        "oracle_size": [
+          1239,
+          1752
+        ]
+      }
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.543944000000001,
+      "warm_ms": 2.067161,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13124,
+      "baseline_hwm_kb": 8620,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3477,
+        "oracle_len": 3474
+      }
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.131683,
+      "warm_ms": 0.01347,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9540,
+      "baseline_hwm_kb": 8836,
+      "pages": 1
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 17.531217,
+      "warm_ms": 15.394844,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38560,
+      "baseline_hwm_kb": 8628,
+      "render": {
+        "ssim": 0.941970525221998,
+        "exact": false,
+        "max_channel_diff": 232,
+        "differing_pct": 10.552450606432496,
+        "size": [
+          1239,
+          1752
+        ],
+        "oracle_size": [
+          1239,
+          1752
+        ]
+      }
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.914172,
+      "warm_ms": 0.046401,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11660,
+      "baseline_hwm_kb": 8748,
+      "pages": 1
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 11.443054,
+      "warm_ms": 3.850236,
+      "warm_samples": 3,
+      "vm_hwm_kb": 42620,
+      "baseline_hwm_kb": 8840,
+      "render": {
+        "ssim": 0.9558172204170413,
+        "exact": false,
+        "max_channel_diff": 161,
+        "differing_pct": 10.087030710434473,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1239,
+          1752
+        ]
+      }
+    },
+    {
+      "file": "text_foxittext.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.258271,
+      "warm_ms": 0.751749,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13016,
+      "baseline_hwm_kb": 8556,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3447,
+        "oracle_len": 3474
+      }
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 5.691562,
+      "warm_ms": 3.921807999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 16384,
+      "baseline_hwm_kb": 8732,
+      "pages": 11
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 43.222176000000005,
+      "warm_ms": 18.456959,
+      "warm_samples": 3,
+      "vm_hwm_kb": 62972,
+      "baseline_hwm_kb": 8540,
+      "render": {
+        "ssim": 0.999983410998299,
+        "exact": false,
+        "max_channel_diff": 72,
+        "differing_pct": 0.014123254144968074,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.713418,
+      "warm_ms": 0.586955,
+      "warm_samples": 3,
+      "vm_hwm_kb": 16368,
+      "baseline_hwm_kb": 8556,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.6410256410256411,
+        "len": 1092,
+        "oracle_len": 1013
+      }
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.965014,
+      "warm_ms": 0.252407,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11500,
+      "baseline_hwm_kb": 8688,
+      "pages": 11
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 18.359377,
+      "warm_ms": 16.133361999999998,
+      "warm_samples": 3,
+      "vm_hwm_kb": 39644,
+      "baseline_hwm_kb": 8568,
+      "render": {
+        "ssim": 0.9833850804137251,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.4848646559814513,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.913508,
+      "warm_ms": 0.550974,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11628,
+      "baseline_hwm_kb": 8564,
+      "pages": 11
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 25.77194,
+      "warm_ms": 9.626769,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37704,
+      "baseline_hwm_kb": 8644,
+      "render": {
+        "ssim": 0.9743849207340401,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 2.579679075501905,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_quick_start.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 8.952752,
+      "warm_ms": 0.558824,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13824,
+      "baseline_hwm_kb": 8776,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.6024096385542169,
+        "len": 1251,
+        "oracle_len": 1013
+      }
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.278427,
+      "warm_ms": 0.110843,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9728,
+      "baseline_hwm_kb": 8744,
+      "pages": 14
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 31.076933,
+      "warm_ms": 20.072039,
+      "warm_samples": 3,
+      "vm_hwm_kb": 60724,
+      "baseline_hwm_kb": 8536,
+      "render": {
+        "ssim": 0.9999590906863662,
+        "exact": false,
+        "max_channel_diff": 12,
+        "differing_pct": 0.000506044936790387,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 8.634813999999999,
+      "warm_ms": 1.740683,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13676,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9477756286266924,
+        "len": 661,
+        "oracle_len": 593
+      }
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.361279,
+      "warm_ms": 0.065512,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9352,
+      "baseline_hwm_kb": 8552,
+      "pages": 14
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 11.182987,
+      "warm_ms": 12.704205,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37820,
+      "baseline_hwm_kb": 8596,
+      "render": {
+        "ssim": 0.9252568158250342,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.504158769298714,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.876842,
+      "warm_ms": 0.053081,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11480,
+      "baseline_hwm_kb": 8752,
+      "pages": 14
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 17.418373000000003,
+      "warm_ms": 8.284216,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37500,
+      "baseline_hwm_kb": 8836,
+      "render": {
+        "ssim": 0.928193054870592,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 5.1932631617687655,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_055.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.820524,
+      "warm_ms": 0.967685,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12968,
+      "baseline_hwm_kb": 8584,
+      "text": {
+        "exact": false,
+        "normalized": false,
+        "token_f1": 0.9386973180076628,
+        "len": 691,
+        "oracle_len": 593
+      }
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.250936,
+      "warm_ms": 0.115583,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9540,
+      "baseline_hwm_kb": 8772,
+      "pages": 10
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 30.931107,
+      "warm_ms": 26.356224,
+      "warm_samples": 3,
+      "vm_hwm_kb": 63848,
+      "baseline_hwm_kb": 8772,
+      "render": {
+        "ssim": 0.9999281160142849,
+        "exact": false,
+        "max_channel_diff": 77,
+        "differing_pct": 0.011040980439062988,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 4.006888999999999,
+      "warm_ms": 0.586384,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14148,
+      "baseline_hwm_kb": 8532,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1862,
+        "oracle_len": 1862
+      }
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.238846,
+      "warm_ms": 0.038341,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9548,
+      "baseline_hwm_kb": 8748,
+      "pages": 10
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 22.152889,
+      "warm_ms": 26.110677,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38428,
+      "baseline_hwm_kb": 8764,
+      "render": {
+        "ssim": 0.8619106246907878,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 12.569236148169958,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.900762,
+      "warm_ms": 0.055391,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11560,
+      "baseline_hwm_kb": 8772,
+      "pages": 10
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.619612,
+      "warm_ms": 7.256259999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37604,
+      "baseline_hwm_kb": 8736,
+      "render": {
+        "ssim": 0.8633918449184736,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 12.4760318716302,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "text_tcpdf_063.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.68515,
+      "warm_ms": 0.376639,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13028,
+      "baseline_hwm_kb": 8644,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1933,
+        "oracle_len": 1862
+      }
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.353193,
+      "warm_ms": 1.098158,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11608,
+      "baseline_hwm_kb": 8744,
+      "pages": 1
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 191.217377,
+      "warm_ms": 56.99438,
+      "warm_samples": 3,
+      "vm_hwm_kb": 108284,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9992281692778451,
+        "exact": false,
+        "max_channel_diff": 82,
+        "differing_pct": 1.8937121616399537,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 6.703805,
+      "warm_ms": 6.341407,
+      "warm_samples": 3,
+      "vm_hwm_kb": 17180,
+      "baseline_hwm_kb": 8544,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.530443,
+      "warm_ms": 0.119483,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9900,
+      "baseline_hwm_kb": 8572,
+      "pages": 1
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 87.12019599999999,
+      "warm_ms": 78.753708,
+      "warm_samples": 3,
+      "vm_hwm_kb": 52096,
+      "baseline_hwm_kb": 8620,
+      "render": {
+        "ssim": 0.9801952776724887,
+        "exact": false,
+        "max_channel_diff": 241,
+        "differing_pct": 7.039499107520748,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.461076,
+      "warm_ms": 0.047971,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11488,
+      "baseline_hwm_kb": 8760,
+      "pages": 1
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 309.453435,
+      "warm_ms": 286.44156799999996,
+      "warm_samples": 3,
+      "vm_hwm_kb": 82368,
+      "baseline_hwm_kb": 8488,
+      "render": {
+        "ssim": 0.9817538091522249,
+        "exact": false,
+        "max_channel_diff": 229,
+        "differing_pct": 6.793837292751596,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_system.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 12.526709,
+      "warm_ms": 6.941561,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13200,
+      "baseline_hwm_kb": 8496,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 3,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 4.685595,
+      "warm_ms": 2.613314,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11760,
+      "baseline_hwm_kb": 8744,
+      "pages": 6
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 40.916669000000006,
+      "warm_ms": 13.287097,
+      "warm_samples": 3,
+      "vm_hwm_kb": 50628,
+      "baseline_hwm_kb": 8564,
+      "render": {
+        "ssim": 0.9999689358864047,
+        "exact": false,
+        "max_channel_diff": 58,
+        "differing_pct": 0.033122941317188966,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 9.716839,
+      "warm_ms": 0.153393,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15524,
+      "baseline_hwm_kb": 8572,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 148,
+        "oracle_len": 92
+      }
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.751498,
+      "warm_ms": 0.046891,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9828,
+      "baseline_hwm_kb": 8488,
+      "pages": 6
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 11.501903,
+      "warm_ms": 8.115300000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37836,
+      "baseline_hwm_kb": 8712,
+      "render": {
+        "ssim": 0.9966259632482859,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.6654030877941961,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.913403,
+      "warm_ms": 0.045011,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11420,
+      "baseline_hwm_kb": 8504,
+      "pages": 6
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 22.306209,
+      "warm_ms": 6.268324,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37456,
+      "baseline_hwm_kb": 8664,
+      "render": {
+        "ssim": 0.9955454147616526,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 0.6183409086726901,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_en_tem.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 9.31611,
+      "warm_ms": 0.077732,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15104,
+      "baseline_hwm_kb": 8516,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 166,
+        "oracle_len": 92
+      }
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 4.729616,
+      "warm_ms": 4.281606,
+      "warm_samples": 3,
+      "vm_hwm_kb": 15180,
+      "baseline_hwm_kb": 8724,
+      "pages": 10
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 30.623924,
+      "warm_ms": 21.656793,
+      "warm_samples": 3,
+      "vm_hwm_kb": 50628,
+      "baseline_hwm_kb": 8544,
+      "render": {
+        "ssim": 0.9999600437312518,
+        "exact": false,
+        "max_channel_diff": 75,
+        "differing_pct": 0.010212906906133265,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.191794,
+      "warm_ms": 0.79375,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14428,
+      "baseline_hwm_kb": 8468,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1013,
+        "oracle_len": 992
+      }
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.959388,
+      "warm_ms": 0.363089,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10840,
+      "baseline_hwm_kb": 8516,
+      "pages": 10
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 14.498327,
+      "warm_ms": 9.272598,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38716,
+      "baseline_hwm_kb": 8752,
+      "render": {
+        "ssim": 0.9953477477643703,
+        "exact": false,
+        "max_channel_diff": 183,
+        "differing_pct": 2.478700108569641,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.326602,
+      "warm_ms": 0.645215,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11728,
+      "baseline_hwm_kb": 8688,
+      "pages": 10
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 20.509764,
+      "warm_ms": 6.201753,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37216,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9953750075378682,
+        "exact": false,
+        "max_channel_diff": 198,
+        "differing_pct": 2.4183427488360967,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_feature.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 13.685297,
+      "warm_ms": 0.37857,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13636,
+      "baseline_hwm_kb": 8596,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1027,
+        "oracle_len": 992
+      }
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 5.910105,
+      "warm_ms": 4.565232,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14332,
+      "baseline_hwm_kb": 8496,
+      "pages": 9
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 28.113182,
+      "warm_ms": 15.679726000000002,
+      "warm_samples": 3,
+      "vm_hwm_kb": 50324,
+      "baseline_hwm_kb": 8716,
+      "render": {
+        "ssim": 0.99995116955026,
+        "exact": false,
+        "max_channel_diff": 75,
+        "differing_pct": 0.010580939587435364,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.697337,
+      "warm_ms": 0.7653580000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 14452,
+      "baseline_hwm_kb": 8568,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1013,
+        "oracle_len": 992
+      }
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.820954,
+      "warm_ms": 0.249906,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10968,
+      "baseline_hwm_kb": 8756,
+      "pages": 9
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 15.50491,
+      "warm_ms": 7.941615,
+      "warm_samples": 3,
+      "vm_hwm_kb": 38144,
+      "baseline_hwm_kb": 8604,
+      "render": {
+        "ssim": 0.9944397800537823,
+        "exact": false,
+        "max_channel_diff": 186,
+        "differing_pct": 2.6004269179103106,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.811344,
+      "warm_ms": 0.589945,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11816,
+      "baseline_hwm_kb": 8748,
+      "pages": 9
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 16.481665,
+      "warm_ms": 3.497536,
+      "warm_samples": 3,
+      "vm_hwm_kb": 37336,
+      "baseline_hwm_kb": 8592,
+      "render": {
+        "ssim": 0.9944746314852235,
+        "exact": false,
+        "max_channel_diff": 198,
+        "differing_pct": 2.548028264909924,
+        "size": [
+          1240,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_font_size14.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 14.496296,
+      "warm_ms": 0.34304799999999996,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13644,
+      "baseline_hwm_kb": 8556,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 1027,
+        "oracle_len": 992
+      }
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.459212,
+      "warm_ms": 0.108603,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9728,
+      "baseline_hwm_kb": 8744,
+      "pages": 1
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 27.108336,
+      "warm_ms": 25.416624,
+      "warm_samples": 3,
+      "vm_hwm_kb": 41172,
+      "baseline_hwm_kb": 8764,
+      "render": {
+        "ssim": 0.9999585459700837,
+        "exact": false,
+        "max_channel_diff": 68,
+        "differing_pct": 0.04497979820367635,
+        "size": [
+          1106,
+          1387
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 6.942381,
+      "warm_ms": 3.820643,
+      "warm_samples": 3,
+      "vm_hwm_kb": 19496,
+      "baseline_hwm_kb": 8600,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.110762,
+      "warm_ms": 0.01292,
+      "warm_samples": 3,
+      "vm_hwm_kb": 9484,
+      "baseline_hwm_kb": 8752,
+      "pages": 1
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 10.006235,
+      "warm_ms": 8.765945,
+      "warm_samples": 3,
+      "vm_hwm_kb": 28660,
+      "baseline_hwm_kb": 8516,
+      "render": {
+        "ssim": 0.9998680172466303,
+        "exact": false,
+        "max_channel_diff": 163,
+        "differing_pct": 0.22470342667836576,
+        "size": [
+          1106,
+          1387
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.82208,
+      "warm_ms": 0.040590999999999995,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11408,
+      "baseline_hwm_kb": 8496,
+      "pages": 1
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 13.375948,
+      "warm_ms": 15.360067,
+      "warm_samples": 3,
+      "vm_hwm_kb": 28456,
+      "baseline_hwm_kb": 8480,
+      "render": {
+        "ssim": 0.999866568105974,
+        "exact": false,
+        "max_channel_diff": 170,
+        "differing_pct": 0.21068798231055355,
+        "size": [
+          1107,
+          1388
+        ],
+        "oracle_size": [
+          1106,
+          1387
+        ]
+      }
+    },
+    {
+      "file": "vector_paths_1751.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 5.7974120000000005,
+      "warm_ms": 5.405613,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11880,
+      "baseline_hwm_kb": 8472,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 0,
+        "oracle_len": 0
+      }
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "pdfrum",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 1.096447,
+      "warm_ms": 0.8188110000000001,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11300,
+      "baseline_hwm_kb": 8772,
+      "pages": 1
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "pdfrum",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 88.26309499999999,
+      "warm_ms": 25.913515,
+      "warm_samples": 3,
+      "vm_hwm_kb": 60148,
+      "baseline_hwm_kb": 8580,
+      "render": {
+        "ssim": 0.9999608906818356,
+        "exact": false,
+        "max_channel_diff": 8,
+        "differing_pct": 0.0,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "pdfrum",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 2.354067,
+      "warm_ms": 0.118363,
+      "warm_samples": 3,
+      "vm_hwm_kb": 13680,
+      "baseline_hwm_kb": 8516,
+      "text": {
+        "exact": true,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 110,
+        "oracle_len": 110
+      }
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "hayro",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.903512,
+      "warm_ms": 0.112823,
+      "warm_samples": 3,
+      "vm_hwm_kb": 10048,
+      "baseline_hwm_kb": 8820,
+      "pages": 1
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "hayro",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 374.128381,
+      "warm_ms": 288.260179,
+      "warm_samples": 3,
+      "vm_hwm_kb": 41324,
+      "baseline_hwm_kb": 8576,
+      "render": {
+        "ssim": 0.9173855034464163,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 15.800057045065602,
+        "size": [
+          1240,
+          1753
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "hayro",
+      "op": "text",
+      "status": "unsupported",
+      "warm_samples": 0
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "mupdf",
+      "op": "open",
+      "status": "ok",
+      "cold_ms": 0.861511,
+      "warm_ms": 0.049761,
+      "warm_samples": 3,
+      "vm_hwm_kb": 11424,
+      "baseline_hwm_kb": 8768,
+      "pages": 1
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "mupdf",
+      "op": "render",
+      "status": "ok",
+      "cold_ms": 52.625617,
+      "warm_ms": 36.887381,
+      "warm_samples": 3,
+      "vm_hwm_kb": 40520,
+      "baseline_hwm_kb": 8520,
+      "render": {
+        "ssim": 0.9279033019704436,
+        "exact": false,
+        "max_channel_diff": 255,
+        "differing_pct": 16.22817106159027,
+        "size": [
+          1241,
+          1754
+        ],
+        "oracle_size": [
+          1240,
+          1753
+        ]
+      }
+    },
+    {
+      "file": "vector_tcpdf_009.pdf",
+      "engine": "mupdf",
+      "op": "text",
+      "status": "ok",
+      "cold_ms": 1.724342,
+      "warm_ms": 0.08801199999999999,
+      "warm_samples": 3,
+      "vm_hwm_kb": 12800,
+      "baseline_hwm_kb": 8576,
+      "text": {
+        "exact": false,
+        "normalized": true,
+        "token_f1": 1.0,
+        "len": 140,
+        "oracle_len": 110
+      }
+    }
+  ]
+}
