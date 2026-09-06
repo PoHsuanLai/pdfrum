@@ -64,7 +64,13 @@
 //! one:
 //!
 //! - **slower by more than the noise band** → a regression. Reported, and the
-//!   process exits non-zero.
+//!   process exits non-zero. `update` writes *nothing* in that case, not even
+//!   the improvements — a regression stops the run. `update
+//!   --accept-regressions` is the way past it, and it is deliberately a
+//!   separate spelling: the ratchet cannot tell a deliberate trade from a
+//!   defect, or a real slowdown from a baseline entry that was always wrong,
+//!   so raising a number is a decision a person makes and writes down. The
+//!   flag records what was measured; the commit records why.
 //! - **faster by more than the noise band** → an improvement. Reported;
 //!   `update` writes it into the baseline so it cannot silently be given back.
 //! - **inside the band** → unchanged, and nothing happens. The baseline keeps
@@ -87,6 +93,18 @@
 //! round. They describe an idle box and were not widened when the baseline
 //! moved to `himmel`: moving to a quieter machine is a reason to trust the
 //! bands, not to loosen them.
+//!
+//! **A band is only as good as the harness's own reproducibility.** These were
+//! measured while the render groups still ran the three pathological image
+//! documents in the middle of the corpus, where the ~500 MB resident set they
+//! leave behind was charged to the rows measured after them. On 2026-09-06 two
+//! runs of the same binary at the same commit reported 34 and 27 regressions
+//! sharing only 13 rows, with the warm cluster moving bodily between
+//! rasterizer backends — which no code change can do. The harness now orders
+//! those documents last, and the bands want re-deriving from runs taken after
+//! that change; `docs/issues-to-file.md` carries it. A threshold below the
+//! harness's reproducibility does not detect regressions, it manufactures a
+//! fresh set each run.
 //!
 //! # Why the median and not the mean or criterion's own slope
 //!
@@ -156,10 +174,19 @@ fn main() {
 
     match mode.as_str() {
         "check" => {
-            check(&baseline, &measured, false);
+            check(&baseline, &measured, Record::Nothing);
         }
         "update" => {
-            if let Some(updated) = check(&baseline, &measured, true) {
+            // The flag is opt-in and position-free: `update --accept-regressions`
+            // is the only spelling that records a regressed row, and a plain
+            // `update` behaves exactly as it always has.
+            let accepting = std::env::args().any(|a| a == "--accept-regressions");
+            let record = if accepting {
+                Record::RegressionsToo
+            } else {
+                Record::Improvements
+            };
+            if let Some(updated) = check(&baseline, &measured, record) {
                 write_baseline(&baseline_path, &updated, &baseline.bands);
             }
         }
@@ -177,10 +204,49 @@ fn main() {
             eprintln!("          exit non-zero on a regression outside the noise band");
             eprintln!("  update  the same comparison, then write improvements into the");
             eprintln!("          baseline (regressions still fail and write nothing)");
+            eprintln!("  update --accept-regressions");
+            eprintln!("          the same, but also raise the regressed rows to what");
+            eprintln!("          they measured -- for when every one has been");
+            eprintln!("          attributed and the attribution is in the same commit");
             eprintln!("  init    overwrite the baseline with the current run wholesale;");
             eprintln!("          for establishing one, not for maintaining it");
             std::process::exit(2);
         }
+    }
+}
+
+/// What a run is allowed to write.
+///
+/// Three states rather than a pair of bools, because only three are legal and
+/// the illegal fourth — "report only, but record regressions" — should not be
+/// spellable. The write path takes this value and reads the decision off it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Record {
+    /// `check`: write nothing, whatever the comparison says.
+    Nothing,
+    /// `update`: write the improvements. A regression is still a failure and
+    /// still writes nothing — this is the ratchet's default and its point.
+    Improvements,
+    /// `update --accept-regressions`: write the improvements *and* raise the
+    /// regressed rows to what they measured.
+    ///
+    /// The operator is asserting that each regressed row has been attributed —
+    /// a deliberate trade, or a baseline entry that was wrong — and that the
+    /// attribution is written down in the same commit. The ratchet cannot tell
+    /// a trade from a defect; only a person who has measured can, which is why
+    /// this is an explicit flag and not a heuristic.
+    RegressionsToo,
+}
+
+impl Record {
+    /// Whether a regression should stop the run rather than be recorded.
+    fn refuses_regressions(self) -> bool {
+        !matches!(self, Self::RegressionsToo)
+    }
+
+    /// Whether anything is written at the end.
+    fn writes(self) -> bool {
+        !matches!(self, Self::Nothing)
     }
 }
 
@@ -191,7 +257,7 @@ fn main() {
 fn check(
     baseline: &Baseline,
     measured: &BTreeMap<String, f64>,
-    updating: bool,
+    record: Record,
 ) -> Option<BTreeMap<String, Entry>> {
     let mut regressions = Vec::new();
     let mut improvements = Vec::new();
@@ -257,25 +323,66 @@ fn check(
                 band * 100.0
             );
         }
-        println!();
-        println!(
-            "The ratchet only tightens. First check this is `himmel` — on the shared\n\
-             box these bands are noise. If a regression is a deliberate trade — a\n\
-             correctness fix that costs time — say so in the last section of\n\
-             docs/status/M13-perf-baseline.md and raise the number in\n\
-             benches/baseline.json in the same commit, so the next reader sees a\n\
-             decision rather than a drift."
-        );
-        std::process::exit(1);
+        if record.refuses_regressions() {
+            println!();
+            println!(
+                "The ratchet only tightens. First check this is `himmel` — on the\n\
+                 shared box these bands are noise, and a row measured next to a\n\
+                 document that leaves a large heap behind it can clear a band on\n\
+                 process state alone.\n\
+                 \n\
+                 If every row above has been attributed — a deliberate trade, or a\n\
+                 baseline entry that was wrong — write the attribution down and\n\
+                 re-run as:\n\
+                 \n\
+                     cargo run --release -p pdfrum-bench --bin ratchet -- \\\n\
+                         update --accept-regressions\n\
+                 \n\
+                 which raises these rows to what they measured. Do not edit\n\
+                 benches/baseline.json by hand: the flag records the same numbers\n\
+                 and leaves the run that produced them in the terminal."
+            );
+            std::process::exit(1);
+        }
+
+        raise(&regressions, &mut updated);
     }
 
     println!();
-    if updating {
+    if record.writes() {
         Some(updated)
     } else {
         println!("ratchet: no regressions.");
         None
     }
+}
+
+/// Raise every regressed row to what it measured, and say so.
+///
+/// Only reached under [`Record::RegressionsToo`]. Split out of [`check`] for
+/// the same reason [`report`] is: that function is about the decision, and
+/// this is about carrying it out and printing what was done. Every row is
+/// listed, because the point of the flag is that the reader of the commit can
+/// see which numbers moved and by how much.
+fn raise(regressions: &[(String, f64, f64, f64, f64)], updated: &mut BTreeMap<String, Entry>) {
+    println!();
+    println!("RAISING these rows, because --accept-regressions was given:");
+    for (id, old, now, delta, _) in regressions {
+        println!(
+            "  {:>+7.1}%  {id}  {} -> {}",
+            delta * 100.0,
+            human(*old),
+            human(*now)
+        );
+        updated.insert(id.clone(), Entry { median_ns: *now });
+    }
+    println!();
+    println!(
+        "{} rows raised. The commit that carries them must carry the\n\
+         attribution too — otherwise the next reader sees a drift rather\n\
+         than a decision.",
+        regressions.len()
+    );
 }
 
 /// Print the improvement, new-benchmark and not-run sections.

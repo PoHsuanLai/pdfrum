@@ -297,54 +297,44 @@ A warm-open median measured at machine load below 2, published in
 
 ---
 
-## Keep the pathological image documents from perturbing the rows after them
+## Re-measure the ratchet's noise bands now the heavy documents are ordered last
 
 **Labels:** benchmarks, harness
-**Area:** `crates/pdfrum-render/benches/render.rs`
+**Area:** `benches/src/bin/ratchet.rs`, `crates/pdfrum-render/benches/render.rs`
 
 ### Context
 
-Attributing the 2026-09-06 ratchet run's 34 regressions found that 30 of them
-were not regressions at all. Fourteen `render-warm-vello-cpu` rows and sixteen
-others measured at or below their baselines on a re-run of the same binary at
-the same commit, on the idle reference box.
+Attributing the 2026-09-06 ratchet run's 34 regressions found that 30 were not
+regressions. The cause was measured: all 44 documents in a render group share
+one process, and the three pathological image documents left a resident set the
+rows after them paid for — `image_bug_583804` alone took the bench binary's
+peak RSS from 27,184 kB to 520,980 kB.
+
+The harness now orders those three last within each group, extending a
+distinction `cold_samples` and `warm_samples` already drew for the same three
+stems. That removes the one perturbation large enough to clear a band.
 
 ### Problem
 
-All 44 documents in a render group share one process, and the pathological
-image documents leave a large resident set behind them. Measured with
-`/usr/bin/time -v` on the bench binary: `shading_gouraud` alone peaks at
-27,184 kB and reads 1.2546 ms; `image_bug_583804` then `shading_gouraud`
-peaks at 520,980 kB and reads 1.3004 ms. Repeating the pairing gave +5.4%
-once and +0.4% another time, so the magnitude is unstable — the signature of
-allocator-arena and page-cache state rather than a code path.
-
-The relative sensitivity is the same on all three backends (+0.4% each), but
-`render-warm-vello-cpu` costs 1.26 ms on the small shading files against
-agg's 92 us, so the same absolute perturbation is a rounding error on one and
-a band-breaking excursion on the other. That is why the false positives
-cluster on one backend and look like a backend-specific cause.
-
-This is a measurement-hygiene problem, not a runtime one: a real caller does
-not render a 4473x4473 sixteen-bit image and then a 690-byte shading file in
-the same session. The retention itself is deliberate and bought a 30-34%
-warm improvement on `image_bug_583804`.
+The bands in `default_bands()` — 3% to 5% on the render groups — were measured
+before that change, on a harness whose reproducibility was worse than the bands
+themselves. Two runs of the same binary at the same commit reported 34 and 27
+regressions sharing only 13 rows, with the warm cluster moving bodily between
+backends. So the bands describe a noise floor that no longer applies, and it is
+not known whether they are now too tight, about right, or loose enough to hide
+a real regression.
 
 ### Proposed fix
 
-Move the three documents already special-cased for sample count —
-`image_bug_583804`, `image_bug_718762`, `image_bug_898443` — to the end of the
-corpus ordering within each group, or into a `benchmark_group` of their own,
-so their heap footprint does not land on the rows measured after them.
-
-Separately, a re-baseline should gate on `pgrep` returning nothing rather than
-on load average: a benchmark between iterations satisfies a load check while
-still perturbing the box.
+Re-measure them the way `docs/status/M12.md` §2 originally did: several
+consecutive runs at one commit on the idle reference box, and take each group's
+band from the observed run-to-run spread. The test of a band is that two
+consecutive runs at the same commit agree row for row within it.
 
 ### Acceptance
 
-Two consecutive `ratchet check` runs on the reference machine, from the same
-binary at the same commit, agree row for row within each group's band.
+Bands re-derived from post-change runs and written into `benches/baseline.json`,
+with two consecutive runs at one commit reporting zero regressions.
 
 ---
 
