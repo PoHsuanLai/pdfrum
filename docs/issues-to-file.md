@@ -80,6 +80,24 @@ decode, before the general resample, is available without the upstream change.
 Peak resident memory under 1 GiB on that file, with the conformance board
 unchanged row for row.
 
+### Resolved at `56a01ac` — and the proposed fix was the wrong diagnosis
+
+Measured rather than reasoned about, the cost was not the image path at all.
+The page is 4473 pt square, so at 150 DPI the render target is 9318x9318 and a
+single page-sized RGBA8 buffer is 331 MiB. Three existed simultaneously: the
+`base` pixmap `VelloCpuDevice` allocated eagerly and read once, the
+`vello_cpu::Pixmap` `rasterize` rendered into, and the copy `to_vec` made
+coming back out. Seeding is now a `Seed::{Solid, Backdrop}` enum and
+`vello_cpu` rasterizes through a `PixmapMut` over the result buffer, so one
+buffer exists where three did. **1596 -> 916 MiB** on that file and a corpus
+render median of **49.73 -> 30.95 MiB**, with zero rows of the 1759-file board
+changing their pixel result.
+
+Decoding at the drawn size would have bought nothing here — the image is
+4473x4473 drawn into 9318x9318 device pixels, so it is already above 1:1. The
+`zune-jpeg` `scale_denom` request below stays worth filing for the shape of
+document this file was mistaken for, but it was never this file's problem.
+
 ---
 
 ## Diagnose the spurious generated space in text extraction
