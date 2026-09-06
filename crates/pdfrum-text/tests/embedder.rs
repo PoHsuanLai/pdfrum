@@ -444,35 +444,37 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
     assert_eq!(page.chars.len(), 13);
 }
 
-/// `Bug921`. Audit items **A40 + A43** asserted 278 here, on the advance
-/// gate that kept every empty-box object. That gate was removed in M28 and
-/// the count is the oracle's 268 again.
+/// `Bug921`. Audit items **A40 + A43**, restored 2026-09-06 by user ruling
+/// after M28 briefly gave them up.
 ///
-/// **The loss this used to record is real and is not disputed.** PDFium's
-/// box gate drops five objects on this page that draw running Russian prose:
-/// its `--txt` begins mid-sentence at "разве не выражает" where the page
-/// draws "И разве не выражает", and an em dash, a `в`, a `я` and a second
-/// `И` go the same way. That is `crbug.com/40643656` /
-/// `crbug.com/444176962`, and it stays filed as
-/// `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
+/// PDFium's box gate drops five objects on this page that draw running
+/// Russian prose. Its `--txt` begins mid-sentence at "разве не выражает"
+/// where the page draws "И разве не выражает"; an em dash, a `в`, a `я` and
+/// a second `И` go the same way. The glyph boxes are empty because of the
+/// font's metrics, not because nothing is drawn — ISO 32000-1 §9.2.2 keeps
+/// the bounding box distinct from the §9.4.3 displacement, and these objects
+/// carry `w0` 5.3–11.3. Ours is the correct behaviour; the oracle's 268 is
+/// the defect, filed as `crbug.com/40643656` / `crbug.com/444176962` and
+/// drafted at `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
 ///
-/// It is not fixed here because **no object-level rule separates it from the
-/// cases the oracle gets right.** These five objects have empty boxes, no
-/// Unicode mapping and `w0` 5.3–11.3; the control runs PDFium correctly
-/// drops in `text_tcpdf_055.pdf` and `bug_651304.pdf` have empty boxes, no
-/// Unicode mapping and `w0` 9.6 — identical on every property the gate can
-/// see. Measured, a rule that keeps these five also keeps those: 41 of 44
-/// benchmark files byte-exact instead of 42, board text pages 1961 of 2067
-/// instead of 2027, and one board row moving *down*. Recovering five
-/// characters on one fixture is not worth two files and a board row, so the
-/// oracle's count is what we assert and the divergence stays upstream.
+/// **The separating property, since a first pass got this wrong.** These
+/// objects were reported as indistinguishable from the C0 control runs the
+/// oracle *rightly* drops in `text_tcpdf_055.pdf` and `bug_651304.pdf`, on
+/// the grounds that both have empty boxes and no `ToUnicode` mapping. The
+/// mapping is indeed empty for both. The **character codes** are not:
+/// `bug_921`'s are 1048 `И`, 8212 `—`, 1074 `в`, 1103 `я`, while the control
+/// runs' are 0..=31. `object::gate` reads them through the same
+/// code-as-unicode fallback `cpdf_textpage.cpp:1213-1215` uses, so letters
+/// are kept and controls dropped.
 ///
-/// The ordering assertion below is the part this test is really about and is
-/// unaffected.
+/// **The measured cost, paid deliberately.** Keeping them costs one
+/// benchmark file (41 of 44 byte-exact rather than 42) and moves
+/// `text_tcpdf_055.pdf`'s C0 row down on the conformance board, which is
+/// bucketed not-achievable per the oracle-bug rule rather than matched.
 #[test]
 fn a_cyrillic_run_comes_out_in_order() {
     let page = fixture!("bug_921.pdf");
-    assert_eq!(page.chars.len(), 268);
+    assert_eq!(page.chars.len(), 278);
     // The run is pinned by *content*, not by offset, so it does not depend on
     // how many characters precede it.
     let run = [

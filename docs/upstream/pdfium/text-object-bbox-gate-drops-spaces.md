@@ -135,10 +135,37 @@ this is the same defect, and here it silently corrupts extracted prose
 rather than dropping whitespace. **This is probably the strongest repro in
 the report and it does not depend on the space argument at all.**
 
-*What a fix must contend with.* A predicate keyed on the advance alone
-cannot distinguish `bug_921.pdf`'s five recovered letters from the C0
-control runs the current gate correctly discards in
-`testing/resources/text_tcpdf_055.pdf` and `bug_651304.pdf`: all of them
-have empty boxes, no `ToUnicode` mapping, and comparable `w0`. Any change
-here needs to be scored against the extracted text of a large corpus,
-because the gate and the spacing heuristic are load-bearing together.
+*A predicate that works, measured.* An earlier draft of this note said the
+recovered letters could not be told apart from the C0 control runs the gate
+*correctly* discards in `testing/resources/text_tcpdf_055.pdf` (codes 0..=31
+in one-glyph objects) and `bug_651304.pdf` (a lone `U+0001`), because both
+families have empty boxes and no usable `ToUnicode`. That is not so. The
+mapping is empty for both, but the **character codes** separate them, and
+`CPDF_TextPage` already falls back to the code where the mapping is empty —
+`cpdf_textpage.cpp:1213-1215`, `unicode += static_cast<wchar_t>(char_code_)`.
+
+pdfrum now keeps an empty-box object when the object's summed `w0` clears
+the same epsilon the box is tested against **and** at least one code it
+shows resolves (mapping first, code as fallback) to a scalar that is neither
+whitespace nor a C0/C1 control. Scored over 44 benchmark documents and a
+1759-file conformance corpus, that recovers `bug_921.pdf`'s five characters
+and `bug_665467.pdf`'s `Л` while leaving every control run and every
+whitespace-only object dropped exactly as today.
+
+Two details are worth passing on, because both cost a corpus-wide regression
+when we got them wrong:
+
+- The whitespace test must be Unicode whitespace, not `U+0020`. Fifty
+  `testing/corpus/pdfium/annots/annotation_*.pdf` fixtures draw `U+00A0` in
+  an empty-box object; treating that as a character appends a trailing space
+  to every one of them.
+- The `w0` test is what excludes genuinely zero-width glyphs — `U+200B` in
+  `bug_491516663.pdf`, and the hairline pair in `bug_491161396.pdf` at `w0`
+  0.006 — which are degenerate on both §9.2.2's and §9.4.3's measures and
+  have nothing to recover.
+
+Any change here still needs to be scored against the extracted text of a
+large corpus, because the gate and the spacing heuristic are load-bearing
+together: the same measurement showed that keeping spaces-only objects
+*generally* duplicates separators `ProcessInsertObject` already generates,
+which is why the predicate above excludes them.

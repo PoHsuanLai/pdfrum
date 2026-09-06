@@ -286,43 +286,46 @@ lost, `text_quick_start` diagnosed with its cause named whether or not it is
 fixed, and the board's text rows moving only upward.
 
 **MET 2026-09-06.** Byte-exact **42 of 44** (from 22), none of the 22 lost;
-whitespace-normalized 41 → 43. The board's text pages went **1785 → 2027 of
-2067** and its non-empty pages **760 → 993 of 1005**, with 131 files gaining
-text pages and **none losing any**; overall the board went 1551 → 1679
-passing with 0 rows down, and the scoreboard was re-recorded.
+whitespace-normalized 41 → 43. The board's text pages went **1785 → 2020 of
+2067** and its non-empty pages **760 → 990 of 1005**, with 125 files gaining
+text pages and **none losing any**; overall 1551 → 1675 passing with **0 rows
+down**, and the scoreboard was re-recorded.
 
 All three items had **one** cause, and it was ours. `ProcessInsertObject`
 was instrumented per item in a private, hardlinked PDFium build (the oracle
-checkout was never written to), and the three remaining candidates were
-refuted: `GetPos`, the text-matrix composition and `FindPreviousTextObject`
-all agreed with ours to six decimal places. The divergence was one conjunct
-in our own degenerate-object gate — `run.advance < SIZE_EPSILON` beside the
-box test — which kept every empty-box object. It was ruled an `[oracle-bug]`
-on the reasoning that PDFium's `fabs(GetRect().Width()) < kSizeEpsilon`
-loses a spaces-only object's word separator, and the measurement shows that
-holds only when the object has **no neighbour**: otherwise `GenerateSpace`
-already emits that separator from the geometry, so keeping the object
-emitted it twice. That duplicate was items 1, 2 and 3 at once —
-`text_quick_start` 0.641 → 1.000 byte-exact on all eleven pages, the
-spurious space, and `text_tcpdf_055`'s C0 run, which lived in exactly such
-an object.
+checkout was never written to), and the three named candidates were refuted:
+`GetPos`, the text-matrix composition and `FindPreviousTextObject` all agreed
+with ours to six decimal places. The divergence was one conjunct in our own
+degenerate-object gate — `run.advance < SIZE_EPSILON` beside the box test —
+which kept *every* empty-box object, including the spaces-only ones whose
+separator `GenerateSpace` already emits from the geometry. Keeping them
+emitted it twice, and that duplicate was items 1, 2 and 3 at once.
 
-**The ruling was narrowed, not discarded.** It was taken against a filed
-upstream report (`crbug.com/40643656`) with `whitespace.pdf` as its fixture,
-and that case is real: a page whose one object draws only spaces has no gap
-for the heuristic to span, so PDFium's gate discards the page's only
-content. `pipeline::Builder::keep_spaces_only` keeps it, bounded to exactly
-that shape; two looser bounds were measured and both cost more than they
-buy. The bound costs one benchmark file, `vector_en_system.pdf`, a corpus
-page of the same shape — a divergence chosen rather than missed.
+**The `[oracle-bug]` ruling the conjunct carried was narrowed, not
+discarded**, and it now has two parts:
 
-One loss is left deliberately: on `bug_921.pdf` PDFium drops five objects
-carrying running Russian prose, and no object-level rule separates them from
-the control runs it correctly drops in `text_tcpdf_055.pdf` and
-`bug_651304.pdf` — same empty box, same absent mapping, same `w0` scale.
-Keeping both scores 41/44 with a board row down against 42/44 with none, so
-the divergence stays filed upstream and the test records why.
-`TextRun::advance` lost its last reader and was removed;
+- *Spaces on a page with no other object.* `whitespace.pdf` has one
+  spaces-only object; no gap exists for the heuristic to span, so PDFium's
+  gate discards the page's only content. `Builder::keep_spaces_only` keeps
+  it, bounded to exactly that shape. It costs one benchmark file,
+  `vector_en_system.pdf`, a corpus page of the same shape.
+- *Objects that draw letters.* PDFium's box gate also drops objects carrying
+  real text: `bug_921.pdf`'s output begins mid-sentence at "разве не
+  выражает" where the page draws "И разве не выражает", and `bug_665467.pdf`
+  loses a `Л` and extracts as empty. **User-ruled 2026-09-06: recover the
+  letters.** A first pass reported these as inseparable from the C0 control
+  runs the oracle rightly drops; that was wrong. The `ToUnicode` mapping is
+  empty for both, but the character codes are not — 1048/8212/1074/1103
+  against 0..=31 — and PDFium itself falls back to the code
+  (`cpdf_textpage.cpp:1213-1215`). `object::gate` keeps an empty-box object
+  when the pen moved and it shows a scalar that is neither whitespace
+  (`U+00A0` included: fifty annotation fixtures draw one) nor a C0/C1
+  control.
+
+Four board files are deliberately not-achievable on their text artifact —
+`bug_921`, `bug_665467`, `bug_1449` and two pages of `example_055` — and all
+four **already failed on `main`**, so the board shows 0 rows down;
+`example_055` goes from 0 of 14 matched pages to 12 of 14.
 `image_ccitt_3bigpreview.pdf` at F1 0.9988 is the other file still not
 byte-exact, and its residual is a duplicated `Clips` in the vertical CJK
 region — a duplicate-object question, not a spacing one. See

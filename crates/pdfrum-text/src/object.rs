@@ -78,6 +78,16 @@ pub struct TextRun {
     /// The object's bounding box in page space, stroke-inflated when the
     /// render mode strokes.
     pub rect: Rect,
+    /// Total advance width in page space: `w0` summed over the object's
+    /// glyphs (ISO 32000-1 §9.4.3), measured through the same text matrix the
+    /// bounding box goes through, so the two are comparable against one
+    /// epsilon.
+    ///
+    /// §9.2.2 keeps the glyph *bounding box* and the §9.4.3 *displacement*
+    /// distinct, and only the displacement says whether the pen moved. A
+    /// space, and any glyph whose outline is empty, has an empty box and a
+    /// non-zero `w0`; a zero-width space has both empty.
+    pub advance: f64,
     /// The marks enclosing the object.
     pub marks: pdfrum_page::ContentMarks,
     /// What each shown character's Type 3 glyph procedure declared, empty for
@@ -353,6 +363,7 @@ pub(crate) fn build(content: &Content<TextObject>, index: ObjectIndex) -> Option
         // it from the stored four coefficients plus `pos_`.
         text_matrix: with_translation(object.matrix, object.position),
         rect: Rect::ZERO,
+        advance: 0.0,
         marks: content.marks.clone(),
         type3: object.type3_metrics.clone(),
     };
@@ -475,6 +486,17 @@ fn layout(run: &mut TextRun, codes: &[CharCode], mode: TextRenderMode, line_widt
         );
     }
     run.rect = rect;
+    // The advance the pen actually travelled, in page space through the same
+    // matrix the box goes through. `pen` is signed -- a negative font size or
+    // a leading kern runs it backwards -- so the magnitude is what the "did
+    // this object move the pen" question wants.
+    let m = run.text_matrix.as_coeffs();
+    let (dx, dy) = if vertical {
+        (m[2] * f64::from(pen), m[3] * f64::from(pen))
+    } else {
+        (m[0] * f64::from(pen), m[1] * f64::from(pen))
+    };
+    run.advance = dx.hypot(dy);
 }
 
 /// The width below which a text object is not worth extracting at all, and
@@ -487,74 +509,134 @@ pub(crate) const SIZE_EPSILON: f64 = 0.01;
 ///
 /// PDFium asks one question — `fabs(GetRect().Width()) < kSizeEpsilon` at
 /// `cpdf_textpage.cpp:886` and `:1081` — and drops everything that fails it.
-/// We ask the same question, and name the empty-box case so the page-level
-/// rescue in [`crate::pipeline`] can find it.
+/// The box is built from the glyph *bounding boxes*
+/// (`cpdf_textobject.cpp:305-331`), and ISO 32000-1 §9.2.2 keeps that
+/// distinct from the §9.4.3 displacement: a glyph can be shown, advance the
+/// pen and still report an empty box. So the box test alone discards
+/// characters that are on the page, and we split its failing side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectGate {
     /// The glyphs occupy real width. Kept, as PDFium keeps it.
     Occupies,
-    /// The glyph bounding box has no width, so extraction does not see the
-    /// object.
+    /// The box is empty, but the pen moved and the object shows at least one
+    /// character that is neither a space nor a control code. Kept.
     ///
-    /// PDFium drops it and so do we. The reason it is safe to drop is that
-    /// the inter-object rules (`GenerateSpace`) already emit a separator
-    /// from the gap the object sits in, so keeping it as well emits the
-    /// separator *twice* — that duplication was the whole of the "spurious
-    /// generated space" defect, and it cost 21 of the 44 benchmark files
-    /// their byte-exact match.
+    /// `[oracle-bug]` PDFium drops it, and that is a loss of content rather
+    /// than of spacing. On `bug_921.pdf` its `--txt` begins mid-sentence at
+    /// "разве не выражает" where the page draws "И разве не выражает": five
+    /// objects of this shape carry an `И`, an em dash, a `в`, a `я` and a
+    /// second `И` — running Russian prose, silently corrupted rather than
+    /// merely shortened. Reported as `crbug.com/40643656` and
+    /// `crbug.com/444176962`; the draft is
+    /// `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
     ///
-    /// `[oracle-bug]` That reasoning needs a gap, and a gap needs a
-    /// neighbour. The page that has none is a real loss, reported as
-    /// `crbug.com/40643656` and `crbug.com/444176962`, and is rescued by
-    /// [`keep_spaces_only`](crate::pipeline::Builder::keep_spaces_only)
-    /// rather than here — this classifier sees one object at a time and
-    /// cannot ask a question about the page.
+    /// Ruled by the user, 2026-09-06: implement the correct behaviour, cite
+    /// both sides, and bucket the golden as not-achievable rather than match
+    /// the defect.
+    ShowsCharacters,
+    /// The box is empty and the object shows nothing but spaces and control
+    /// codes. Dropped, as PDFium drops it.
+    ///
+    /// A space here is genuinely redundant: the inter-object rules
+    /// (`GenerateSpace`) already emit a separator from the gap the object
+    /// sits in, so keeping the object emits it twice — that duplication was
+    /// the whole of the "spurious generated space" defect and cost 20 of the
+    /// 44 benchmark files their byte-exact match. A control code is not text
+    /// and the oracle is right to drop it: `text_tcpdf_055.pdf` shows codes
+    /// 0..=31 in one-glyph objects, `bug_651304.pdf` a lone `U+0001`.
+    ///
+    /// The exception is a page that has no other object at all, where there
+    /// is no gap for the heuristic to span; see
+    /// [`keep_spaces_only`](crate::pipeline::Builder::keep_spaces_only).
     EmptyBox,
 }
 
 impl ObjectGate {
     /// Whether extraction should see the object at all.
     ///
-    /// `rescue` is the page-level exception described on
-    /// [`Self::EmptyBox`]: the page's one object draws only spaces, so no
-    /// neighbour exists for a separator to be generated against.
+    /// `rescue` is the page-level exception described on [`Self::EmptyBox`].
     #[must_use]
     pub fn keeps(self, rescue: bool) -> bool {
         match self {
-            Self::Occupies => true,
+            Self::Occupies | Self::ShowsCharacters => true,
             Self::EmptyBox => rescue,
         }
     }
 }
 
+/// The Unicode scalar an item shows, falling back to the character code.
+///
+/// `cpdf_textpage.cpp:1213-1215` does exactly this — `unicode +=
+/// static_cast<wchar_t>(item.char_code_)` when `UnicodeFromCharCode` comes
+/// back empty — and `pipeline` already reads codes this way in three places.
+/// It matters here because the fonts in question have no usable `ToUnicode`
+/// at all, so the mapping is empty on *every* object and only the code
+/// separates them.
+fn shown_char(run: &TextRun, item: &Item) -> u32 {
+    run.font
+        .unicode_from_charcode(item.code)
+        .first()
+        .map_or(item.code.0, |ch| u32::from(*ch))
+}
+
 /// Classifies one text object for the degenerate-object gate.
 ///
-/// This is `fabs(GetRect().Width()) < kSizeEpsilon`, and nothing more. Two
-/// richer predicates were measured against the whole corpus and both lost:
+/// The empty-box case is kept when the object **moved the pen** and shows a
+/// character that is neither a space nor a control code.
 ///
-/// - Gating on the object's **advance** as well — `w0` summed through the
-///   text matrix, ISO 32000-1 §9.4.3, which §9.2.2 keeps distinct from the
-///   bounding box — keeps every spaces-only object. That was this crate's
-///   behaviour until M28 and is the "spurious generated space": 22 of 44
-///   byte-exact instead of 43, board text pages 1785 of 2067 instead of 2055.
-/// - Gating on the advance *and* on the object drawing a non-space character
-///   recovers `bug_921.pdf`, where PDFium loses five characters of running
-///   Russian prose. But objects of identical shape — no Unicode mapping,
-///   `w0` 9.6 — are control runs the oracle rightly drops in
-///   `text_tcpdf_055.pdf` and `bug_651304.pdf`, so the rule keeps both or
-///   neither: 41 of 44, board 1961 of 2067, and one board row *down*.
+/// *Moved the pen*: `w0` summed through the text matrix (§9.4.3), against
+/// the same epsilon the box uses. A glyph that displaces nothing is
+/// degenerate on both of §9.2.2's and §9.4.3's measures, so there is nothing
+/// on the page to recover — `bug_491516663.pdf` draws `U+200B`, a zero-width
+/// space, and `bug_491161396.pdf` a hairline pair at `w0` 0.006.
 ///
-/// The plain box test is therefore what ships, with the page-level rescue
-/// for the one case the upstream report pins. `bug_921.pdf`'s five
-/// characters stay lost, and that loss is recorded in the upstream draft
-/// rather than traded for two files and a board row.
+/// *Shows a character*: read through [`shown_char`]. This is the test that
+/// separates the letters PDFium loses from the control runs it rightly
+/// drops, and the mapping alone does **not** do it — measured on the
+/// fixtures, `unicode_from_charcode` comes back **empty for both**, because
+/// neither font carries a usable `ToUnicode`. The character *codes*
+/// separate them cleanly, which is why [`shown_char`] falls back to the code
+/// exactly as `cpdf_textpage.cpp:1213-1215` does:
+///
+/// | fixture | font | mapping | codes | verdict |
+/// |---|---|---|---|---|
+/// | `bug_921.pdf` | `FooFont` | empty | 1048 `И`, 8212 `—`, 1074 `в`, 1103 `я` | **kept** |
+/// | `text_tcpdf_055.pdf` | `Courier` | empty | 0..=31 | dropped |
+/// | `bug_651304.pdf` | (none) | empty | 1 | dropped |
+/// | `bug_491516663.pdf` | `Test` | `U+200B` | 1 | dropped (`w0` 0) |
+/// | `annots/annotation_*.pdf` | `ArialMT` | `U+00A0` | 3 | dropped (whitespace) |
 #[must_use]
 pub fn gate(run: &TextRun) -> ObjectGate {
-    if run.rect.width().abs() < SIZE_EPSILON {
-        ObjectGate::EmptyBox
-    } else {
-        ObjectGate::Occupies
+    if run.rect.width().abs() >= SIZE_EPSILON {
+        return ObjectGate::Occupies;
     }
+    let shows_text = run.advance >= SIZE_EPSILON
+        && (0..run.count())
+            .filter_map(|index| run.item(index))
+            .any(|item| shows_glyph(shown_char(run, &item)));
+    if shows_text {
+        ObjectGate::ShowsCharacters
+    } else {
+        ObjectGate::EmptyBox
+    }
+}
+
+/// Whether a scalar is a character worth rescuing a degenerate object for.
+///
+/// Two families are not. **Whitespace** — including `U+00A0`, which the
+/// annotation fixtures draw by the dozen — carries only a separator, and the
+/// inter-object rules already emit that separator from the gap the object
+/// sits in, so keeping the object emits it twice. **Control codes**, C0, C1
+/// and `DEL`, are not text at all; `text_tcpdf_055.pdf` shows codes 0..=31
+/// in one-glyph objects and `bug_651304.pdf` a lone `U+0001`, and the oracle
+/// is right to drop both.
+///
+/// Everything else is content the box gate must not silently lose.
+fn shows_glyph(ch: u32) -> bool {
+    if ch < 0x20 || (0x7F..=0x9F).contains(&ch) {
+        return false;
+    }
+    char::from_u32(ch).is_none_or(|c| !c.is_whitespace())
 }
 
 /// Every text object on a page, in the order a pre-order walk reaches them,
