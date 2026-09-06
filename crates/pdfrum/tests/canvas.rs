@@ -429,7 +429,7 @@ fn every_rotation_places_the_canvas_on_the_displayed_page() {
         // canvas transform with the display matrix must give the identity:
         // canvas space and displayed space are then the same space, corner
         // for corner and axis for axis.
-        let display = pdfrum::PageRotation::from_degrees(i64::from(degrees)).display_matrix(crop);
+        let display = pdfrum::Rotation::from_degrees(i64::from(degrees)).display_matrix(crop);
         let composed = (display * to_page).as_coeffs();
         let identity = Affine::IDENTITY.as_coeffs();
         for (got, want) in composed.iter().zip(identity.iter()) {

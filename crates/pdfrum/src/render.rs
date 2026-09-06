@@ -280,14 +280,35 @@ impl RenderOptions {
 
     /// The options the engine below actually receives.
     pub(crate) fn to_inner(&self) -> pdfrum_render::RenderOptions {
-        pdfrum_render::RenderOptions {
-            transform: self.transform,
-            color_mode: self.color_mode,
-            text_aa: self.text_aa,
-            no_path_smooth: !self.smooth_paths,
-            no_image_smooth: !self.interpolate_images,
-            background: self.background,
-            ..pdfrum_render::RenderOptions::default()
+        pdfrum_render::RenderOptions::from(self)
+    }
+}
+
+/// This crate's options as the engine's own.
+///
+/// Public because the engine crates take *their* type: a caller who reaches
+/// past the facade -- to `pdfrum-svg`, or to `pdfrum_render` directly -- needs
+/// to build one from the options they already have, and the flags do not line
+/// up field for field. The engine's are negative and this crate's are
+/// positive, so `smooth_paths` here is `no_path_smooth` there.
+///
+/// The engine's remaining flags keep their defaults; this crate does not
+/// expose them.
+///
+/// ```
+/// let engine = pdfrum_render::RenderOptions::from(&pdfrum::RenderOptions::default());
+/// assert!(!engine.no_path_smooth, "smooth_paths defaults on, so its inverse is off");
+/// ```
+impl From<&RenderOptions> for pdfrum_render::RenderOptions {
+    fn from(options: &RenderOptions) -> Self {
+        Self {
+            transform: options.transform,
+            color_mode: options.color_mode,
+            text_aa: options.text_aa,
+            no_path_smooth: !options.smooth_paths,
+            no_image_smooth: !options.interpolate_images,
+            background: options.background,
+            ..Self::default()
         }
     }
 }

@@ -13,7 +13,7 @@
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
 //! 2. Look those names up as `pub enum` in the member-crate snapshots
 //!    (renames from WP7's error payloads: `OpenError` is `LoadError`,
-//!    `PageRotation` is `pdfrum_page::Rotation`, and so on).
+//!    `Rotation` is `pdfrum_page::Rotation`, and so on).
 //! 3. Take every `pub Enum::Variant` / `pub Enum::Variant(payload)` line
 //!    (struct-variant fields are `Enum::Variant::field` and are skipped).
 //!
@@ -76,7 +76,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum-object.txt", "pdfrum_object::Error", "ObjectError"),
     ("pdfrum-object.txt", "pdfrum_object::Object", "Object"),
     ("pdfrum-page.txt", "pdfrum_page::PageObject", "PageObject"),
-    ("pdfrum-page.txt", "pdfrum_page::Rotation", "PageRotation"),
+    ("pdfrum-page.txt", "pdfrum_page::Rotation", "Rotation"),
     (
         "pdfrum-page.txt",
         "pdfrum_page::TextRenderMode",
@@ -586,10 +586,10 @@ fn construct_default_feature_variants() -> usize {
     every_page_object_variant(&image);
     n += 5;
 
-    let _ = PageRotation::None;
-    let _ = PageRotation::Quarter;
-    let _ = PageRotation::Half;
-    let _ = PageRotation::ThreeQuarter;
+    let _ = Rotation::None;
+    let _ = Rotation::Quarter;
+    let _ = Rotation::Half;
+    let _ = Rotation::ThreeQuarter;
     n += 4;
 
     let modes: &[TextRenderMode] = &[

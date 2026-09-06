@@ -117,7 +117,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<BuildContext>();
     nameable::<TextRenderMode>();
     nameable::<PageObject>();
-    nameable::<PageRotation>();
+    nameable::<Rotation>();
     nameable::<IndexOutOfRange>();
 
     // pdfrum-parser

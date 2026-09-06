@@ -500,7 +500,7 @@ impl DocEdit<'_> {
         Ok(Some(SessionPage {
             edit: PageEdit { index, page: graph },
             crop,
-            rotate: crate::Rotation::from(rotate).degrees(),
+            rotate: rotate.degrees(),
         }))
     }
 

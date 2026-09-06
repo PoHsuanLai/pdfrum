@@ -120,8 +120,8 @@ pub use outline::{Bookmark, Outline, OutlineIter};
 pub use owned_form::OwnedFormSession;
 pub use owned_page::OwnedPage;
 pub use page::{
-    ImageEncoding, LinkTarget, NotAQuarterTurn, Page, PageImage, PageLink, PreparedPage, RawImage,
-    Rotation, UnknownImageEncoding,
+    ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage,
+    UnknownImageEncoding,
 };
 #[cfg(feature = "forms")]
 pub use pdfrum_form::AnnotId;
@@ -437,14 +437,14 @@ pub use pdfrum_object::Resolve;
 /// The type of [`TextBuilder::render_mode`].
 pub use pdfrum_page::TextRenderMode;
 
-/// The page rotation `pdfrum-page` reports, which this crate converts from.
+/// A page's `/Rotate`, and the error parsing one from a string returns.
 ///
-/// Renamed because this crate has its own [`Rotation`] and the `From` impl
-/// between them is public — so its *source* type had to be nameable or the
-/// conversion could be seen in the rustdoc and not written. A caller who has
-/// only this crate wants [`Rotation`]; this is here for one who reached
-/// through [`Page::objects`] and needs to come back.
-pub use pdfrum_page::Rotation as PageRotation;
+/// The engine's own type, re-exported rather than wrapped: a rotation is four
+/// quarter turns whichever crate names it, so a facade copy would have been
+/// the same four variants under a second name and a `From` impl between them.
+/// [`Page::rotation`] returns this, and so does [`PageObject`] reached through
+/// [`Page::objects`] -- one type across the seam, nothing to convert.
+pub use pdfrum_page::{NotAQuarterTurn, Rotation};
 
 /// The flattened glyph outlines the rasterizer draws, cached across pages.
 ///
