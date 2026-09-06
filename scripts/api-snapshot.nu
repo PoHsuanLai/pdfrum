@@ -112,6 +112,9 @@ def published-libs []: nothing -> list<string> {
 #     `# Features` section naming it, and it adds seven types and two
 #     constructors an embedder is meant to use — a surface no file would record
 #     otherwise, so a change to it would be invisible to every gate here.
+#   - `pdfrum --features svg` does. It puts `to_svg`/`to_svg_on` on the
+#     facade's page types and a `svg` module beside them — the whole point of
+#     the feature is that surface, and no other file records it.
 #   - `pdfrum-render/profiling` does not. It is a profiling switch, not a
 #     surface offered to callers.
 #   - `pdfrum-form/javascript` does, but its items are the same ones
@@ -126,6 +129,7 @@ const FEATURED = [
     {file: 'pdfrum+javascript', crate: 'pdfrum', features: 'javascript'}
     {file: 'pdfrum+png', crate: 'pdfrum', features: 'png'}
     {file: 'pdfrum+markdown', crate: 'pdfrum', features: 'markdown'}
+    {file: 'pdfrum+svg', crate: 'pdfrum', features: 'svg'}
     {file: 'pdfrum+tinyskia+agg', crate: 'pdfrum', features: 'tinyskia,agg'}
     {file: 'pdfrum-page+codecs', crate: 'pdfrum-page', features: 'jpx,jbig2,ccitt'}
     {file: 'pdfrum-filters+ccitt', crate: 'pdfrum-filters', features: 'ccitt'}

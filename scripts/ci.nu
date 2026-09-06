@@ -18,13 +18,13 @@ def main [] {
     ^cargo clippy --workspace --all-targets -- -D warnings
 
     # The tool's and the CLI's JavaScript tests are `cfg`'d behind their
-    # `javascript` features; without the flags they never run and the gate
-    # would pass over them.
-    print "==> cargo nextest run (with the tool's and the CLI's javascript features)"
-    ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript
+    # `javascript` features, and the facade's SVG test behind `pdfrum/svg`;
+    # without the flags they never run and the gate would pass over them.
+    print "==> cargo nextest run (with the tool's and the CLI's javascript features and pdfrum/svg)"
+    ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg
 
     print "==> cargo test --doc (nextest silently skips doctests)"
-    ^cargo test --doc --workspace
+    ^cargo test --doc --workspace --features pdfrum/svg
 
     # Doctests prove the *examples* compile and run; this proves the prose
     # around them resolves. A broken intra-doc link is invisible to every other

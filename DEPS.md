@@ -331,11 +331,12 @@ duplicate-version check is unaffected.
 
 **The shipped crate takes nothing new.** `pdfrum-svg`'s own dependencies are
 `pdfrum-render`, `pdfrum-page`, `pdfrum-common`, `kurbo` and `peniko`, all
-already here. The two things that would ordinarily be a dependency — base64,
-and a PNG encoder for the embedded images — are written in-crate under
-STYLE.md §5, the second because `png` is on the tool-and-test-only list above
-and a library crate may not reach for it. See `docs/design/svg.md` §2 for what
-that encoder does and does not do.
+already here. base64 is written in-crate under STYLE.md §5. The PNG for the
+embedded images is `pdfrum-render`'s `Pixmap::encode_png`, which this crate
+reaches by enabling that crate's `png` feature — `png` is on the
+tool-and-test-only list below for a *new* edge, but it is already an optional
+library dependency of `pdfrum-render`, so using it here adds no crate to the
+graph and keeps one encoder in the workspace rather than two.
 
 ## Rejected: a machine-learning runtime for `pdfrum-markdown` (2026-09-06)
 
