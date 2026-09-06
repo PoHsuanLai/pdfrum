@@ -3,7 +3,8 @@
 Ready to file against <https://github.com/linebender/vello>. Everything below
 the rule is the issue text; nothing above it is meant to be posted.
 
-**Status:** drafted, not yet filed.
+**Status:** drafted, not yet filed. **Prototyped 2026-09-06 — see
+"What the prototype measured" below. The result changes the recommendation.**
 
 **Checked against upstream 2026-09-06, and it is not a duplicate.**
 
@@ -46,6 +47,101 @@ path we are staying on.
 own this design — in particular whether `pack` should keep bit-exact
 `(x * 255.0 + 0.5) as u8` rounding, and how the tail below one SIMD width is
 handled. We offered to write it, but did not presume the shape.
+
+## What the prototype measured (2026-09-06)
+
+We wrote the patch rather than only proposing it. Fork branch
+`simd-highp-pack-unpack` off `linebender/vello@9376c29e`, one commit,
+`sparse_strips/vello_cpu/src/fine/highp/mod.rs` plus a changelog line. It is
+ready to push and has **not** been filed.
+
+**It works, and it is bit-exact, and at the SIMD level we actually run it buys
+us almost nothing.** That last clause is the finding.
+
+### Upstream instruction counts
+
+callgrind, 10,000 iterations of vello's own `fine/pack` benchmark region
+(256x4). The scalar code costs the same at every level because it is scalar:
+`pack` 451,240,000, `unpack` 118,870,000.
+
+| level | `pack` | | `unpack` | |
+|---|---:|---:|---:|---:|
+| SSE2 | 446,820,000 | **1.01x** | 88,880,000 | **1.34x** |
+| SSE4.2 | 213,090,000 | 2.12x | 69,040,000 | 1.72x |
+| AVX2 | 95,330,000 | 4.73x | 39,020,000 | 3.05x |
+
+**`crates/pdfrum-raster-vello-cpu` pins `Level::baseline()`, which on x86-64
+is SSE2** (`lib.rs:75`, deliberately, for cross-machine determinism). At SSE2
+the SSE2 backend emulates the wide loads and the byte shuffle the patch uses,
+and `pack` does not move. The 4.7x is an AVX2 number and we do not run AVX2.
+
+### Downstream marginal `Ir`, our three pages
+
+Method is section 0 of `docs/design/mupdf-comparison.md`: `--warm 4` minus
+`--warm 0`, divided by 4, anchored on `benches/compare/src/engines/mod.rs:run`
+inclusive. Both sides are the *same fork* (so `fearless_simd` is 0.7.0 in
+both) and differ only by the one commit.
+
+| page | scalar | SIMD | saved | |
+|---|---:|---:|---:|---:|
+| `text_tcpdf_063` | 236,639,580 | 230,319,504 | 6,320,076 | 2.7% |
+| `vector_en_tem` | 140,642,847 | 134,323,997 | 6,318,850 | 4.5% |
+| `mixed_tcpdf_045` | 155,874,461 | 149,555,709 | 6,318,752 | 4.1% |
+
+The saving is the same ~6.32 M on all three pages, which is the signature of a
+per-pixel cost and confirms the measurement is sound. But **it is 6 M, not the
+~102 M the draft above predicted**, because the draft's estimate assumed a
+3x-4x SIMD gain and we get 1.01x on `pack` at our pinned level.
+
+The draft's *cost* figures are all confirmed: baseline `pack` is 38.0 `Ir` per
+touched pixel downstream, matching the 44.1 in the isolated benchmark and the
+44.0 in the original study. The diagnosis was right. The remedy, at SSE2, is
+not.
+
+### Bit-exactness, which is the one unambiguous good news
+
+The board is **byte-identical**: 1759 rows compared by `path` against
+`conformance/scoreboard.json`, **0 differing rows**, 1551 pass / 208 fail with
+every tag bucket unchanged. Run twice, once before and once after the NaN
+hardening below.
+
+Two things the draft above got wrong, both found by testing rather than
+reasoning, and both now corrected in the patch and its commit message:
+
+1. **`unpack`'s divide-to-multiply is *not* bit-exact.** The draft asserted
+   that `x / 255.0` and `x * (1.0/255.0)` "round to the same `f32`" for the
+   256 byte inputs. They do not: **126 of 256 differ in the last bit**
+   (checked exhaustively). Upstream's own `TODO` asks for a change that would
+   alter output. The patch keeps the divide.
+
+2. **`f32_to_u8` is not a saturating cast.** It uses `to_int`, whose
+   truncating convert is documented "implementation-defined" out of range, so
+   it disagrees with Rust's `as u8` for every input outside `[0, 1]` --
+   negatives come back as 255. Verified over 800,275 inputs: in-range, all
+   variants agree; out-of-range, the bare convert mismatches 198,834 of
+   200,017. Clamping to `[0, 1]` before the convert agrees everywhere, and NaN
+   needs an explicit `x != x` select because `max`/`min` may return either
+   operand for a NaN lane (measured: operand order alone flips NaN between 0
+   and 255).
+
+   This is a latent issue in `f32_to_u8` itself, which `U8Kernel` also uses.
+   We did not chase it; it is worth mentioning to upstream.
+
+### Recommendation
+
+**File the issue, offer the patch, do not vendor it.** Reasoning:
+
+- The patch is correct, tested, and genuinely 4.7x at AVX2, so it is worth
+  having upstream and costs us nothing to offer.
+- Vendoring it would buy us **4%**, which does not justify carrying a fork of
+  someone else's rasterizer.
+- The 2.5x mupdf gap is *not* closed by this. The study's a1 was the top item
+  on the strength of a 3x-4x assumption that does not survive contact with our
+  pinned SSE2. `docs/design/mupdf-comparison.md` section 6 should be re-ranked.
+- The real question this raises for us is **whether pinning `Level::baseline()`
+  is still the right trade**. It costs us every SIMD improvement in vello, not
+  just this one. That is a user decision, not one to make in passing.
+
 
 ---
 
