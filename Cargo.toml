@@ -197,6 +197,25 @@ png = "=0.18.1"
 # 0.47 resolves `tiny-skia` 0.12.0, the version the workspace already pins, so
 # no duplicate rasterizer enters the graph. Pure Rust throughout.
 resvg = { version = "=0.47.0", default-features = false, features = ["raster-images"] }
+# M25's SVG *ingestion*: the resolved tree the facade's `Canvas::draw_svg`
+# compiles into page operators. The first new **runtime** dependency of the
+# SVG milestones, and it is default-off behind `pdfrum/svg-ingest`.
+#
+# `default-features = false` per the DEPS.md rule. The defaults are `text`,
+# `system-fonts` and `memmap-fonts`, and all three exist to shape text — which
+# means a second font stack (`fontdb`, `rustybuzz`, `ttf-parser`,
+# `unicode-bidi`, `unicode-script`, `unicode-vo`) beside the one pdfrum
+# already carries. Dropping them is the point rather than a saving: SVG text
+# must map through `pdfrum-font`, not through a rival.
+#
+# The consequence is stated rather than hidden: without `text`, `usvg` drops
+# `<text>` elements from the resolved tree entirely, so ingestion reports them
+# as unsupported instead of drawing them (docs/design/svg-ingest.md §6).
+#
+# Ten crates new to the workspace's normal tree, all pure Rust. `kurbo 0.13.1`
+# is the version the workspace already pins, so no duplicate geometry crate
+# enters the graph. Same version as `resvg` above, which depends on it.
+usvg = { version = "=0.47.0", default-features = false }
 # Criterion, for the five per-crate bench targets and `pdfrum-bench`. Declared
 # here rather than repeated in six manifests so the pin and its reason live in
 # one place.

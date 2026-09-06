@@ -63,6 +63,19 @@ javascript = ["forms", "pdfrum-form/javascript"]
 # structure tree where there is one and typography where there is not.
 markdown = ["dep:pdfrum-markdown"]
 
+# M25: an SVG document drawn into a page as vectors, through
+# `Canvas::draw_svg`. Needs `edit`, because a canvas is a drawing session over
+# an editable document.
+#
+# What it brings: `usvg` with `default-features = false` and the nine crates
+# behind it new to this workspace, all pure Rust (DEPS.md records the audit).
+# Default-off, because ten crates is a real cost for a caller who never meets
+# an SVG — and it is deliberately *separate* from `pdfrum-svg`'s export
+# feature, which adds nothing to the tree at all: exporting and ingesting
+# share a subject but not a price, and a caller who only exports should pay
+# nothing for a parser.
+svg-ingest = ["edit", "dep:usvg", "dep:png"]
+
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
 codecs-all = ["jpx", "jbig2", "ccitt"]
@@ -113,6 +126,22 @@ pdfrum-doc.workspace = true
 pdfrum-markdown = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
+# M25's SVG ingestion, behind `svg-ingest`. `default-features = false` per the
+# DEPS.md rule: the defaults are `text`, `system-fonts` and `memmap-fonts`,
+# all three of which exist to *shape text* through a second font stack, and
+# pdfrum has its own. See DEPS.md for what dropping them drops and what the
+# consequence for `<text>` is.
+usvg = { workspace = true, optional = true }
+# Decoding a PNG an SVG `<image>` carried, so it embeds as PDF image samples
+# rather than being dropped. Optional and reached only through `svg-ingest`;
+# it is also a dev-dependency below, for the examples that write files.
+#
+# It shares a name with this crate's existing `png` *feature* — the one
+# forwarding `pdfrum-render/png`. That is allowed precisely because every
+# reference to the dependency in a feature list is written
+# `dep:png`, so the feature never implicitly enables it and the two stay
+# independent: `--features png` still turns on only the pixmap encoder.
+png = { workspace = true, optional = true }
 kurbo.workspace = true
 peniko.workspace = true
 thiserror.workspace = true
@@ -150,6 +179,17 @@ pdfrum-render.workspace = true
 # M23 contract asks to be proved. Already a normal dependency; this adds
 # nothing to the tree a caller compiles.
 pdfrum-filters.workspace = true
+# M25's ingestion round trip (`tests/svg_ingest.rs`): render the fixture SVG
+# with a *second* implementation and score our page against it, so ingestion
+# has the same kind of correctness story M24's export has. **Dev-only** —
+# `resvg` never enters the shipped tree, which `scripts/ci.nu`'s pure-Rust
+# check covers. Its SSIM module is shared with `pdfrum-svg`'s round trip
+# rather than transcribed a second time, so both report the same metric.
+resvg.workspace = true
+# An integration test is its own crate and can only `use` what the manifest
+# lists for it: `tests/svg_ingest.rs` names `Diagnostics` to render the page
+# it ingested into. Already a normal dependency of this crate.
+pdfrum-common.workspace = true
 
 # Which features each integration test needs. The three not listed —
 # signatures, searchex, thumbnails — run on any feature set; the rest
@@ -266,3 +306,9 @@ required-features = ["vello-cpu", "edit", "forms"]
 [[test]]
 name = "construct_enums"
 required-features = ["vello-cpu", "edit", "forms"]
+
+# M25's ingestion round trip: score what `Canvas::draw_svg` drew against
+# `resvg` rendering the same SVG directly.
+[[test]]
+name = "svg_ingest"
+required-features = ["svg-ingest", "tinyskia"]

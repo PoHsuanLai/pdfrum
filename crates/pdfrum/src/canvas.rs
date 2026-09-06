@@ -547,6 +547,69 @@ impl Canvas<'_, '_> {
         self.out.push_str(" gs\n");
     }
 
+    /// Paint `shape` with a shading dictionary, clipped to the shape.
+    ///
+    /// `sh` fills the *whole current clip*, so the shape becomes a clip and
+    /// the shading is painted through it — which is how PDF spells a
+    /// gradient-filled path. `transform` is the gradient's own coordinate
+    /// mapping, applied inside the clip so it moves the gradient rather than
+    /// the shape.
+    ///
+    /// Crate-internal because a caller-facing shading API is a design of its
+    /// own — colour spaces, function types, the extend flags — and the one
+    /// caller here is [`Canvas::draw_svg`](crate::Canvas::draw_svg), which
+    /// builds the dictionary from a `usvg` gradient.
+    #[cfg(feature = "svg-ingest")]
+    pub(crate) fn shade(
+        &mut self,
+        shape: &BezPath,
+        rule: Fill,
+        shading: &Dict,
+        transform: Affine,
+        opacity: f64,
+    ) {
+        let name = self.realize(pdf_names::SHADING, Object::Dict(shading.clone()));
+        self.out.push_str("q\n");
+        self.write_path(shape);
+        self.out.push_str(match rule {
+            Fill::NonZero => " W n\n",
+            Fill::EvenOdd => " W* n\n",
+        });
+        if opacity < 1.0 {
+            self.opacity(opacity);
+        }
+        write_matrix(&mut self.out, transform);
+        self.out.push_str(" cm /");
+        self.push_name(&name);
+        self.out.push_str(" sh\nQ\n");
+    }
+
+    /// Embed a PNG or JPEG an SVG `<image>` carried, as a new image
+    /// `/XObject`.
+    ///
+    /// `None` when the bytes are neither, or decode to nothing this session
+    /// can embed; the caller reports that as
+    /// [`Unsupported::ImageFormat`](crate::Unsupported::ImageFormat) rather
+    /// than failing the whole drawing, because one bad `<image>` should not
+    /// cost the rest of the document.
+    #[cfg(feature = "svg-ingest")]
+    pub(crate) fn embed_svg_image(&mut self, bytes: &[u8]) -> Option<EmbeddedImage> {
+        // JPEG passes through whole: `/DCTDecode` is the PDF filter for
+        // exactly these bytes, so nothing is decoded and nothing is lost.
+        if bytes.starts_with(&[0xFF, 0xD8]) {
+            return self.edit.embed_jpeg(bytes).ok();
+        }
+        let decoded = crate::svg_ingest::decode_png(bytes)?;
+        self.edit
+            .embed_image(
+                &decoded.pixels,
+                decoded.width,
+                decoded.height,
+                decoded.format,
+            )
+            .ok()
+    }
+
     /// Record the first failure; later ones are dropped, because the first is
     /// the one that explains the rest.
     fn fail(&mut self, error: Error) {
@@ -1105,16 +1168,22 @@ fn merge_resources(resources: &Dict, added: &[(&'static Name, Name, Object)]) ->
         }
         out.push(key.clone(), Object::Dict(sub));
     }
-    for category in [pdf_names::FONT, pdf_names::XOBJECT, pdf_names::EXT_G_STATE] {
+    // The categories the drawing used that the page had none of. Taken from
+    // `added` rather than from a fixed list of the categories a canvas
+    // happens to mint today: a drawing that reaches for a new one — `sh`
+    // brought `/Shading` — must not silently lose its resources, which is a
+    // resource named in the stream and absent from `/Resources`, and so a
+    // draw that does nothing at all.
+    for (category, _, _) in added {
         if out.contains_key(category) {
             continue;
         }
         let mut sub = Dict::new();
-        for (_, name, held) in added.iter().filter(|(cat, _, _)| *cat == category) {
+        for (_, name, held) in added.iter().filter(|(cat, _, _)| cat == category) {
             sub.push(name.clone(), held.clone());
         }
         if !sub.is_empty() {
-            out.push(category.clone(), Object::Dict(sub));
+            out.push((*category).clone(), Object::Dict(sub));
         }
     }
     out

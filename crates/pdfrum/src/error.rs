@@ -83,6 +83,19 @@ pub enum Error {
     #[error(transparent)]
     Limit(#[from] pdfrum_common::LimitExceeded),
 
+    /// An SVG would not resolve — malformed XML, or an `<svg>` with no
+    /// usable size. Only [`Canvas::draw_svg`](crate::Canvas::draw_svg)
+    /// produces it, behind the `svg-ingest` feature.
+    ///
+    /// An SVG construct that resolves but has no PDF spelling is **not** an
+    /// error: it is an
+    /// [`Unsupported`](crate::Unsupported) item on the returned
+    /// [`SvgIngestReport`](crate::SvgIngestReport), the same way damage a
+    /// document survives is a diagnostic rather than an error.
+    #[error("cannot read svg: {0}")]
+    #[cfg(feature = "svg-ingest")]
+    Svg(#[source] usvg::Error),
+
     /// The filesystem refused a read or a write. Only the path-taking
     /// convenience methods ([`Document::open`](crate::Document::open),
     /// [`Document::save`](crate::Document::save)) can produce this; the
@@ -137,6 +150,9 @@ pub enum ErrorCode {
     Text = 8,
     /// [`Error::Limit`]: a ceiling the caller set was exceeded.
     Limit = 9,
+    /// [`Error::Svg`]: an SVG would not resolve. Only produced with the
+    /// `svg-ingest` feature; the number is reserved either way.
+    Svg = 10,
 }
 
 /// The number, for a header or a wire format.
@@ -170,6 +186,7 @@ impl ErrorCode {
             ErrorCode::Save => "save",
             ErrorCode::Text => "text",
             ErrorCode::Limit => "limit",
+            ErrorCode::Svg => "svg",
         }
     }
 }
@@ -212,6 +229,7 @@ impl TryFrom<u32> for ErrorCode {
             7 => Ok(ErrorCode::Save),
             8 => Ok(ErrorCode::Text),
             9 => Ok(ErrorCode::Limit),
+            10 => Ok(ErrorCode::Svg),
             other => Err(UnknownErrorCode(other)),
         }
     }
@@ -240,6 +258,8 @@ impl Error {
             Error::Save(_) => ErrorCode::Save,
             Error::Text(_) => ErrorCode::Text,
             Error::Limit(_) => ErrorCode::Limit,
+            #[cfg(feature = "svg-ingest")]
+            Error::Svg(_) => ErrorCode::Svg,
             Error::Io(_) => ErrorCode::Io,
         }
     }
@@ -343,7 +363,8 @@ mod tests {
             assert_eq!(error.code(), code, "{error}");
             assert_eq!(u32::from(code), number, "{error}");
         }
-        // The reserved number is reserved with the feature off too.
+        // The reserved numbers are reserved with their features off too.
         assert_eq!(u32::from(ErrorCode::Save), 7);
+        assert_eq!(u32::from(ErrorCode::Svg), 10);
     }
 }

@@ -184,6 +184,78 @@ pages that render within the M24 round-trip floor of rendering the same SVG
 directly, unsupported features are reported not swallowed, and
 `docs/design/svg.md` gains the ingestion half.
 
+**MET 2026-09-07, with two items partly met and named below.**
+`Canvas::draw_svg` in the facade (`crates/pdfrum/src/svg_ingest.rs`), behind
+the default-off `svg-ingest` feature. It walks a `usvg`-resolved tree and
+issues M23 canvas calls, so an SVG goes into a page as vectors.
+
+Scored against **`resvg`** rendering the same file directly — an independent
+parser, geometry and rasterizer — with the board's own SSIM, over a committed
+seventeen-file corpus. **Eight of the twelve carried fixtures score a flat
+1.0000**; the published per-class floors are Vector 0.99, Gradient 0.99,
+Alpha 0.95, Image 0.92, each set just under its class's worst file, named
+with the full run in `docs/design/svg-ingest.md` §5. Gates: **4414 workspace
+tests pass** with `PDFRUM_ORACLE_CHECKOUT` set (4402 without the feature),
+clippy clean, and
+`cargo build -p pdfrum --no-default-features` reaches none of the ten new
+crates.
+
+Two features, not one, because export adds **0** crates to the tree and
+ingestion adds **10**: a caller who only exports pays nothing for a parser.
+The code is in the facade rather than in `pdfrum-svg` because `Canvas` is
+there (`pdfrum-edit` does not depend on `peniko`) and because M24's
+`svg = ["dep:pdfrum-svg"]` makes the other direction a cycle.
+
+The pass also fixed a **latent M23 defect**: `merge_resources` hardcoded the
+three resource categories a canvas minted at the time, so a drawing that used
+any other one wrote a name into the stream with nothing behind it in
+`/Resources` — a `sh` that drew nothing at all. It now derives the categories
+from what the drawing actually added.
+
+**Item 2, the Form XObject: not met, named debt.** What shipped draws the SVG
+inline into the page's content stream. For one placement the two are
+equivalent in the file; for the same logo on twenty pages the XObject is one
+object rather than twenty copies, and it is the better answer. Nothing about
+the mapping changes when it lands (`docs/design/svg-ingest.md` §8).
+
+**Item 3, text: not met, named debt.** `usvg` is taken
+`--no-default-features`, which is the right call — its defaults are a second
+font stack, and SVG text must map through `pdfrum-font`, not through a rival.
+The consequence is that `<text>` leaves no node in the resolved tree at all,
+so it is detected in the source XML and **reported** as `Unsupported::Text`
+rather than drawn. Neither the outline default nor the embedded-font option
+exists yet; closing it is a font-and-layout problem (§6).
+
+**Stroke attributes beyond colour and width: named debt.** M23's
+`Canvas::Stroke` carries only those two, so `stroke-linecap`,
+`stroke-linejoin`, `stroke-miterlimit` and `stroke-dasharray` are dropped —
+every stroke inks with the PDF default cap and join, and a **dashed stroke
+draws solid**. PDF has `J`, `j`, `M` and `d` for all four, so this is a canvas
+gap rather than a mapping one, and closing it widens a type M23 owns and other
+callers use. Unreported deliberately (`docs/design/svg-ingest.md` §4): a cap
+difference is a half-pixel at the ends, and an item on every stroke would bury
+the report entries that mean something.
+
+**Also unimplemented, each reported rather than swallowed:** SVG filters
+(declined outright, per item 4), `<mask>` and non-normal blend modes (both
+need a transparency-group `/XObject`, deferred), `<pattern>` fills, and GIF
+and WebP `<image>` data. Two approximations are made *without* a report item,
+because the shape is still drawn and the reasoning is recorded in §4: group
+opacity composites members individually rather than through a group buffer
+(the sole cause of `opacity_groups`'s 0.9669), and a gradient *stroke*
+collapses to the average of its stops.
+
+**One exit criterion was met differently than written.** The `resvg` test
+suite is not vendored here and cannot be fetched offline, so the corpus is
+seventeen hand-written fixtures covering the feature matrix by class rather
+than a subset of that suite. Because they are committed, the test has no
+legitimate skip: a missing or empty fixture directory **fails**, and a `.svg`
+with no row in the table fails too. The ingestion half went into a new
+`docs/design/svg-ingest.md` rather than into `docs/design/svg.md`, which was
+already long; the two cross-reference.
+
+`ErrorCode` gained `Svg = 10`, reserved with the feature off as `Save = 7` is.
+
 
 ## M26 — PDF/A: the checker first, the conversion second
 
