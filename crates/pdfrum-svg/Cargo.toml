@@ -15,8 +15,12 @@ workspace = true
 # Nothing new in the shipped tree. Writing SVG is string formatting over the
 # geometry and colour vocabulary the engine already speaks, and the base64 for
 # an embedded image is nineteen lines (STYLE.md §5: write the thirty lines).
+# The one thing that is not string formatting is the PNG behind an `<image>`
+# `data:` URI, and that is `pdfrum-render`'s `png` feature rather than a
+# second edge to the `png` crate: one encoder in the workspace, and the
+# pixels this crate hands it are already a `Pixmap`.
 [dependencies]
-pdfrum-render.workspace = true
+pdfrum-render = { workspace = true, features = ["png"] }
 pdfrum-page.workspace = true
 pdfrum-common.workspace = true
 kurbo.workspace = true
@@ -27,18 +31,19 @@ peniko.workspace = true
 # a dependency of the crate: `SvgBackend` wraps *any* `RasterBackend`, and
 # which one is the caller's choice.
 pdfrum-raster-tinyskia.workspace = true
-# The in-crate PNG encoder's own tests decode what it wrote, and the round
-# trip needs a pixmap type to hand `resvg`. Both are `tiny-skia`, which is
-# already in the workspace and is `resvg`'s own rasterizer.
-tiny-skia.workspace = true
 # The round trip (docs/design/svg.md §5): render our own SVG with a second
 # engine and score it against the oracle's PNG. **Dev-only** — `resvg` never
 # enters the shipped tree, which `scripts/ci.nu`'s pure-Rust check covers.
 resvg.workspace = true
 # The round trip opens the corpus the way the board does — through the facade,
-# so the page it converts is the page the board renders. A dev-dependency on
-# `pdfrum` is not a cycle: nothing in the facade depends on this crate.
-pdfrum.workspace = true
+# so the page it converts is the page the board renders, and the `convert`
+# example shows the facade path a caller actually has. `svg` and `tinyskia`
+# are both off in the facade's default set and both are what that path needs.
+#
+# The facade depends on this crate under its own `svg` feature, so this is a
+# *dev*-dependency cycle. Cargo permits that and it appears in no published
+# normal tree.
+pdfrum = { workspace = true, features = ["svg", "tinyskia"] }
 pdfrum-corpus.workspace = true
 # The golden store keys a PDF by the first sixteen hex digits of its SHA-256,
 # so finding the oracle's PNG means computing one.

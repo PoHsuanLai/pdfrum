@@ -208,6 +208,43 @@ impl<'a> Page<'a> {
         self.prepare(options, session).render_on(backend, session)
     }
 
+    /// The page as an SVG document, rasterizing with `backend` only what SVG
+    /// cannot say — behind the default-off `svg` feature.
+    ///
+    /// The result carries the document *and* a [`RasterReport`](crate::svg::RasterReport)
+    /// naming every region that had to become pixels, because a vector export
+    /// that silently embedded a bitmap would look like a success. The
+    /// document's `viewBox` is the device box [`Page::render`] fills under the
+    /// same `options`, so the two are directly comparable.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    #[cfg(feature = "svg")]
+    pub fn to_svg<B: RasterBackend>(
+        &self,
+        backend: &B,
+        options: &RenderOptions,
+    ) -> Result<crate::svg::SvgPage> {
+        self.to_svg_on(backend, options, &mut RenderSession::default())
+    }
+
+    /// [`Page::to_svg`] reusing a caller-owned [`RenderSession`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    #[cfg(feature = "svg")]
+    pub fn to_svg_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        options: &RenderOptions,
+        session: &mut RenderSession,
+    ) -> Result<crate::svg::SvgPage> {
+        check_pixel_cap(&self.doc.limits, self.display_size(), options)?;
+        self.prepare(options, session).to_svg_on(backend, session)
+    }
+
     /// Interprets the page once, for drawing any number of times.
     ///
     /// The expensive half of [`Page::render_on`], separated from the drawing
@@ -770,6 +807,50 @@ impl PreparedPage<'_> {
         pixmap.map_err(|error| match error {
             // The engine does not know which page it drew; this is where the
             // message learns it.
+            pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),
+            other => Error::Render(other),
+        })
+    }
+
+    /// The prepared page as an SVG document — [`Page::to_svg`] on a page
+    /// already interpreted.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    #[cfg(feature = "svg")]
+    pub fn to_svg<B: RasterBackend>(&self, backend: &B) -> Result<crate::svg::SvgPage> {
+        self.to_svg_on(backend, &mut RenderSession::default())
+    }
+
+    /// [`PreparedPage::to_svg`] reusing a caller-owned [`RenderSession`].
+    ///
+    /// The conversion overrides two of `options`' text settings — it wants
+    /// glyph outlines rather than the cached bitmaps the engine blits at small
+    /// sizes, or the export would be a page of tiny embedded PNGs with no
+    /// vector text in it. `pdfrum-svg` documents that trade.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    #[cfg(feature = "svg")]
+    pub fn to_svg_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        session: &mut RenderSession,
+    ) -> Result<crate::svg::SvgPage> {
+        check_pixel_cap(&self.doc.limits, self.graph.display_size(), &self.options)?;
+        let inner = self.options.to_inner();
+        let mut diags = Diagnostics::default();
+        let render_session = pdfrum_render::RenderSession {
+            caches: Some(&mut session.caches),
+            deadline: self.doc.limits.deadline.as_ref(),
+            ..Default::default()
+        };
+        let converted =
+            pdfrum_svg::page_to_svg_with(&self.graph, &inner, backend, render_session, &mut diags);
+        self.doc.note(&diags);
+        converted.map_err(|error| match error {
             pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),
             other => Error::Render(other),
         })

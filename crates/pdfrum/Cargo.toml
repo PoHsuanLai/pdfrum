@@ -62,6 +62,13 @@ javascript = ["forms", "pdfrum-form/javascript"]
 # Markdown and layout-preserving text from a page: `pdfrum-markdown`, the
 # structure tree where there is one and typography where there is not.
 markdown = ["dep:pdfrum-markdown"]
+# SVG export: `pdfrum-svg`'s `SvgBackend`, a `RasterBackend` wrapper that
+# records the walk as vectors while a real rasterizer keeps painting, plus the
+# report naming every region it had to fall back to pixels for. Default-off
+# because an SVG is a second output format rather than part of reading a PDF,
+# and because the backend is a wrapper the caller chooses to put in the way —
+# a build that never exports one should not carry it.
+svg = ["dep:pdfrum-svg"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
@@ -111,6 +118,7 @@ pdfrum-raster-vello = { workspace = true, optional = true }
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-markdown = { workspace = true, optional = true }
+pdfrum-svg = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
 kurbo.workspace = true
@@ -266,3 +274,7 @@ required-features = ["vello-cpu", "edit", "forms"]
 [[test]]
 name = "construct_enums"
 required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "svg_export"
+required-features = ["vello-cpu", "svg"]

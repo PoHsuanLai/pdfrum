@@ -67,7 +67,6 @@
 mod backend;
 mod doc;
 mod evidence;
-mod png;
 mod report;
 mod xml;
 

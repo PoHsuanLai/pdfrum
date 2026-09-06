@@ -1935,6 +1935,7 @@ dependencies = [
  "pdfrum-raster-vello",
  "pdfrum-raster-vello-cpu",
  "pdfrum-render",
+ "pdfrum-svg",
  "pdfrum-text",
  "peniko",
  "png",
@@ -2249,7 +2250,6 @@ dependencies = [
  "peniko",
  "resvg",
  "sha2",
- "tiny-skia",
 ]
 
 [[package]]
