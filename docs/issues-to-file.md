@@ -563,6 +563,57 @@ and the recorded pass count matches a fresh run.
 
 ---
 
+## A decimal number opening a sentence is read as a list marker
+
+**Labels:** bug, markdown
+**Area:** `crates/pdfrum-markdown/src/heuristics.rs`
+
+### Context
+
+`leading_number` recognises a multi-part label like `2.1 Background` by its
+shape: digit groups joined by points, closed by whitespace
+(`heuristics.rs:514-517`, the `groups > 1` arm). That rule is what makes a
+numbered table of contents come out as a list.
+
+### Problem
+
+The same shape is a decimal number, so a sentence opening with one becomes a
+list item. Measured over `benches/corpus`, three real cases:
+
+- `1.3 GHz or faster processor.` -- a hardware requirement, rendered `- 1.3 GHz
+  or faster processor.`
+- `0.1 Contents` -- a table cell on `vector_en_tem.pdf`'s revision history
+- `14.2 朗读设置：...` -- correct here, a genuine section number
+
+So the rule is right more often than it is wrong on this corpus, which is why
+it has stood. It is still an over-match, and it was found by an over-match
+probe that failed: `leading_number("3.14 is pi")` returns `Some`.
+
+### Proposed fix
+
+Not determined, and worth thinking about before coding. Candidates, none
+verified:
+
+- A list marker is followed by a capital or an ideograph, not by a lower-case
+  word: separates `1.3 GHz` (upper) poorly, but `3.14 is pi` (lower) well.
+- A marker's number continues its neighbours' sequence. `2.1` after `2.0` is a
+  marker; a lone `1.3` among prose lines is not. This is the strongest signal
+  and needs the list machinery to look at runs rather than single lines.
+- A decimal has at most one point and no trailing separator; a label often
+  carries a closer. Weak on its own.
+
+Whatever is chosen must keep `2.1 Background ... 4` and `14.2 朗读设置` working,
+both of which are genuine markers in the corpus today.
+
+### Acceptance
+
+`leading_number("3.14 is pi")` is `None` and `1.3 GHz or faster processor.`
+renders as a paragraph, with `text_quick_start.pdf`, `vector_en_tem.pdf` and
+`text_cjk_functions.pdf` unchanged in their genuine lists, and a unit test
+pinning each case.
+
+---
+
 ## Upstream (vello): SIMD-ify F32Kernel pack and unpack
 
 **Labels:** upstream, vello, performance
