@@ -1,5 +1,27 @@
 # Every loss in run 3, explained
 
+> **Run 5 (2026-09-07, `258e24cc72e3`, idle `himmel`) re-measured every row in
+> this file, and fourteen of the sixteen losses are closed.** The corpus-44
+> loss list is now **two rows**, both against `pdfium-render` and both already
+> classified below as tradeoffs we do not propose to close:
+> `image_jpx_123.pdf` render (SSIM 0.9874 — upstream JPX decoder numerics) and
+> `image_ccitt_3bigpreview.pdf` text (F1 0.999 — the duplicate `Clips` in the
+> vertical CJK region, the residue this file already names as the last
+> non-byte-exact row of the 44).
+>
+> The fourteen that closed are the ones the rows below already say were fixed
+> on main after run 3 was taken, now confirmed by measurement rather than by
+> pointer: the five text rows and `text_quick_start`'s F1 0.641 (M28's
+> `run.advance` fix — corpus-44 text now **42 of 44 byte-exact**, was 21, and
+> whitespace-normalized **43**, was 39), the four `vector_en_system` rows and
+> `vector_tcpdf_009` (the snapped-reduction pass), `image_en_fqa` (the same
+> pass wired to the colour path) and `shading_tcpdf_058`. Render `>= 0.99`
+> went **35 -> 38 of 44** and median SSIM 0.9995 -> **0.9999**. On the 209-file
+> PDFium sample the same passes give `>= 0.99` **180 -> 182**, text exact
+> **165 -> 204** and normalized **198 -> 208**. **No row got worse, on either
+> corpus.** The data is `data/2026-09-07-258e24cc72e3-*.json`; the machine
+> reading and the delta table are under "Run 5" in `README.md`.
+
 `docs/benchmarks/README.md` run 3 publishes, for each op, the files where
 some peer lands closer to the oracle than pdfrum does, plus the speed and
 memory rows where a peer is faster or smaller. This document is the

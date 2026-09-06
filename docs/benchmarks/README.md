@@ -200,10 +200,14 @@ box makes absolute milliseconds meaningless.
 Runs 1 and 2 were taken on `frieren`, 32 CPUs, Linux 6.8, rustc 1.97.1,
 **not** idle — between 18 and 88 on 32 cores — so only the ratios between
 engines, measured back to back on the same files, were readable there.
-**Run 3, the current reading, was taken on `himmel`** — 32 CPUs, rustc
-1.98.1, idle, load under 2 for the whole chain — and its absolute
-milliseconds can be quoted. The same box is now where the workspace ratchet
-is measured; the internal working notes has that rule.
+**Run 5, the current reading, was taken on `himmel`** — 32 CPUs, rustc
+1.98.1, idle, load 0.02 at the start and under 1.3 for the whole comparison
+phase — and its absolute milliseconds can be quoted. Run 3 was taken on the
+same box under the same conditions and is kept as the immediately preceding
+reading, which is what makes the run 3 -> run 5 delta a code delta: every
+unchanged peer reproduces to within 2.5% across the pair. The same box is now
+where the workspace ratchet is measured; the internal working notes has that
+rule.
 
 ### Render profiles, and what a configuration computes
 
@@ -282,19 +286,206 @@ a per-engine matrix of what each configuration actually computes, and a
 measured. Run 4's own milliseconds were taken on a loaded box and are a
 ratio between two profiles of one engine, never a cross-engine absolute.
 
-Run 3 is the whole chain in one sitting on
-an idle box, at commit `8a02d57b1fa7`. Runs 1 and 2 are kept below as
-history: they were measured on a box carrying a load average of 30–40 on its
-32 cores, so their **speed columns are superseded and must not be quoted**;
-their correctness, robustness, memory and adoption tables stand, and run 3
-reproduces them. Every run uses the same oracle — `pdfium_test` at PDFium
+**Run 5 is the current reading** — the whole chain in one sitting on an idle
+box at commit `258e24cc72e3`, taken to pay PLAN.md's M2 debt. Run 3 is the
+same chain on the same box at `8a02d57b1fa7`, kept in full because the pair
+subtracts: it is the previous reading, not superseded history. Runs 1 and 2
+are kept below as history: they were measured on a box carrying a load
+average of 30–40 on its 32 cores, so their **speed columns are superseded and
+must not be quoted**; their correctness, robustness, memory and adoption
+tables stand, and runs 3 and 5 reproduce them. Every run uses the same
+oracle — `pdfium_test` at PDFium
 `a043bed4a0d7` — at 150 DPI, 10 s per (engine, file, op), 3 warm runs, with
 `pdfium-render` bound to the `libpdfium.so` named above. Every table below is
 a `compare report` of the JSON beside it, verbatim.
 
-### Run 3 — one sitting on an idle box (the current reading)
+### Run 5 — the M2 re-measurement (the current reading)
 
-**This is the run the numbers above and below are quoted from.** Runs 1 and
+`data/2026-09-07-258e24cc72e3-*.json`. **This is the run the numbers above
+are quoted from.** Run 3 remains below in full: it was taken on the same box
+under the same conditions, which is what lets the two be subtracted.
+
+PLAN.md carried "M1 (ratchet re-baseline) and M2 (oracle side-by-side) are
+STILL OWED" across three milestones, and with it the line that every "versus
+PDFium" figure dated from M12, `forms` warm included, at 3.35x and never
+re-measured. Run 5 is M2. M1 was already paid: `benches/baseline.json` was
+re-recorded on this box at `29ffac2` on 2026-09-06, all 440 rows, and is not
+touched here.
+
+**The machine.** `himmel`, 32 CPUs, `rustc 1.98.1 (48a229cea 2026-09-01)`.
+The whole chain ran in one sitting on an otherwise idle box. Load average
+`0.14 0.46 0.51` at the start of the comparison phase and `6.49 3.20 1.65` at
+its end — the rise is the closing `adoption` step's own parallel cargo
+builds, as it was in run 3, not another tenant. The workspace bench that
+precedes it ran alone at a steady load of exactly 1.00, and the oracle timing
+alone at 0.02 before and 1.01 after. Every step exited 0.
+
+**The control that makes the delta readable.** Between run 3 and run 5 every
+engine we did not change reproduces to within **2.5%**: `mupdf` render
++1.0%, `pdfium-render` +1.6%, `hayro` +1.6% cold, and +0.7% / +1.5% / +0.5%
+warm. Movements in the `pdfrum` rows below are therefore code, not machine —
+which is the thing runs 1 and 2 could not say. Anything under about 3% here
+is not a result.
+
+#### What moved, run 3 -> run 5
+
+Class geomeans over `benches/corpus`, `pdfrum` only, in milliseconds.
+
+| op | class | run 3 | run 5 | change |
+|---|---|---|---|---|
+| render cold | ALL | 53.504 | 34.438 | **−35.6%** |
+| render cold | forms | 124.661 | 72.404 | −41.9% |
+| render cold | image | 155.606 | 125.222 | −19.5% |
+| render cold | mixed | 54.351 | 26.573 | −51.1% |
+| render cold | shading | 22.109 | 14.227 | −35.6% |
+| render cold | text | 25.131 | 15.515 | −38.3% |
+| render cold | vector | 40.060 | 27.841 | −30.5% |
+| render warm | ALL | 11.457 | 9.804 | **−14.4%** |
+| render warm | forms | 8.882 | 7.727 | −13.0% |
+| render warm | image | 12.149 | 8.452 | −30.4% |
+| render warm | mixed | 8.422 | 8.408 | within noise |
+| render warm | shading | 12.740 | 11.859 | −6.9% |
+| render warm | text | 11.329 | 10.520 | −7.1% |
+| render warm | vector | 16.106 | 12.826 | −20.4% |
+| open cold | ALL | 0.354 | 0.289 | **−18.2%** |
+| open warm | ALL | 0.143 | 0.115 | **−19.3%** |
+| open warm | vector | 0.480 | 0.556 | +15.8%, see below |
+| text cold | ALL | 2.808 | 1.493 | **−46.8%** |
+| text warm | ALL | 0.153 | 0.151 | within noise |
+
+The passes behind these: the parser `Arc` sharing and the xref slot vector
+for `open` (−18% cold, −19% warm, and −25% on the `forms` class, which holds
+the corpus's largest cross-reference); the image-rows pass and lazy unpack
+for `render cold image` and `render warm image`; the snapped-colour
+reduction for `vector`; M28 for `text cold`. `text warm` and `render warm
+mixed` did not move and are reported as unchanged rather than dressed up.
+
+**The one number that went up is `open warm vector`, +15.8%**, and it is not
+called a regression here because it cannot be distinguished from noise: the
+`open warm` medians it is built from are 0.48 and 0.56 ms over six files, the
+compare harness takes three warm samples, and two idle-himmel runs of the
+same commit family have been seen to move a warm class geomean by more than
+this in either direction. `open cold vector` fell 20.3% and `open warm ALL`
+fell 19.3% in the same run. It is recorded, not explained away, and the
+ratchet — 50 samples per entry, not 3 — is where a real `open` regression
+would show.
+
+#### Correctness — every published loss re-scored
+
+| metric | run 3 | run 5 |
+|---|---|---|
+| corpus-44 render `>= 0.99` | 35/44 | **38/44** |
+| corpus-44 render median SSIM | 0.9995 | **0.9999** |
+| corpus-44 text byte-exact | 21/44 | **42/44** |
+| corpus-44 text whitespace-normalized | 39/44 | **43/44** |
+| 209-file sample render `>= 0.99` | 180 | **182** |
+| 209-file sample text byte-exact | 165 | **204** |
+| 209-file sample text normalized | 198 | **208** |
+
+The corpus-44 **loss list falls from sixteen rows to two**, and both
+survivors are tradeoffs `losses-explained.md` already declines to close:
+`image_jpx_123.pdf` render (upstream JPX numerics) and
+`image_ccitt_3bigpreview.pdf` text (F1 0.999). **No row on either corpus got
+worse.**
+
+#### Memory and throughput
+
+The M27 peak-memory pass reaches the published comparison for the first
+time. Render `VmHWM` less the process floor, over the 44:
+
+| engine | run 3 median | run 5 median |
+|---|---|---|
+| pdfrum | 51.5 MiB | **31.3 MiB** |
+| pdfium-render | 28.8 MiB | 28.7 MiB |
+| mupdf | 28.4 MiB | 28.4 MiB |
+| hayro | 29.6 MiB | 29.6 MiB |
+
+pdfrum's peak on `image_bug_583804.pdf` is **1539 -> 934 MiB**. Every peer is
+unchanged, so this is the pass and not the box. pdfrum's median is now level
+with the two C engines rather than 1.8x above them.
+
+Throughput over the same corpus, total pages over total seconds:
+
+| engine | 1 thread | 4 | 8 |
+|---|---|---|---|
+| pdfrum run 3 | 27.8 | 33.9 | 34.7 |
+| **pdfrum run 5** | **36.0** | **46.7** | **48.4** |
+| hayro run 5 | 31.7 | 39.3 | 40.0 |
+| pdf_oxide run 5 | 26.1 | 30.8 | 31.5 |
+| pdfium-render run 5 | 64.7 | 64.9 | 64.9 |
+| mupdf run 5 | 93.2 | 109.7 | 108.2 |
+
++29% at one thread and +39% at eight, against peers that moved under 3%.
+pdfrum now leads both pure-Rust rasterizing peers at every thread count.
+
+#### `forms` warm against the oracle — the figure PLAN.md carried
+
+This is the one M12 named and no milestone since re-measured. It is **not**
+taken from the table above: the compare harness takes three warm samples, and
+a class geomean over seven files at three samples is not a number to hang a
+milestone on. It is taken the way M12 took it — `scripts/bench-oracle.nu`'s
+method against criterion's own medians, **50 samples per entry**.
+
+`nu` is not installed on `himmel`, so the script could not be run there; its
+method was reproduced in shell exactly — one untimed warm pass per file, then
+best-of-5 at `--render-repeats=1` and best-of-5 at `--render-repeats=40`,
+with the per-pass cost taken as the difference divided by 39, which is what
+cancels process start, font-database build and file read. Minimum of the
+rounds, not mean, for the reason the script gives.
+
+Against `render-warm-vello-cpu`, the facade default and the backend the
+comparison harness itself renders through:
+
+| file | pdfrum warm (ms) | oracle per-pass (ms) | ratio |
+|---|---|---|---|
+| `forms_combo_box` | 5.038 | 3.222 | 1.56x |
+| `forms_list_box` | 9.320 | 5.002 | 1.86x |
+| `forms_number` | 1.795 | 0.926 | 1.94x |
+| `forms_push_button` | 7.157 | 50.634 | 0.14x |
+| `forms_signature` | 3.326 | 1.955 | 1.70x |
+| `forms_text_field` | 5.962 | 3.805 | 1.57x |
+| `forms_widgets_407` | 8.140 | 4.751 | 1.71x |
+| **geomean, 7 files** | | | **1.20x** |
+
+**`forms` warm is 1.20x, against M12's 3.35x and M12b's unmet `< 2.5x`
+target.** Two things have to be said with it or the number is misleading.
+
+**One file carries most of it.** `forms_push_button` reads 0.14x because the
+oracle spends 50.6 ms per pass on it against 0.9–5.0 ms on the other six —
+a tenfold outlier on PDFium's side, not on ours. Drop it and the remaining
+six geomean **1.72x**. Both figures are below 2.5x; the honest statement is
+that `forms` warm is between 1.2x and 1.8x depending on whether that file is
+in, and it is no longer the 3.35x residue.
+
+**The backend moves it more than the forms code does.** The same seven files,
+the same oracle, the same run:
+
+| backend | `forms` warm geomean |
+|---|---|
+| `render-warm-agg` | 0.56x |
+| `render-warm-vello-cpu` (facade default) | 1.20x |
+| `render-warm-tinyskia` | 2.61x |
+
+A 4.7x spread across three rasterizers on identical documents. The citable
+number is the facade default's, and the finding worth carrying forward is
+that `tinyskia` is roughly 4x `agg` on form widgets — a backend property,
+not a forms property.
+
+**On the convention.** The oracle's per-pass figure covers every page of the
+document while criterion's render benchmark renders page 1 only, and the
+`forms` documents average 3.0 pages. This asymmetry is M12's, inherited
+deliberately so the comparison to 3.35x is like-for-like, and it is why the
+ratio flatters us on multi-page files. Normalizing the oracle per page gives
+`forms` **3.21x** — which is within 4% of M12's 3.35x and is the reading to
+use if what is wanted is "cost per page rendered" rather than "cost of the
+benchmarked call". Both are published here because quoting either alone
+would be a choice the reader cannot see.
+
+### Run 3 — one sitting on an idle box (the previous reading, same box)
+
+**Superseded as the quoted reading by run 5 above, and kept in full as the
+run 5 delta's baseline** — same box, same conditions, one commit family
+earlier. Runs 1 and
 2 measured the same corpora on `frieren` at load 30–40; every millisecond in
 them is inflated by an unknown amount and they are kept only as history. Run
 3 is the whole chain — both corpora, the coverage matrix, both throughput
