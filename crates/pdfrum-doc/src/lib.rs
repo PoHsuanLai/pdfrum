@@ -33,11 +33,12 @@ pub mod form;
 pub mod geom;
 pub mod nav;
 pub mod page_label;
+pub mod pdfa;
 pub mod prefs;
 pub mod structure;
 pub mod vt;
 
-mod metadata;
+pub(crate) mod metadata;
 mod names;
 
 pub use annot::{AnnotFlags, Annotation, Subtype};
@@ -49,6 +50,7 @@ pub use nav::{
     AActionType, Action, ActionKind, Bookmark, Dest, FileSpec, Link, NameTree, ZoomMode,
 };
 pub use page_label::page_label;
+pub use pdfa::{Clause as PdfaClause, Level as PdfaLevel, Report as PdfaReport};
 pub use prefs::ViewerPrefs;
 pub use structure::{StructElement, StructTree};
 

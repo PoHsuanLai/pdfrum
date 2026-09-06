@@ -422,6 +422,67 @@ pub fn pdfrum_doc::nav::outline_bookmarks<R: pdfrum_object::resolve::Resolve>(&p
 pub fn pdfrum_doc::nav::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::Link>>
 pub mod pdfrum_doc::page_label
 pub fn pdfrum_doc::page_label::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
+pub mod pdfrum_doc::pdfa
+#[non_exhaustive] pub enum pdfrum_doc::pdfa::Clause
+pub pdfrum_doc::pdfa::Clause::AnnotationAppearanceMissing
+pub pdfrum_doc::pdfa::Clause::AnnotationFlagsIllegal
+pub pdfrum_doc::pdfa::Clause::AnnotationSubtypeForbidden
+pub pdfrum_doc::pdfa::Clause::DeviceColorWithoutOutputIntent
+pub pdfrum_doc::pdfa::Clause::EmbeddedFile
+pub pdfrum_doc::pdfa::Clause::EmbeddedMultimedia
+pub pdfrum_doc::pdfa::Clause::Encrypted
+pub pdfrum_doc::pdfa::Clause::ExternalContentReference
+pub pdfrum_doc::pdfa::Clause::FontEncodingInvalid
+pub pdfrum_doc::pdfa::Clause::FontNotEmbedded
+pub pdfrum_doc::pdfa::Clause::FontSubsetIncomplete
+pub pdfrum_doc::pdfa::Clause::ForbiddenAction
+pub pdfrum_doc::pdfa::Clause::JavaScript
+pub pdfrum_doc::pdfa::Clause::JpxFilter
+pub pdfrum_doc::pdfa::Clause::LzwFilter
+pub pdfrum_doc::pdfa::Clause::OptionalContent
+pub pdfrum_doc::pdfa::Clause::OutputIntentMissing
+pub pdfrum_doc::pdfa::Clause::OutputIntentProfileMissing
+pub pdfrum_doc::pdfa::Clause::Transparency
+pub pdfrum_doc::pdfa::Clause::XmpIdentificationMismatch
+pub pdfrum_doc::pdfa::Clause::XmpIdentificationMissing
+pub pdfrum_doc::pdfa::Clause::XmpInfoMismatch
+pub pdfrum_doc::pdfa::Clause::XmpMalformed
+pub pdfrum_doc::pdfa::Clause::XmpMissing
+impl pdfrum_doc::PdfaClause
+pub const fn pdfrum_doc::PdfaClause::iso(self, pdfrum_doc::PdfaLevel) -> &'static str
+pub enum pdfrum_doc::pdfa::Level
+pub pdfrum_doc::pdfa::Level::A1b
+pub pdfrum_doc::pdfa::Level::A2b
+impl pdfrum_doc::PdfaLevel
+pub const fn pdfrum_doc::PdfaLevel::forbids_transparency(self) -> bool
+pub const fn pdfrum_doc::PdfaLevel::name(self) -> &'static str
+pub const fn pdfrum_doc::PdfaLevel::part(self) -> u8
+impl core::fmt::Display for pdfrum_doc::PdfaLevel
+pub fn pdfrum_doc::PdfaLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_doc::pdfa::Subject
+pub pdfrum_doc::pdfa::Subject::Catalog
+pub pdfrum_doc::pdfa::Subject::Document
+pub pdfrum_doc::pdfa::Subject::Object(pdfrum_object::object::ObjRef)
+pub pdfrum_doc::pdfa::Subject::Page(u32)
+pub pdfrum_doc::pdfa::Subject::Resource
+pub pdfrum_doc::pdfa::Subject::Resource::name: alloc::string::String
+pub pdfrum_doc::pdfa::Subject::Resource::page: u32
+impl core::fmt::Display for pdfrum_doc::pdfa::Subject
+pub fn pdfrum_doc::pdfa::Subject::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::pdfa::Report
+pub pdfrum_doc::pdfa::Report::level: pdfrum_doc::PdfaLevel
+pub pdfrum_doc::pdfa::Report::violations: alloc::vec::Vec<pdfrum_doc::pdfa::Violation>
+impl pdfrum_doc::PdfaReport
+pub fn pdfrum_doc::PdfaReport::by_clause(&self, pdfrum_doc::PdfaClause) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_doc::pdfa::Violation>
+pub fn pdfrum_doc::PdfaReport::clauses(&self) -> alloc::vec::Vec<pdfrum_doc::PdfaClause>
+pub fn pdfrum_doc::PdfaReport::conforms(&self) -> bool
+pub struct pdfrum_doc::pdfa::Violation
+pub pdfrum_doc::pdfa::Violation::clause: pdfrum_doc::PdfaClause
+pub pdfrum_doc::pdfa::Violation::detail: alloc::string::String
+pub pdfrum_doc::pdfa::Violation::subject: pdfrum_doc::pdfa::Subject
+impl core::fmt::Display for pdfrum_doc::pdfa::Violation
+pub fn pdfrum_doc::pdfa::Violation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn pdfrum_doc::pdfa::check<R: pdfrum_object::resolve::Resolve>(pdfrum_doc::PdfaLevel, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::PdfaReport
 pub mod pdfrum_doc::prefs
 pub struct pdfrum_doc::prefs::ViewerPrefs
 pub pdfrum_doc::prefs::ViewerPrefs::dict: core::option::Option<pdfrum_object::dict::Dict>
@@ -607,6 +668,42 @@ pub enum pdfrum_doc::FocusBox
 pub pdfrum_doc::FocusBox::Inflated
 pub pdfrum_doc::FocusBox::None
 pub pdfrum_doc::FocusBox::Rect(kurbo::rect::Rect)
+#[non_exhaustive] pub enum pdfrum_doc::PdfaClause
+pub pdfrum_doc::PdfaClause::AnnotationAppearanceMissing
+pub pdfrum_doc::PdfaClause::AnnotationFlagsIllegal
+pub pdfrum_doc::PdfaClause::AnnotationSubtypeForbidden
+pub pdfrum_doc::PdfaClause::DeviceColorWithoutOutputIntent
+pub pdfrum_doc::PdfaClause::EmbeddedFile
+pub pdfrum_doc::PdfaClause::EmbeddedMultimedia
+pub pdfrum_doc::PdfaClause::Encrypted
+pub pdfrum_doc::PdfaClause::ExternalContentReference
+pub pdfrum_doc::PdfaClause::FontEncodingInvalid
+pub pdfrum_doc::PdfaClause::FontNotEmbedded
+pub pdfrum_doc::PdfaClause::FontSubsetIncomplete
+pub pdfrum_doc::PdfaClause::ForbiddenAction
+pub pdfrum_doc::PdfaClause::JavaScript
+pub pdfrum_doc::PdfaClause::JpxFilter
+pub pdfrum_doc::PdfaClause::LzwFilter
+pub pdfrum_doc::PdfaClause::OptionalContent
+pub pdfrum_doc::PdfaClause::OutputIntentMissing
+pub pdfrum_doc::PdfaClause::OutputIntentProfileMissing
+pub pdfrum_doc::PdfaClause::Transparency
+pub pdfrum_doc::PdfaClause::XmpIdentificationMismatch
+pub pdfrum_doc::PdfaClause::XmpIdentificationMissing
+pub pdfrum_doc::PdfaClause::XmpInfoMismatch
+pub pdfrum_doc::PdfaClause::XmpMalformed
+pub pdfrum_doc::PdfaClause::XmpMissing
+impl pdfrum_doc::PdfaClause
+pub const fn pdfrum_doc::PdfaClause::iso(self, pdfrum_doc::PdfaLevel) -> &'static str
+pub enum pdfrum_doc::PdfaLevel
+pub pdfrum_doc::PdfaLevel::A1b
+pub pdfrum_doc::PdfaLevel::A2b
+impl pdfrum_doc::PdfaLevel
+pub const fn pdfrum_doc::PdfaLevel::forbids_transparency(self) -> bool
+pub const fn pdfrum_doc::PdfaLevel::name(self) -> &'static str
+pub const fn pdfrum_doc::PdfaLevel::part(self) -> u8
+impl core::fmt::Display for pdfrum_doc::PdfaLevel
+pub fn pdfrum_doc::PdfaLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum_doc::Subtype
 pub pdfrum_doc::Subtype::Caret
 pub pdfrum_doc::Subtype::Circle
@@ -784,6 +881,13 @@ pub fn pdfrum_doc::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R
 pub fn pdfrum_doc::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
 pub fn pdfrum_doc::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
 pub fn pdfrum_doc::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::NameTree>
+pub struct pdfrum_doc::PdfaReport
+pub pdfrum_doc::PdfaReport::level: pdfrum_doc::PdfaLevel
+pub pdfrum_doc::PdfaReport::violations: alloc::vec::Vec<pdfrum_doc::pdfa::Violation>
+impl pdfrum_doc::PdfaReport
+pub fn pdfrum_doc::PdfaReport::by_clause(&self, pdfrum_doc::PdfaClause) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_doc::pdfa::Violation>
+pub fn pdfrum_doc::PdfaReport::clauses(&self) -> alloc::vec::Vec<pdfrum_doc::PdfaClause>
+pub fn pdfrum_doc::PdfaReport::conforms(&self) -> bool
 pub struct pdfrum_doc::StructElement
 pub pdfrum_doc::StructElement::dict: pdfrum_object::dict::Dict
 pub pdfrum_doc::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::Kid>

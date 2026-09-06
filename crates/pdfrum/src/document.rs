@@ -365,6 +365,44 @@ impl Document {
         xmp
     }
 
+    /// Check the document against a PDF/A conformance level (ISO 19005).
+    ///
+    /// Returns every requirement the document fails, each naming the clause
+    /// broken and the object that breaks it. An empty report means the checks
+    /// this engine runs all passed — which is a weaker claim than ISO 19005
+    /// conformance, and `docs/design/pdfa.md` says exactly how much weaker
+    /// and which requirements are not covered.
+    ///
+    /// This only reports. Nothing is rewritten, and there is no conversion
+    /// yet: the roadmap orders M26 "report before repair" deliberately.
+    ///
+    /// ```
+    /// use pdfrum::{Document, PdfaLevel};
+    ///
+    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
+    /// let report = doc.check_pdfa(PdfaLevel::A2b);
+    ///
+    /// // An ordinary PDF is not archival: it carries no XMP packet, so it
+    /// // cannot identify itself as PDF/A.
+    /// assert!(!report.conforms());
+    /// assert!(report.clauses().contains(&pdfrum::PdfaClause::XmpMissing));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn check_pdfa(&self, level: pdfrum_doc::PdfaLevel) -> pdfrum_doc::PdfaReport {
+        let mut diags = Diagnostics::default();
+        let report = pdfrum_doc::pdfa::check(
+            level,
+            &self.catalog(),
+            self.inner.trailer(),
+            &self.inner,
+            &self.limits,
+            &mut diags,
+        );
+        self.note(&diags);
+        report
+    }
+
     #[cfg(feature = "forms")]
     /// The document's interactive form, if it has one.
     ///

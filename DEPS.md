@@ -497,6 +497,41 @@ It found a real defect on its first run: `pdfrum_page` had been both a type and
 a function, which C has one namespace for, and the accessor is now
 `pdfrum_document_page`.
 
+## The PDF/A oracle (M26 phase 2) — a tool, and the first that needs a JVM
+
+`Document::check_pdfa` is scored against **veraPDF**, the reference
+implementation of ISO 19005, exactly as the conformance board scores rendering
+against `pdfium_test`. Like the row above it, this is a `PATH` binary and not a
+dependency: it appears in no `Cargo.toml`, is not in the lock file, and nothing
+is compiled against it.
+
+| Tool | Version | Install | Why, and what it is not |
+|---|---|---|---|
+| `verapdf` | 1.30.2 | download `https://software.verapdf.org/releases/verapdf-installer.zip` (32 MB), unzip, and run `java -jar verapdf-greenfield-<version>/verapdf-izpack-installer-<version>.jar -console`, answering `1` to continue and `O` to confirm the target path. Never into the repository. | The oracle for `crates/pdfrum/tests/pdfa_oracle.rs`. `$PDFRUM_VERAPDF` names the installed launcher; unset, the oracle half of that test **skips with a printed note**, and set-but-broken **fails** — the two cases are kept apart because a silently skipping oracle is a false green. A contributor who never touches the PDF/A checker never needs it. |
+
+**It is a Java tool, and that is new here.** No other tool in this repository
+needs a JVM; `cbindgen`, `cargo-c` and `cargo-deny` are Rust binaries and the
+C compiler is the platform's. Calling that out rather than slipping it in:
+running the PDF/A oracle means installing a JRE (openjdk 21 is what it was
+developed against), which is a heavier ask than `cargo install`. That is
+precisely why it is optional at test time and why the checker's other two
+tests — which cover all 44 corpus documents at both levels — need nothing but
+`cargo`.
+
+It does **not** run in CI. `.github/workflows/ci.yml` is blocked on account
+billing, unrelated to this work, so the oracle comparison is a local gate and
+`docs/design/pdfa.md` §6 carries the divergence table from the run that
+produced it.
+
+It earned the JVM on its first scored run, which is the argument for keeping
+it: 34 disagreements, every one a defect on our side. Ten wrong ISO citations,
+a whole clause that is not an ISO 19005 requirement at all, and four checks
+that enforced the *popular summary* of a rule rather than the rule — a
+mandatory output intent, a ban on constant alpha, a `/CIDSet` A-2 does not
+require, and one clause conflating LZW with JPEG 2000. None of that was
+visible from reading the specification, which is exactly what an oracle is
+for.
+
 ## The web binding (M22 phase 4)
 
 `crates/pdfrum-wasm` builds the WebAssembly module and the JavaScript that

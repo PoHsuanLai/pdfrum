@@ -36,6 +36,11 @@ use pdfrum::*;
 /// Snapshot path, rustdoc enum path, facade name. The derivation index.
 const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum.txt", "pdfrum::Error", "Error"),
+    // `Rotation` is `pdfrum_page`'s and reaches the facade as a re-export, so
+    // it is derived from `pdfrum-page.txt` below and not from `pdfrum.txt`,
+    // which no longer declares an enum of that name. The stale duplicate row
+    // here derived zero variants while the four constructions still counted,
+    // which is why this gate was four short once the baseline was regenerated.
     ("pdfrum.txt", "pdfrum::Update", "Update"),
     ("pdfrum.txt", "pdfrum::StampPosition", "StampPosition"),
     ("pdfrum.txt", "pdfrum::FlattenMode", "FlattenMode"),
@@ -52,6 +57,12 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ),
     ("pdfrum-common.txt", "pdfrum_common::Operation", "Operation"),
     ("pdfrum-common.txt", "pdfrum_common::Severity", "Severity"),
+    // M26's PDF/A checker. The three enums live in `pdfrum-doc` and are
+    // re-exported from the facade under `Pdfa*` names, so the snapshot path is
+    // the owning crate's and the construction below is the facade's.
+    ("pdfrum-doc.txt", "pdfrum_doc::pdfa::Level", "PdfaLevel"),
+    ("pdfrum-doc.txt", "pdfrum_doc::pdfa::Clause", "PdfaClause"),
+    ("pdfrum-doc.txt", "pdfrum_doc::pdfa::Subject", "PdfaSubject"),
     ("pdfrum-doc.txt", "pdfrum_doc::Subtype", "Subtype"),
     ("pdfrum-doc.txt", "pdfrum_doc::FocusBox", "FocusBox"),
     ("pdfrum-doc.txt", "pdfrum_doc::form::FieldKind", "FieldKind"),
@@ -674,6 +685,50 @@ fn construct_default_feature_variants() -> usize {
     };
     n += 1;
 
+    // pdfrum::PdfaLevel — 2
+    let _ = pdfrum::PdfaLevel::A1b;
+    let _ = pdfrum::PdfaLevel::A2b;
+    n += 2;
+
+    // pdfrum::PdfaSubject — 5. `Object` and `Resource` carry data; the
+    // snapshot counts variants, so each is constructed once with a value.
+    let _ = pdfrum::PdfaSubject::Document;
+    let _ = pdfrum::PdfaSubject::Catalog;
+    let _ = pdfrum::PdfaSubject::Page(0);
+    let _ = pdfrum::PdfaSubject::Object(pdfrum::ObjRef::new(1, 0));
+    let _ = pdfrum::PdfaSubject::Resource {
+        page: 0,
+        name: String::new(),
+    };
+    n += 5;
+
+    // pdfrum::PdfaClause — 23
+    let _ = pdfrum::PdfaClause::FontNotEmbedded;
+    let _ = pdfrum::PdfaClause::FontSubsetIncomplete;
+    let _ = pdfrum::PdfaClause::FontEncodingInvalid;
+    let _ = pdfrum::PdfaClause::Encrypted;
+    let _ = pdfrum::PdfaClause::JavaScript;
+    let _ = pdfrum::PdfaClause::ForbiddenAction;
+    let _ = pdfrum::PdfaClause::EmbeddedMultimedia;
+    let _ = pdfrum::PdfaClause::XmpMissing;
+    let _ = pdfrum::PdfaClause::XmpMalformed;
+    let _ = pdfrum::PdfaClause::XmpIdentificationMissing;
+    let _ = pdfrum::PdfaClause::XmpIdentificationMismatch;
+    let _ = pdfrum::PdfaClause::XmpInfoMismatch;
+    let _ = pdfrum::PdfaClause::OutputIntentMissing;
+    let _ = pdfrum::PdfaClause::OutputIntentProfileMissing;
+    let _ = pdfrum::PdfaClause::AnnotationFlagsIllegal;
+    let _ = pdfrum::PdfaClause::AnnotationSubtypeForbidden;
+    let _ = pdfrum::PdfaClause::AnnotationAppearanceMissing;
+    let _ = pdfrum::PdfaClause::ExternalContentReference;
+    let _ = pdfrum::PdfaClause::Transparency;
+    let _ = pdfrum::PdfaClause::DeviceColorWithoutOutputIntent;
+    let _ = pdfrum::PdfaClause::OptionalContent;
+    let _ = pdfrum::PdfaClause::EmbeddedFile;
+    let _ = pdfrum::PdfaClause::LzwFilter;
+    let _ = pdfrum::PdfaClause::JpxFilter;
+    n += 24;
+
     n
 }
 
@@ -779,8 +834,13 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 326, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 38, "default-feature enum count");
+    // 324 -> 357. The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
+    // the facade; M26's `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
+    // `pdfrum-doc`'s and counted in the member-crate half below, not here.
+    // The duplicate `Rotation` block (4) that survived the type's move to
+    // `pdfrum-page` is gone from this half and constructed there instead.
+    assert_eq!(constructed, 357, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 41, "default-feature enum count");
 }
 
 #[test]

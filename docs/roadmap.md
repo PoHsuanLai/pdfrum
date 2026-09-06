@@ -269,6 +269,47 @@ already long; the two cross-reference.
 
 ## M26 — PDF/A: the checker first, the conversion second
 
+**Parts 1 and 2 are met. Parts 3 and 4 are explicitly deferred to a later
+pass**, which is the order this entry asks for: report before repair.
+
+- **Part 1, met.** `Document::check_pdfa(level)` in the default feature set,
+  over `crates/pdfrum-doc/src/pdfa/`. `PdfaLevel` is an enum with `A1b` and
+  `A2b` and no variant for the `a` levels, so a caller cannot ask for a check
+  weaker than its name; `PdfaClause` is an enum with 24 variants and an
+  `iso(level)` citation; `PdfaSubject` names the `ObjRef`, page or named
+  resource rather than formatting it into a sentence. **No new dependency in
+  any tree** — the XMP identification subset is read directly per STYLE.md §5
+  — which is why it needs no feature gate.
+- **Part 2, met.** veraPDF 1.30.2 is the oracle, in
+  `crates/pdfrum/tests/pdfa_oracle.rs`, scored over the 44-document corpus at
+  both levels. `$PDFRUM_VERAPDF` unset skips loudly; set-but-broken fails.
+  The divergence table is in `docs/design/pdfa.md` §6, adjudicated rather
+  than tuned away. DEPS.md records the install and calls out that it is the
+  first tool here needing a JVM, and that CI cannot run it.
+
+  The oracle paid for itself immediately: the first scored run found **34
+  disagreements, every one a defect on our side** — ten wrong ISO citations, a
+  clause that is not an ISO 19005 requirement at all, and four checks that
+  enforced the popular summary of a rule rather than the rule. The checker was
+  corrected, not the test. What remains is 8 clause-pairs over 82 scored
+  pairs, covering four distinct requirements: one **ours right**, one family
+  **theirs right** (font embedding is scoped to fonts *used*, which needs an
+  interpreter we do not have), and one **not determined** (veraPDF's A-1
+  profile has no JPEG 2000 rule to compare against). Six further pairs are
+  unscored because veraPDF declines to parse three `shading_*` files our
+  parser opens.
+- **Part 3 (`to_pdfa`) and part 4 (the conversion policy): not started.**
+- **Named debt**, all in `docs/design/pdfa.md` §4: the checker reads the
+  object graph and not content-stream operands, so inline colour and
+  `gs`-less transparency are invisible to it; CMap embedding, glyph-presence
+  and width-agreement checks are unimplemented; an output intent's ICC stream
+  is checked for presence but not parsed; A-2's conditional permission for
+  embedded PDF/A attachments is not verified, so an A-2 check permits every
+  embedded file. Every one of these makes the checker report *fewer*
+  violations than veraPDF, never one veraPDF does not see — which is the
+  direction the oracle test asserts.
+
+
 Archival conformance is where institutions actually buy, and no Rust crate
 converts an existing document. It is also a specification with dozens of
 independent requirements, where claiming compliance you do not have is worse
