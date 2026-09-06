@@ -203,6 +203,9 @@ names! {
     EXT_G_STATE = "ExtGState";
     /// The marked-content property resource category (`/Properties`).
     PROPERTIES = "Properties";
+    /// The shading resource category (`/Shading`), which the `sh` operator
+    /// names its shading in.
+    SHADING = "Shading";
     /// A form's, pattern's or shading's coordinate mapping (`/Matrix`).
     MATRIX = "Matrix";
     /// A form's or pattern's clipping rectangle (`/BBox`).

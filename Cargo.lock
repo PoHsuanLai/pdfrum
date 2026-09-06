@@ -1940,7 +1940,9 @@ dependencies = [
  "peniko",
  "png",
  "rayon",
+ "resvg",
  "thiserror",
+ "usvg",
 ]
 
 [[package]]

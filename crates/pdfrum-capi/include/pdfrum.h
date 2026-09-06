@@ -61,6 +61,10 @@ enum pdfrum_code
     // A limit in `pdfrum_limits` — pixels, time, or a parser bound — was
     // reached. A cancelled operation reports this code.
     PDFRUM_CODE_LIMIT = 9,
+    // An SVG handed to the library would not resolve. Only reachable in a
+    // build whose facade carries the `svg-ingest` feature; the number is the
+    // facade's either way.
+    PDFRUM_CODE_SVG = 10,
     // A pointer this library requires was null, an index was out of range, or
     // a string was not UTF-8. The caller's contract was not met; the library
     // answered rather than crashed.
