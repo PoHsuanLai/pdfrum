@@ -178,9 +178,25 @@ Two comparisons are run:
 Seven of the 44 bench-corpus documents are not in the conformance corpus and
 have no golden (`forms_combo_box`, `forms_list_box`, `forms_number`,
 `forms_push_button`, `forms_signature`, `forms_text_field`,
-`mixed_formfield`). **37 are scored against the oracle**, and the test pins
-that count so an eighth unscored file fails rather than quietly shrinking the
-proof. `PDFRUM_GOLDENS` being unset is likewise a failure, not a skip.
+`mixed_formfield`). **37 are scored against the oracle.**
+
+### Where the store comes from, and what a missing one means
+
+`$PDFRUM_GOLDENS`, else the in-repo `conformance/goldens`. The store is **not
+committed**: it is generated locally from a built `pdfium_test`, and
+`.github/workflows/ci.yml` states outright that it will not do that
+multi-hour build. So a hosted runner has no goldens and the oracle half
+cannot run there.
+
+The test treats that as a missing *input*, not as a pass, and keeps two cases
+apart — collapsing them is exactly what produces a vacuous green:
+
+- **No store**: the oracle half is skipped with a note on stdout, and the
+  self-consistency half still runs over all 44 files with its floors enforced.
+  This is the CI configuration.
+- **A store that is present**: every file that has a golden must be scored,
+  and the count 37 is pinned. A broken lookup fails with `left: 0, right: 37`
+  rather than quietly shrinking the proof to nothing.
 
 ### Published floors — measured, not chosen
 
