@@ -40,6 +40,8 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum.txt", "pdfrum::Update", "Update"),
     ("pdfrum.txt", "pdfrum::StampPosition", "StampPosition"),
     ("pdfrum.txt", "pdfrum::FlattenMode", "FlattenMode"),
+    ("pdfrum.txt", "pdfrum::Paint", "Paint"),
+    ("pdfrum.txt", "pdfrum::Fill", "Fill"),
     ("pdfrum.txt", "pdfrum::Flattened", "Flattened"),
     ("pdfrum-common.txt", "pdfrum_common::DiagKind", "DiagKind"),
     (
@@ -199,6 +201,15 @@ fn construct_default_feature_variants() -> usize {
     let _ = Flattened::Done;
     let _ = Flattened::NothingToDo;
     n += 4;
+
+    // pdfrum::Paint — 3, pdfrum::Fill — 2
+    let stroke = Stroke::new(Color::BLACK, 1.0);
+    let _ = Paint::Fill(Color::BLACK);
+    let _ = Paint::Stroke(stroke);
+    let _ = Paint::FillStroke(Color::BLACK, stroke);
+    let _ = Fill::NonZero;
+    let _ = Fill::EvenOdd;
+    n += 5;
 
     // DiagKind — 102. Two variants carry a `u32` count.
     let diag: &[DiagKind] = &[
@@ -405,7 +416,12 @@ fn construct_default_feature_variants() -> usize {
         expected: 0,
         found: 0,
     };
-    n += 16;
+    let _ = SaveError::MissingGlyph(MissingGlyph {
+        character: 'a',
+        offset: 0,
+    });
+    let _ = SaveError::InlinePage(PageIndex::from(0u32));
+    n += 18;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -756,8 +772,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 317, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 35, "default-feature enum count");
+    assert_eq!(constructed, 324, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 37, "default-feature enum count");
 }
 
 #[test]

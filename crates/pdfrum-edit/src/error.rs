@@ -120,6 +120,20 @@ pub enum Error {
         found: usize,
     },
 
+    /// A drawing refused a character the font has no glyph for.
+    ///
+    /// Raised by [`EmbeddedFont::encode_checked`](crate::EmbeddedFont::encode_checked)
+    /// and by the facade's canvas, which encodes through it. A blank where a
+    /// glyph should be is a worse answer than a refusal, because nothing
+    /// downstream can tell the two apart.
+    #[error("cannot draw the text: {0}")]
+    MissingGlyph(#[from] crate::MissingGlyph),
+
+    /// A page written inline in its parent's `/Kids` has no object of its own
+    /// for an appended content stream to reach.
+    #[error("page {0} has no object of its own to draw on")]
+    InlinePage(PageIndex),
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),
