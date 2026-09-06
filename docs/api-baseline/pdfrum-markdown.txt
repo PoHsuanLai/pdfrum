@@ -10,11 +10,15 @@ pub pdfrum_markdown::ast::Block::Image::alt: alloc::string::String
 pub pdfrum_markdown::ast::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::ast::Block::List
 pub pdfrum_markdown::ast::Block::List::items: alloc::vec::Vec<alloc::string::String>
-pub pdfrum_markdown::ast::Block::List::ordered: bool
+pub pdfrum_markdown::ast::Block::List::marker: pdfrum_markdown::ast::ListMarker
 pub pdfrum_markdown::ast::Block::Paragraph(alloc::string::String)
 pub pdfrum_markdown::ast::Block::Table(alloc::vec::Vec<alloc::vec::Vec<alloc::string::String>>)
 impl pdfrum_markdown::ast::Block
 pub fn pdfrum_markdown::ast::Block::text(&self) -> alloc::string::String
+pub enum pdfrum_markdown::ast::ListMarker
+pub pdfrum_markdown::ast::ListMarker::Bullet
+pub pdfrum_markdown::ast::ListMarker::Labelled(alloc::vec::Vec<alloc::string::String>)
+pub pdfrum_markdown::ast::ListMarker::Ordered
 pub fn pdfrum_markdown::ast::lead_in(&str) -> core::option::Option<(&str, &str)>
 pub mod pdfrum_markdown::heuristics
 pub fn pdfrum_markdown::heuristics::blocks(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::DrawnImage], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
@@ -73,7 +77,7 @@ pub pdfrum_markdown::Block::Image::alt: alloc::string::String
 pub pdfrum_markdown::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::Block::List
 pub pdfrum_markdown::Block::List::items: alloc::vec::Vec<alloc::string::String>
-pub pdfrum_markdown::Block::List::ordered: bool
+pub pdfrum_markdown::Block::List::marker: pdfrum_markdown::ast::ListMarker
 pub pdfrum_markdown::Block::Paragraph(alloc::string::String)
 pub pdfrum_markdown::Block::Table(alloc::vec::Vec<alloc::vec::Vec<alloc::string::String>>)
 impl pdfrum_markdown::ast::Block

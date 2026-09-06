@@ -809,3 +809,99 @@ File as a cleanup suggestion, or drop it. The measurement is the value here.
 ### Acceptance
 
 Filed, or explicitly dropped.
+
+---
+
+## Markdown: tables come out as prose
+
+**Labels:** markdown, heuristics
+**Area:** `crates/pdfrum-markdown/src/heuristics.rs`
+
+### Context
+
+`pdfrum extract markdown benches/corpus/vector_en_tem.pdf` flattens the
+revision-history table to two prose lines:
+
+```
+Version Author Date Description
+
+- 0.1 Contents
+```
+
+`Block::Table` exists in the AST and `render.rs` writes it as a GFM pipe
+table; nothing ever constructs one on the heuristic path. Only the tagged
+path (`tagged.rs`, `"TABLE"`) does, and none of the corpus fixtures checked
+here is tagged.
+
+### Problem
+
+There is no table detection from geometry. The work splits three ways, and
+only the first two are reachable without a model.
+
+**Tier 1 — wired (ruled) tables from vector geometry.** `~/MinerU-rs/crates/
+mineru-table/` needs a UNet only because it works from a rasterized page and
+must infer where the ruling lines are from pixels. We do not have that
+problem: `pdfrum-page` exposes ruling lines as literal path objects with
+exact coordinates, so we can produce a *better* line set than the model by
+reading the content stream, then feed MinerU's classical recovery unchanged.
+That is replacing an estimate with ground truth, not lossy distillation.
+
+Everything needed is already public and needs no change to `pdfrum-page` and
+no new dependency (`kurbo` is already a dependency of this crate):
+
+- `PageObject::Path(Box<Content<PathObject>>)` — `page.rs:254`.
+- `PathObject { path: BezPath, matrix: Affine, fill_rule: FillRule, stroke:
+  bool }` — `page.rs:96`. Page-space geometry is `matrix * path`; the
+  bounding box is `matrix.transform_rect_bbox(path.bounding_box())`, the
+  idiom `lines.rs:164` already uses for images.
+- `Content::state.stroke_params.width` for thickness and
+  `state.fill`/`state.stroke` to drop white or faint rules.
+- `lines.rs:109` `ObjectFacts::from_page` already walks every object and
+  discards `PageObject::Path(_)`; a parallel `paths` field slots in beside
+  `images`. It recurses into forms **without** accumulating
+  `FormObject.matrix`, so a parent `Affine` must be threaded through
+  `collect` for rules drawn inside a form.
+
+What to port, cited file by file, from `~/MinerU-rs/crates/mineru-table/`:
+`unet/recover.rs` (383 lines, logical grid inference from cell rectangles)
+and `unet/postprocess.rs` (309 lines, assembly with rowspan/colspan).
+`unet/extract.rs`'s morphology and connected-component labelling is *not*
+needed — it exists to turn a predicted mask into rectangles, and we have the
+rectangles. `matching.rs` (OCR-to-cell matching) has an analogue worth
+reading: ours matches extracted `Line`s to cells, which is easier because we
+have exact text positions. Do **not** port `unet/model.rs` or anything under
+`generated/` — those are the network.
+
+**Tier 2 — borderless tables by column alignment.** Text at consistent
+x-positions across several rows, the classical pdfplumber/camelot approach.
+Covers most business documents; fails on merged cells and ragged rows.
+
+**Declined — irregular borderless tables.** MinerU answers these with
+SLANet, a CNN plus attention decoder emitting HTML structure tokens end to
+end. There is no mask to substitute with ground truth, so nothing about it
+is portable. This crate takes no model weights and no ML dependency, so
+irregular borderless tables are out of scope, permanently, by design.
+
+### Why this was filed rather than built in the markdown-quality pass
+
+The named fixture would not have been fixed by either buildable tier.
+`vector_en_tem.pdf`'s revision-history table has no ruling lines (tier 1
+does not apply) and its one data row is ragged — four headers, `Version
+Author Date Description`, against a two-cell row `0.1 Contents`, as
+`extract text --layout` shows. Column alignment cannot recover a row whose
+cells do not line up under the headers, so tier 2 does not apply either.
+It is precisely the irregular borderless case that is declined above.
+
+Building tier 1 is worthwhile on its own merits — ruled tables are common —
+but it is a project rather than part of a pass, and it would have shown no
+improvement on any fixture that pass was measured against.
+
+### Proposed fix
+
+Tier 1 as its own change, on a fixture with a ruled table. Then tier 2,
+scoped separately.
+
+### Acceptance
+
+A ruled table in a corpus fixture comes out as a GFM pipe table with the
+right number of rows and columns, and no currently-clean fixture regresses.

@@ -33,7 +33,7 @@ use kurbo::Rect;
 use pdfrum_doc::structure::{Kid, StructElement, StructTree};
 use pdfrum_object::Resolve;
 
-use crate::ast::Block;
+use crate::ast::{Block, ListMarker};
 use crate::heuristics::{join, normalize, strip_bullet};
 use crate::lines::{DrawnImage, McidText, Run};
 
@@ -138,7 +138,12 @@ fn visit<R: Resolve>(
                 }
             }
             if !items.is_empty() {
-                out.push(Block::List { ordered, items });
+                let marker = if ordered {
+                    ListMarker::Ordered
+                } else {
+                    ListMarker::Bullet
+                };
+                out.push(Block::List { marker, items });
             }
         }
         "TABLE" => {

@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use crate::ast::{Block, lead_in};
+use crate::ast::{Block, ListMarker, lead_in};
 
 /// The blocks as Markdown, blank-line separated, ending in one newline;
 /// every image is `![alt](image)`.
@@ -40,14 +40,26 @@ pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String
                 }
                 out.push('\n');
             }
-            Block::List { ordered, items } => {
+            Block::List { marker, items } => {
                 for (i, item) in items.iter().enumerate() {
-                    if *ordered {
-                        let _ = write!(out, "{}. ", i + 1);
-                    } else {
-                        out.push_str("- ");
+                    match marker {
+                        ListMarker::Bullet => out.push_str("- "),
+                        ListMarker::Ordered => {
+                            let _ = write!(out, "{}. ", i + 1);
+                        }
+                        // The document's own label. Markdown numbers an
+                        // ordered list itself and cannot be told to write
+                        // `2.1`, so the label goes in the text of a bullet
+                        // item: the words on the page, in the page's order.
+                        ListMarker::Labelled(labels) => {
+                            out.push_str("- ");
+                            if let Some(label) = labels.get(i) {
+                                out.push_str(&escape(label.trim()));
+                                out.push(' ');
+                            }
+                        }
                     }
-                    out.push_str(&escape(item.trim()));
+                    out.push_str(&escape_inline(item.trim()));
                     out.push('\n');
                 }
             }
@@ -146,7 +158,7 @@ fn escape_from(text: &str, at_line_start: bool) -> String {
 mod tests {
     use super::{render, render_with_images};
 
-    use crate::ast::Block;
+    use crate::ast::{Block, ListMarker};
 
     #[test]
     fn every_block_kind_renders_as_expected() {
@@ -158,7 +170,7 @@ mod tests {
             Block::Paragraph("Some *text* here.".into()),
             Block::Paragraph("**Redaction** - Lets you *remove* text.".into()),
             Block::List {
-                ordered: true,
+                marker: ListMarker::Ordered,
                 items: vec!["one".into(), "two".into()],
             },
             Block::Code("let a = `b`;".into()),
