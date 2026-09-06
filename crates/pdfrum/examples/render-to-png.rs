@@ -68,7 +68,9 @@ fn run(input: &Path, out_dir: &Path, scale: f64) -> Result<usize, Box<dyn std::e
 /// Encode a pixmap as an RGBA PNG.
 ///
 /// `to_straight_rgba` un-premultiplies, which is what every image format
-/// outside a compositor expects.
+/// outside a compositor expects. `Pixmap::save_png` does the same thing
+/// behind the `png` feature; this is the long way round on purpose, for a
+/// caller who brings their own encoder.
 fn write_png(path: &PathBuf, pixmap: &Pixmap) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create(path)?;
     let mut encoder = png::Encoder::new(file, pixmap.width(), pixmap.height());

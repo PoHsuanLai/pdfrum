@@ -1201,6 +1201,14 @@ mod tests {
 impl Pixmap {
     /// The pixmap as a PNG file's bytes: eight-bit RGBA, unpremultiplied.
     ///
+    /// The alpha is undone on the way out because PNG's is *straight*
+    /// (ISO 15948 §6.2) and this buffer's is premultiplied. A viewer
+    /// multiplies by alpha when it composites, so writing the premultiplied
+    /// bytes would darken every partly transparent pixel a second time --
+    /// a 50% red would leave here as `128,0,0,128` and land as `64,0,0`.
+    /// Fully opaque pixels are identical either way, which is why this is
+    /// invisible on most pages.
+    ///
     /// # Errors
     ///
     /// [`Error::Png`](crate::Error::Png) when the encoder refuses the dimensions.
@@ -1210,7 +1218,7 @@ impl Pixmap {
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
-        writer.write_image_data(&self.data)?;
+        writer.write_image_data(&self.to_straight_rgba())?;
         writer.finish()?;
         Ok(out)
     }
@@ -1244,6 +1252,39 @@ mod png_tests {
             (info.width, info.height, info.color_type),
             (2, 1, png::ColorType::Rgba)
         );
-        assert_eq!(out.get(..info.buffer_size()), Some(pixmap.data()));
+        // Straight alpha, not the buffer's own premultiplied bytes: the
+        // second pixel is stored `0,0,255,128` and must land `0,0,255,128`
+        // only because its colour is already at full intensity under that
+        // alpha. See `unpremultiplied_alpha_is_what_reaches_the_file`.
+        assert_eq!(
+            out.get(..info.buffer_size()),
+            Some(pixmap.to_straight_rgba().as_slice())
+        );
+    }
+
+    /// PNG's alpha is straight and this buffer's is premultiplied, so the
+    /// conversion has to happen on the way out.
+    ///
+    /// The regression: `encode_png` wrote `self.data` verbatim while its own
+    /// documentation said "unpremultiplied", so every partly transparent
+    /// pixel came out darkened -- a viewer multiplies by alpha again when it
+    /// composites. Opaque pixels are identical either way, which is why no
+    /// golden caught it.
+    #[test]
+    fn unpremultiplied_alpha_is_what_reaches_the_file() {
+        // Half-alpha red: premultiplied storage is 128,0,0,128; the file must
+        // carry 255,0,0,128.
+        let pixmap = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 128));
+        assert_eq!(pixmap.data(), &[128, 0, 0, 128], "stored premultiplied");
+
+        let decoder = png::Decoder::new(std::io::Cursor::new(pixmap.encode_png().unwrap()));
+        let mut reader = decoder.read_info().unwrap();
+        let mut out = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut out).unwrap();
+        assert_eq!(
+            out.get(..info.buffer_size()),
+            Some([255, 0, 0, 128].as_slice()),
+            "the file must carry straight alpha"
+        );
     }
 }
