@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#ffffff"/>
+  <text x="20" y="70" font-family="Roboto" font-size="30" fill="#cc2200">
+    Two<tspan fill="#0044cc" dx="6">Runs</tspan>
+  </text>
+  <text x="20" y="140" font-family="Roboto" font-size="26" fill="#111111"
+        transform="rotate(-12 20 140)">Turned</text>
+</svg>

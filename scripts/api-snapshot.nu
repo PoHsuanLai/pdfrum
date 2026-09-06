@@ -115,6 +115,17 @@ def published-libs []: nothing -> list<string> {
 #   - `pdfrum --features svg` does. It puts `to_svg`/`to_svg_on` on the
 #     facade's page types and a `svg` module beside them — the whole point of
 #     the feature is that surface, and no other file records it.
+#   - `pdfrum --features svg-ingest` does, and had no row until 2026-09-07,
+#     which is how `Canvas::draw_svg`, `SvgFit`, `SvgIngestReport` and
+#     `Unsupported` shipped in M25 without the gate ever seeing them. The
+#     ingestion direction is a different surface from the export one — a
+#     `Canvas` producer rather than a `Page` method — so it is its own file
+#     rather than folded into `pdfrum+svg`.
+#   - `pdfrum --features svg-text` does. It adds exactly one type, `SvgFonts`,
+#     and one method, `DocEdit::set_svg_fonts`, and those two are the whole
+#     contract by which a caller decides what an ingested `<text>` is set in.
+#     A separate file because the feature is separately payable: it is the one
+#     that costs a second font stack.
 #   - `pdfrum-render/profiling` does not. It is a profiling switch, not a
 #     surface offered to callers.
 #   - `pdfrum-form/javascript` does, but its items are the same ones
@@ -130,6 +141,8 @@ const FEATURED = [
     {file: 'pdfrum+png', crate: 'pdfrum', features: 'png'}
     {file: 'pdfrum+markdown', crate: 'pdfrum', features: 'markdown'}
     {file: 'pdfrum+svg', crate: 'pdfrum', features: 'svg'}
+    {file: 'pdfrum+svg-ingest', crate: 'pdfrum', features: 'svg-ingest'}
+    {file: 'pdfrum+svg-text', crate: 'pdfrum', features: 'svg-text'}
     {file: 'pdfrum+tinyskia+agg', crate: 'pdfrum', features: 'tinyskia,agg'}
     {file: 'pdfrum-page+codecs', crate: 'pdfrum-page', features: 'jpx,jbig2,ccitt'}
     {file: 'pdfrum-filters+ccitt', crate: 'pdfrum-filters', features: 'ccitt'}
