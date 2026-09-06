@@ -18,7 +18,12 @@
 //! - **Images.** An image drawn at least 4 pt on each side is a picture and
 //!   becomes a [`Block::Image`], placed before the first line that lies
 //!   below its centre and overlaps it across — after every line when none
-//!   does — and ending whatever paragraph or list was open. Smaller is a
+//!   does — and ending whatever paragraph or list was open. An untagged
+//!   document says nothing about what a picture shows, so its alternative
+//!   text is the only thing the page does say — which image it is, and how
+//!   big it was drawn — which is enough to tell two apart and to know a
+//!   full-page scan from an icon. A tagged document's `/Alt` is better and
+//!   [`crate::tagged`] uses it. Smaller is a
 //!   rule, a spacer or a tracking dot, and is not.
 //! - **Body size.** The font size most characters use, rounded to a half
 //!   point.
@@ -27,7 +32,12 @@
 //!   `###`.
 //! - **Code.** Lines in a monospaced font, kept line by line.
 //! - **Lists.** A line starting with a bullet, or a number followed by a
-//!   point or a bracket.
+//!   point or a bracket — `1.`, `2)` — or a section number of several
+//!   parts, `2.1` or `5.4.2`, closed by the space before its text. When
+//!   every item of a run carries a number, the document's own numbers are
+//!   kept: they are what a cross-reference points at, and a renderer that
+//!   numbered from one would write the wrong section. Items with no
+//!   numbers of their own are numbered by the Markdown renderer.
 //! - **Paragraphs.** Consecutive body lines join with a space; a line ending
 //!   in a hyphen followed by a lower-case letter is de-hyphenated; a
 //!   vertical gap of more than 0.8 line heights, or a size change, starts
@@ -42,6 +52,16 @@
 //!     last line met by an unlucky wrap, and joins; a short line followed
 //!     by a capital is one paragraph ending and the next beginning, so a
 //!     run of one-line paragraphs comes out one each.
+//!   - *Alignment.* A wrapped line keeps some edge of the one above it:
+//!     its left in a left-aligned or justified column, its right in a
+//!     right-aligned one, or — a hanging indent — it starts inside a
+//!     predecessor that reached the body's right edge and had to wrap.
+//!     When both edges move and the line above stopped short, each line
+//!     was placed on its own — centred, or tabbed — and neither wraps
+//!     into the other.
+//!   - *Dot leaders.* A line whose text ends in a leader and a target is
+//!     a table-of-contents entry, complete in itself, and never wraps
+//!     into the next however its edges line up.
 //!   - *Lead-in.* A line that opens bold and turns plain, or whose first
 //!     six words at most are a capitalised phrase — the first word and at
 //!     least half of them — closed by ` - ` or ` – `, begins a paragraph
@@ -56,7 +76,7 @@
 
 use kurbo::Rect;
 
-use crate::ast::Block;
+use crate::ast::{Block, ListMarker};
 use crate::lines::{DrawnImage, Line};
 
 /// The fraction of the page height at each edge that is margin.
@@ -84,6 +104,9 @@ const RAGGED_CHARS: f64 = 2.0;
 /// Lines whose left edges are within this many character widths share a
 /// column.
 const LEFT_EDGE_CHARS: f64 = 1.0;
+/// Lines whose left *and* right edges both move by more than this many
+/// character widths were each placed on their own, not wrapped.
+const ALIGNED_EDGE_CHARS: f64 = 1.0;
 /// A lead-in has at most this many words before its dash.
 const LEAD_IN_MAX_WORDS: usize = 6;
 /// A run of this many dots is a leader, not an ellipsis.
@@ -141,12 +164,12 @@ pub fn blocks_among(
     for item in place_images(&classified, images) {
         match item {
             Item::Line(class, line) => run.push((class, line)),
-            Item::Image(index) => {
+            Item::Image(image) => {
                 blocks.extend(group(&run, &bodies));
                 run.clear();
                 blocks.push(Block::Image {
-                    alt: String::new(),
-                    index: Some(index),
+                    alt: image_alt(&image),
+                    index: Some(image.index),
                 });
             }
         }
@@ -159,7 +182,21 @@ pub fn blocks_among(
 #[derive(Debug, Clone, Copy)]
 enum Item<'a> {
     Line(Class, &'a Line),
-    Image(usize),
+    Image(DrawnImage),
+}
+
+/// An untagged image's alternative text. The document said nothing about
+/// what it shows — that is what tagging is for — so the only honest
+/// description is the one thing the page does say: which image it is and
+/// how big it was drawn, rounded to the point. That is enough for a reader
+/// to tell two pictures apart and to know a full-page scan from an icon.
+fn image_alt(image: &DrawnImage) -> String {
+    format!(
+        "Image {} ({}x{})",
+        image.index + 1,
+        image.bbox.width().round(),
+        image.bbox.height().round(),
+    )
 }
 
 /// The lines with the pictures among them — the images at least
@@ -167,7 +204,7 @@ enum Item<'a> {
 /// below its centre and overlaps it across, else before the first line
 /// below it at all, else after every line.
 fn place_images<'a>(classified: &[(Class, &'a Line)], images: &[DrawnImage]) -> Vec<Item<'a>> {
-    let mut placed: Vec<(usize, usize)> = images
+    let mut placed: Vec<(usize, DrawnImage)> = images
         .iter()
         .filter(|image| image.bbox.width().min(image.bbox.height()) >= IMAGE_MIN_SIDE)
         .map(|image| {
@@ -179,19 +216,19 @@ fn place_images<'a>(classified: &[(Class, &'a Line)], images: &[DrawnImage]) -> 
                 .position(|(_, line)| below(line) && across(line))
                 .or_else(|| classified.iter().position(|(_, line)| below(line)))
                 .unwrap_or(classified.len());
-            (at, image.index)
+            (at, *image)
         })
         .collect();
-    placed.sort_unstable();
+    placed.sort_by_key(|(at, image)| (*at, image.index));
     let mut out = Vec::with_capacity(classified.len() + placed.len());
     let mut pictures = placed.into_iter().peekable();
     for (at, &(class, line)) in classified.iter().enumerate() {
-        while let Some((_, index)) = pictures.next_if(|(slot, _)| *slot == at) {
-            out.push(Item::Image(index));
+        while let Some((_, image)) = pictures.next_if(|(slot, _)| *slot == at) {
+            out.push(Item::Image(image));
         }
         out.push(Item::Line(class, line));
     }
-    out.extend(pictures.map(|(_, index)| Item::Image(index)));
+    out.extend(pictures.map(|(_, image)| Item::Image(image)));
     out
 }
 
@@ -364,20 +401,59 @@ pub(crate) fn strip_bullet(text: &str) -> &str {
     }
 }
 
-fn starts_with_number(text: &str) -> bool {
-    let digits: String = text.chars().take_while(char::is_ascii_digit).collect();
-    if digits.is_empty() || digits.len() > 3 {
-        return false;
+/// The number a line opens with, when it opens with one: `1.`, `2)`, and
+/// the section numbers `2.1` and `5.4.2` that a table of contents and a
+/// numbered heading carry. Each group is at most three digits, and the
+/// label is closed by a point, a bracket or — for a multi-part number —
+/// by the space before the text.
+fn leading_number(text: &str) -> Option<&str> {
+    let mut end = 0;
+    let mut groups = 0;
+    loop {
+        let digits = text
+            .get(end..)?
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .count();
+        if digits == 0 || digits > 3 {
+            return None;
+        }
+        end += digits;
+        groups += 1;
+        match text.get(end..)?.chars().next() {
+            // A point may close the label or join the next group; a digit
+            // after it means another group.
+            Some('.')
+                if text
+                    .get(end + 1..)?
+                    .starts_with(|c: char| c.is_ascii_digit()) =>
+            {
+                end += 1;
+            }
+            Some(c @ ('.' | ')')) => {
+                let closed = text.get(end + c.len_utf8()..)?;
+                return (closed.starts_with(char::is_whitespace) && !closed.trim().is_empty())
+                    .then(|| text.get(..end + c.len_utf8()))?;
+            }
+            // `2.1 Background`: the space closes a multi-part number.
+            Some(c) if c.is_whitespace() && groups > 1 => {
+                return (!text.get(end..)?.trim().is_empty()).then(|| text.get(..end))?;
+            }
+            _ => return None,
+        }
     }
-    let rest = &text[digits.len()..];
-    let mut chars = rest.chars();
-    matches!(chars.next(), Some('.' | ')')) && chars.next().is_some_and(char::is_whitespace)
+}
+
+fn starts_with_number(text: &str) -> bool {
+    leading_number(text).is_some()
 }
 
 /// Bullet or number stripped.
 fn item_text(text: &str) -> String {
-    let rest = text
-        .trim_start_matches(|c: char| c.is_ascii_digit() || is_bullet(c) || matches!(c, '.' | ')'));
+    let rest = match leading_number(text) {
+        Some(label) => text.get(label.len()..).unwrap_or_default(),
+        None => text.trim_start_matches(is_bullet),
+    };
     rest.trim_start().to_owned()
 }
 
@@ -468,6 +544,15 @@ fn column_right_edge(line: &Line, bodies: &[&Line]) -> f64 {
         .fold(line.bbox.x1, f64::max)
 }
 
+/// The furthest right any body line on the page reaches: the right edge a
+/// wrapped line must have run into.
+fn page_right_edge(bodies: &[&Line]) -> f64 {
+    bodies
+        .iter()
+        .map(|line| line.bbox.x1)
+        .fold(f64::NEG_INFINITY, f64::max)
+}
+
 /// Whether `prev` is its paragraph's last line: it stops short of `edge`,
 /// the column's right edge, and `next` opens with a capital or a digit. A
 /// short line met by a lower-case word is a justified paragraph's last
@@ -481,6 +566,56 @@ fn ends_ragged(prev: &Line, next: &Line, edge: f64) -> bool {
             .chars()
             .next()
             .is_some_and(|c| c.is_uppercase() || c.is_ascii_digit())
+}
+
+/// Whether `prev` and `next` were laid out as one wrapped column: a
+/// wrapped line keeps *some* edge — a left-aligned or justified paragraph
+/// keeps its left, a right-aligned one its right, and a centred pair of
+/// lines the same length keeps both. When both edges move, each line was
+/// placed on its own — centred, right-aligned or tabbed — and neither
+/// wraps into the other.
+///
+/// This is what a page of `text_tcpdf_063.pdf` needs: nine left-aligned
+/// lines break on the ragged-right rule, and the centred, right-aligned
+/// and justified blocks below them, whose every line starts and ends
+/// somewhere else, used to run together into one paragraph because no
+/// column edge could be measured for them.
+fn shares_an_edge(prev: &Line, next: &Line, edge: f64) -> bool {
+    let reach = char_width(prev).max(char_width(next)) * ALIGNED_EDGE_CHARS;
+    let same_left = (prev.bbox.x0 - next.bbox.x0).abs() <= reach;
+    let same_right = (prev.bbox.x1 - next.bbox.x1).abs() <= reach;
+    // A hanging indent — a wrapped cell in a two-column definition list —
+    // shares neither edge, and is still a continuation. What marks it is
+    // that the line it continues *ran out of room*: it reached the body's
+    // right edge and had to wrap. A centred line stops well short of that
+    // edge, so a shorter centred line that happens to sit inside its
+    // predecessor's span is not mistaken for one.
+    let wrapped = prev.bbox.x1 >= edge - char_width(prev) * RAGGED_CHARS;
+    let indented = wrapped && next.bbox.x0 > prev.bbox.x0 + reach && next.bbox.x1 <= prev.bbox.x1;
+    same_left || same_right || indented
+}
+
+/// Whether a line is a table-of-contents entry: text, a dot leader, and a
+/// page number at the end. [`normalize`] has not run yet, so the leader is
+/// still the producer's own run of dots.
+///
+/// Such a line is complete in itself and never wraps into the next, which
+/// is what `vector_en_tem.pdf`'s `2.1 Background ... 4` needs: those
+/// entries share a left edge *and*, the leaders reaching the same page
+/// number column, a right edge, so no other rule tells them apart.
+fn is_leader_entry(text: &str) -> bool {
+    // The entry's target: the page number, or a producer's `错误!未定义书签。`
+    // where the reference broke. Whatever it is, it does not contain a dot,
+    // so the leader is the run of dots and spaces just before it.
+    let head = text
+        .trim_end()
+        .trim_end_matches(|c: char| c != '.' && c != ' ');
+    head.chars()
+        .rev()
+        .take_while(|c| *c == '.' || *c == ' ')
+        .filter(|c| *c == '.')
+        .count()
+        >= LEADER_MIN_DOTS
 }
 
 /// Whether the line's head begins a paragraph: a bold run that turns
@@ -564,11 +699,16 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
                 i = j;
             }
             Class::Bullet | Class::Numbered => {
-                let ordered = class == Class::Numbered;
+                let mut labels: Vec<String> = leading_number(&line.text)
+                    .map(|l| vec![l.trim_end_matches(')').to_owned()])
+                    .unwrap_or_default();
                 let mut items = vec![normalize(&item_text(&line.text))];
                 let mut j = i + 1;
                 while let Some((c, next)) = classified.get(j).copied() {
                     if c == class {
+                        if let Some(label) = leading_number(&next.text) {
+                            labels.push(label.trim_end_matches(')').to_owned());
+                        }
                         items.push(normalize(&item_text(&next.text)));
                     } else if c == Class::Body
                         && classified
@@ -585,7 +725,17 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
                     }
                     j += 1;
                 }
-                blocks.push(Block::List { ordered, items });
+                // The document's own numbers are kept when every item
+                // carries one, so `2.1` stays `2.1` and a list starting at
+                // 3 starts at 3; anything else the renderer numbers.
+                let marker = if class == Class::Bullet {
+                    ListMarker::Bullet
+                } else if labels.len() == items.len() {
+                    ListMarker::Labelled(labels)
+                } else {
+                    ListMarker::Ordered
+                };
+                blocks.push(Block::List { marker, items });
                 i = j;
             }
             Class::Body => {
@@ -594,6 +744,8 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
                 while let Some((Class::Body, next)) = classified.get(j).copied()
                     && classified.get(j - 1).is_some_and(|(_, prev)| {
                         continues(prev, next)
+                            && shares_an_edge(prev, next, page_right_edge(bodies))
+                            && !is_leader_entry(&prev.text)
                             && !ends_ragged(prev, next, column_right_edge(prev, bodies))
                     })
                     && !starts_lead_in(next)
@@ -611,8 +763,10 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
 
 #[cfg(test)]
 mod tests {
-    use super::{blocks, blocks_among, has_dash_lead_in, normalize};
-    use crate::ast::Block;
+    use super::{
+        blocks, blocks_among, has_dash_lead_in, is_leader_entry, leading_number, normalize,
+    };
+    use crate::ast::{Block, ListMarker};
     use crate::lines::{DrawnImage, Line};
     use kurbo::Rect;
 
@@ -669,12 +823,12 @@ mod tests {
             vec![
                 Block::Paragraph("First paragraph line one and line two.".into()),
                 Block::Image {
-                    alt: String::new(),
+                    alt: "Image 2 (228x120)".into(),
                     index: Some(1),
                 },
                 Block::Paragraph("Second paragraph, below the picture.".into()),
                 Block::Image {
-                    alt: String::new(),
+                    alt: "Image 3 (100x100)".into(),
                     index: Some(2),
                 },
             ]
@@ -721,7 +875,7 @@ mod tests {
                 ),
                 Block::Paragraph("A new paragraph after a gap.".into()),
                 Block::List {
-                    ordered: false,
+                    marker: ListMarker::Bullet,
                     items: vec!["first item".into(), "second item".into()]
                 },
                 Block::Code("let x = 1;\nlet y = 2;".into()),
@@ -1095,7 +1249,7 @@ mod tests {
         assert_eq!(
             blocks(&lines, &[], page),
             vec![Block::List {
-                ordered: false,
+                marker: ListMarker::Bullet,
                 items: vec![
                     "You can change views by swiping".into(),
                     "Another item".into()
@@ -1119,6 +1273,164 @@ mod tests {
         assert_eq!(
             normalize("Well... maybe. Or not...."),
             "Well... maybe. Or not...."
+        );
+    }
+
+    /// Defect 1, `text_tcpdf_063.pdf`: nine centred lines at normal
+    /// leading, each starting and ending somewhere else. Every one is its
+    /// own paragraph; they used to run together because no rule could
+    /// measure a column edge for text that is not left-aligned.
+    #[test]
+    fn centred_lines_that_share_no_edge_are_each_their_own_paragraph() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let centred = |text: &str, half_width: f64, top: f64| Line {
+            text: text.to_owned(),
+            bbox: Rect::new(306.0 - half_width, top - 12.0, 306.0 + half_width, top),
+            font_size: 12.0,
+            bold: false,
+            bold_prefix: 0,
+            mono: false,
+            mcids: Vec::new(),
+            segments: Vec::new(),
+        };
+        let lines = vec![
+            centred("CENTER | Stretching = 90%", 120.0, 700.0),
+            centred("CENTER | Stretching = 100%", 132.0, 682.0),
+            centred("CENTER | Stretching = 110%", 145.0, 664.0),
+        ];
+        let texts: Vec<String> = blocks(&lines, &[], page).iter().map(Block::text).collect();
+        assert_eq!(
+            texts,
+            [
+                "CENTER | Stretching = 90%",
+                "CENTER | Stretching = 100%",
+                "CENTER | Stretching = 110%",
+            ]
+        );
+    }
+
+    /// A wrapped line indented inside its predecessor still joins it, so
+    /// the rule above does not break `text_cjk_page.pdf`'s two-column
+    /// definition rows, whose first line reaches the body's right edge.
+    #[test]
+    fn a_hanging_indent_after_a_full_line_still_joins_its_paragraph() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            column_line(
+                "MediaBox rectangle a rectangle in user space",
+                505.0,
+                700.0,
+                0,
+            ),
+            column_line("that bounds the page", 324.0, 688.0, 0),
+        ];
+        // The continuation starts indented, at x0 230 rather than 72.
+        let mut lines = lines;
+        if let Some(second) = lines.get_mut(1) {
+            second.bbox = Rect::new(230.0, 678.0, 324.0, 688.0);
+        }
+        assert_eq!(
+            blocks(&lines, &[], page),
+            vec![Block::Paragraph(
+                "MediaBox rectangle a rectangle in user space that bounds the page".into()
+            )]
+        );
+    }
+
+    /// Defect 1, `vector_en_tem.pdf`: table-of-contents entries share a
+    /// left edge and, their leaders all reaching the page-number column, a
+    /// right edge too. The leader itself says each is complete.
+    #[test]
+    fn a_dot_leader_entry_never_wraps_into_the_next() {
+        assert!(is_leader_entry("2.1 Background ...................4"));
+        assert!(is_leader_entry(
+            "5.4 Virus Scan ......... \u{9519}\u{8bef}!"
+        ));
+        // Three dots is an ellipsis, not a leader.
+        assert!(!is_leader_entry("and so on ... more words"));
+        assert!(!is_leader_entry("A plain sentence that wraps"));
+
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        // Entries with no number of their own: body lines sharing both a
+        // left edge and, the leaders reaching the same column, a right one.
+        let lines = vec![
+            column_line("Revision History ...................... 2", 500.0, 700.0, 0),
+            column_line("Appendix ............................. 11", 500.0, 688.0, 0),
+        ];
+        let texts: Vec<String> = blocks(&lines, &[], page).iter().map(Block::text).collect();
+        assert_eq!(texts, ["Revision History ... 2", "Appendix ... 11"]);
+    }
+
+    /// Defect 2: the document's own numbers are what a cross-reference
+    /// points at, so `2.1` stays `2.1` and a run that goes 1, 2, 2.1, 3
+    /// stays one list instead of splitting and restarting at 1.
+    #[test]
+    fn a_documents_own_numbers_are_kept_and_do_not_split_the_list() {
+        assert_eq!(leading_number("1. Definition"), Some("1."));
+        assert_eq!(leading_number("2) Introduction"), Some("2)"));
+        assert_eq!(leading_number("2.1 Background"), Some("2.1"));
+        assert_eq!(leading_number("5.4.2 Virus Scan"), Some("5.4.2"));
+        assert_eq!(leading_number("2.1"), None);
+        assert_eq!(leading_number("2019 was a year"), None);
+        assert_eq!(leading_number("Plain text"), None);
+
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            column_line("1. Definition", 200.0, 700.0, 0),
+            column_line("2. Introduction", 200.0, 688.0, 0),
+            column_line("2.1 Background", 200.0, 676.0, 0),
+            column_line("3. Purpose", 200.0, 664.0, 0),
+        ];
+        assert_eq!(
+            blocks(&lines, &[], page),
+            vec![Block::List {
+                marker: ListMarker::Labelled(vec![
+                    "1.".into(),
+                    "2.".into(),
+                    "2.1".into(),
+                    "3.".into(),
+                ]),
+                items: vec![
+                    "Definition".into(),
+                    "Introduction".into(),
+                    "Background".into(),
+                    "Purpose".into(),
+                ],
+            }]
+        );
+    }
+
+    /// Defect 4: an untagged image says nothing about itself, so its alt
+    /// text is the one thing the page does say — which image, and how big.
+    #[test]
+    fn an_untagged_image_is_described_by_its_index_and_size() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![column_line("Some text.", 200.0, 700.0, 0)];
+        let images = [
+            DrawnImage {
+                index: 0,
+                mcid: None,
+                bbox: Rect::new(72.0, 400.0, 300.0, 600.0),
+            },
+            DrawnImage {
+                index: 1,
+                mcid: None,
+                bbox: Rect::new(72.0, 100.0, 122.0, 140.0),
+            },
+        ];
+        assert_eq!(
+            blocks(&lines, &images, page),
+            vec![
+                Block::Paragraph("Some text.".into()),
+                Block::Image {
+                    alt: "Image 1 (228x200)".into(),
+                    index: Some(0),
+                },
+                Block::Image {
+                    alt: "Image 2 (50x40)".into(),
+                    index: Some(1),
+                },
+            ]
         );
     }
 }
