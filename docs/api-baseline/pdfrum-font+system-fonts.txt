@@ -116,13 +116,10 @@ pub fn pdfrum_font::StandardFont::is_symbolic(self) -> bool
 pub struct pdfrum_font::CharItem
 pub pdfrum_font::CharItem::cid: core::option::Option<pdfrum_cmap::ids::Cid>
 pub pdfrum_font::CharItem::code: pdfrum_cmap::ids::CharCode
-pub pdfrum_font::CharItem::gid: pdfrum_font::Gid
-pub pdfrum_font::CharItem::has_glyph: bool
+pub pdfrum_font::CharItem::gid: core::option::Option<pdfrum_font::Gid>
 pub pdfrum_font::CharItem::unicode: smallvec::SmallVec<[char; 2]>
 pub pdfrum_font::CharItem::vertical_glyph: bool
 pub pdfrum_font::CharItem::width: f32
-impl pdfrum_font::CharItem
-pub fn pdfrum_font::CharItem::glyph(&self) -> core::option::Option<pdfrum_font::Gid>
 pub struct pdfrum_font::CharmapId
 pub pdfrum_font::CharmapId::encoding: u16
 pub pdfrum_font::CharmapId::platform: u16
