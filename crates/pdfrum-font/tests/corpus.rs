@@ -287,8 +287,7 @@ fn decoding_a_corpus_page_never_panics_and_widths_are_finite() {
                             golden.source,
                             item.code.0
                         );
-                        let _ = item.glyph();
-                        if let Some(gid) = item.glyph() {
+                        if let Some(gid) = item.gid {
                             let _ = font.glyph_path(gid);
                         }
                     }

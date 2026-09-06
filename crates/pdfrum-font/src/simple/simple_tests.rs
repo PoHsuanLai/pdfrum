@@ -530,7 +530,7 @@ fn a_standard_font_decodes_ascii_to_itself() {
     for (item, expected) in font.decode(b"Hello").zip("Hello".chars()) {
         assert_eq!(item.unicode.as_slice(), [expected], "{expected}");
         assert!(item.width > 0.0);
-        assert!(item.has_glyph, "{expected} must resolve a glyph");
+        assert!(item.gid.is_some(), "{expected} must resolve a glyph");
     }
 }
 

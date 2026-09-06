@@ -633,7 +633,7 @@ pub fn place_glyphs_into(
             } else {
                 0.0
             };
-            if let Some(gid) = item.glyph() {
+            if let Some(gid) = item.gid {
                 let key = GlyphKey {
                     font: font.id(),
                     gid,

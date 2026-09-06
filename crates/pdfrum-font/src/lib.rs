@@ -28,7 +28,7 @@
 //! for item in font.decode(b"Hello") {
 //!     let text: String = item.unicode.iter().collect();
 //!     println!("code {:#x} -> glyph {} -> {text:?} ({}/1000 em)",
-//!              item.code.0, item.gid.0, item.width);
+//!              item.code.0, item.gid.map(|g| g.0), item.width);
 //! }
 //! # Some(())
 //! # }
@@ -59,7 +59,7 @@
 
 // Every module is private and the `pub use` block below is the whole surface
 // (STYLE.md §4). A type a sibling crate names is re-exported here; a function
-// only this crate uses is not (`docs/design/idiomatic-api.md` §WP11).
+// only this crate uses is not.
 mod cid;
 mod descriptor;
 mod encoding;
@@ -169,9 +169,13 @@ pub struct CharItem {
     pub code: CharCode,
     /// The CID this code maps to, for a Type0 font only.
     pub cid: Option<Cid>,
-    /// The glyph to draw. [`Gid`] cannot express "no glyph": that is
-    /// [`CharItem::has_glyph`] being false.
-    pub gid: Gid,
+    /// The glyph to draw, or `None` when the ladder found no glyph at all.
+    ///
+    /// `None` is PDFium's `-1`, which is distinct from glyph 0 (`.notdef`):
+    /// `.notdef` draws a box, `None` draws nothing. The two were a `Gid` and
+    /// a `bool` beside it until the pair could express a state that has no
+    /// meaning -- "no glyph" carrying an index.
+    pub gid: Option<Gid>,
     /// The characters this code stands for, usually one and occasionally none
     /// — a ligature glyph maps to several, an unmapped code to zero.
     pub unicode: SmallVec<[char; 2]>,
@@ -182,17 +186,6 @@ pub struct CharItem {
     /// Not derivable downstream, and load-bearing: it suppresses the Japan1
     /// CID transform, which would otherwise rotate an already-rotated glyph.
     pub vertical_glyph: bool,
-    /// False when the ladder found no glyph at all — PDFium's `-1`, which is
-    /// distinct from glyph 0 (`.notdef`) and means "draw nothing".
-    pub has_glyph: bool,
-}
-
-impl CharItem {
-    /// The glyph to draw, or `None` when the ladder resolved nothing.
-    #[must_use]
-    pub fn glyph(&self) -> Option<Gid> {
-        self.has_glyph.then_some(self.gid)
-    }
 }
 
 impl Font {

@@ -66,7 +66,7 @@ this crate exists for: `PdfVersion` is *read* by `pdfrum-parser` out of the
 `%PDF-M.N` header and *written* by `pdfrum-edit` into one, and neither of those
 crates should depend on the other for a two-digit value. This is the bottom of
 the graph, so it is the only place both can name it.
-`docs/design/idiomatic-api.md` §WP1 replaces the `major × 10 + minor` packed
+The version is a struct, not the `major × 10 + minor` packed
 `u8` that `Document::version()`, `SaveOptions::version` and `write_header` all
 published; the packing survives as a private conversion inside
 `pdfrum-parser`'s `read_version`, and appears in no public signature anywhere
@@ -329,8 +329,7 @@ impl SecurityHandler {
 }
 ```
 
-`docs/design/idiomatic-api.md` §A.3: the crate that owns the `/P` word owns the
-type that decodes it. Before this, `pdfrum-crypt` and `pdfrum-parser` published
+The crate that owns the `/P` word owns the type that decodes it. Before this, `pdfrum-crypt` and `pdfrum-parser` published
 the raw word and `crates/pdfrum/src/form_session.rs` hand-decoded it with
 `bits & 0x100` and `bits & 0x20` — magic numbers in a crate with no business
 knowing them, which this deletes. `Permissions` is a **struct of booleans, not
@@ -531,11 +530,18 @@ in the same commit as the code:
    bridge but its §3.1 sketch did not carry the split into `GlyphSource`.
    `GlyphSource` also gains a third variant, `None`, for a Type3 font or a
    program no backend could read — the state `IsEmbedded() == false` describes.
-2. **`CharItem` gains `has_glyph: bool`.** `Gid` cannot express PDFium's `-1`,
-   which is distinct from glyph 0 (`.notdef`) and means "draw nothing"; making
-   `gid` an `Option<Gid>` instead would push the unwrap into every render call
-   site for a case that is common, so the flag plus a `glyph()` accessor is the
-   shape. `vertical_glyph` is present as ruled.
+2. **`CharItem::gid` is an `Option<Gid>`.** `Gid` cannot express PDFium's
+   `-1`, which is distinct from glyph 0 (`.notdef`) and means "draw nothing".
+   This was first specified as a `Gid` plus a `has_glyph: bool` and a
+   `glyph()` accessor, on the reasoning that an `Option` "would push the
+   unwrap into every render call site for a case that is common". Measured
+   when the change was finally made (2026-09-07), that reasoning was wrong:
+   **two** call sites read the field, both already went through `glyph()`,
+   and both became `item.gid` -- the same expression length. Both
+   constructors had an `Option<Gid>` in hand and were flattening it with
+   `gid.unwrap_or_default()` beside `has_glyph: gid.is_some()`, which the
+   accessor then rebuilt. Net twelve lines removed. `vertical_glyph` is
+   present as ruled.
 3. **`SimpleFont`'s field list** is as the brief's §3.1 records it — `unicodes:
    [u16; 256]` and `glyph_index: [u16; 256]` are first-class — plus `widths`
    as a `SimpleWidths` record rather than `[f32; 256]`, because the *unset*
