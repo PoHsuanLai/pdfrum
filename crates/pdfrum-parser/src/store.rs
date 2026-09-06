@@ -58,7 +58,13 @@ pub struct ObjectStore {
     /// The file, from its header onwards.
     bytes: Arc<[u8]>,
     /// Where every object lives.
-    xref: Xref,
+    ///
+    /// Shared rather than owned. A store is built at least twice per open —
+    /// once through the throwaway plaintext store that reads `/Encrypt`, and
+    /// again for the document itself — and the table is a slot vector, so
+    /// owning it meant a `memcpy` of `slots.len()` entries per construction.
+    /// The store never mutates it, so a reference count is the whole cost.
+    xref: Arc<Xref>,
     /// Caps.
     limits: Limits,
     /// Parsed objects, one slot per object number. The slot is created on
@@ -101,7 +107,7 @@ impl ObjectStore {
     /// Build a store over a file and its cross-reference table.
     pub(crate) fn new(
         bytes: Arc<[u8]>,
-        xref: Xref,
+        xref: Arc<Xref>,
         limits: Limits,
         security: SecurityHandler,
     ) -> Self {
@@ -605,7 +611,7 @@ mod tests {
         build(&mut xref);
         ObjectStore::new(
             Arc::from(file),
-            xref,
+            Arc::new(xref),
             Limits::default(),
             SecurityHandler::Identity,
         )
