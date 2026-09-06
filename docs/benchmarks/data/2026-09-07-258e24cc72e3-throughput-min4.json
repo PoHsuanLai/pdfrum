@@ -1,0 +1,6089 @@
+[
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.110809611,
+    "pages_per_sec": 18.048975914192138,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.079726478,
+    "pages_per_sec": 25.085768870913874,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.078884356,
+    "pages_per_sec": 25.353569470732573,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.012920102,
+    "pages_per_sec": 154.79753952406878,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.012731164,
+    "pages_per_sec": 157.09482652175402,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.012964252,
+    "pages_per_sec": 154.27037363975953,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.026091013,
+    "pages_per_sec": 76.65474698126899,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.016734351,
+    "pages_per_sec": 119.51464386040426,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.016536383,
+    "pages_per_sec": 120.94543286763495,
+    "status": "ok"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.019463289,
+    "pages_per_sec": 102.75755551900811,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.012518746,
+    "pages_per_sec": 159.76041050757,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.012526606,
+    "pages_per_sec": 159.6601665287469,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.009706249,
+    "pages_per_sec": 206.0528222591446,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.009727079,
+    "pages_per_sec": 205.61157157251424,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_combo_box.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.009812218,
+    "pages_per_sec": 203.827513820015,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.093481955,
+    "pages_per_sec": 42.78900671257891,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.064106518,
+    "pages_per_sec": 62.396151355467474,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.068308563,
+    "pages_per_sec": 58.55781214428416,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.016971039,
+    "pages_per_sec": 235.6956459766547,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.013440969,
+    "pages_per_sec": 297.59759136413453,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.012460787,
+    "pages_per_sec": 321.0070118364113,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.032874018,
+    "pages_per_sec": 121.6766383713728,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.017605164,
+    "pages_per_sec": 227.20606294834857,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.019021202,
+    "pages_per_sec": 210.29165244131258,
+    "status": "ok"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.017463895,
+    "pages_per_sec": 229.04397902071673,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.015944098,
+    "pages_per_sec": 250.8765312405882,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.015874758,
+    "pages_per_sec": 251.9723450272439,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.014002944,
+    "pages_per_sec": 285.65421671328545,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.012932213,
+    "pages_per_sec": 309.30514367494567,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_list_box.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.01330476,
+    "pages_per_sec": 300.64428069352624,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.048594827,
+    "pages_per_sec": 20.578322050616624,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.048075041,
+    "pages_per_sec": 20.800814293637316,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.047269978,
+    "pages_per_sec": 21.155076484275074,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.002977905,
+    "pages_per_sec": 335.80654856350355,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.002985615,
+    "pages_per_sec": 334.93936760098,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.003007945,
+    "pages_per_sec": 332.4528872702127,
+    "status": "ok"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001976964,
+    "pages_per_sec": 505.8261050782918,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001856264,
+    "pages_per_sec": 538.7164756737188,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001765076,
+    "pages_per_sec": 566.5478426991245,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001721276,
+    "pages_per_sec": 580.9643543510743,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001670786,
+    "pages_per_sec": 598.5206962471555,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_number.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001703225,
+    "pages_per_sec": 587.1214901143419,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.217312757,
+    "pages_per_sec": 18.406650650518415,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.16505641,
+    "pages_per_sec": 24.234139104321972,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.177665506,
+    "pages_per_sec": 22.514218376188342,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.055053913,
+    "pages_per_sec": 72.65605262245391,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.035228427,
+    "pages_per_sec": 113.5446666409488,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.035854023,
+    "pages_per_sec": 111.56349177329417,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.063676661,
+    "pages_per_sec": 62.817364120270064,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.041204388,
+    "pages_per_sec": 97.07703946482593,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.041258087,
+    "pages_per_sec": 96.95068993383043,
+    "status": "ok"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.056438991,
+    "pages_per_sec": 70.87298920705368,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.05426092,
+    "pages_per_sec": 73.71788019812418,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.058781492,
+    "pages_per_sec": 68.04863000074921,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.019161261,
+    "pages_per_sec": 208.7545282118959,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.011073398,
+    "pages_per_sec": 361.2260662896791,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_push_button.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.011037708,
+    "pages_per_sec": 362.3940767412945,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.180274065,
+    "pages_per_sec": 11.094219237803285,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.176716184,
+    "pages_per_sec": 11.317582548070414,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.210642763,
+    "pages_per_sec": 9.49474822450938,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.00606922,
+    "pages_per_sec": 329.5316366847799,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.005686373,
+    "pages_per_sec": 351.7180459319148,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.005160147,
+    "pages_per_sec": 387.5858575346787,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.01335905,
+    "pages_per_sec": 149.71124443729155,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.009434552,
+    "pages_per_sec": 211.98674828439124,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.009328503,
+    "pages_per_sec": 214.39667222061246,
+    "status": "ok"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.003801179,
+    "pages_per_sec": 526.1525437239341,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.003767128,
+    "pages_per_sec": 530.9084267909134,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.00366017,
+    "pages_per_sec": 546.422707142018,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.004564672,
+    "pages_per_sec": 438.1475821263828,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.005015918,
+    "pages_per_sec": 398.73060125783553,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_signature.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.00480483,
+    "pages_per_sec": 416.247817300508,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 3,
+    "secs": 0.181939931,
+    "pages_per_sec": 16.488958655260785,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 3,
+    "secs": 0.159843525,
+    "pages_per_sec": 18.76835486454644,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 3,
+    "secs": 0.144107265,
+    "pages_per_sec": 20.81782622132201,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 3,
+    "secs": 0.015255923,
+    "pages_per_sec": 196.64493587179223,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 3,
+    "secs": 0.010048526,
+    "pages_per_sec": 298.55125020326363,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 3,
+    "secs": 0.00964356,
+    "pages_per_sec": 311.08843622064876,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 3,
+    "secs": 0.028545643,
+    "pages_per_sec": 105.09484757446172,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 3,
+    "secs": 0.01202571,
+    "pages_per_sec": 249.46552012313617,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 3,
+    "secs": 0.011627154,
+    "pages_per_sec": 258.01670812995167,
+    "status": "ok"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 3,
+    "secs": 0.01446938,
+    "pages_per_sec": 207.33438474903554,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 3,
+    "secs": 0.013758206,
+    "pages_per_sec": 218.05168493624822,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 3,
+    "secs": 0.013779196,
+    "pages_per_sec": 217.7195244192767,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 3,
+    "secs": 0.010178886,
+    "pages_per_sec": 294.72773346710045,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 3,
+    "secs": 0.010153735,
+    "pages_per_sec": 295.4577798219079,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_text_field.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 3,
+    "secs": 0.010182485,
+    "pages_per_sec": 294.6235619301182,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 5,
+    "secs": 0.035436736,
+    "pages_per_sec": 141.09651633829932,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 5,
+    "secs": 0.018794074,
+    "pages_per_sec": 266.04130642456767,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 5,
+    "secs": 0.013571378,
+    "pages_per_sec": 368.42242548988025,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 5,
+    "secs": 0.009519201,
+    "pages_per_sec": 525.2541678655593,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 5,
+    "secs": 0.006533625,
+    "pages_per_sec": 765.2719585222598,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 5,
+    "secs": 0.004639761,
+    "pages_per_sec": 1077.6417147348754,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 5,
+    "secs": 0.014096843,
+    "pages_per_sec": 354.68934427374984,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 5,
+    "secs": 0.012249328,
+    "pages_per_sec": 408.185657205032,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 5,
+    "secs": 0.011458625,
+    "pages_per_sec": 436.35252920834745,
+    "status": "ok"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 5,
+    "secs": 0.006951912,
+    "pages_per_sec": 719.2265955035103,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 5,
+    "secs": 0.006886603,
+    "pages_per_sec": 726.0473705250615,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 5,
+    "secs": 0.006908163,
+    "pages_per_sec": 723.7814162752095,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 5,
+    "secs": 0.008072393,
+    "pages_per_sec": 619.3950170661908,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 5,
+    "secs": 0.005906151,
+    "pages_per_sec": 846.5750367709867,
+    "status": "display-lists"
+  },
+  {
+    "file": "forms_widgets_407.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 5,
+    "secs": 0.005695362,
+    "pages_per_sec": 877.90732178218,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 1.263292359,
+    "pages_per_sec": 0.7915824020273362,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 1.264148636,
+    "pages_per_sec": 0.7910462199794677,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 1.2673910529999999,
+    "pages_per_sec": 0.7890224549344361,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.60393018,
+    "pages_per_sec": 1.6558205453484707,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.599196619,
+    "pages_per_sec": 1.6689012726221675,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.593135321,
+    "pages_per_sec": 1.685955910219685,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 2.615501355,
+    "pages_per_sec": 0.38233587533354574,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 2.588652624,
+    "pages_per_sec": 0.3863013487127503,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 2.600022366,
+    "pages_per_sec": 0.38461207606396414,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.629137056,
+    "pages_per_sec": 1.5894787796444785,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.629638403,
+    "pages_per_sec": 1.5882131636751515,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.629759622,
+    "pages_per_sec": 1.5879074571726035,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.377933302,
+    "pages_per_sec": 2.6459695261255383,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.387162266,
+    "pages_per_sec": 2.5828963404197043,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_583804.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.380169213,
+    "pages_per_sec": 2.630407633771228,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.422434476,
+    "pages_per_sec": 2.3672310306415425,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.422195797,
+    "pages_per_sec": 2.3685692920339516,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.421613823,
+    "pages_per_sec": 2.37183874305753,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.209314764,
+    "pages_per_sec": 4.777493860872614,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.217673675,
+    "pages_per_sec": 4.594032787841709,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.21343186,
+    "pages_per_sec": 4.685336106802424,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.894528746,
+    "pages_per_sec": 1.1179070594115932,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.900668067,
+    "pages_per_sec": 1.110286948809966,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.896682653,
+    "pages_per_sec": 1.1152217528178276,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.534498717,
+    "pages_per_sec": 1.8709118809727658,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.534602607,
+    "pages_per_sec": 1.8705483043033497,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.534791996,
+    "pages_per_sec": 1.8698858761528658,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.006971623,
+    "pages_per_sec": 143.4386225416951,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.006863483,
+    "pages_per_sec": 145.69861978240493,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_718762.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.006885334,
+    "pages_per_sec": 145.23623690586396,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.302901096,
+    "pages_per_sec": 3.301407664764607,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.30840362,
+    "pages_per_sec": 3.2425040925265405,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.309917429,
+    "pages_per_sec": 3.226665900096893,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.130610765,
+    "pages_per_sec": 7.656336749884285,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.130320218,
+    "pages_per_sec": 7.673406439513477,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.130893562,
+    "pages_per_sec": 7.63979514897761,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.307019393,
+    "pages_per_sec": 3.257123239768766,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.312585577,
+    "pages_per_sec": 3.1991239314282245,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.307078893,
+    "pages_per_sec": 3.256492135394014,
+    "status": "ok"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.09347829,
+    "pages_per_sec": 10.6976710849118,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.093427531,
+    "pages_per_sec": 10.703483109277501,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.093348082,
+    "pages_per_sec": 10.712592895052735,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.213694352,
+    "pages_per_sec": 4.679580862296257,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.213318114,
+    "pages_per_sec": 4.68783443303835,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_bug_898443.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.206746709,
+    "pages_per_sec": 4.8368363628946565,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.067132817,
+    "pages_per_sec": 14.895844457115512,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.066157186,
+    "pages_per_sec": 15.115515947126287,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.063518038,
+    "pages_per_sec": 15.743559333492009,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.050826812,
+    "pages_per_sec": 19.674655180025848,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.049352714,
+    "pages_per_sec": 20.26231019432893,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.051426497,
+    "pages_per_sec": 19.44522878935347,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.18237148,
+    "pages_per_sec": 5.483313509327226,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.183245733,
+    "pages_per_sec": 5.4571529913878,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.181521457,
+    "pages_per_sec": 5.5089905982850285,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.026306164,
+    "pages_per_sec": 38.01390426973693,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.026000486,
+    "pages_per_sec": 38.46081954006552,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.025943647,
+    "pages_per_sec": 38.545081961684104,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.028101399,
+    "pages_per_sec": 35.585416939562336,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.027878931,
+    "pages_per_sec": 35.86938107490563,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_3bigpreview.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.028091449,
+    "pages_per_sec": 35.59802130534455,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.019849267,
+    "pages_per_sec": 100.75938824340466,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.017551425,
+    "pages_per_sec": 113.95086153973253,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.017555256,
+    "pages_per_sec": 113.92599458532531,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 2,
+    "secs": 1.020788877,
+    "pages_per_sec": 1.959268997794928,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 2,
+    "secs": 1.05354186,
+    "pages_per_sec": 1.8983583623340796,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 2,
+    "secs": 1.046819027,
+    "pages_per_sec": 1.910549912081413,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.04260661,
+    "pages_per_sec": 46.941073227839524,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.021588032,
+    "pages_per_sec": 92.64392418910626,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.021862541,
+    "pages_per_sec": 91.48067463887203,
+    "status": "ok"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.016186567,
+    "pages_per_sec": 123.55924514444602,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.016245636,
+    "pages_per_sec": 123.10998473682409,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.016271416,
+    "pages_per_sec": 122.91493254182672,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.009912939,
+    "pages_per_sec": 201.75651237236502,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.009837939,
+    "pages_per_sec": 203.29461282490163,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_ccitt_transfer.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.010065088,
+    "pages_per_sec": 198.7066581037344,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.129850553,
+    "pages_per_sec": 30.804643550497623,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.0364694,
+    "pages_per_sec": 109.68099283234712,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.036063273,
+    "pages_per_sec": 110.91616670511299,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.69385776,
+    "pages_per_sec": 5.764870310018583,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.29938387,
+    "pages_per_sec": 13.360773244062882,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.305369272,
+    "pages_per_sec": 13.098894901252539,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.088056236,
+    "pages_per_sec": 45.42551648471552,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.026623431,
+    "pages_per_sec": 150.24359557564162,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.027763572,
+    "pages_per_sec": 144.07368043276276,
+    "status": "ok"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.083396775,
+    "pages_per_sec": 47.96348539856607,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.083389005,
+    "pages_per_sec": 47.967954528297824,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.083298476,
+    "pages_per_sec": 48.02008622582723,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.055441095,
+    "pages_per_sec": 72.14864713620825,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.020002626,
+    "pages_per_sec": 199.97374344748536,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_en_fqa.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.020007026,
+    "pages_per_sec": 199.92976467367012,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.089626474,
+    "pages_per_sec": 11.157417617477622,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.089148428,
+    "pages_per_sec": 11.21724771187216,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.089210788,
+    "pages_per_sec": 11.209406647097435,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.024014032,
+    "pages_per_sec": 41.64231979036256,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.023906094,
+    "pages_per_sec": 41.83033832293975,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.023878634,
+    "pages_per_sec": 41.87844246031829,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.016026869,
+    "pages_per_sec": 62.39521892891244,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.016026018,
+    "pages_per_sec": 62.39853218684767,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.016097298,
+    "pages_per_sec": 62.12222697250185,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.052813207,
+    "pages_per_sec": 18.93465776467617,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.052671777,
+    "pages_per_sec": 18.985499577885893,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.052801106,
+    "pages_per_sec": 18.93899722479298,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.011239158,
+    "pages_per_sec": 88.97463671210957,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.011253488,
+    "pages_per_sec": 88.86133792473942,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_1478366.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.011257878,
+    "pages_per_sec": 88.82668652120763,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.09260939,
+    "pages_per_sec": 10.79804110576692,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.092970767,
+    "pages_per_sec": 10.756069163116617,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.094412765,
+    "pages_per_sec": 10.591788091366672,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.048197094,
+    "pages_per_sec": 20.748138881568252,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.046593438,
+    "pages_per_sec": 21.462249684172264,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.047989636,
+    "pages_per_sec": 20.83783256868212,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.148004025,
+    "pages_per_sec": 6.756573005362522,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.146743376,
+    "pages_per_sec": 6.814617649249121,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.154984817,
+    "pages_per_sec": 6.45224493183742,
+    "status": "ok"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.037083505,
+    "pages_per_sec": 26.96616730268619,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.037223894,
+    "pages_per_sec": 26.864465066443614,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.037102745,
+    "pages_per_sec": 26.95218372656794,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.035460119,
+    "pages_per_sec": 28.200694983567317,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.036795148,
+    "pages_per_sec": 27.17749633728882,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jbig2_880920.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.035421729,
+    "pages_per_sec": 28.231258841148044,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.071326465,
+    "pages_per_sec": 14.020041509136895,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.072240707,
+    "pages_per_sec": 13.842610925720868,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.072542314,
+    "pages_per_sec": 13.785057918058694,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.042795559,
+    "pages_per_sec": 23.366910571258106,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.038935401,
+    "pages_per_sec": 25.683567507112613,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.043002837,
+    "pages_per_sec": 23.254279711824594,
+    "status": "ok"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.040479218,
+    "pages_per_sec": 24.70403454928403,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.040662217,
+    "pages_per_sec": 24.592854836223022,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.040697836,
+    "pages_per_sec": 24.571331016224057,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.058770367,
+    "pages_per_sec": 17.01537783488744,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.058369541,
+    "pages_per_sec": 17.13222312301548,
+    "status": "display-lists"
+  },
+  {
+    "file": "image_jpx_123.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.058133423,
+    "pages_per_sec": 17.201808329779585,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 12,
+    "secs": 0.095975312,
+    "pages_per_sec": 125.03215410229664,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 12,
+    "secs": 0.02684507,
+    "pages_per_sec": 447.0094508973156,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 12,
+    "secs": 0.019065893,
+    "pages_per_sec": 629.3961683305366,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 12,
+    "secs": 0.037133225,
+    "pages_per_sec": 323.1607273540071,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 12,
+    "secs": 0.012673856,
+    "pages_per_sec": 946.8310196991349,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 12,
+    "secs": 0.009875169,
+    "pages_per_sec": 1215.1690771064273,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 12,
+    "secs": 0.144663932,
+    "pages_per_sec": 82.95087679491527,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 12,
+    "secs": 0.043978369,
+    "pages_per_sec": 272.8614151197831,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 12,
+    "secs": 0.029817155,
+    "pages_per_sec": 402.4528832479155,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 12,
+    "secs": 0.015315824,
+    "pages_per_sec": 783.503388390987,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 12,
+    "secs": 0.015154226,
+    "pages_per_sec": 791.8583238761254,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 12,
+    "secs": 0.015217535,
+    "pages_per_sec": 788.5639822743959,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 12,
+    "secs": 0.030726218,
+    "pages_per_sec": 390.54595004175263,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 12,
+    "secs": 0.017496896,
+    "pages_per_sec": 685.8359334135608,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_en_uicase.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 12,
+    "secs": 0.017200599,
+    "pages_per_sec": 697.6501225335234,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.126395022,
+    "pages_per_sec": 7.911703991000532,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.162265989,
+    "pages_per_sec": 6.16272088909525,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.119600638,
+    "pages_per_sec": 8.361159411206486,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.018874675,
+    "pages_per_sec": 52.981044706730046,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.020311474,
+    "pages_per_sec": 49.23325604040357,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.020313603,
+    "pages_per_sec": 49.22809606941713,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Pages node missing Kids"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.023624076,
+    "pages_per_sec": 42.32969788955978,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.023436148,
+    "pages_per_sec": 42.66912804954125,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.023500377,
+    "pages_per_sec": 42.552508838475234,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.029562258,
+    "pages_per_sec": 33.82691538650396,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.029800935,
+    "pages_per_sec": 33.555994132398865,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_formfield.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.029659447,
+    "pages_per_sec": 33.716070296253335,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.062112621,
+    "pages_per_sec": 96.59872508036652,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.022617915,
+    "pages_per_sec": 265.2764412634852,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.016561764,
+    "pages_per_sec": 362.28024985744275,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.043207995,
+    "pages_per_sec": 138.86318955554407,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.020012195,
+    "pages_per_sec": 299.8171864705496,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.018403699,
+    "pages_per_sec": 326.0214155860732,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.065602782,
+    "pages_per_sec": 91.45953596906912,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.023637046,
+    "pages_per_sec": 253.83882571451613,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.026307774,
+    "pages_per_sec": 228.06946722288248,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.060566664,
+    "pages_per_sec": 99.06439621637408,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.05979181,
+    "pages_per_sec": 100.34819149980574,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.057907655,
+    "pages_per_sec": 103.61324422479204,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.030079733,
+    "pages_per_sec": 199.46985566660447,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.019130533,
+    "pages_per_sec": 313.63475340702735,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_006.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.018713986,
+    "pages_per_sec": 320.61582177094715,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.091924816,
+    "pages_per_sec": 174.05528448378945,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.02676691,
+    "pages_per_sec": 597.752971859658,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.016385456,
+    "pages_per_sec": 976.475723348804,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.039218828,
+    "pages_per_sec": 407.96731610643747,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.018495648,
+    "pages_per_sec": 865.0683663529928,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.016514285,
+    "pages_per_sec": 968.8581733935196,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.029678457,
+    "pages_per_sec": 539.1115852148243,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.013137412,
+    "pages_per_sec": 1217.8958839077286,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.014193034,
+    "pages_per_sec": 1127.3135821417745,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.040548377,
+    "pages_per_sec": 394.5903926068361,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.041226282,
+    "pages_per_sec": 388.10193943756553,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.040761525,
+    "pages_per_sec": 392.52702149882765,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.029578478,
+    "pages_per_sec": 540.9338506193592,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.015157616,
+    "pages_per_sec": 1055.5749664063267,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_045.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.014331592,
+    "pages_per_sec": 1116.414701172068,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.089952492,
+    "pages_per_sec": 177.87167030347533,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.025999587,
+    "pages_per_sec": 615.3943906878213,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.015619902,
+    "pages_per_sec": 1024.334211571878,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.027331356,
+    "pages_per_sec": 585.4082029446325,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.010533184,
+    "pages_per_sec": 1519.0088770878779,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.007659927,
+    "pages_per_sec": 2088.792752202469,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.025990437,
+    "pages_per_sec": 615.6110418612815,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.011762804,
+    "pages_per_sec": 1360.2198931479263,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.011907863,
+    "pages_per_sec": 1343.649989926824,
+    "status": "ok"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.016315497,
+    "pages_per_sec": 980.6627404608023,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.015965499,
+    "pages_per_sec": 1002.1609722314347,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.016478055,
+    "pages_per_sec": 970.9883842480197,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 16,
+    "secs": 0.027756382,
+    "pages_per_sec": 576.4440048418414,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 16,
+    "secs": 0.013296401,
+    "pages_per_sec": 1203.3331425548913,
+    "status": "display-lists"
+  },
+  {
+    "file": "mixed_tcpdf_059.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 16,
+    "secs": 0.012622096,
+    "pages_per_sec": 1267.6183099859168,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.04624101,
+    "pages_per_sec": 21.6258252144579,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.047151193,
+    "pages_per_sec": 21.20837112223226,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.045428098,
+    "pages_per_sec": 22.012808020269745,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.306495607,
+    "pages_per_sec": 3.262689504061962,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.312000342,
+    "pages_per_sec": 3.205124691818447,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.30734189,
+    "pages_per_sec": 3.253705506919346,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.09395097,
+    "pages_per_sec": 10.643849659029598,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.093560763,
+    "pages_per_sec": 10.688241180760786,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.09522866,
+    "pages_per_sec": 10.501040338066291,
+    "status": "ok"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.061861633,
+    "pages_per_sec": 16.16510834752778,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.062285419,
+    "pages_per_sec": 16.05512198609437,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.061968252,
+    "pages_per_sec": 16.13729559452476,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.035181762,
+    "pages_per_sec": 28.423817999792053,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.035314241,
+    "pages_per_sec": 28.31718795825174,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_axial_radial.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.034398368,
+    "pages_per_sec": 29.0711466311425,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.005824722,
+    "pages_per_sec": 171.6820133218375,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.005198598,
+    "pages_per_sec": 192.3595554032068,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.005167057,
+    "pages_per_sec": 193.5337659329092,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.002031763,
+    "pages_per_sec": 492.1833894996612,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001710796,
+    "pages_per_sec": 584.5232277840256,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001698876,
+    "pages_per_sec": 588.6244787730241,
+    "status": "ok"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.000568616,
+    "pages_per_sec": 1758.6561053505354,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.000585385,
+    "pages_per_sec": 1708.2774584247973,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.000585345,
+    "pages_per_sec": 1708.3941948765257,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.000087879,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.000078219,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_coons.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.000072999,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.005372216,
+    "pages_per_sec": 186.14292500524923,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.005495085,
+    "pages_per_sec": 181.9808064843401,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.005209727,
+    "pages_per_sec": 191.94863761575223,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001783205,
+    "pages_per_sec": 560.7880193247552,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001703897,
+    "pages_per_sec": 586.8899352484334,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001704846,
+    "pages_per_sec": 586.5632438355135,
+    "status": "ok"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.0,
+    "pages_per_sec": 0.0,
+    "status": "error",
+    "detail": "pdf_oxide: Invalid PDF: Node missing Type"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.000653935,
+    "pages_per_sec": 1529.2039728719215,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.000590355,
+    "pages_per_sec": 1693.8960455996817,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.000584015,
+    "pages_per_sec": 1712.284787205808,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 0,
+    "secs": 0.000080329,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 0,
+    "secs": 0.000074939,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_gouraud.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 0,
+    "secs": 0.000072919,
+    "pages_per_sec": 0.0,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.063721638,
+    "pages_per_sec": 31.386512694479073,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.043472794,
+    "pages_per_sec": 46.00578467535351,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.042169914,
+    "pages_per_sec": 47.42717758447409,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.339253809,
+    "pages_per_sec": 5.895291215433339,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.261753835,
+    "pages_per_sec": 7.640766753235917,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.271844182,
+    "pages_per_sec": 7.357155798905419,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.047304782,
+    "pages_per_sec": 42.27902371476947,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.027728633,
+    "pages_per_sec": 72.12760903142971,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.026972409,
+    "pages_per_sec": 74.14984697881454,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.091929317,
+    "pages_per_sec": 21.755845308847448,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.091626669,
+    "pages_per_sec": 21.827706079765928,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.092195814,
+    "pages_per_sec": 21.692958858197184,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 2,
+    "secs": 0.012699806,
+    "pages_per_sec": 157.48272060218875,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 2,
+    "secs": 0.007751317,
+    "pages_per_sec": 258.0206692617526,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_030.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 2,
+    "secs": 0.007737897,
+    "pages_per_sec": 258.46816001815483,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.009554431,
+    "pages_per_sec": 104.66348022189914,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.009505552,
+    "pages_per_sec": 105.20167582061515,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.009486383,
+    "pages_per_sec": 105.41425535949793,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.014936238,
+    "pages_per_sec": 66.95126309583445,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.014106984,
+    "pages_per_sec": 70.8868741894086,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.01470108,
+    "pages_per_sec": 68.02221333398634,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.128029401,
+    "pages_per_sec": 7.8107059174634434,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.128767165,
+    "pages_per_sec": 7.765954931134813,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.131010177,
+    "pages_per_sec": 7.632994801617587,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.004694262,
+    "pages_per_sec": 213.02603050277125,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.004818321,
+    "pages_per_sec": 207.5411746124843,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.00481701,
+    "pages_per_sec": 207.59765912879567,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.005299117,
+    "pages_per_sec": 188.7106851952882,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.005997511,
+    "pages_per_sec": 166.73583424857412,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_056.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.005770603,
+    "pages_per_sec": 173.29211522608642,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.017524366,
+    "pages_per_sec": 57.0634053180583,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.017249599,
+    "pages_per_sec": 57.97236214012859,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.017167739,
+    "pages_per_sec": 58.24878861450538,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.988602712,
+    "pages_per_sec": 1.011528683728717,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.988671004,
+    "pages_per_sec": 1.0114588128448845,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.986115507,
+    "pages_per_sec": 1.0140799864736334,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.574752165,
+    "pages_per_sec": 1.7398803534737446,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.57560286,
+    "pages_per_sec": 1.7373089494378118,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.578129949,
+    "pages_per_sec": 1.7297149226220072,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.013172342,
+    "pages_per_sec": 75.91664413207613,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.013223252,
+    "pages_per_sec": 75.62436229756493,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.013235711,
+    "pages_per_sec": 75.55317579841385,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.012582047,
+    "pages_per_sec": 79.47832336026084,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.012933624,
+    "pages_per_sec": 77.31784996996976,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tcpdf_058.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.012731686,
+    "pages_per_sec": 78.54419281154122,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.014809249,
+    "pages_per_sec": 67.52536877460835,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.014989357,
+    "pages_per_sec": 66.71400247522293,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.014388662,
+    "pages_per_sec": 69.4991653845229,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.019752569,
+    "pages_per_sec": 50.626326124971385,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.018986275,
+    "pages_per_sec": 52.669625821810754,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.016655324,
+    "pages_per_sec": 60.04086140864027,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.004624672,
+    "pages_per_sec": 216.23155112405811,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.004641702,
+    "pages_per_sec": 215.4382164128589,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.004605332,
+    "pages_per_sec": 217.1396112158689,
+    "status": "ok"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.024772348,
+    "pages_per_sec": 40.36759050857835,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.024514229,
+    "pages_per_sec": 40.7926351671105,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.024679778,
+    "pages_per_sec": 40.519003047758375,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001124071,
+    "pages_per_sec": 889.623520222477,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001003992,
+    "pages_per_sec": 996.0238727001808,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_tensor.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.000953073,
+    "pages_per_sec": 1049.2375715186558,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.012109931,
+    "pages_per_sec": 82.57685365837344,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.002725348,
+    "pages_per_sec": 366.9256183063594,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.002741187,
+    "pages_per_sec": 364.80546566140873,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.027136918,
+    "pages_per_sec": 36.85016846791518,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.031844849,
+    "pages_per_sec": 31.40225284158201,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.029060192,
+    "pages_per_sec": 34.41133492855106,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.000212548,
+    "pages_per_sec": 4704.819617215876,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.000211798,
+    "pages_per_sec": 4721.479900660063,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.000161758,
+    "pages_per_sec": 6182.074456904759,
+    "status": "ok"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001402589,
+    "pages_per_sec": 712.9672341648194,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001457818,
+    "pages_per_sec": 685.9566832073688,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001406879,
+    "pages_per_sec": 710.793181218854,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.000618975,
+    "pages_per_sec": 1615.5741346581042,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.000631125,
+    "pages_per_sec": 1584.4721727074668,
+    "status": "display-lists"
+  },
+  {
+    "file": "shading_type4_5.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.000608445,
+    "pages_per_sec": 1643.533926649081,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.006751685,
+    "pages_per_sec": 148.11117521033637,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.006587176,
+    "pages_per_sec": 151.81012318480634,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.006624726,
+    "pages_per_sec": 150.94963927564703,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.002693668,
+    "pages_per_sec": 371.2409992619729,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.002184372,
+    "pages_per_sec": 457.79748138137643,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.002198662,
+    "pages_per_sec": 454.82206905836364,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.003017625,
+    "pages_per_sec": 331.38643801002445,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.002941346,
+    "pages_per_sec": 339.9804035295405,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.003002795,
+    "pages_per_sec": 333.02306684272486,
+    "status": "ok"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001343229,
+    "pages_per_sec": 744.4746949328819,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001371649,
+    "pages_per_sec": 729.0494871501382,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001352739,
+    "pages_per_sec": 739.2409030862569,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.001595437,
+    "pages_per_sec": 626.7875196576236,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.001524838,
+    "pages_per_sec": 655.8073710125273,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_bug_1029.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.001439258,
+    "pages_per_sec": 694.8024607123949,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.040948885,
+    "pages_per_sec": 97.68275741818124,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.014058315,
+    "pages_per_sec": 284.5291203106489,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.013813497,
+    "pages_per_sec": 289.5718585959805,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.017567717,
+    "pages_per_sec": 227.69037092298333,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.006650015,
+    "pages_per_sec": 601.5024026261596,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.007011563,
+    "pages_per_sec": 570.4862097081635,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.047992807,
+    "pages_per_sec": 83.34582305219197,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.020931219,
+    "pages_per_sec": 191.10210446892748,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.016996371,
+    "pages_per_sec": 235.3443567453311,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.013598739,
+    "pages_per_sec": 294.1449203488647,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.013359961,
+    "pages_per_sec": 299.40207160784377,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.013307561,
+    "pages_per_sec": 300.5810005304503,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 4,
+    "secs": 0.019720399,
+    "pages_per_sec": 202.83565256463623,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 4,
+    "secs": 0.017403938,
+    "pages_per_sec": 229.83304123469065,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_functions.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 4,
+    "secs": 0.016947681,
+    "pages_per_sec": 236.02049153509557,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.066738434,
+    "pages_per_sec": 104.88708800089616,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.02448845,
+    "pages_per_sec": 285.8490431203282,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.015464764,
+    "pages_per_sec": 452.6418896531496,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.03302501,
+    "pages_per_sec": 211.96057170005398,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.013927066,
+    "pages_per_sec": 502.61842659466106,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.00852768,
+    "pages_per_sec": 820.8563173102181,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.083379527,
+    "pages_per_sec": 83.95346258080836,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.030767658,
+    "pages_per_sec": 227.51162925692947,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.018409339,
+    "pages_per_sec": 380.2417892353441,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.021080987,
+    "pages_per_sec": 332.0527639431683,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.021015818,
+    "pages_per_sec": 333.0824429484496,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.021007159,
+    "pages_per_sec": 333.21973713818227,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.023671107,
+    "pages_per_sec": 295.7191651408614,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.024730228,
+    "pages_per_sec": 283.0544061300203,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_page.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.024587139,
+    "pages_per_sec": 284.7016889602324,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.066207078,
+    "pages_per_sec": 105.7288769034634,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.023705836,
+    "pages_per_sec": 295.2859371844131,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.017845384,
+    "pages_per_sec": 392.25830052186046,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.039580226,
+    "pages_per_sec": 176.85598864443068,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.013953866,
+    "pages_per_sec": 501.6530902618672,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.009220255,
+    "pages_per_sec": 759.1980915929115,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.087702493,
+    "pages_per_sec": 79.81529099748623,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.028940793,
+    "pages_per_sec": 241.8731235180736,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.019779128,
+    "pages_per_sec": 353.90842306091554,
+    "status": "ok"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.022064929,
+    "pages_per_sec": 317.24552569373776,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.02207425,
+    "pages_per_sec": 317.11156664439335,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.02205549,
+    "pages_per_sec": 317.38129599478407,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 7,
+    "secs": 0.023399648,
+    "pages_per_sec": 299.1497991764663,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 7,
+    "secs": 0.024023114,
+    "pages_per_sec": 291.3860376302589,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_cjk_structure.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 7,
+    "secs": 0.024135423,
+    "pages_per_sec": 290.03013537405167,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.092781581,
+    "pages_per_sec": 118.55801422482766,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.031031097,
+    "pages_per_sec": 354.4831173709392,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.023340179,
+    "pages_per_sec": 471.29030158680445,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.073789897,
+    "pages_per_sec": 149.07189801335542,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.025401153,
+    "pages_per_sec": 433.0512083447551,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.018873725,
+    "pages_per_sec": 582.8208263074724,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.151826318,
+    "pages_per_sec": 72.45120704303717,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.054801622,
+    "pages_per_sec": 200.72398587034522,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.039249449,
+    "pages_per_sec": 280.25871140254736,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.026201946,
+    "pages_per_sec": 419.8161464801126,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.026150027,
+    "pages_per_sec": 420.64966127950845,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.026336304,
+    "pages_per_sec": 417.6744010852851,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.016914832,
+    "pages_per_sec": 650.316834361701,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.022474006,
+    "pages_per_sec": 489.4543500611328,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxit_products.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.022906553,
+    "pages_per_sec": 480.2119288746762,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.013555909,
+    "pages_per_sec": 73.76856837855728,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.01226795,
+    "pages_per_sec": 81.51321125371395,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.01348983,
+    "pages_per_sec": 74.12991861276235,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.010039518,
+    "pages_per_sec": 99.60637552519951,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.010098307,
+    "pages_per_sec": 99.0265001846349,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.010656383,
+    "pages_per_sec": 93.84047101159933,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.018963644,
+    "pages_per_sec": 52.73248116237575,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.018957285,
+    "pages_per_sec": 52.75016965773316,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.020440333,
+    "pages_per_sec": 48.92288202936811,
+    "status": "ok"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.0047943,
+    "pages_per_sec": 208.58102329850033,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.004729582,
+    "pages_per_sec": 211.43517545525162,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.004708321,
+    "pages_per_sec": 212.38993687983466,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.004304395,
+    "pages_per_sec": 232.32068618237872,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.004178526,
+    "pages_per_sec": 239.31884114158916,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_foxittext.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.004379724,
+    "pages_per_sec": 228.32488987890562,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.226439098,
+    "pages_per_sec": 48.578183260560415,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.072167349,
+    "pages_per_sec": 152.42350110435675,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.051164172,
+    "pages_per_sec": 214.99419554761874,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.420738531,
+    "pages_per_sec": 26.144503508759932,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.154182039,
+    "pages_per_sec": 71.34423744389579,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.117314981,
+    "pages_per_sec": 93.76466591253167,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.161268052,
+    "pages_per_sec": 68.20941819276146,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.053125685,
+    "pages_per_sec": 207.0561537230061,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.041434681,
+    "pages_per_sec": 265.47809068446793,
+    "status": "ok"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.166381811,
+    "pages_per_sec": 66.11299596925292,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.169979871,
+    "pages_per_sec": 64.71354481731545,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.167111254,
+    "pages_per_sec": 65.82441180173299,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 11,
+    "secs": 0.180867532,
+    "pages_per_sec": 60.817991368401046,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 11,
+    "secs": 0.062843146,
+    "pages_per_sec": 175.03897720206433,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_quick_start.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 11,
+    "secs": 0.046333251,
+    "pages_per_sec": 237.4104938157696,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 14,
+    "secs": 0.175499946,
+    "pages_per_sec": 79.77210431734264,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 14,
+    "secs": 0.054435375,
+    "pages_per_sec": 257.18569955658427,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 14,
+    "secs": 0.030483832,
+    "pages_per_sec": 459.25984633427976,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 14,
+    "secs": 0.091513802,
+    "pages_per_sec": 152.98238838333916,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 14,
+    "secs": 0.028377258,
+    "pages_per_sec": 493.3528109023078,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 14,
+    "secs": 0.017330908,
+    "pages_per_sec": 807.8053383007976,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 14,
+    "secs": 0.193732137,
+    "pages_per_sec": 72.26472704422808,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 14,
+    "secs": 0.062436229,
+    "pages_per_sec": 224.22878870535246,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 14,
+    "secs": 0.036307463,
+    "pages_per_sec": 385.5956556369692,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 14,
+    "secs": 0.121365709,
+    "pages_per_sec": 115.35383524188039,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 14,
+    "secs": 0.121583046,
+    "pages_per_sec": 115.14763333039049,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 14,
+    "secs": 0.121724815,
+    "pages_per_sec": 115.01352456358221,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 14,
+    "secs": 0.112805848,
+    "pages_per_sec": 124.1070409753934,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 14,
+    "secs": 0.058506832,
+    "pages_per_sec": 239.28829371585184,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_055.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 14,
+    "secs": 0.058908089,
+    "pages_per_sec": 237.65836301360923,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.113952359,
+    "pages_per_sec": 87.75597177413414,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.037083407,
+    "pages_per_sec": 269.66238565944064,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.028453397,
+    "pages_per_sec": 351.451884637887,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.099752975,
+    "pages_per_sec": 100.247636724619,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.034667667,
+    "pages_per_sec": 288.4532149221348,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.022375128,
+    "pages_per_sec": 446.92481759210494,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.1664954,
+    "pages_per_sec": 60.06171942287895,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.051141382,
+    "pages_per_sec": 195.5363662249096,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.035884587,
+    "pages_per_sec": 278.6711743401143,
+    "status": "ok"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.058469893,
+    "pages_per_sec": 171.02819052533582,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.058103146,
+    "pages_per_sec": 172.10772029452588,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.058454993,
+    "pages_per_sec": 171.07178509113842,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.063333283,
+    "pages_per_sec": 157.89486232696953,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.038316627,
+    "pages_per_sec": 260.98330628110875,
+    "status": "display-lists"
+  },
+  {
+    "file": "text_tcpdf_063.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.034138671,
+    "pages_per_sec": 292.922943602579,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.093528846,
+    "pages_per_sec": 10.691888575210262,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.091627822,
+    "pages_per_sec": 10.91371570525817,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.092575883,
+    "pages_per_sec": 10.801949358668283,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.051839076,
+    "pages_per_sec": 19.29046729150805,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.0525637,
+    "pages_per_sec": 19.02453594400699,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.053636292,
+    "pages_per_sec": 18.644092697533974,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.078040022,
+    "pages_per_sec": 12.8139379560913,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.081026298,
+    "pages_per_sec": 12.341672082809461,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.082305048,
+    "pages_per_sec": 12.149923052107326,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.094587107,
+    "pages_per_sec": 10.57226541456649,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.094600108,
+    "pages_per_sec": 10.570812456154913,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.094853736,
+    "pages_per_sec": 10.54254731727172,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.17256004,
+    "pages_per_sec": 5.795084423948905,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.169218278,
+    "pages_per_sec": 5.909527102030904,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_system.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.169282908,
+    "pages_per_sec": 5.907270921881847,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.045859565,
+    "pages_per_sec": 130.83421092197452,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.01826893,
+    "pages_per_sec": 328.42645956823964,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.011577845,
+    "pages_per_sec": 518.2311561434792,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.017441428,
+    "pages_per_sec": 344.0085295768214,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.007858696,
+    "pages_per_sec": 763.4854433865364,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.007949965,
+    "pages_per_sec": 754.7203038000796,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.041888788,
+    "pages_per_sec": 143.23641925376307,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.016759013,
+    "pages_per_sec": 358.0163103877299,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.01710431,
+    "pages_per_sec": 350.7887777992798,
+    "status": "ok"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.010651773,
+    "pages_per_sec": 563.2865063872465,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.010536894,
+    "pages_per_sec": 569.4277649561626,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.010585874,
+    "pages_per_sec": 566.793067818491,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 6,
+    "secs": 0.023149321,
+    "pages_per_sec": 259.1868677271355,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 6,
+    "secs": 0.016493015,
+    "pages_per_sec": 363.79036822557913,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_en_tem.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 6,
+    "secs": 0.016899202,
+    "pages_per_sec": 355.0463507093412,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.161854359,
+    "pages_per_sec": 61.783939967906576,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.059864641,
+    "pages_per_sec": 167.0435140503056,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.043783293,
+    "pages_per_sec": 228.3976218965531,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.066257699,
+    "pages_per_sec": 150.92585693324483,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.031105356,
+    "pages_per_sec": 321.488042123678,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.024622989,
+    "pages_per_sec": 406.12453670835816,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.105651908,
+    "pages_per_sec": 94.65044398440963,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.051358491,
+    "pages_per_sec": 194.709770581071,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.043800462,
+    "pages_per_sec": 228.3080941018385,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.059283076,
+    "pages_per_sec": 168.68220535655067,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.059297056,
+    "pages_per_sec": 168.64243648116357,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.059116488,
+    "pages_per_sec": 169.15754535350612,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 10,
+    "secs": 0.121130071,
+    "pages_per_sec": 82.55588325379583,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 10,
+    "secs": 0.117117054,
+    "pages_per_sec": 85.38466140037983,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_feature.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 10,
+    "secs": 0.118023697,
+    "pages_per_sec": 84.72874731249945,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 9,
+    "secs": 0.131594186,
+    "pages_per_sec": 68.39207926708859,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 9,
+    "secs": 0.040471259,
+    "pages_per_sec": 222.3800351750856,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 9,
+    "secs": 0.027494676,
+    "pages_per_sec": 327.3360995415985,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 9,
+    "secs": 0.047287444,
+    "pages_per_sec": 190.32536417066655,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 9,
+    "secs": 0.016773963,
+    "pages_per_sec": 536.5458359482491,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 9,
+    "secs": 0.011519997,
+    "pages_per_sec": 781.2502034505737,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 9,
+    "secs": 0.088163451,
+    "pages_per_sec": 102.08311832076537,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 9,
+    "secs": 0.031659351,
+    "pages_per_sec": 284.2762001027753,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 9,
+    "secs": 0.025305594,
+    "pages_per_sec": 355.652588119449,
+    "status": "ok"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 9,
+    "secs": 0.049620965,
+    "pages_per_sec": 181.37494907646393,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 9,
+    "secs": 0.049473846,
+    "pages_per_sec": 181.91429871855928,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 9,
+    "secs": 0.049726634,
+    "pages_per_sec": 180.98952766439007,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 9,
+    "secs": 0.104283339,
+    "pages_per_sec": 86.30333556926097,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 9,
+    "secs": 0.103585615,
+    "pages_per_sec": 86.88465092377932,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_font_size14.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 9,
+    "secs": 0.107287465,
+    "pages_per_sec": 83.88678024967781,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.012159611,
+    "pages_per_sec": 82.23947295682403,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.011620536,
+    "pages_per_sec": 86.05455032366837,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.010647293,
+    "pages_per_sec": 93.92058619970352,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.005852533,
+    "pages_per_sec": 170.86618734144685,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.005310327,
+    "pages_per_sec": 188.31232050305,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.005258447,
+    "pages_per_sec": 190.17021565492624,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.016239438,
+    "pages_per_sec": 61.57848565941753,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.015085317,
+    "pages_per_sec": 66.28962454020687,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.016660364,
+    "pages_per_sec": 60.02269818354509,
+    "status": "ok"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.008779679,
+    "pages_per_sec": 113.89938060377834,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.008742789,
+    "pages_per_sec": 114.37997645831324,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.008706669,
+    "pages_per_sec": 114.85448683072711,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.010787662,
+    "pages_per_sec": 92.69849203655065,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.011129949,
+    "pages_per_sec": 89.8476713595004,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_paths_1751.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.011183999,
+    "pages_per_sec": 89.41345577731185,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfrum",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.060344307,
+    "pages_per_sec": 16.57157153200881,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfrum",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.060210779,
+    "pages_per_sec": 16.608321908607095,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfrum",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.059824502,
+    "pages_per_sec": 16.71555911990709,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "hayro",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.150047126,
+    "pages_per_sec": 6.664572835603662,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "hayro",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.153236139,
+    "pages_per_sec": 6.525875727004581,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "hayro",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.152612654,
+    "pages_per_sec": 6.5525365937217765,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdf_oxide",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.176779677,
+    "pages_per_sec": 5.656758836594095,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdf_oxide",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.1764436,
+    "pages_per_sec": 5.6675334214445865,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdf_oxide",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.17661484,
+    "pages_per_sec": 5.662038365519002,
+    "status": "ok"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfium-render",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.286691122,
+    "pages_per_sec": 3.488074527818828,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfium-render",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.286547243,
+    "pages_per_sec": 3.489825934217765,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "pdfium-render",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.286489793,
+    "pages_per_sec": 3.4905257514706642,
+    "status": "single-thread-only",
+    "detail": "PDFium keeps one global state; every call must be on one thread"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "mupdf",
+    "threads": 1,
+    "pages": 1,
+    "secs": 0.038811274,
+    "pages_per_sec": 25.765709211194665,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "mupdf",
+    "threads": 4,
+    "pages": 1,
+    "secs": 0.039079601,
+    "pages_per_sec": 25.58879759289252,
+    "status": "display-lists"
+  },
+  {
+    "file": "vector_tcpdf_009.pdf",
+    "engine": "mupdf",
+    "threads": 8,
+    "pages": 1,
+    "secs": 0.038331148,
+    "pages_per_sec": 26.088443789891187,
+    "status": "display-lists"
+  }
+]
