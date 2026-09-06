@@ -62,6 +62,11 @@ pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
 pub use pdfrum::PdfString
 pub use pdfrum::PdfVersion
+pub use pdfrum::PdfaClause
+pub use pdfrum::PdfaLevel
+pub use pdfrum::PdfaReport
+pub use pdfrum::PdfaSubject
+pub use pdfrum::PdfaViolation
 pub use pdfrum::Permissions
 pub use pdfrum::PixelFormat
 pub use pdfrum::Pixmap
@@ -182,6 +187,14 @@ pub fn pdfrum::ImageEncoding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 impl core::str::traits::FromStr for pdfrum::ImageEncoding
 pub type pdfrum::ImageEncoding::Err = pdfrum::UnknownImageEncoding
 pub fn pdfrum::ImageEncoding::from_str(&str) -> core::result::Result<pdfrum::ImageEncoding, pdfrum::UnknownImageEncoding>
+pub enum pdfrum::LineCap
+pub pdfrum::LineCap::Butt
+pub pdfrum::LineCap::Round
+pub pdfrum::LineCap::Square
+pub enum pdfrum::LineJoin
+pub pdfrum::LineJoin::Bevel
+pub pdfrum::LineJoin::Miter
+pub pdfrum::LineJoin::Round
 pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
@@ -191,8 +204,8 @@ pub pdfrum::Paint::Fill(peniko::Color)
 pub pdfrum::Paint::FillStroke(peniko::Color, pdfrum::Stroke)
 pub pdfrum::Paint::Stroke(pdfrum::Stroke)
 impl pdfrum::Paint
-pub fn pdfrum::Paint::fill(self) -> core::option::Option<peniko::Color>
-pub fn pdfrum::Paint::stroke(self) -> core::option::Option<pdfrum::Stroke>
+pub fn pdfrum::Paint::fill(&self) -> core::option::Option<peniko::Color>
+pub fn pdfrum::Paint::stroke(&self) -> core::option::Option<&pdfrum::Stroke>
 pub enum pdfrum::StampPosition
 pub pdfrum::StampPosition::BottomLeft
 pub pdfrum::StampPosition::BottomRight
@@ -293,6 +306,11 @@ impl pdfrum::Canvas<'_, '_>
 pub fn pdfrum::Canvas<'_, '_>::draw_svg(&mut self, &str, kurbo::rect::Rect, pdfrum::SvgFit) -> pdfrum::Result<pdfrum::SvgIngestReport>
 pub fn pdfrum::Canvas<'_, '_>::draw_svg_from(&mut self, &str, kurbo::rect::Rect, pdfrum::SvgFit, core::option::Option<&std::path::Path>) -> pdfrum::Result<pdfrum::SvgIngestReport>
 pub fn pdfrum::Canvas<'_, '_>::place_svg(&mut self, &pdfrum::SvgForm, kurbo::rect::Rect, pdfrum::SvgFit)
+pub struct pdfrum::Dash
+impl pdfrum::Dash
+pub fn pdfrum::Dash::lengths(&self) -> &[f64]
+pub fn pdfrum::Dash::new(&[f64], f64) -> core::option::Option<Self>
+pub fn pdfrum::Dash::phase(&self) -> f64
 pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::add_attachment(&mut self, &str, &[u8], &pdfrum::AttachmentOptions) -> pdfrum::Result<usize>
@@ -336,6 +354,7 @@ pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::D
 pub fn pdfrum::Document::attachments(&self) -> alloc::vec::Vec<pdfrum::Attachment<'_>>
 pub fn pdfrum::Document::blank(f64, f64) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
+pub fn pdfrum::Document::check_pdfa(&self, pdfrum_doc::pdfa::report::Level) -> pdfrum_doc::pdfa::report::Report
 pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::embedded_fonts(&self) -> alloc::vec::Vec<pdfrum::EmbeddedFontFile>
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
@@ -463,6 +482,12 @@ pub pdfrum::Metadata::modification_date: core::option::Option<alloc::string::Str
 pub pdfrum::Metadata::producer: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::subject: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::title: core::option::Option<alloc::string::String>
+pub struct pdfrum::MiterLimit(_)
+impl pdfrum::MiterLimit
+pub fn pdfrum::MiterLimit::get(self) -> f64
+pub fn pdfrum::MiterLimit::new(f64) -> Self
+impl core::default::Default for pdfrum::MiterLimit
+pub fn pdfrum::MiterLimit::default() -> Self
 pub struct pdfrum::OpenOptions
 pub pdfrum::OpenOptions::limits: pdfrum_common::limits::Limits
 pub pdfrum::OpenOptions::password: core::option::Option<alloc::vec::Vec<u8>>
@@ -710,10 +735,18 @@ pub fn pdfrum::StampOptionsBuilder::margin(self, f64) -> Self
 pub fn pdfrum::StampOptionsBuilder::opacity(self, f32) -> Self
 pub fn pdfrum::StampOptionsBuilder::position(self, pdfrum::StampPosition) -> Self
 pub struct pdfrum::Stroke
+pub pdfrum::Stroke::cap: pdfrum::LineCap
 pub pdfrum::Stroke::color: peniko::Color
+pub pdfrum::Stroke::dash: core::option::Option<pdfrum::Dash>
+pub pdfrum::Stroke::join: pdfrum::LineJoin
+pub pdfrum::Stroke::miter_limit: pdfrum::MiterLimit
 pub pdfrum::Stroke::width: f64
 impl pdfrum::Stroke
 pub fn pdfrum::Stroke::new(peniko::Color, f64) -> Self
+pub fn pdfrum::Stroke::with_cap(self, pdfrum::LineCap) -> Self
+pub fn pdfrum::Stroke::with_dash(self, pdfrum::Dash) -> Self
+pub fn pdfrum::Stroke::with_join(self, pdfrum::LineJoin) -> Self
+pub fn pdfrum::Stroke::with_miter_limit(self, pdfrum::MiterLimit) -> Self
 pub struct pdfrum::SvgFonts
 impl pdfrum::SvgFonts
 pub fn pdfrum::SvgFonts::families(&self) -> alloc::vec::Vec<alloc::string::String>
