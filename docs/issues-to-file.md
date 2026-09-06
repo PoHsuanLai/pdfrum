@@ -297,32 +297,54 @@ A warm-open median measured at machine load below 2, published in
 
 ---
 
-## Re-baseline three image_bug_583804 warm rows
+## Keep the pathological image documents from perturbing the rows after them
 
-**Labels:** benchmarks, chore
-**Area:** `benches/baseline.json`
+**Labels:** benchmarks, harness
+**Area:** `crates/pdfrum-render/benches/render.rs`
 
 ### Context
 
-Three warm baselines — `render-warm-agg`, `render-warm-tinyskia` and
-`render-warm-vello-cpu`, all on `image_bug_583804` — were raised to numbers the
-lazy-unpack change produced. The cause was then found and fixed: a sixteen-bit
-image's packed samples are 120 MiB against a 100 MiB decoded-image cache
-budget, so the cache evicted its only entry on every access.
+Attributing the 2026-09-06 ratchet run's 34 regressions found that 30 of them
+were not regressions at all. Fourteen `render-warm-vello-cpu` rows and sixteen
+others measured at or below their baselines on a re-run of the same binary at
+the same commit, on the idle reference box.
 
 ### Problem
 
-The baselines are now loose. `vello-cpu` measures 192.02 ms against a baseline
-of 295. The other two backends have not been re-measured.
+All 44 documents in a render group share one process, and the pathological
+image documents leave a large resident set behind them. Measured with
+`/usr/bin/time -v` on the bench binary: `shading_gouraud` alone peaks at
+27,184 kB and reads 1.2546 ms; `image_bug_583804` then `shading_gouraud`
+peaks at 520,980 kB and reads 1.3004 ms. Repeating the pairing gave +5.4%
+once and +0.4% another time, so the magnitude is unstable — the signature of
+allocator-arena and page-cache state rather than a code path.
+
+The relative sensitivity is the same on all three backends (+0.4% each), but
+`render-warm-vello-cpu` costs 1.26 ms on the small shading files against
+agg's 92 us, so the same absolute perturbation is a rounding error on one and
+a band-breaking excursion on the other. That is why the false positives
+cluster on one backend and look like a backend-specific cause.
+
+This is a measurement-hygiene problem, not a runtime one: a real caller does
+not render a 4473x4473 sixteen-bit image and then a 690-byte shading file in
+the same session. The retention itself is deliberate and bought a 30-34%
+warm improvement on `image_bug_583804`.
 
 ### Proposed fix
 
-Lower all three at the next re-baseline on the reference machine, through
-`ratchet update`. Do not hand-edit `benches/baseline.json`.
+Move the three documents already special-cased for sample count —
+`image_bug_583804`, `image_bug_718762`, `image_bug_898443` — to the end of the
+corpus ordering within each group, or into a `benchmark_group` of their own,
+so their heap footprint does not land on the rows measured after them.
+
+Separately, a re-baseline should gate on `pgrep` returning nothing rather than
+on load average: a benchmark between iterations satisfies a load check while
+still perturbing the box.
 
 ### Acceptance
 
-`ratchet check` green with the three rows at their re-taken medians.
+Two consecutive `ratchet check` runs on the reference machine, from the same
+binary at the same commit, agree row for row within each group's band.
 
 ---
 

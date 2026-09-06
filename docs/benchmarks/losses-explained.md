@@ -56,7 +56,7 @@ taken at `e08d7cc`.
 | **`text_bug_1029.pdf` text** — F1 0.957, **1.000** against the `chars` stream | Almost entirely the harness stream defect (see the row above): via `Display` we lost the whole first line, via the `chars` stream it is present and the soft hyphen matches. The residual is one trailing space before each `\r`. | **harness defect** + **inferior** (small residual) | Closed: the harness fix took this row to 1.000; the trailing space did not survive into the char stream. |
 | **`mixed_en_uicase.pdf` text** — F1 0.991, **1.000 and byte-exact** against the `chars` stream | **Pure harness artefact — the engine already matches.** Against the `chars` stream our output is byte-identical to the oracle modulo the BOM. Both engines write `0x2` to the record and `U+00AD` to the buffer (`crates/pdfrum-text/src/pipeline.rs:962-967` / `core/fpdftext/cpdf_textpage.cpp:1359-1361`) and both exempt `kHyphen` from `IsControlChar` (`cpdf_textpage.cpp:134-147` / `crates/pdfrum-text/src/charinfo.rs:93-108`). | **harness defect** — no engine loss | Closed: the harness fix took this row to 1.000, byte-exact, as predicted. |
 | **`image_ccitt_3bigpreview.pdf` text** — F1 0.994, **0.999** against the `chars` stream | The same spurious generated space, in the vertical CJK region: `Clips Clips` vs `Clips` on line 4, and four blank lines that are a lone space each. | **inferior** | The harness fix took it to 0.999. The `ladder_char_width` truncation is a measured no-op and does not close the rest. |
-| **Warm open** — 0.14 ms median vs hayro 0.04, pdf-rs 0.12 | **The xref chain, and an eager page count.** Callgrind, `profile --op open --file text_quick_start.pdf`, 5 351 895 `Ir` whole process; `Document::from_bytes` (`crates/pdfrum/src/document.rs:148`) is 4 545 569 (84.9%). Split: **`xref::chain::load` 3 524 549 = 77.5% of open** (`crates/pdfrum-parser/src/xref/chain.rs`), of which `read_stream_section` 2 151 836 (47%) inflates the xref stream and `Xref::add_compressed` 1 398 422 (31%) inserts one `BTreeMap<u64, XEntry>` entry per compressed object — `BTreeMap::insert` alone is 1 271 375 `Ir` (28% of open) and `Xref::merge_up` (`crates/pdfrum-parser/src/xref/mod.rs:305-320`) a further 1 087 558 (24%), re-inserting every key of every section while walking `/Prev`. Then **`catalog_page_count` 645 606 = 14.2%** (`crates/pdfrum-parser/src/doc.rs:443-465`): `page_count_of` → `count_subtree` walks the page tree at open so `page_count()` is infallible and O(1) afterwards. hayro's open does not build a complete, merged, generation-checked object index or count pages eagerly. | **more work** (the page-tree walk) + **inferior** (the `BTreeMap`) | The 14.2% page walk is a deliberate API property — `Document::page_count()` returns `u32`, not `Result`, and run 3b shows we recover the whole `FRC` family of damaged trailers that lopdf, pdf-extract and pdf-rs cannot open (46, 46 and 72 files of 209). That is the "what we get". The **52% of open spent in `BTreeMap` insert plus `merge_up`** is not a tradeoff: a sorted `Vec<(u64, XEntry)>` built once and merged by a single descending-priority pass, or a `HashMap`, would remove most of it with no behavioural change. That is the fixable half and it is the larger one. **Fixed 2026-09-06** — the internal working notes. The table is now a slot vector indexed by object number (`EntryTable`, `crates/pdfrum-parser/src/xref/mod.rs`): `BTreeMap::insert` is gone from the profile, `merge_up` fell 1 087 558 → 127 989 and `add_compressed` 1 398 475 → 110 450. Open `Ir` on `text_quick_start` 5 350 120 → 2 713 090 (-49.3%), and on `forms_widgets_407` — the corpus's largest cross-reference at 9950 objects — 14 561 868 → 4 791 409 (-67.1%). Render and text `Ir` improved too, so lookups did not regress. Board: 0 changed rows of 1759, all 770 `FRC`/`bug_*` damaged-file rows unchanged. The 14.2% page walk stays, as argued above; with the container gone `catalog_page_count` is the largest item left in open at 23.6%. |
+| **Warm open** — 0.14 ms median vs hayro 0.04, pdf-rs 0.12 | **The xref chain, and an eager page count.** Callgrind, `profile --op open --file text_quick_start.pdf`, 5 351 895 `Ir` whole process; `Document::from_bytes` (`crates/pdfrum/src/document.rs:148`) is 4 545 569 (84.9%). Split: **`xref::chain::load` 3 524 549 = 77.5% of open** (`crates/pdfrum-parser/src/xref/chain.rs`), of which `read_stream_section` 2 151 836 (47%) inflates the xref stream and `Xref::add_compressed` 1 398 422 (31%) inserts one `BTreeMap<u64, XEntry>` entry per compressed object — `BTreeMap::insert` alone is 1 271 375 `Ir` (28% of open) and `Xref::merge_up` (`crates/pdfrum-parser/src/xref/mod.rs:305-320`) a further 1 087 558 (24%), re-inserting every key of every section while walking `/Prev`. Then **`catalog_page_count` 645 606 = 14.2%** (`crates/pdfrum-parser/src/doc.rs:443-465`): `page_count_of` → `count_subtree` walks the page tree at open so `page_count()` is infallible and O(1) afterwards. hayro's open does not build a complete, merged, generation-checked object index or count pages eagerly. | **more work** (the page-tree walk) + **inferior** (the `BTreeMap`) | The 14.2% page walk is a deliberate API property — `Document::page_count()` returns `u32`, not `Result`, and run 3b shows we recover the whole `FRC` family of damaged trailers that lopdf, pdf-extract and pdf-rs cannot open (46, 46 and 72 files of 209). That is the "what we get". The **52% of open spent in `BTreeMap` insert plus `merge_up`** is not a tradeoff: a sorted `Vec<(u64, XEntry)>` built once and merged by a single descending-priority pass, or a `HashMap`, would remove most of it with no behavioural change. That is the fixable half and it is the larger one. **Fixed 2026-09-06** — the internal working notes. The table is now a slot vector indexed by object number (`EntryTable`, `crates/pdfrum-parser/src/xref/mod.rs`): `BTreeMap::insert` is gone from the profile, `merge_up` fell 1 087 558 → 127 989 and `add_compressed` 1 398 475 → 110 450. Open `Ir` on `text_quick_start` 5 350 120 → 2 713 090 (-49.3%), and on `forms_widgets_407` — the corpus's largest cross-reference at 9950 objects — 14 561 868 → 4 791 409 (-67.1%). Render and text `Ir` improved too, so lookups did not regress. Board: 0 changed rows of 1759, all 770 `FRC`/`bug_*` damaged-file rows unchanged. The 14.2% page walk stays, as argued above; with the container gone `catalog_page_count` is the largest item left in open at 23.6%. **A second pass, 2026-09-06, closed what the first one exposed:** with the per-entry cost gone, the largest single item in open became `__memcpy_avx_unaligned_erms` at **23.2%**, because a slot vector is copied in bulk where a `BTreeMap` was copied node by node. Two copies were redundant. `xref::chain::load` took the body as `&[u8]` and re-wrapped it with `Arc::from`, duplicating a document the caller already held reference-counted — 3.3 MB on `forms_widgets_407`. And `ObjectStore` owned its `Xref` by value, so each of the two stores an open builds deep-copied the whole table. Both now share: `chain::load` takes `&Arc<[u8]>`, `ObjectStore` holds `Arc<Xref>`. Open on `forms_widgets_407` 78 405 011 → **73 130 006** `Ir` for twenty iterations, of which `memcpy` 18 148 589 → **7 580 645** (23.2% → 10.4%). The public `read_xref` keeps its `&[u8]` and pays the one reference count itself. Board: 0 changed rows of 1759. **This is the case where an instruction count and a wall clock disagree, and both are right:** an AVX copy moves 32 bytes per instruction, so a megabyte-scale `memcpy` is cheap in `Ir` and expensive in time, and it evicts every cache line the parse wanted. The first pass cut open's instructions by 67.1% on this file and its wall clock went the other way. |
 | **Warm text** — 0.36 ms median vs PDFium 0.04 | **The page build is real but is *not* skippable work.** the internal working notes recorded the build as 39.3% of `text_tcpdf_063` and called it "work no text consumer reads". Re-measured at `e08d7cc` (callgrind, `profile --op text --iterations 1`) that has moved and the reading has changed: build is **26.7% of `text_tcpdf_063`** (59.3 M of 222.2 M) and **44.8% of `text_quick_start`** (61.8 M of 137.8 M). But the build's own split says almost none of it is graphics. On `text_tcpdf_063`: `show_text` 24.7 M (41.6% of the build), `FontCache::get_or_load` via `find_font` 25.3 M (42.7%), `parse_content` + tokenize 23.4 M, `add_form` 4.1 M — **all four are prerequisites for text**. On `text_quick_start`: font load 46.2 M of the 61.8 M build (75%), `parse_content` 22.1 M; non-text graphics work is under 3% of the build. Ours: `crates/pdfrum-page/src/build.rs` `interpret_streams`. PDFium's cheaper answer: `CPDF_TextPage` reads a page object list PDFium builds once and caches on `CPDF_Page`, so a second text call pays nothing (`core/fpdftext/cpdf_textpage.cpp`). | **tradeoff**, not "more work we could skip" | This corrects `text-perf.md` §6 and answers the brief's question directly: **a text-only build mode is not worth writing.** Measured, it would save under 3% of the build on the two files profiled, because the build on a text page *is* text work — content lexing, font loading and `show_text`. The remaining gap to PDFium's 0.04 ms is font loading (33.6% of the whole `text_quick_start` run) and the per-run rebuild, and the lever there is caching the built page across calls, not a narrower build. The M13 §23.4 extreme case (`image_bug_583804`, 87% `image::unpack`) **did not reproduce**: page 1 of that file profiles at 1 114 966 `Ir` total and has no images, so that row belongs to a later page and is not this median's cause. |
 | **Warm render** — 10.55 ms vs mupdf 4.18, pdfium-render 5.68, hayro 8.78 | Fully explained in `docs/design/mupdf-comparison.md` — §1.1 (`vello_cpu`'s `F32Kernel::pack`, a fixed cost per render), §1.2 (the backend, not the render crate, carries the gap), §4 (the seven things we compute that mupdf does not). **Do not re-derive here.** | **tradeoff** + **inferior**, split per §6 of that doc | §6 is the ranked plan: (a) portable with no pixel change, (b) changes pixels inside the PDFium floor, (c) mupdf's different answer, do not propose. |
 | **Render memory** — 1 539 MiB peak on `image_bug_583804.pdf` (every peer < 1 GiB); median 51.50 MiB | Recorded in the open work list (`docs/issues-to-file.md`) (§ the `image_bug_583804` rows — 176 MB retained for one page with no eviction, 59-75% of that document's render in the image path). Not re-measured here. | **in progress** | Carried by the open work list (`docs/issues-to-file.md`). |
@@ -244,6 +244,28 @@ quantise twice — the same restriction `image_placement` already carried for
 `Placement::Snapped`, now applied one step earlier so the *reduction* is not
 snapped either. SSIM on this file **0.959381 -> 0.999960**.
 
+**What it costs, and what it buys.** Reducing onto upstream's integer
+destination rect costs this file 42% to 55% on the **cold** render, measured
+on `himmel` across the landing commit: agg 45.346 -> 64.520 ms, tiny-skia
+41.475 -> 64.233 ms, vello_cpu 42.632 -> 65.091 ms. The cost is paid in
+`convert_and_reduce`, which now box-filters to each draw's own snapped size
+rather than to a shared ceiled footprint, so more distinct sizes are filtered
+and the source is read 1.75x more often (`image/rows.rs:convert_row`,
+44,627,116 -> 77,921,224 `Ir`). The JPEG decode count is unchanged —
+`image::decode_dct` is byte-identical at 96,178,993 `Ir` — so this is filter
+work, not repeated decoding, and it is inherent to reproducing upstream's
+per-draw geometry.
+
+What it buys is the second resample, which disappears: the reduced pixmap
+lands one texel per device pixel, `placement_for` answers `Placement::Exact`,
+and the backend's bilinear sampler falls from 13.4% of the page's instructions
+to 1.5% (`AggDevice::draw_image` 118,953,754 -> 19,025,956 `Ir`). The **warm**
+render — the state a caller who draws the same page twice is in, and the
+convention the oracle's own column is taken in — therefore drops by 42% to
+74%: agg 6.2435 -> 1.6376 ms, tiny-skia 2.3911 -> 1.3805 ms, vello_cpu 3.5211
+-> 2.0615 ms. The three cold rows are raised in `benches/baseline.json` as a
+deliberate trade, on that arithmetic and on the SSIM above.
+
 ### `shading_tcpdf_058` — the name of the file is not the cause
 
 The brief asked which of three candidates the remaining 0.005 is. The
@@ -338,3 +360,38 @@ Text: `pdfium_test --txt` for the oracle (UTF-16LE), the harness child
 
 Builds: a dedicated `CARGO_TARGET_DIR`;
 the comparison harness from the warm `m21` target dir.
+
+### A criterion interval is not a reproducibility bound
+
+Established 2026-09-06, while attributing a ratchet run's regressions, and
+worth stating because it invalidates the obvious reading of a benchmark
+report. A criterion confidence interval bounds the spread of the samples
+taken inside **one invocation**; it does not bound the spread across
+invocations. On the render benchmarks the two differ by more than an order of
+magnitude — a row can read 1.259 ms and 1.529 ms, minutes apart, from the
+same binary at the same commit on an idle box, each with an interval under
+0.05%.
+
+The mechanism is heap residency carried across benchmark ids within one
+process. All 44 documents in a group share one process
+(`crates/pdfrum-render/benches/render.rs`), and the pathological image
+documents leave a large resident set behind them: `image_bug_583804` alone
+takes the bench binary's peak RSS from 27 MB to 521 MB, because the
+decoded-image cache is deliberately allowed to retain up to its 100 MiB
+budget rather than empty itself (`crates/pdfrum-page/src/image/cache.rs`).
+Every row measured after them in the same process pays for that, by a margin
+that varies from a few tenths of a percent to several percent with machine
+state.
+
+The margin is the same in relative terms on all three backends — measured at
++0.4% each on the pairing above — but only `render-warm-vello-cpu` has a
+per-page cost large enough for it to clear the group's five percent band:
+1.26 ms on the small shading files against agg's 92 us. That is why a
+one-backend cluster is not by itself evidence of a backend-specific cause.
+
+Two rules follow. **A row that moves with a hundredth-of-a-percent interval
+and then returns to baseline on a re-run of the same binary at the same
+commit has not regressed**; it was measured in a different process state.
+And a re-baseline must gate on `pgrep` returning nothing rather than on load
+average, which a job between iterations can satisfy while still perturbing
+the box.
