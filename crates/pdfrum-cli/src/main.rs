@@ -791,10 +791,13 @@ enum Extract {
         /// Pages to convert, 1-based. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
-        /// Write every image the Markdown shows into this directory — JPEG,
-        /// JPEG 2000, JBIG2 and CCITT data as it is in the file, everything
-        /// else decoded to PNG — and link it; without this every image is
-        /// `![alt](image)`.
+        /// Write the Markdown into this directory as `<stem>.md`, with every
+        /// image it shows beside it — JPEG, JPEG 2000, JBIG2 and CCITT data
+        /// as it is in the file, everything else decoded to PNG — linked by
+        /// bare file name, so the directory is self-contained and keeps
+        /// working wherever it is moved. Without this the Markdown goes to
+        /// stdout and every image is `![alt](image)`, because a link would
+        /// have nothing to point at.
         #[arg(short, long, value_name = "DIR")]
         output: Option<PathBuf>,
         /// One JSON document: an array of `{page, markdown}`.
@@ -1118,6 +1121,7 @@ fn run_extract(
             pages.as_deref(),
             output.as_deref(),
             json,
+            term,
         ),
         Extract::Links { input, pages, json } => {
             cmd::extract::links(&input.file, password, pages.as_deref(), json.mode(), term)

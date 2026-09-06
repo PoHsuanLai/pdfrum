@@ -876,7 +876,10 @@ fn markdown_writes_and_links_the_images_it_shows_when_asked() {
     let guide = "../../../benches/corpus/text_quick_start.pdf";
     let dir = scratch("markdown-images").unwrap();
     let dir_arg = dir.to_str().unwrap();
-    let md = stdout(&["extract", "markdown", guide, "-o", dir_arg]).unwrap();
+    // `-o DIR` writes the document into DIR beside its images, so the
+    // Markdown is read back from the file rather than from stdout.
+    stdout(&["extract", "markdown", guide, "-o", dir_arg]).unwrap();
+    let md = std::fs::read_to_string(dir.join("text_quick_start.md")).unwrap();
     assert!(!md.contains("](image)"), "{md}");
     let links: Vec<&str> = md
         .lines()
@@ -885,20 +888,15 @@ fn markdown_writes_and_links_the_images_it_shows_when_asked() {
         .collect();
     assert_eq!(links.len(), 85, "{md}");
     for link in &links {
-        assert!(link.starts_with(dir_arg), "{link}");
-        assert!(Path::new(link).is_file(), "{link} was not written");
+        // A bare name, resolved from beside the document: a link carrying a
+        // directory would not survive the directory being moved.
+        assert!(!link.contains('/'), "{link}");
+        assert!(dir.join(link).is_file(), "{link} was not written");
     }
-    assert!(
-        links[0].ends_with("/text_quick_start-p1-17.png"),
-        "{}",
-        links[0]
-    );
-    assert!(
-        links[1].ends_with("/text_quick_start-p2-13.jpg"),
-        "{}",
-        links[1]
-    );
-    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 85);
+    assert_eq!(links[0], "text_quick_start-p1-17.png");
+    assert_eq!(links[1], "text_quick_start-p2-13.jpg");
+    // The 85 images, plus the document itself.
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 86);
     // Read as a document, the running title and folio are gone.
     assert!(
         !md.lines()
@@ -916,8 +914,9 @@ fn markdown_writes_and_links_the_images_it_shows_when_asked() {
     };
     assert_eq!(words(&plain), words(&md));
     // One page alone is read as a page; its files are still named by it.
-    let one = stdout(&["extract", "markdown", guide, "--pages", "2", "-o", dir_arg]).unwrap();
-    assert!(one.contains("/text_quick_start-p2-13.jpg"), "{one}");
+    stdout(&["extract", "markdown", guide, "--pages", "2", "-o", dir_arg]).unwrap();
+    let one = std::fs::read_to_string(dir.join("text_quick_start.md")).unwrap();
+    assert!(one.contains("](text_quick_start-p2-13.jpg)"), "{one}");
     assert!(!one.contains("](image)"), "{one}");
 }
 
