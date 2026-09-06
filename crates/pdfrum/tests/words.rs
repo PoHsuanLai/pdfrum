@@ -88,7 +88,11 @@ fn the_corpus_guide_gives_a_stable_count_of_real_words() {
     let doc = Document::open(QUICK_START).expect("open");
     let page = doc.page(0).expect("page");
     let words = page.words();
-    assert_eq!(words.len(), 45, "{:?}", texts(&words));
+    // 33 is the oracle's own count: `pdfium_test --txt` on this page splits
+    // into exactly 33 whitespace-separated words, and our page text has been
+    // byte-exact against it since M28 dropped the spurious generated spaces.
+    // The former 45 counted those spurious spaces as word separators.
+    assert_eq!(words.len(), 33, "{:?}", texts(&words));
     for word in &words {
         assert!(!word.text.is_empty(), "{word:?}");
         assert!(word.text.trim() == word.text, "{word:?}");

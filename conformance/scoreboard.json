@@ -1,23 +1,23 @@
 {
-  "generated_at": "2026-09-05T22:02:40Z",
+  "generated_at": "2026-09-06T14:15:40Z",
   "totals": {
     "files": 1759,
-    "pass": 1551,
-    "fail": 208,
+    "pass": 1675,
+    "fail": 84,
     "by_tag": {
       "form-events": 8,
       "js-transcript": 7,
       "page-count": 2,
       "pixel-fail": 28,
-      "tierA-mismatch": 170
+      "tierA-mismatch": 46
     },
     "text": {
       "pages": 2067,
-      "matched": 1785,
+      "matched": 2020,
       "nonempty": 1005,
-      "nonempty_matched": 760,
-      "rate": 0.863570,
-      "nonempty_rate": 0.756219
+      "nonempty_matched": 990,
+      "rate": 0.977262,
+      "nonempty_rate": 0.985075
     }
   },
   "per_file": [
@@ -1368,10 +1368,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_10_8.2.2_Prev_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1382,17 +1380,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1401,14 +1396,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_11_8.2.2_Prev_remove_obj.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1419,17 +1412,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1438,14 +1428,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_12_8.2.2__Next_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1456,17 +1444,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1475,14 +1460,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_13_8.2.2__Next_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1493,17 +1476,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1512,14 +1492,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_14_8.2.2__Next_remove_obj.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1530,17 +1508,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1549,14 +1524,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_15_8.2.2__Next_exchange.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1567,17 +1540,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1586,14 +1556,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_16_8.2.2__Next_add.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1604,17 +1572,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1623,14 +1588,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_17_8.2.2__T8.4_First_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1641,17 +1604,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1660,14 +1620,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_18_8.2.2__T8.4_First_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1678,17 +1636,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1697,14 +1652,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_19_8.2.2__T8.4_First_remove_obj.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1715,17 +1668,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1734,14 +1684,12 @@
         "max_channel_diff": 20,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_1_8.2.2__Title_edit.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1752,17 +1700,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1771,14 +1716,12 @@
         "max_channel_diff": 9,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_20_8.2.2__T8.4_First_remove_value2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1789,17 +1732,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1808,14 +1748,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_21_8.2.2__T8.4_First_remove_all2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1826,17 +1764,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1845,14 +1780,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_22_8.2.2__T8.4_First_remove_obj2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1863,17 +1796,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1882,14 +1812,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_23_8.2.2__T8.4_Last_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1900,17 +1828,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1919,14 +1844,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_24_8.2.2__T8.4_Last_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1937,17 +1860,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1956,14 +1876,12 @@
         "max_channel_diff": 18,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_25_8.2.2__T8.4_Last_remove_obj.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -1974,17 +1892,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -1993,14 +1908,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_26_8.2.2__T8.4_Last_remove_value2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2011,17 +1924,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2030,14 +1940,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_27_8.2.2__T8.4_Last_remove_all2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2048,17 +1956,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2067,14 +1972,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_28_8.2.2__T8.4_Last_remove_obj2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2085,17 +1988,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2104,14 +2004,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_29_8.2.2__T8.4_First_Last_exchange.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2122,17 +2020,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2141,14 +2036,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_2_8.2.2__Title_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2159,17 +2052,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2178,7 +2068,7 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_31_8.2.2_add_dest_entry.pdf",
@@ -2212,10 +2102,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_32_8.2.2_A_Support_action.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2224,16 +2112,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -2242,7 +2128,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_33_8.2.2_A_empty.pdf",
@@ -2396,10 +2282,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_38_8.2.2_Dest_remove.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2408,16 +2292,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -2426,7 +2308,7 @@
         "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_39_8.2.2_C_edit.pdf",
@@ -2460,10 +2342,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_3_8.2.2__Title_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2474,17 +2354,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2493,7 +2370,7 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_40_8.2.2_C_empty1.pdf",
@@ -2587,10 +2464,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_43_8.2.2_C_empty.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2599,16 +2474,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -2617,7 +2490,7 @@
         "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_44_8.2.2_C_remove.pdf",
@@ -2801,10 +2674,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_4_8.2.2_Parent_edit2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -2815,17 +2686,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -2834,7 +2702,7 @@
         "max_channel_diff": 6,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_50_8.2.2_F_remove.pdf",
@@ -3020,10 +2888,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_5_8.2.2_Parent_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3034,17 +2900,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3053,14 +2916,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_6_8.2.2_Parent_remove_all.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3071,17 +2932,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3090,14 +2948,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_7_8.2.2_Parent_remove_obj.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3108,17 +2964,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3127,14 +2980,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_8_8.2.2_Parent_edit.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3145,17 +2996,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3164,14 +3012,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/FRC_9_8.2.2_Prev_remove_value.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3182,17 +3028,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3201,14 +3044,12 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part1/outline.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -3219,17 +3060,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -3238,7 +3076,7 @@
         "max_channel_diff": 7,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.2.2_part2/FRC_56_8.2.2_C_edit_C__1.pdf",
@@ -4506,10 +4344,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.4_part1/FRC_8.4.1_Annotations_AP_N_.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -4518,16 +4354,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -4536,7 +4370,7 @@
         "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.4_part1/FRC_8.4.1_Annotations_AP_N_R.D_.pdf",
@@ -5174,10 +5008,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.4_part2/FRC_8.4.3_Border_Stypes_D_remove.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -5186,16 +5018,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -5204,7 +5034,7 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.4_part2/FRC_8.4.3_Border_Stypes_I_different_values.pdf",
@@ -5478,10 +5308,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.4_part2/FRC_8.4.3_Border_Stypes_W_different_values.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -5490,16 +5318,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -5508,7 +5334,7 @@
         "max_channel_diff": 42,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.4_part2/FRC_8.4.3_Border_Stypes_W_remove.pdf",
@@ -6008,10 +5834,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_E_GoTo_D.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -6020,16 +5844,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -6038,7 +5860,7 @@
         "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_Fo_URI_Base.pdf",
@@ -6102,10 +5924,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_U_GoToR_NewWindow.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -6114,16 +5934,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -6132,14 +5950,12 @@
         "max_channel_diff": 32,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_U_GoToR_NewWindow_2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -6148,16 +5964,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -6166,7 +5980,7 @@
         "max_channel_diff": 32,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_WP.pdf",
@@ -6230,10 +6044,8 @@
     },
     {
       "path": "corpus/fx/FRC_8.5_part2/FRC_8.5_X_GoToR_D.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -6242,16 +6054,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -6260,14 +6070,12 @@
         "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/action/123.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -6276,16 +6084,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -6294,7 +6100,7 @@
         "max_channel_diff": 26,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/action/7_dashed.pdf",
@@ -7066,10 +6872,8 @@
     },
     {
       "path": "corpus/fx/font/font_1_embedded_font_en_feature.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -7096,25 +6900,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt",
-          "input.pdf.7.txt",
-          "input.pdf.8.txt",
-          "input.pdf.9.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 10,
         "actual_pages": 10,
         "text": {
           "pages": 10,
-          "matched": 0,
+          "matched": 10,
           "nonempty": 10,
-          "nonempty_matched": 0
+          "nonempty_matched": 10
         }
       },
       "tierB": {
@@ -7123,14 +6916,12 @@
         "max_channel_diff": 142,
         "pages": 10
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt, input.pdf.7.txt, input.pdf.8.txt, input.pdf.9.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/font/font_2_embedded_font_en_size14.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -7155,24 +6946,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt",
-          "input.pdf.7.txt",
-          "input.pdf.8.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 9,
         "actual_pages": 9,
         "text": {
           "pages": 9,
-          "matched": 0,
+          "matched": 9,
           "nonempty": 9,
-          "nonempty_matched": 0
+          "nonempty_matched": 9
         }
       },
       "tierB": {
@@ -7181,7 +6962,7 @@
         "max_channel_diff": 38,
         "pages": 9
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt, input.pdf.7.txt, input.pdf.8.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/font/type3.pdf",
@@ -7653,10 +7434,8 @@
     },
     {
       "path": "corpus/fx/form/form_same.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -7667,17 +7446,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -7686,7 +7462,7 @@
         "max_channel_diff": 137,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/form/format_alert_box.pdf",
@@ -12471,10 +12247,8 @@
     },
     {
       "path": "corpus/fx/other/12.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -12483,16 +12257,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -12501,7 +12273,7 @@
         "max_channel_diff": 8,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/other/1m_diff_lsjdf.pdf",
@@ -12802,10 +12574,8 @@
     },
     {
       "path": "corpus/fx/other/foxittext.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -12814,16 +12584,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -12832,7 +12600,7 @@
         "max_channel_diff": 9,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/other/group_xobject.pdf",
@@ -12956,10 +12724,8 @@
     },
     {
       "path": "corpus/fx/other/thread_action.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -12970,17 +12736,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -12989,7 +12752,7 @@
         "max_channel_diff": 9,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/path/11.pdf",
@@ -14145,10 +13908,8 @@
     },
     {
       "path": "corpus/fx/text/appstoredescription3.1_en_updated.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14159,17 +13920,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -14178,14 +13936,12 @@
         "max_channel_diff": 25,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/ch_9_android.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14196,17 +13952,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -14215,14 +13968,12 @@
         "max_channel_diff": 25,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_14_foxit_products.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14251,26 +14002,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.10.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt",
-          "input.pdf.7.txt",
-          "input.pdf.8.txt",
-          "input.pdf.9.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 11,
         "actual_pages": 11,
         "text": {
           "pages": 11,
-          "matched": 0,
+          "matched": 11,
           "nonempty": 11,
-          "nonempty_matched": 0
+          "nonempty_matched": 11
         }
       },
       "tierB": {
@@ -14279,14 +14018,12 @@
         "max_channel_diff": 69,
         "pages": 11
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.10.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt, input.pdf.7.txt, input.pdf.8.txt, input.pdf.9.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_contact.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14295,16 +14032,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -14313,7 +14048,7 @@
         "max_channel_diff": 25,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_diy.pdf",
@@ -14347,10 +14082,8 @@
     },
     {
       "path": "corpus/fx/text/en_foxit.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14359,16 +14092,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -14377,14 +14108,12 @@
         "max_channel_diff": 49,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_fqa.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14399,19 +14128,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 4,
         "actual_pages": 4,
         "text": {
           "pages": 4,
-          "matched": 0,
+          "matched": 4,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -14420,14 +14144,12 @@
         "max_channel_diff": 188,
         "pages": 4
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_fqa2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14438,17 +14160,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -14457,14 +14176,12 @@
         "max_channel_diff": 22,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_introduce.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14475,17 +14192,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -14494,7 +14208,7 @@
         "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_system.pdf",
@@ -14532,10 +14246,8 @@
     },
     {
       "path": "corpus/fx/text/en_tem.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14554,21 +14266,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 6,
         "actual_pages": 6,
         "text": {
           "pages": 6,
-          "matched": 0,
+          "matched": 6,
           "nonempty": 6,
-          "nonempty_matched": 0
+          "nonempty_matched": 6
         }
       },
       "tierB": {
@@ -14577,7 +14282,7 @@
         "max_channel_diff": 62,
         "pages": 6
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/en_uicase_.pdf",
@@ -14667,10 +14372,8 @@
     },
     {
       "path": "corpus/fx/text/quick_start_guide.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14699,26 +14402,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.10.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt",
-          "input.pdf.7.txt",
-          "input.pdf.8.txt",
-          "input.pdf.9.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 11,
         "actual_pages": 11,
         "text": {
           "pages": 11,
-          "matched": 0,
+          "matched": 11,
           "nonempty": 11,
-          "nonempty_matched": 0
+          "nonempty_matched": 11
         }
       },
       "tierB": {
@@ -14727,7 +14418,7 @@
         "max_channel_diff": 213,
         "pages": 11
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.10.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt, input.pdf.7.txt, input.pdf.8.txt, input.pdf.9.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/test_m.pdf",
@@ -14761,10 +14452,8 @@
     },
     {
       "path": "corpus/fx/text/whats_new_in_v3.0.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14775,17 +14464,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -14794,14 +14480,12 @@
         "max_channel_diff": 24,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_file1.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14810,16 +14494,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -14828,14 +14510,12 @@
         "max_channel_diff": 10,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_file_structure.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14856,22 +14536,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 7,
         "actual_pages": 7,
         "text": {
           "pages": 7,
-          "matched": 0,
+          "matched": 7,
           "nonempty": 7,
-          "nonempty_matched": 0
+          "nonempty_matched": 7
         }
       },
       "tierB": {
@@ -14880,14 +14552,12 @@
         "max_channel_diff": 66,
         "pages": 7
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_function_list.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14902,19 +14572,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 4,
         "actual_pages": 4,
         "text": {
           "pages": 4,
-          "matched": 0,
+          "matched": 4,
           "nonempty": 4,
-          "nonempty_matched": 0
+          "nonempty_matched": 4
         }
       },
       "tierB": {
@@ -14923,14 +14588,12 @@
         "max_channel_diff": 35,
         "pages": 4
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_page.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14951,22 +14614,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 7,
         "actual_pages": 7,
         "text": {
           "pages": 7,
-          "matched": 0,
+          "matched": 7,
           "nonempty": 7,
-          "nonempty_matched": 0
+          "nonempty_matched": 7
         }
       },
       "tierB": {
@@ -14975,14 +14630,12 @@
         "max_channel_diff": 56,
         "pages": 7
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_shared_document.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -14993,17 +14646,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
           "pages": 2,
-          "matched": 0,
+          "matched": 2,
           "nonempty": 2,
-          "nonempty_matched": 0
+          "nonempty_matched": 2
         }
       },
       "tierB": {
@@ -15012,14 +14662,12 @@
         "max_channel_diff": 70,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/zh_webdav.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15028,16 +14676,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15046,14 +14692,12 @@
         "max_channel_diff": 25,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_circle.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15062,16 +14706,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15080,14 +14722,12 @@
         "max_channel_diff": 24,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_circle_dash.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15096,16 +14736,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15114,14 +14752,12 @@
         "max_channel_diff": 41,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_circle_fill_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15130,16 +14766,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15148,14 +14782,12 @@
         "max_channel_diff": 76,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_circle_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15164,16 +14796,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15182,14 +14812,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ellipse.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15198,16 +14826,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15216,14 +14842,12 @@
         "max_channel_diff": 33,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ellipse_fill.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15232,16 +14856,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15250,14 +14872,12 @@
         "max_channel_diff": 33,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ellipse_fill_dash.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15266,16 +14886,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15284,14 +14902,12 @@
         "max_channel_diff": 59,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ellipse_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15300,16 +14916,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15318,14 +14932,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_freetext.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15334,16 +14946,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15352,14 +14962,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15368,16 +14976,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15386,14 +14992,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_author_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15402,16 +15006,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15420,7 +15022,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_author_content.pdf#form-events",
@@ -15448,10 +15050,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_empty_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15460,16 +15060,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15478,7 +15076,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_empty_content.pdf#form-events",
@@ -15506,10 +15104,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15518,16 +15114,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15536,14 +15130,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_long_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15552,16 +15144,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15570,7 +15160,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_long_content.pdf#form-events",
@@ -15598,10 +15188,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15610,16 +15198,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15628,7 +15214,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author.pdf#form-events",
@@ -15656,10 +15242,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author_no_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15668,16 +15252,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15686,7 +15268,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author_no_content.pdf#form-events",
@@ -15714,10 +15296,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15726,16 +15306,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15744,7 +15322,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_content.pdf#form-events",
@@ -15772,10 +15350,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15784,16 +15360,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15802,14 +15376,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ink.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15818,16 +15390,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15836,14 +15406,12 @@
         "max_channel_diff": 67,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ink_dash.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15852,16 +15420,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15870,14 +15436,12 @@
         "max_channel_diff": 106,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ink_dot.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15886,16 +15450,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15904,14 +15466,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ink_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15920,16 +15480,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15938,14 +15496,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_ink_multiple.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15954,16 +15510,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -15972,14 +15526,12 @@
         "max_channel_diff": 91,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_polygon.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15988,16 +15540,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16006,14 +15556,12 @@
         "max_channel_diff": 8,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16022,16 +15570,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16040,14 +15586,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square_dash.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16056,16 +15600,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16074,14 +15616,12 @@
         "max_channel_diff": 217,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square_fill_negative_border.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16090,16 +15630,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16108,14 +15646,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square_fill_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16124,16 +15660,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16142,14 +15676,12 @@
         "max_channel_diff": 73,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square_fill_opacity_dash.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16158,16 +15690,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16176,14 +15706,12 @@
         "max_channel_diff": 75,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_square_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16192,16 +15720,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16210,14 +15736,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_squiggly.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16226,16 +15750,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16244,14 +15766,12 @@
         "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_squiggly_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16260,16 +15780,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16278,14 +15796,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_squiggly_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16294,16 +15810,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16312,14 +15826,12 @@
         "max_channel_diff": 10,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_stamp.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16328,16 +15840,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16346,14 +15856,12 @@
         "max_channel_diff": 8,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_strikeout.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16362,16 +15870,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16380,14 +15886,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_strikeout_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16396,16 +15900,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16414,14 +15916,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_strikeout_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16430,16 +15930,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16448,14 +15946,12 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_text.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16464,16 +15960,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16482,14 +15976,12 @@
         "max_channel_diff": 27,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_underline.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16498,16 +15990,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16516,14 +16006,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_underline_hidden.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16532,16 +16020,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16550,14 +16036,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_underline_opacity.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16566,16 +16050,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -16584,7 +16066,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/bug_440132.pdf",
@@ -20642,10 +20124,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_001.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -20654,16 +20134,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -20672,7 +20150,7 @@
         "max_channel_diff": 12,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_002.pdf",
@@ -20798,10 +20276,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_006.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -20820,17 +20296,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.3.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 6,
         "actual_pages": 6,
         "text": {
           "pages": 6,
-          "matched": 4,
+          "matched": 6,
           "nonempty": 6,
-          "nonempty_matched": 4
+          "nonempty_matched": 6
         }
       },
       "tierB": {
@@ -20839,7 +20312,7 @@
         "max_channel_diff": 34,
         "pages": 6
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.3.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_007.pdf",
@@ -21299,10 +20772,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_021.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -21311,16 +20782,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -21329,7 +20798,7 @@
         "max_channel_diff": 66,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_022.pdf",
@@ -22395,10 +21864,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_054.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -22407,16 +21874,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -22425,7 +21890,7 @@
         "max_channel_diff": 69,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_055.pdf",
@@ -22468,28 +21933,16 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.txt",
-          "input.pdf.1.txt",
-          "input.pdf.10.txt",
-          "input.pdf.11.txt",
           "input.pdf.12.txt",
-          "input.pdf.13.txt",
-          "input.pdf.2.txt",
-          "input.pdf.3.txt",
-          "input.pdf.4.txt",
-          "input.pdf.5.txt",
-          "input.pdf.6.txt",
-          "input.pdf.7.txt",
-          "input.pdf.8.txt",
-          "input.pdf.9.txt"
+          "input.pdf.13.txt"
         ],
         "golden_pages": 14,
         "actual_pages": 14,
         "text": {
           "pages": 14,
-          "matched": 0,
+          "matched": 12,
           "nonempty": 14,
-          "nonempty_matched": 0
+          "nonempty_matched": 12
         }
       },
       "tierB": {
@@ -22498,7 +21951,7 @@
         "max_channel_diff": 36,
         "pages": 14
       },
-      "notes": "dumps differ: input.pdf.0.txt, input.pdf.1.txt, input.pdf.10.txt, input.pdf.11.txt, input.pdf.12.txt, input.pdf.13.txt, input.pdf.2.txt, input.pdf.3.txt, input.pdf.4.txt, input.pdf.5.txt, input.pdf.6.txt, input.pdf.7.txt, input.pdf.8.txt, input.pdf.9.txt"
+      "notes": "dumps differ: input.pdf.12.txt, input.pdf.13.txt"
     },
     {
       "path": "corpus/third_party/tcpdf/example_056.pdf",
@@ -22596,10 +22049,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_059.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -22638,16 +22089,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 16,
         "actual_pages": 16,
         "text": {
           "pages": 16,
-          "matched": 15,
+          "matched": 16,
           "nonempty": 16,
-          "nonempty_matched": 15
+          "nonempty_matched": 16
         }
       },
       "tierB": {
@@ -22656,7 +22105,7 @@
         "max_channel_diff": 11,
         "pages": 16
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_060.pdf",
@@ -22839,10 +22288,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_065.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -22851,16 +22298,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -22869,7 +22314,7 @@
         "max_channel_diff": 35,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/344775293.in",
@@ -23173,10 +22618,8 @@
     },
     {
       "path": "resources/annotation_highlight_long_content.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -23185,16 +22628,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -23203,7 +22644,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/annotation_highlight_rollover_ap.in",
@@ -23267,10 +22708,8 @@
     },
     {
       "path": "resources/annotation_highlight_square_with_ap.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -23279,16 +22718,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -23297,14 +22734,12 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/annotation_ink_multiple.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -23313,16 +22748,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -23331,7 +22764,7 @@
         "max_channel_diff": 91,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/annotation_markup_multiline_no_ap.in",
@@ -24147,10 +23580,8 @@
     },
     {
       "path": "resources/bug_1029.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -24159,16 +23590,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -24177,7 +23606,7 @@
         "max_channel_diff": 10,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_1055869.in",
@@ -25828,10 +25257,8 @@
     },
     {
       "path": "resources/bug_182.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -25840,16 +25267,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -25858,7 +25283,7 @@
         "max_channel_diff": 7,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_1893.in",
@@ -27135,10 +26560,8 @@
     },
     {
       "path": "resources/bug_444176962.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -27147,16 +26570,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -27165,7 +26586,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_451265.in",
@@ -28741,10 +28162,8 @@
     },
     {
       "path": "resources/bug_601362.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -28753,16 +28172,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -28771,7 +28188,7 @@
         "max_channel_diff": 5,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_602650.pdf",
@@ -29121,10 +28538,8 @@
     },
     {
       "path": "resources/bug_650.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29133,16 +28548,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -29151,7 +28564,7 @@
         "max_channel_diff": 21,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_664284.in",
@@ -31557,10 +30970,8 @@
     },
     {
       "path": "resources/embedded_images.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -31569,16 +30980,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -31587,7 +30996,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/empty_xref.pdf",
@@ -33094,10 +32503,8 @@
     },
     {
       "path": "resources/hello_world_with_invisible_spaces.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33106,16 +32513,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -33124,14 +32529,12 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/hello_world_with_invisible_spaces.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33140,16 +32543,14 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 1,
-          "nonempty_matched": 0
+          "nonempty_matched": 1
         }
       },
       "tierB": {
@@ -33158,7 +32559,7 @@
         "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/image_clipped.in",
@@ -37794,10 +37195,8 @@
     },
     {
       "path": "resources/marked_content_id.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -37806,14 +37205,12 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 0,
           "nonempty_matched": 0
         }
@@ -37824,14 +37221,12 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/marked_content_id.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -37840,14 +37235,12 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
           "pages": 1,
-          "matched": 0,
+          "matched": 1,
           "nonempty": 0,
           "nonempty_matched": 0
         }
@@ -37858,7 +37251,7 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": ""
     },
     {
       "path": "resources/matte.in",

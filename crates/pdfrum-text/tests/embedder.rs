@@ -318,12 +318,21 @@ fn an_unmappable_character_is_still_counted() {
     assert_eq!(page.to_string(), "\u{FFFD}");
 }
 
-/// Audit items **A40 + A43**. `WhitespaceCharCount` used to assert zero
-/// characters, reproducing the bug crbug.com/40643656 reports: the object gate
-/// at `cpdf_textpage.cpp:881` tests `GetRect().Width()`, built from the glyph
+/// Audit items **A40 + A43**. `WhitespaceCharCount` asserts zero characters,
+/// reproducing the bug crbug.com/40643656 reports: the object gate at
+/// `cpdf_textpage.cpp:886` tests `GetRect().Width()`, built from the glyph
 /// bounding boxes, and a space's box is empty while its `w0` per §9.4.3 is
-/// not, so a spaces-only object vanishes. Gating on the advance keeps it, and
-/// this page yields the one character the bug asks for.
+/// not, so a spaces-only object vanishes.
+///
+/// `[oracle-bug]` We keep it, and this page yields the one character the bug
+/// asks for. M28 narrowed *how* we keep it: the general advance gate that
+/// used to do so kept every spaces-only object on every page, which
+/// duplicated separators the inter-object rules already emit and was the
+/// "spurious generated space" defect. The rescue is now page-level —
+/// `pipeline::Builder::keep_spaces_only`, which fires only when the page's
+/// single text object draws nothing but spaces, so there is no neighbour for
+/// `GenerateSpace` to span and PDFium's drop loses the page's only content.
+/// `hello_world_with_invisible_spaces.pdf` above is the contrasting case.
 #[test]
 fn a_whitespace_only_page_yields_the_one_space_it_draws() {
     let page = fixture!("whitespace.pdf");
@@ -435,17 +444,39 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
     assert_eq!(page.chars.len(), 13);
 }
 
+/// `Bug921`. Audit items **A40 + A43**, restored 2026-09-06 by user ruling
+/// after M28 briefly gave them up.
+///
+/// PDFium's box gate drops five objects on this page that draw running
+/// Russian prose. Its `--txt` begins mid-sentence at "разве не выражает"
+/// where the page draws "И разве не выражает"; an em dash, a `в`, a `я` and
+/// a second `И` go the same way. The glyph boxes are empty because of the
+/// font's metrics, not because nothing is drawn — ISO 32000-1 §9.2.2 keeps
+/// the bounding box distinct from the §9.4.3 displacement, and these objects
+/// carry `w0` 5.3–11.3. Ours is the correct behaviour; the oracle's 268 is
+/// the defect, filed as `crbug.com/40643656` / `crbug.com/444176962` and
+/// drafted at `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
+///
+/// **The separating property, since a first pass got this wrong.** These
+/// objects were reported as indistinguishable from the C0 control runs the
+/// oracle *rightly* drops in `text_tcpdf_055.pdf` and `bug_651304.pdf`, on
+/// the grounds that both have empty boxes and no `ToUnicode` mapping. The
+/// mapping is indeed empty for both. The **character codes** are not:
+/// `bug_921`'s are 1048 `И`, 8212 `—`, 1074 `в`, 1103 `я`, while the control
+/// runs' are 0..=31. `object::gate` reads them through the same
+/// code-as-unicode fallback `cpdf_textpage.cpp:1213-1215` uses, so letters
+/// are kept and controls dropped.
+///
+/// **The measured cost, paid deliberately.** Keeping them costs one
+/// benchmark file (41 of 44 byte-exact rather than 42) and moves
+/// `text_tcpdf_055.pdf`'s C0 row down on the conformance board, which is
+/// bucketed not-achievable per the oracle-bug rule rather than matched.
 #[test]
 fn a_cyrillic_run_comes_out_in_order() {
-    // `Bug921`. Audit items **A40 + A43**: the upstream count is 268, and it
-    // is 278 once the advance gate stops deleting the page's spaces-only
-    // objects — which on this page also carried real letters (the oracle
-    // loses an `И`, an `—`, a `в` and a `я`, verified against its own `--txt`).
     let page = fixture!("bug_921.pdf");
     assert_eq!(page.chars.len(), 278);
-    // The run is pinned by *content*, not by offset: A40+A43 restores
-    // characters ahead of it, so an absolute index would pin the bug's
-    // arithmetic rather than the ordering this test is about.
+    // The run is pinned by *content*, not by offset, so it does not depend on
+    // how many characters precede it.
     let run = [
         1095_u32, 1077, 1083, 1086, 1074, 1077, 1095, 1077, 1089, 1082, 1086, 1077, 32, 1089, 1090,
         1088, 1072, 1076, 1072, 1085, 1080, 1077, 46, 32,
@@ -538,16 +569,27 @@ fn cropping_a_page_does_not_change_its_characters() {
     }
 }
 
-/// Audit items **A40 + A43**. `GetTextShouldNotGetInvisibleSpaces` used to
-/// assert the plain string, on the reasoning that three of the five text
-/// objects "show nothing at all". They do show something: each draws a space
-/// glyph with a real advance, and only the empty *bounding box* made them
-/// invisible to the gate. Keeping them is what §9.4.3 requires, so the spaces
-/// and the line breaks they carry are in the output.
+/// `GetTextShouldNotGetInvisibleSpaces`, and the oracle's own name for it is
+/// the right one after all.
+///
+/// Audit items **A40 + A43** changed this to `" \r\n \r\n {HELLO}"`, on the
+/// reasoning that the three space-only objects each draw a space glyph with
+/// a real advance and only the empty bounding box hid them. M28 measured
+/// that reasoning and it does not hold **when the page has other objects**:
+/// the inter-object rules (`GenerateSpace`) already emit a separator from
+/// the gap such an object sits in, so keeping the object emits it twice.
+/// That duplication was the whole of the "spurious generated space" defect —
+/// it cost 21 of the 44 benchmark files their byte-exact match and 242 board
+/// text pages.
+///
+/// So the plain string is correct here, and this page is the *contrast* to
+/// `whitespace.pdf` below: there the spaces-only object is the page's only
+/// object, nothing can act as the neighbour a separator would be generated
+/// against, and PDFium's drop is a true loss that we still diverge on.
 #[test]
 fn invisible_spaces_are_extracted_as_the_spaces_they_draw() {
     let page = fixture!("hello_world_with_invisible_spaces.pdf");
-    assert_eq!(page.to_string(), format!(" \r\n \r\n {HELLO}"));
+    assert_eq!(page.to_string(), HELLO);
 }
 
 // ---------------------------------------------------------------------------
