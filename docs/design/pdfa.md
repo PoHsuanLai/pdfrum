@@ -1,19 +1,21 @@
-# PDF/A — the checker, and what it does not claim
+# PDF/A — the checker, the conversion, and what neither claims
 
-`crates/pdfrum-doc/src/pdfa/`, M26 parts 1 and 2. What `check_pdfa` looks at,
-what it does not, and how we know — which is veraPDF, scored over the corpus
-with the disagreements written down rather than tuned away.
+All four parts of M26. `crates/pdfrum-doc/src/pdfa/` reports what a document
+fails (§§1-7); `crates/pdfrum/src/pdfa/` repairs it (§§8-11). Both are scored
+against veraPDF over the corpus, with the disagreements and the shortfalls
+written down rather than tuned away.
 
 ## 1. Report before repair
 
-M26 has four parts and this pass implements the first two. There is no
-`to_pdfa` and no conversion policy, deliberately: the roadmap orders them that
-way because a converter built on an unexamined checker inherits every one of
-its mistakes and hides them behind a file that now claims to be archival. A
-checker nobody has cross-examined is a claim; one scored against an
-independent implementation is a result.
+The two halves landed in that order and the ordering was the point: a converter
+built on an unexamined checker inherits every one of its mistakes and hides
+them behind a file that now claims to be archival. A checker nobody has
+cross-examined is a claim; one scored against an independent implementation is
+a result. §6 lists what the oracle caught on the checker's first scored run —
+34 disagreements, every one a defect on our side — which is the argument for
+having spent a pass on the checker alone.
 
-So the shipped surface is one method that only reads:
+The reading half is one method:
 
 ```rust
 let report = doc.check_pdfa(PdfaLevel::A2b);
@@ -22,7 +24,7 @@ for violation in &report.violations {
 }
 ```
 
-## 2. Where the code lives, and why it took no feature flag
+## 2. Where the checker lives, and why it took no feature flag
 
 `pdfrum-doc`, next to the annotation model, the AcroForm reader and the
 structure tree. Three reasons, in the order they decided it:
@@ -98,8 +100,10 @@ This is the important half of the table, and it is why a passing report says
   program match the `/Widths` array. Both need the interpreter.
 - **ICC profile validity.** The profile stream's presence is checked; that it
   parses as a valid ICC profile of the right class is not. `moxcms` is already
-  in the tree and could do it — deferred with the conversion, which is the
-  pass that has to write one.
+  in the tree and could do it. Still unimplemented *for reading* — but the
+  conversion now writes a profile rather than only reading someone else's, and
+  the one it writes comes out of `moxcms` and is asserted well-formed in
+  `pdfrum-page`'s own test (§8).
 - **A-2's `/CIDSet` completeness rule** (6.2.11.4.2). Where A-1 requires a
   CIDFont subset to *have* a `/CIDSet`, A-2 instead requires that one which is
   present list every CID in the program. Checking that means parsing the
@@ -218,7 +222,7 @@ corrections in the table above, **the checker and veraPDF disagree about four
 distinct requirements across 82 scored file-level pairs**, and every one of
 the four is explained rather than outstanding.
 
-## 7. The run
+## 7. The checker's run
 
 veraPDF 1.30.2 (greenfield, built 2026-06-03) under openjdk 21.0.12, over the
 44-document benchmark corpus at flavours `1b` and `2b`:
@@ -239,17 +243,253 @@ Each invocation starts a JVM, so the scored run takes roughly two minutes.
 That is the reason the oracle is a separate test rather than part of the
 per-crate suite, and the reason a missing veraPDF skips rather than fails.
 
-## 8. What comes next
 
-Parts 3 and 4 of M26 — `to_pdfa(level, policy)` and the policy that decides
-what to do with a document that cannot be converted faithfully. Nothing in
-this pass anticipates them beyond one thing: `Subject` carries the `ObjRef`
-rather than a formatted string, because a converter has to reach the object it
-is about to rewrite, and a report that had thrown that away would have had to
-be redesigned first.
+## 8. The conversion: `to_pdfa`, and the shape that makes lossiness loud
 
-The debt the conversion inherits is §4's list. The two items most likely to
-matter there are the content-stream gap — a converter that rewrites colour
-must see the operands, so it will need the interpreter this checker does
-without — and ICC profile validation, which becomes load-bearing the moment we
-are the ones writing the profile rather than reading someone else's.
+M26 parts 3 and 4, in `crates/pdfrum/src/pdfa/`. Where the checker reports,
+this repairs — and the roadmap's fourth item names the failure mode it is
+built against: *silent lossy conversion*. A converter that quietly drops a
+font, deletes an annotation or rasterizes a page has produced a file that
+passes a validator and is not the document the caller handed in.
+
+Two things prevent that, and neither is a convention someone has to remember:
+
+**One pass decides, a second writes.** `convert.rs` surveys the object graph
+first, deciding every repair and — where the repair changes what the document
+means — asking `Policy` whether it is allowed. Nothing is written during the
+survey. Only if the survey collects no `Refusal` does the applying pass run,
+and by then every decision is made, so the writer cannot discover a compromise
+it has to make up its mind about mid-file. The same survey entry produces both
+the edit and the `Compromise`, so a compromise that reaches the file has a
+report entry *by construction* rather than by discipline.
+
+**A refusal writes nothing.** `to_pdfa` returns `(Conversion, Option<Vec<u8>>)`
+internally, and the bytes are `None` exactly when `Conversion::converted()` is
+false. There is no file for a caller to mistake for a conversion.
+
+### The policy is a struct of enums
+
+```rust
+let outcome = doc.to_pdfa("out.pdf", PdfaLevel::A2b, &PdfaPolicy::lossy())?;
+for compromise in &outcome.compromises {
+    eprintln!("cost: {compromise}");   // and match on it, which is the point
+}
+```
+
+`Policy` has one `Concession` per *kind* of compromise the pipeline can face —
+`unembeddable_font`, `unrepresentable_content`, `forbidden_feature` — each
+`Refuse` by default, because a caller who has not thought about a compromise
+has not agreed to it. `Policy::strict()` is that default named; `lossy()` is
+the archivist's answer, "produce a conforming file and tell me what it cost".
+
+Three things are deliberate here and each removes a check or a comment, which
+is STYLE.md §2's test for whether a type is earning its place:
+
+- **`Concession` is not `bool`.** "Rasterize it" and "refuse" are different
+  answers, and a future third answer ("substitute and mark it") is a variant
+  rather than a second boolean nobody can order against the first.
+- **The axes are separate** because a caller's answers genuinely differ between
+  them. An archive may accept a substituted font — the text stays text, and
+  stays searchable — while refusing a rasterized page, where the text stops
+  being text at all.
+- **`Refusal` names the concession, not the problem.** A caller reads a
+  refusal, widens one named field, and runs again;
+  `widening_the_policy_a_refusal_names_makes_the_conversion_succeed` asserts
+  that loop actually closes over the corpus.
+
+`Policy` is `#[non_exhaustive]` so a fourth concession is not a breaking
+change, which means a caller cannot write a struct literal — hence the three
+`const fn` setters, chained off `strict()` or `lossy()`.
+
+### `Compromise` is the complete list of ways the file can differ
+
+`FontSubstituted`, `ActionRemoved`, `AnnotationRemoved`,
+`AnnotationFlagsChanged`, `FormFlattened`, `PageRasterized`,
+`EmbeddedFileRemoved`, `OptionalContentRemoved`, `ObjectMetadataRemoved`. Each
+carries the `ObjRef` or page index it happened to, for the same reason
+`Subject` does (§3): a caller showing a user what changed has to reach the
+thing, and a sentence cannot be turned back into a reference.
+
+A repair that changes nothing a reader would notice is **not** a compromise and
+does not appear: minting a `/ID`, writing the output intent, rewriting the XMP
+packet, dropping an `/Interpolate` hint or a `/TR` transfer function. The list
+is about meaning, not about bytes.
+
+One entry is worth calling out because it *adds* rather than removes.
+`AnnotationFlagsChanged` is PDF/A requiring every annotation be visible and
+printable: an annotation hidden by its `/F` flags has them cleared and becomes
+visible, which changes what the page draws. It is gated on
+`forbidden_feature` and reported. That gating was not in the first draft — the
+test `the_strict_policy_refuses_what_the_lossy_policy_compromises` caught a
+compromise being made under a policy that authorized none, which is exactly the
+class of bug this design exists to make loud.
+
+`Conversion::rasterized_pages()` is the roadmap's "say which", kept as its own
+accessor because it is the compromise whose *extent* a caller almost always
+wants separately.
+
+### Where the code lives, and why it is behind `edit`
+
+The facade, not `pdfrum-doc`. The checker reads the object graph, which
+`pdfrum-doc` already has; the conversion **writes**, which needs
+`pdfrum-edit`'s overlay and the writer, and needs the facade's own `Metadata`.
+Making the checker depend on the writer to serve the caller who wants to repair
+would be the wrong edge — the checker ships to the caller who only wants to
+know. So the conversion sits beside `flatten` and `stamp`, the other write-side
+document operations, behind the `edit` feature that gates saving. The checker
+stays in the default set (§2) and is unaffected.
+
+## 9. The run: what veraPDF says about the output
+
+The checker's exit criterion was agreement. The conversion's is stricter and
+is a *difference* — the same 44 corpus files, through the same veraPDF at the
+same flavour, before and after:
+
+```
+PDFRUM_VERAPDF=~/verapdf/verapdf \
+  cargo nextest run -p pdfrum --test pdfa_convert --no-capture
+```
+
+> `veraPDF A-2b over 44 corpus files: 0 passed before conversion, 10 after`
+
+**0 to 10 of 44.** Not one corpus document is a PDF/A file to begin with — they
+are rendering fixtures, and veraPDF fails every one — so the before-number is
+asserted to be zero rather than assumed. That is what makes the after-number a
+conversion result rather than a statement about the corpus. `A2B_PASS_FLOOR`
+pins it: the number may rise freely and may not fall without someone editing
+the constant.
+
+All 44 convert (none refuses under `lossy`), all 44 reopen in our own parser,
+and one file — `shading_type4_5` — that veraPDF previously **declined to parse
+at all** comes out of the rewrite as a file it validates and passes.
+
+The repairs, and the rule each answers, counted over the 41 files veraPDF has
+an opinion on:
+
+| Repair | veraPDF rule | Failed before |
+|---|---|---|
+| the XMP packet, with the PDF/A identification schema | 6.6.4-1 | 27 |
+| the packet rewritten so it parses, as UTF-8 | 6.6.2.1-1/-4/-5 | 14/11/11 |
+| the sRGB output intent | 6.2.4.3-2/-4 | 33/28 |
+| a trailer `/ID` | 6.1.3-1 | 11 |
+| legal object spacing | 6.1.9-1 | 7 |
+| JavaScript and the forbidden actions stripped | 6.5.1-1, 6.4.1-1/-2 | 1, 2/2 |
+| annotation flags corrected or supplied | 6.3.2-1/-2 | 4/5 |
+| `/Interpolate` and `/TR` dropped, recursively | 6.2.8-3, 6.2.5-1 | 3, 2 |
+| a button widget's `/N` made a state subdictionary | 6.3.3-3 | 3 |
+| `/Metadata` on non-catalog objects removed | 6.6.2.3.1-1/-2 | 1/5 |
+
+Two of those cost no code at all. The writer already mints an `/ID` on every
+save and emits its own object frames, so a **full rewrite** — never an
+incremental save — answers 6.1.3 and 6.1.9 as a side effect of writing the file
+at all. That is also why `remove_security` is set unconditionally: the trailer
+is the writer's to build, and it is the only way to drop the `/Encrypt` PDF/A
+forbids.
+
+### Three findings the oracle forced, which reading the standard would not have
+
+- **The XMP packet is generated, not patched.** Splicing the identification
+  schema into the document's existing packet is the obvious conversion and it
+  is wrong: 11 corpus files fail 6.6.2.1-4 ("serialized incorrectly and can not
+  be parsed") and 11 fail -5 ("encoding null different from UTF-8") *before*
+  anything is spliced. A packet that does not parse does not start parsing
+  because something was added to it. So the packet is built from the
+  information dictionary, which is the store PDF/A requires it to agree with
+  anyway (6.6.2.3.1) — making that agreement true by construction rather than
+  checked afterwards.
+- **`Dict::dict` answers for a stream.** A stream *has* a dictionary, so
+  "is this `/N` a state subdictionary?" asked as `ap.dict("N").is_none()` is
+  always false — it passes on exactly the shape it is looking for. Asked as
+  `ap.stream("N").is_some()` it works. The 6.3.3-3 repair was silently a no-op
+  until veraPDF said the count had not moved.
+- **`/Type` is optional on a graphics-state dictionary.** The `/TR` repair was
+  gated on `/Type /ExtGState` and the corpus file carrying the offending `/TR`
+  omits the key entirely, so the repair never fired. It now keys off `/TR`
+  itself, which no other PDF object type defines.
+
+### The scored test's gating
+
+Identical to §6's, and for the same reason: `$PDFRUM_VERAPDF` unset **skips
+with a printed note** and the four unscored tests still convert all 44 files;
+set-but-broken **fails**. A silently skipping oracle is a false green. One
+veraPDF invocation validates the whole output directory, so the scored test
+costs one JVM start rather than 44 and runs in about eight seconds.
+
+## 10. What the conversion does not repair
+
+The honest half, and the reason 10 of 44 is the number rather than 44 of 44.
+Every item is a rule veraPDF still fails converted files on.
+
+- **Fonts that are not embedded — 6.2.11.4.1, 21 files.** The single largest
+  remaining blocker, and the one the roadmap anticipated: `Policy` has an
+  `unembeddable_font` concession and the substitution behind it is **not
+  implemented**. Doing it means finding a system font of the right metrics,
+  embedding and subsetting it, and rewriting the font dictionary's `/Widths`
+  and encoding to match — a font problem, not a PDF/A one. Until it lands, a
+  document with an unembedded font converts (the other repairs still apply) but
+  does not pass.
+- **Non-UTF-8 resource names — 6.1.8-1, 13 files.** A font resource named with
+  bytes that are not valid UTF-8. Renaming it means rewriting every content
+  stream that names it, which needs the interpreter §4's first bullet says this
+  code does without. Not attempted rather than attempted badly.
+- **DeviceCMYK without a CMYK output intent — 6.2.4.3-3, 5 files.** The sRGB
+  intent we write covers RGB and Gray; CMYK needs a CMYK profile, and `moxcms`
+  has a built-in sRGB profile but no built-in CMYK one. A correct CMYK profile
+  is LUT data, not a formula, so this is a **dependency or a vendored asset
+  question and is left for the user** rather than decided here. Nothing else in
+  the pass needs one.
+- **Rasterizing a page — the `unrepresentable_content` concession.** The
+  concession is live and refuses, naming the page; the *repair* does not exist.
+  Two reasons it was not written: A-2b permits transparency, so no corpus file
+  needs it at this level, and the facade's `edit` feature does not imply a
+  rasterizer, so `to_pdfa` would have to take a `RasterBackend` type parameter
+  to have one. That is a signature change worth making when the repair is real
+  and not before. `Compromise::PageRasterized` and `RasterCause` are in the
+  vocabulary anyway, so a caller writes that match arm once.
+
+Both of the first two concessions are **live rather than reserved**, and that
+distinction was forced by the dead-code sweep at the end of this pass. As first
+written, `unembeddable_font` and `unrepresentable_content` were never read: the
+fields existed, the `Refusal` variants existed, and nothing produced either —
+a dead option of exactly the kind STYLE.md §4 forbids, wearing documentation
+that claimed a caller "still gets a refusal". They now drive a real refusal,
+detected through **the checker** (`survey_unrepairable`) rather than through a
+second implementation of the same walk — which is `Subject` carrying an
+`ObjRef` (§3) being used for the purpose it was designed for. `Accept` on
+either currently means "convert as far as you can": every other repair applies
+and no `Compromise` is reported, because with no substitution performed nothing
+was in fact compromised.
+- **Glyph widths, `.notdef` references, CIDSet completeness, CIDSystemInfo** —
+  6.2.11.5, 6.2.11.8, 6.2.11.4.2, 6.2.11.3.1, one or two files each. All need
+  the embedded font program parsed and compared against the dictionary, which
+  is the checker's §4 gap seen from the writing side.
+- **LZW re-encoded as Flate — 6.1.7.2-1, one file.** Genuinely in reach: decode
+  the stream and hand the writer raw bytes, which it flates. Not done because
+  the one file that needs it fails four other rules, so it cannot change the
+  number; recorded here rather than left as a surprise.
+- **A direct annotation or resource inside a dictionary we do not rewrite.**
+  The repairs work by replacing indirect objects. A `/Annots` array or an
+  `/ExtGState` written inline in a page rather than as its own object is
+  reached only when the page itself is being rewritten for another reason.
+
+None of these is a case where the conversion writes something wrong. Each is a
+case where it writes less than a complete repair and the file still fails
+validation — which is the direction that is safe, and it is visible because
+veraPDF says so.
+
+## 11. Named debt
+
+For the roadmap, and each one is a decision rather than an oversight:
+
+1. **Font embedding and substitution** — the `unembeddable_font` concession
+   detects and refuses; the substitution behind `Accept` is unwritten. 21 of 44
+   corpus files are blocked on it. The largest single item.
+2. **Page rasterization** — likewise for `unrepresentable_content`, and wiring
+   the repair needs `to_pdfa` to take a backend.
+3. **A CMYK output intent** — needs a profile `moxcms` does not carry.
+   **The user's call**, per M26's "no new colour dependency is taken".
+4. **The checker gaps §4 lists are inherited**, and two are now load-bearing
+   rather than theoretical: the conversion writes an ICC profile without
+   validating it (it comes from `moxcms`, so it is well-formed by
+   construction — asserted in `pdfrum-page`'s own test), and the
+   content-stream gap is what blocks the UTF-8 resource-name repair.

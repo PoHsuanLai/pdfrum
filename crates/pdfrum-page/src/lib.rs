@@ -85,7 +85,7 @@ pub use build::{
 };
 pub use color::{
     ColorSpace, ColorValue, Family, PatternSpace, PatternValue, Rgb, Separation,
-    SetComponentsError, adobe_cmyk_to_srgb, load_colorspace,
+    SetComponentsError, adobe_cmyk_to_srgb, load_colorspace, srgb_profile_bytes,
 };
 pub use content::parse_content;
 pub use error::Error;
