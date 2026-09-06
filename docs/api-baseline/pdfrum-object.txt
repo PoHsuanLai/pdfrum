@@ -137,6 +137,7 @@ pub const pdfrum_object::names::RUN_LENGTH_DECODE: &pdfrum_object::Name
 pub const pdfrum_object::names::S: &pdfrum_object::Name
 pub const pdfrum_object::names::SATURATION: &pdfrum_object::Name
 pub const pdfrum_object::names::SCREEN: &pdfrum_object::Name
+pub const pdfrum_object::names::SHADING: &pdfrum_object::Name
 pub const pdfrum_object::names::SIG: &pdfrum_object::Name
 pub const pdfrum_object::names::SIZE: &pdfrum_object::Name
 pub const pdfrum_object::names::SMASK: &pdfrum_object::Name
