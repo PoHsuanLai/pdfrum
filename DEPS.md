@@ -172,6 +172,50 @@ exposes gaps — no longer the default plan. We do **not** depend on
 `hayro-syntax`/`hayro-interpret`/`hayro` itself (that's a competing engine,
 not a codec).
 
+### A vendored CMYK profile, and the dependency it did not become (M26, 2026-09-07)
+
+| Asset | Use | Why |
+|---|---|---|
+| `crates/pdfrum-page/assets/CGATS001Compat-v2-micro.icc` | The `/DestOutputProfile` of the CMYK PDF/A output intent `to_pdfa` writes | 8464 bytes, **CC0-1.0**, from [Compact-ICC-Profiles](https://github.com/saucecontrol/Compact-ICC-Profiles); colorimetrically CGATS TR 001 (SWOP). Data, not code: **no crate is added, and no build machinery** |
+
+M26's rule was that no new colour dependency is taken. **The user lifted it**
+for this one purpose — ISO 19005-2 6.2.4.3-3 makes `/DeviceCMYK` legal only
+against a CMYK destination profile, and `moxcms` builds sRGB from a formula but
+carries no CMYK profile, because a CMYK profile is measured LUT data.
+
+The lift turned out not to be needed, and that is the point worth recording.
+What the conversion needs is *a profile*; `moxcms` is already the colour
+management. crates.io has colour crates in quantity and essentially none that
+ship a permissively-licensed CMYK profile as bytes:
+
+- `rustybara-icc` — LGPL-3.0-only, and its profiles are Adobe's under the
+  non-transferable Color Profile Bundling Agreement. Twice disqualified.
+- `printpdf` — ships `CoatedFOGRA39.icc` under the same Adobe agreement, and
+  654 KB of it.
+- `cmx` — MIT/Apache-2.0 crate, but its CMYK fixture is Apple's, vendored as a
+  test file the crate licence does not cover.
+- `zpdf-color` — MIT, a genuinely free 2244-byte `prtr`/CMYK profile, but it is
+  the crate's own test fixture and is not exported; taking the crate to reach
+  an `include_bytes!` of a file in its `testdata/` is taking a dependency to
+  avoid vendoring 2 KB.
+- `gamut-icc`, `tintbox`, `pdfboss-icc`, `icc-profile`, `appthere-color`,
+  `stet-graphics` — colour-management engines that ship no profile.
+  `gamut-icc` (MIT/Apache-2.0, three deps) *can* construct and serialise a
+  `prtr`/CMYK profile, but we would then have to supply the LUT numbers, which
+  is the measurement we do not have.
+- Ghostscript's `default_cmyk.icc` — AGPL-3.0, and 187 KB.
+
+So the profile is checked in. CC0-1.0 is a public-domain dedication and was
+**already on `deny.toml`'s allowlist** (M12c admitted it for `hexf-parse`), so
+no policy line moved for this either.
+
+One thing is done to the bytes: upstream declares device class `scnr`, an input
+profile, and 6.2.3 requires an output intent's profile be `prtr` or `mntr`.
+`cmyk_profile_bytes` parses the asset, sets `ProfileClass::OutputDevice` and
+re-encodes through `moxcms` — which is why the asset needs no colour code of
+its own beyond what `pdfrum-page` already had. `docs/design/pdfa.md` §9.1
+carries the measurement, including the veraPDF run that found the `scnr`.
+
 ## Crypto, text, numeric
 
 | Crate | Use | Why |

@@ -319,8 +319,8 @@ already long; the two cross-reference.
 
 ## M26 — PDF/A: the checker first, the conversion second
 
-**Parts 1 and 2 are met. Parts 3 and 4 are explicitly deferred to a later
-pass**, which is the order this entry asks for: report before repair.
+**All four parts are met**, in the order this entry asks for: report before
+repair.
 
 - **Part 1, met.** `Document::check_pdfa(level)` in the default feature set,
   over `crates/pdfrum-doc/src/pdfa/`. `PdfaLevel` is an enum with `A1b` and
@@ -348,7 +348,26 @@ pass**, which is the order this entry asks for: report before repair.
   profile has no JPEG 2000 rule to compare against). Six further pairs are
   unscored because veraPDF declines to parse three `shading_*` files our
   parser opens.
-- **Part 3 (`to_pdfa`) and part 4 (the conversion policy): not started.**
+- **Parts 3 and 4, met.** `Document::to_pdfa(path, level, policy)` in
+  `crates/pdfrum/src/pdfa/`, behind `edit` because it writes a file. veraPDF
+  over the 44-file corpus at A-2b: **0 passed before conversion, 11 after** —
+  10 when the conversion landed, and 11 once the CMYK output intent joined it.
+  The before-number is asserted rather than assumed, so the after-number is a
+  conversion result and not a statement about the corpus, and `A2B_PASS_FLOOR`
+  pins it. Two passes: the survey decides every repair and asks `Policy` about
+  the ones that change meaning, the apply pass writes and never re-decides, so
+  a compromise reaching the file has a report entry by construction.
+  `docs/design/pdfa.md` §§8-10 carry the shape, the run and the honest list of
+  what it does not repair.
+
+  The rule below that **no new colour dependency is taken** was lifted by the
+  user for the CMYK output intent, ISO 19005-2 6.2.4.3-3 requiring a CMYK
+  destination profile that `moxcms` cannot compute. It was then not needed: the
+  profile is 8 KB of CC0-1.0 data vendored in `pdfrum-page/assets/` and
+  re-encoded as an output profile through the `moxcms` already in the tree, so
+  the dependency count did not move and neither did `deny.toml`. DEPS.md
+  records the crates examined and declined; `docs/design/pdfa.md` §9.1 records
+  why it is worth one corpus file rather than the five that fail the rule.
 - **Named debt**, all in `docs/design/pdfa.md` §4: the checker reads the
   object graph and not content-stream operands, so inline colour and
   `gs`-less transparency are invisible to it; CMap embedding, glyph-presence
@@ -401,7 +420,8 @@ their absence is a decision.
 
 **Rules:** the checker ships before the converter and is useful alone; no
 compliance claim without a veraPDF score behind it; `moxcms` is already in
-the tree and no new colour dependency is taken.
+the tree and no new colour dependency is taken — *lifted by the user for the
+CMYK output intent, and then not needed; see the status above*.
 **Exit:** `check_pdfa` agrees with veraPDF on a published corpus with the
 disagreements enumerated and adjudicated; `to_pdfa(A2b)` produces files
 veraPDF passes for the inputs it accepts and a named compromise list for the

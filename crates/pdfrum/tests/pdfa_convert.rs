@@ -40,13 +40,14 @@ use pdfrum_corpus::CORPUS;
 
 /// How many corpus files veraPDF passes at A-2b after conversion.
 ///
-/// Measured, not chosen: the run in `docs/design/pdfa.md` §9. The floor exists
+/// Measured, not chosen: the run in `docs/design/pdfa.md` §9 — 10 when the
+/// conversion landed, 11 once the CMYK output intent joined it. The floor exists
 /// so the number cannot quietly regress — a change that converts fewer files
 /// fails here rather than being noticed a milestone later.
 ///
 /// Before conversion the same corpus passes **zero**, which is the other half
 /// of the claim and is asserted alongside it.
-const A2B_PASS_FLOOR: usize = 10;
+const A2B_PASS_FLOOR: usize = 11;
 
 /// The veraPDF launcher, when one is configured and present.
 fn verapdf() -> Option<PathBuf> {
@@ -231,6 +232,59 @@ fn every_corpus_file_converts_and_the_output_reopens() {
             );
         }
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A CMYK document gets a CMYK output intent, and an RGB one does not.
+///
+/// The half of the CMYK intent that needs no oracle. An output intent carries
+/// **one** destination profile (ISO 19005-2 6.2.4.2), so writing a CMYK
+/// profile is not an addition to the sRGB one but a choice against it — and a
+/// choice made wrongly is worse than no CMYK support at all, because it would
+/// take an RGB file that passes today and fail it on 6.2.4.3-2.
+///
+/// So this asserts the choice in both directions over the corpus rather than
+/// only that a CMYK profile can be written: `image_bug_718762` paints in
+/// `/DeviceCMYK` and nothing else, and the remaining files must keep sRGB.
+#[test]
+fn only_a_cmyk_document_is_given_a_cmyk_output_intent() {
+    /// The `/OutputConditionIdentifier` each profile is written under.
+    const CMYK_CONDITION: &[u8] = b"CGATS TR 001";
+    const SRGB_CONDITION: &[u8] = b"sRGB IEC61966-2.1";
+
+    let dir = scratch("intent");
+    let conversions = convert_corpus(&dir, PdfaLevel::A2b, PdfaPolicy::lossy());
+
+    let mut cmyk = Vec::new();
+    for (stem, _) in &conversions {
+        let bytes = std::fs::read(dir.join(format!("{stem}.pdf")))
+            .unwrap_or_else(|e| panic!("{stem}: the output is readable, got {e}"));
+        let has = |needle: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
+        // Exactly one intent reaches the file, whichever it is.
+        assert!(
+            has(CMYK_CONDITION) != has(SRGB_CONDITION),
+            "{stem}: a file carries one output intent, not both and not neither"
+        );
+        if has(CMYK_CONDITION) {
+            cmyk.push(*stem);
+        }
+    }
+
+    assert!(
+        cmyk.contains(&"image_bug_718762"),
+        "image_bug_718762 paints only in /DeviceCMYK, so it must get the CMYK intent; \
+         got {cmyk:?}"
+    );
+    // The corpus is overwhelmingly RGB, so a scan that had gone wrong in the
+    // permissive direction would show up as most of it turning CMYK.
+    assert!(
+        cmyk.len() * 4 < conversions.len(),
+        "only a document painting in CMYK alone takes the CMYK intent, and the corpus \
+         is mostly RGB; {} of {} is too many",
+        cmyk.len(),
+        conversions.len()
+    );
+
     let _ = std::fs::remove_dir_all(&dir);
 }
 

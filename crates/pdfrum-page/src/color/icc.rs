@@ -328,10 +328,11 @@ mod tests {
 ///
 /// PDF/A requires an `/OutputIntent` whose `/DestOutputProfile` is an embedded
 /// ICC profile, and the conversion has to produce those bytes from somewhere.
-/// It comes from here rather than from a vendored binary blob because
-/// `moxcms` is already the colour engine in this crate and already models a
-/// profile — `docs/design/pdfa.md` §6 records the alternative that was
-/// declined, which was to check a 3 KB `.icc` file into the tree.
+/// It is *computed* rather than checked in as a blob because sRGB is a
+/// matrix-shaper profile — three primaries and a curve, which is a formula —
+/// and `moxcms` is already the colour engine in this crate. That is what
+/// separates it from [`cmyk_profile_bytes`], whose profile is measured LUT
+/// data and has to come from somewhere.
 ///
 /// Returns nothing if the encoder refuses, which it does not for the built-in
 /// sRGB profile; the caller reports it rather than writing an intent whose
@@ -341,9 +342,59 @@ pub fn srgb_profile_bytes() -> Option<Vec<u8>> {
     moxcms::ColorProfile::new_srgb().encode().ok()
 }
 
+/// The vendored CMYK profile, as it ships upstream.
+///
+/// `assets/README.md` carries the provenance and the licence; the short of it
+/// is CC0-1.0 from Compact-ICC-Profiles, colorimetrically CGATS TR 001 (SWOP).
+const CGATS_CMYK_PROFILE: &[u8] = include_bytes!("../../assets/CGATS001Compat-v2-micro.icc");
+
+/// A CMYK ICC profile, encoded as an output profile, for the same writer.
+///
+/// The counterpart to [`srgb_profile_bytes`], and it exists because an output
+/// intent's profile answers for exactly one colour space: veraPDF's 6.2.4.3-3
+/// wants a *CMYK* destination profile for a document that paints in
+/// `/DeviceCMYK`, and the sRGB profile does not satisfy it however well it
+/// serves RGB and Gray.
+///
+/// Unlike sRGB this cannot be computed. A matrix-shaper profile is three
+/// primaries and a curve — a formula, which is why `moxcms` can build sRGB
+/// from nothing — whereas a CMYK profile is a lookup table measured off a
+/// printing condition. So the bytes are vendored (`assets/`) rather than
+/// constructed, which is also why this takes no new dependency: what was
+/// needed was a *profile*, and `moxcms` is already the colour engine.
+///
+/// The one thing done to the vendored bytes is a re-encode. Upstream declares
+/// device class `scnr`, an input profile, because its author's use for it is
+/// converting CMYK images *in*; ISO 19005-2 6.2.3 requires an output intent's
+/// profile be `prtr` or `mntr`, and veraPDF fails the file on the header alone
+/// otherwise. Parsing it and re-encoding it as [`ProfileClass::OutputDevice`]
+/// states what the profile is being used as here, and keeps the tag data
+/// intact — which patching the four header bytes by hand would also do, but
+/// without the parser proving the result is still a profile.
+///
+/// [`ProfileClass::OutputDevice`]: moxcms::ProfileClass::OutputDevice
+///
+/// Returns nothing if the vendored bytes will not parse or will not re-encode,
+/// neither of which happens for the asset in the tree; the caller writes no
+/// intent rather than one whose profile is empty.
+#[must_use]
+pub fn cmyk_profile_bytes() -> Option<Vec<u8>> {
+    let mut profile = moxcms::ColorProfile::new_from_slice(CGATS_CMYK_PROFILE).ok()?;
+    profile.profile_class = moxcms::ProfileClass::OutputDevice;
+    profile.encode().ok()
+}
+
 #[cfg(test)]
-mod srgb_profile_tests {
-    use super::srgb_profile_bytes;
+mod output_profile_tests {
+    use super::{cmyk_profile_bytes, srgb_profile_bytes};
+
+    /// The header fields a PDF/A validator reads, so a test can name them.
+    fn header_of(bytes: &[u8]) -> (usize, &[u8], &[u8], &[u8]) {
+        let field = |at: usize| bytes.get(at..at + 4).expect("an ICC header is 128 bytes");
+        let declared =
+            u32::from_be_bytes(field(0).try_into().expect("four bytes are four bytes")) as usize;
+        (declared, field(12), field(16), field(36))
+    }
 
     // The conversion embeds these bytes as a PDF/A output intent's
     // `/DestOutputProfile`, so they must be a profile a validator accepts: an
@@ -353,18 +404,49 @@ mod srgb_profile_tests {
     fn the_srgb_profile_encodes_as_a_well_formed_icc_profile() {
         let bytes = srgb_profile_bytes().expect("the built-in sRGB profile encodes");
         assert!(bytes.len() > 128, "an ICC profile is at least a header");
-        let field = |at: usize| bytes.get(at..at + 4).expect("an ICC header is 128 bytes");
-        let declared =
-            u32::from_be_bytes(field(0).try_into().expect("four bytes are four bytes")) as usize;
+        let (declared, class, space, signature) = header_of(&bytes);
         assert_eq!(
             declared,
             bytes.len(),
             "the header's size field is the truth"
         );
-        assert_eq!(field(12), b"mntr", "a display device class");
-        assert_eq!(field(16), b"RGB ", "an RGB data colour space");
-        assert_eq!(field(36), b"acsp", "the ICC signature");
+        assert_eq!(class, b"mntr", "a display device class");
+        assert_eq!(space, b"RGB ", "an RGB data colour space");
+        assert_eq!(signature, b"acsp", "the ICC signature");
         // And the engine reads back what it wrote.
         assert!(moxcms::ColorProfile::new_from_slice(&bytes).is_ok());
+    }
+
+    // The same bar for the CMYK profile, plus the one field the re-encode
+    // exists to change: ISO 19005-2 6.2.3 rejects the `scnr` the vendored
+    // bytes declare, and veraPDF fails the whole file on it.
+    #[test]
+    fn the_cmyk_profile_re_encodes_as_an_output_class_icc_profile() {
+        let bytes = cmyk_profile_bytes().expect("the vendored CMYK profile re-encodes");
+        let (declared, class, space, signature) = header_of(&bytes);
+        assert_eq!(
+            declared,
+            bytes.len(),
+            "the header's size field is the truth"
+        );
+        assert_eq!(
+            class, b"prtr",
+            "an output device class, which 6.2.3 requires"
+        );
+        assert_eq!(space, b"CMYK", "a CMYK data colour space");
+        assert_eq!(signature, b"acsp", "the ICC signature");
+        assert!(moxcms::ColorProfile::new_from_slice(&bytes).is_ok());
+    }
+
+    // The vendored asset is what the re-encode starts from, so the one thing
+    // worth asserting about it separately is that only the class moved: a
+    // future asset swap that changed the colour space would otherwise pass
+    // the test above while writing an intent for the wrong space.
+    #[test]
+    fn the_vendored_cmyk_asset_is_a_cmyk_input_profile() {
+        let profile = moxcms::ColorProfile::new_from_slice(super::CGATS_CMYK_PROFILE)
+            .expect("the vendored asset parses");
+        assert_eq!(profile.color_space, moxcms::DataColorSpace::Cmyk);
+        assert_eq!(profile.profile_class, moxcms::ProfileClass::InputDevice);
     }
 }

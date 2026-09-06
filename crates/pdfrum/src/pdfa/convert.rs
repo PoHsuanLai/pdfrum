@@ -26,7 +26,7 @@
 //! |---|---|---|
 //! | write the XMP packet with the identification schema | 6.6.4-1 | 27 |
 //! | rewrite the packet so it parses, as UTF-8 | 6.6.2.1-1/-4/-5 | 14/11/11 |
-//! | write the sRGB output intent | 6.2.4.3-2/-3/-4 | 33/5/28 |
+//! | write the output intent, sRGB or CMYK | 6.2.4.3-2/-3/-4 | 33/5/28 |
 //! | mint a trailer `/ID` | 6.1.3-1 | 11 |
 //! | re-serialize every object with legal spacing | 6.1.9-1 | 7 |
 //! | strip JavaScript and the forbidden actions | 6.5.1-1, 6.4.1-1/-2 | 1, 2/2 |
@@ -1081,9 +1081,11 @@ fn apply(
     ))));
     catalog.insert(names::METADATA.clone(), Object::Ref(metadata));
 
-    // The output intent, which is what makes every device colour space in the
-    // file legal: 33 of 41 corpus files fail 6.2.4.3-2 without one.
-    if let Some(intents) = output_intent(&mut edit) {
+    // The output intent, which is what makes the file's device colour spaces
+    // legal: 33 of 41 corpus files fail 6.2.4.3-2 without one. Which profile
+    // it carries follows from what the document paints in — see
+    // [`intent_profile`], and note that a file gets exactly one.
+    if let Some(intents) = output_intent(&mut edit, intent_profile(doc)) {
         catalog.insert(Name::from("OutputIntents"), Object::Array(intents));
     }
 
@@ -1104,16 +1106,143 @@ fn apply(
     Ok(out)
 }
 
-/// The `/OutputIntents` array with an sRGB profile behind it.
+/// Which destination profile the file's output intent carries.
 ///
-/// `None` when the profile will not encode, which the built-in one does. The
-/// caller then writes no intent rather than one with an empty profile, since
-/// an intent whose `/DestOutputProfile` is empty is a worse failure than an
-/// absent intent.
-fn output_intent(edit: &mut pdfrum_edit::EditDoc<'_>) -> Option<Array> {
-    let profile_bytes = pdfrum_page::srgb_profile_bytes()?;
+/// A file has **one** — ISO 19005-2 6.2.4.2 requires every `/OutputIntents`
+/// entry to share a `/DestOutputProfile`, so this is a choice and not a set —
+/// and the profile answers for exactly one family of device space. 6.2.4.3
+/// spells that out per space: `-2` wants an RGB destination profile for
+/// `/DeviceRGB`, `-3` a CMYK one for `/DeviceCMYK`, `-4` either for
+/// `/DeviceGray`. sRGB satisfies RGB and Gray; nothing but a CMYK profile
+/// satisfies CMYK.
+///
+/// An enum rather than a `bool` because the two arms differ in three
+/// coordinated values — the profile bytes, `/N`, and the condition string —
+/// and a boolean would have each of them written as a separate conditional
+/// that a later edit could get out of step with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IntentProfile {
+    /// sRGB, which answers `/DeviceRGB` and `/DeviceGray`.
+    Srgb,
+    /// CMYK, which answers `/DeviceCMYK` and nothing else.
+    Cmyk,
+}
+
+impl IntentProfile {
+    /// The encoded profile, its component count, and its condition name.
+    ///
+    /// `None` when the profile will not encode, which neither does; the caller
+    /// then writes no intent rather than one whose `/DestOutputProfile` is
+    /// empty, since that is a worse PDF/A failure than having none.
+    fn parts(self) -> Option<(Vec<u8>, i64, &'static [u8])> {
+        match self {
+            Self::Srgb => Some((pdfrum_page::srgb_profile_bytes()?, 3, b"sRGB IEC61966-2.1")),
+            // The registered ICC characterization name for CGATS TR 001, which
+            // is the condition the vendored profile describes. PDF/A wants
+            // `/OutputConditionIdentifier` to name a real condition rather
+            // than to be free text.
+            Self::Cmyk => Some((pdfrum_page::cmyk_profile_bytes()?, 4, b"CGATS TR 001")),
+        }
+    }
+}
+
+/// The profile the document's own device colour usage calls for.
+///
+/// **CMYK only when the document paints in CMYK and in nothing else.** Mixing
+/// is not a case this can serve: a file that uses `/DeviceCMYK` *and*
+/// `/DeviceRGB` needs two destination profiles and is allowed one, so whatever
+/// is chosen it fails 6.2.4.3 on the other space. Preferring sRGB there is the
+/// smaller loss, because sRGB covers two of the three device spaces.
+///
+/// The scan is the shallow one, over every object's colour-space keys and
+/// array heads — the same no-interpreter limit `docs/design/pdfa.md` §4
+/// records for the checker. A `/DeviceCMYK` named only as a content-stream
+/// operand is invisible here, and the file keeps the sRGB intent it would have
+/// had anyway, so the gap costs a repair rather than causing a wrong one.
+fn intent_profile(doc: &Document) -> IntentProfile {
+    let resolve = &doc.inner;
+    let mut cmyk = false;
+    let mut other = false;
+
+    let last = doc.inner.xref().last_object_number();
+    for num in 1..=last {
+        let Ok(object) = resolve.fetch(ObjRef::new(num, 0)) else {
+            continue;
+        };
+        note_device_spaces(object.as_ref(), &mut cmyk, &mut other);
+    }
+
+    if cmyk && !other {
+        IntentProfile::Cmyk
+    } else {
+        IntentProfile::Srgb
+    }
+}
+
+/// How deep a colour-space array is followed looking for a device space.
+///
+/// `/Indexed` over `/Separation` over `/DeviceCMYK` is three, and a document
+/// that nests further is describing something this scan does not need to
+/// resolve exactly — it only has to decide which of two profiles to write.
+const MAX_COLOR_SPACE_DEPTH: u32 = 8;
+
+/// Record any device colour space `object` names, at one level of the graph.
+///
+/// It looks at the keys that hold a colour space (`/ColorSpace` on an image or
+/// a shading, `/CS` on a group or a shading's abbreviation) and at the
+/// `/ColorSpace` resource dictionary, whose every value is one. That reaches
+/// an image's space, a shading's space and a named resource, which is where
+/// the corpus's CMYK lives.
+fn note_device_spaces(object: &Object, cmyk: &mut bool, other: &mut bool) {
+    let Some(dict) = object.as_dict() else {
+        return;
+    };
+    for key in [names::COLOR_SPACE, &Name::from("CS")] {
+        if let Some(space) = dict.raw(key) {
+            note_one_space(space, cmyk, other, 0);
+        }
+    }
+    // A `/ColorSpace` *resource* dictionary maps names to spaces, so its
+    // values are spaces rather than its `/ColorSpace` key. Reached here as a
+    // sibling of `/Font` and `/XObject` under a `/Resources`.
+    if let Some(Object::Dict(resources)) = dict.raw(names::RESOURCES)
+        && let Some(Object::Dict(spaces)) = resources.raw(names::COLOR_SPACE)
+    {
+        for (_, space) in spaces.iter() {
+            note_one_space(space, cmyk, other, 0);
+        }
+    }
+}
+
+/// One colour space: a device name, or an array whose head names its base.
+fn note_one_space(space: &Object, cmyk: &mut bool, other: &mut bool, depth: u32) {
+    match space {
+        Object::Name(name) => match name.as_bytes() {
+            b"DeviceCMYK" => *cmyk = true,
+            b"DeviceRGB" | b"DeviceGray" => *other = true,
+            _ => {}
+        },
+        // `/Indexed`, `/Separation` and `/DeviceN` all carry the space they
+        // are built over, and a device space underneath is the same problem
+        // one level down — 6.2.4.3 is about what the file finally paints in.
+        Object::Array(array) if depth < MAX_COLOR_SPACE_DEPTH => {
+            for i in 0..array.len() {
+                if let Some(element) = array.raw_at(i) {
+                    note_one_space(element, cmyk, other, depth + 1);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The `/OutputIntents` array with `profile` behind it.
+///
+/// `None` when the profile will not encode; see [`IntentProfile::parts`].
+fn output_intent(edit: &mut pdfrum_edit::EditDoc<'_>, profile: IntentProfile) -> Option<Array> {
+    let (profile_bytes, components, condition) = profile.parts()?;
     let mut profile_dict = Dict::default();
-    profile_dict.insert(Name::from("N"), Object::Int(3));
+    profile_dict.insert(Name::from("N"), Object::Int(components));
     let profile = edit.add(Object::Stream(Box::new(Stream::new(
         profile_dict,
         ByteSpan::from(profile_bytes),
@@ -1127,7 +1256,7 @@ fn output_intent(edit: &mut pdfrum_edit::EditDoc<'_>) -> Option<Array> {
     // `GTS_PDFA1` is the subtype for every part of ISO 19005 including part 2:
     // the `1` is historical and is not a version number.
     intent.insert(Name::from("S"), Object::Name(Name::from("GTS_PDFA1")));
-    let condition = PdfString::new(b"sRGB IEC61966-2.1", StringSyntax::Literal);
+    let condition = PdfString::new(condition, StringSyntax::Literal);
     intent.insert(
         Name::from("OutputConditionIdentifier"),
         Object::Str(condition.clone()),
@@ -1254,6 +1383,65 @@ mod tests {
         assert_eq!(PRINT_FLAG & !ILLEGAL_FLAGS, 4);
         // A flag word that is already legal is left exactly as it stands.
         assert_eq!((PRINT_FLAG | 16) | PRINT_FLAG & !ILLEGAL_FLAGS, 20);
+    }
+
+    /// What [`super::note_one_space`] makes of one colour space, as the pair
+    /// the intent choice is actually made on.
+    fn spaces_in(space: &pdfrum_object::Object) -> (bool, bool) {
+        let (mut cmyk, mut other) = (false, false);
+        super::note_one_space(space, &mut cmyk, &mut other, 0);
+        (cmyk, other)
+    }
+
+    #[test]
+    fn a_device_space_is_recognised_by_name() {
+        use pdfrum_object::{Name, Object};
+        assert_eq!(
+            spaces_in(&Object::Name(Name::from("DeviceCMYK"))),
+            (true, false)
+        );
+        assert_eq!(
+            spaces_in(&Object::Name(Name::from("DeviceRGB"))),
+            (false, true)
+        );
+        assert_eq!(
+            spaces_in(&Object::Name(Name::from("DeviceGray"))),
+            (false, true)
+        );
+        // An ICC or Lab space is already device-independent, so it neither
+        // needs nor constrains the intent.
+        assert_eq!(
+            spaces_in(&Object::Name(Name::from("Pattern"))),
+            (false, false)
+        );
+    }
+
+    // `/Separation` and `/Indexed` name the space they are built over, and a
+    // device space underneath is what the file finally paints in — 6.2.4.3
+    // is about that, not about the wrapper.
+    #[test]
+    fn a_device_space_under_a_wrapper_is_found() {
+        use pdfrum_object::{Array, Name, Object};
+        let mut separation = Array::default();
+        separation.push(Object::Name(Name::from("Separation")));
+        separation.push(Object::Name(Name::from("Spot")));
+        separation.push(Object::Name(Name::from("DeviceCMYK")));
+        assert_eq!(spaces_in(&Object::Array(separation)), (true, false));
+    }
+
+    // The mixed case, which is the one the choice turns on: a file painting
+    // in both gets sRGB, because one intent cannot answer for both spaces and
+    // sRGB covers two of the three device spaces.
+    #[test]
+    fn a_document_painting_in_both_is_not_a_cmyk_document() {
+        use pdfrum_object::{Array, Name, Object};
+        let mut both = Array::default();
+        both.push(Object::Name(Name::from("DeviceCMYK")));
+        both.push(Object::Name(Name::from("DeviceRGB")));
+        // Both are seen, which is what makes it the mixed case — and the
+        // choice is `cmyk && !other`, so seeing the other one is what sends
+        // this file to sRGB.
+        assert_eq!(spaces_in(&Object::Array(both)), (true, true));
     }
 
     #[test]
