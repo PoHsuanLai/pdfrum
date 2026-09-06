@@ -198,6 +198,22 @@ comparison.
 
 ## M27 — Peak render memory: decode at the size the page draws
 
+**Exit met at `56a01ac`, and none of the three items below is what did it.**
+Peak on `image_bug_583804.pdf` is **916 MiB** (was 1596 measured on the same
+box under the same load), the corpus render median **improved** 49.73 ->
+30.95 MiB, the file got *faster* rather than slower (cold 1723 -> 1370 ms,
+warm 1489 -> 1290 ms), and the board's pixel result is unchanged on all 1759
+files. The cost was three simultaneous page-sized RGBA8 buffers in the
+vello-cpu backend — 331 MiB each at 9318x9318 — not the image path: a seed
+pixmap allocated to be read once, the rasterizer's own pixmap, and the copy
+back out. See `docs/benchmarks/losses-explained.md`.
+
+Of the three items: (1) buys nothing on this file, whose image is drawn above
+1:1, and stays right for the document shape this one was mistaken for; (2) was
+not needed to clear 1 GiB and was not attempted; (3) was tried and measured —
+it saves 20 MiB and costs 14% warm and 42% cold, reproducing exactly the
+regression `6af7a2a` exists to prevent, so the exemption stays.
+
 The one place this engine is strictly behind every peer with nothing bought
 for it. On `image_bug_583804.pdf` peak resident memory is 1539 MiB where
 mupdf peaks at 914 and no measured peer exceeds 1 GiB; wall time on that
