@@ -222,11 +222,10 @@ impl SimpleFont {
         CharItem {
             code,
             cid: None,
-            gid: gid.unwrap_or_default(),
+            gid,
             unicode: self.unicode_from_charcode(code),
             width: self.char_width(code),
             vertical_glyph: false,
-            has_glyph: gid.is_some(),
         }
     }
 

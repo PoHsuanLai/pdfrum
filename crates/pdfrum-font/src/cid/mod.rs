@@ -270,7 +270,7 @@ impl Type0Font {
         CharItem {
             code,
             cid: Some(self.cid_from_charcode(code)),
-            gid: gid.unwrap_or_default(),
+            gid,
             unicode: self.unicode_from_charcode(code),
             width: if self.is_vertical() {
                 self.vert_width(code)
@@ -278,7 +278,6 @@ impl Type0Font {
                 self.char_width(code)
             },
             vertical_glyph,
-            has_glyph: gid.is_some(),
         }
     }
 

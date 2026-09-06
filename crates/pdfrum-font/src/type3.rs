@@ -8,7 +8,7 @@
 
 use crate::encoding::{FontEncoding, adobe_char_name};
 use crate::{
-    CharCode, CharItem, FontCache, FontId, Gid, GlyphName, ToUnicode, names, simple, tounicode,
+    CharCode, CharItem, FontCache, FontId, GlyphName, ToUnicode, names, simple, tounicode,
 };
 use pdfrum_common::kurbo::{Affine, Rect};
 use pdfrum_common::{Diagnostics, Limits};
@@ -104,11 +104,10 @@ impl Type3Font {
             cid: None,
             // A Type 3 font has no glyph indices by construction; the C++'s
             // `GlyphFromCharCode` returns -1 unconditionally.
-            gid: Gid(0),
+            gid: None,
             unicode: self.unicode_from_charcode(code),
             width: self.char_width(code),
             vertical_glyph: false,
-            has_glyph: false,
         }
     }
 }
@@ -373,8 +372,7 @@ mod tests {
     fn a_type3_font_has_no_glyphs_at_all() {
         let f = load_it(&Dict::new());
         let item = f.char_item(CharCode(65));
-        assert!(!item.has_glyph);
-        assert_eq!(item.glyph(), None);
+        assert_eq!(item.gid, None);
     }
 
     #[test]

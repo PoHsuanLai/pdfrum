@@ -321,8 +321,8 @@ fn add_used(current: Option<&Selected>, codes: &[u8], found: &mut BTreeMap<u32, 
         return;
     };
     for item in selected.font.decode(codes) {
-        // `has_glyph` false is the C++'s `gid == -1`: nothing to keep.
-        if let (Some(gid), Some(cid)) = (item.glyph(), item.cid) {
+        // A `None` gid is the C++'s `gid == -1`: nothing to keep.
+        if let (Some(gid), Some(cid)) = (item.gid, item.cid) {
             candidate.used_gids.insert(gid.0);
             candidate.cid_to_gid.insert(cid.0, gid.0);
         }
