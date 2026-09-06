@@ -558,8 +558,11 @@ fn drawing_every_page_gives_each_its_own_canvas() {
     let font = edit.standard_font(StandardFont::Helvetica).expect("font");
     let mut pages = Vec::new();
     edit.draw_pages(|c| {
-        pages.push(u32::from(c.page()));
-        let label = format!("page {}", u32::from(c.page()) + 1);
+        // `page()` is `Some` for every canvas `draw_pages` hands out; the
+        // `None` case is a Form XObject, which has no page.
+        let index = u32::from(c.page().expect("a page canvas knows its page"));
+        pages.push(index);
+        let label = format!("page {}", index + 1);
         c.text(&label, &font, 9.0, Point::new(20.0, 20.0), Color::BLACK);
     })
     .expect("draws");

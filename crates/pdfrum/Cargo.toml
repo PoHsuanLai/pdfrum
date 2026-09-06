@@ -71,17 +71,39 @@ markdown = ["dep:pdfrum-markdown"]
 svg = ["dep:pdfrum-svg"]
 
 # M25: an SVG document drawn into a page as vectors, through
-# `Canvas::draw_svg`. Needs `edit`, because a canvas is a drawing session over
-# an editable document.
+# `Canvas::draw_svg` inline or `DocEdit::compile_svg` once into a Form
+# XObject. Needs `edit`, because a canvas is a drawing session over an
+# editable document.
 #
-# What it brings: `usvg` with `default-features = false` and the nine crates
-# behind it new to this workspace, all pure Rust (DEPS.md records the audit).
-# Default-off, because ten crates is a real cost for a caller who never meets
+# What it brings: `usvg` with `default-features = false`, a `png` decoder, and
+# **22 crates** new to a *default* `pdfrum` — all pure Rust (DEPS.md records
+# the audit, the crate list and the reproduction command). That figure was
+# recorded as ten until 2026-09-07, on a count of `usvg`'s own subtree rather
+# than the delta a caller actually pays.
+#
+# Default-off, because 22 crates is a real cost for a caller who never meets
 # an SVG — and it is deliberately *separate* from `pdfrum-svg`'s export
 # feature, which adds nothing to the tree at all: exporting and ingesting
 # share a subject but not a price, and a caller who only exports should pay
 # nothing for a parser.
 svg-ingest = ["edit", "dep:usvg", "dep:png"]
+
+# M25 item 3: `<text>` in an ingested SVG, converted to outlines.
+#
+# A *third* feature rather than part of `svg-ingest`, because it is the only
+# thing in this crate that costs a second font stack. `usvg/text` brings ten
+# more crates — `rustybuzz` and `ttf-parser` beside the workspace's own
+# skrifa/read-fonts, and a `fontdb 0.23` beside the `fontdb 0.24` that
+# `system-fonts` already resolves, a genuine duplicate that 0.x semver cannot
+# collapse. A caller who ingests logos and never meets a `<text>` should not
+# pay that, so they do not.
+#
+# What it does **not** bring is `usvg`'s `system-fonts` or `memmap-fonts`:
+# nothing scans the host, and the font database starts empty. The faces come
+# from the caller through `SvgFonts`, which is what keeps SVG text mapping
+# through fonts *we* were handed rather than through whatever the machine
+# happens to have installed. DEPS.md records the measurement.
+svg-text = ["svg-ingest", "usvg/text"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
@@ -334,3 +356,10 @@ required-features = ["svg-ingest", "tinyskia"]
 [[test]]
 name = "pdfa_oracle"
 required-features = ["vello-cpu", "edit", "forms"]
+
+# M25 item 2: that a compiled form is **one** object however many pages place
+# it. A claim about the saved bytes rather than the pixels, so it needs no
+# rasterizer — only the editor and the ingestion feature.
+[[test]]
+name = "svg_form"
+required-features = ["svg-ingest"]

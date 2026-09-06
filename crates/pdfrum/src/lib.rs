@@ -90,9 +90,15 @@ mod signature;
 mod stamp;
 #[cfg(feature = "svg-ingest")]
 mod svg_ingest;
+#[cfg(feature = "svg-text")]
+mod svg_text;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
+/// An SVG compiled once into a Form `XObject`: one object, placed on any
+/// number of pages by [`Canvas::place_svg`].
+#[cfg(feature = "svg-ingest")]
+pub use canvas::SvgForm;
 /// Drawing on an existing page: [`Canvas`] from [`DocEdit::draw_page`],
 /// with [`Paint`], [`Stroke`] and [`Fill`] saying how a shape is painted and
 /// [`LineCap`], [`LineJoin`], [`MiterLimit`] and [`Dash`] shaping the pen.
@@ -223,10 +229,14 @@ pub use signature::Signature;
 /// [`DocEdit::stamp_image`] draw, and where.
 #[cfg(feature = "edit")]
 pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
-/// SVG drawn into a page as vectors: [`Canvas::draw_svg`], how it is placed,
-/// and everything it could not carry.
+/// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
+/// [`DocEdit::compile_svg`] once into a reusable [`SvgForm`], how each is
+/// placed, and everything neither could carry.
 #[cfg(feature = "svg-ingest")]
 pub use svg_ingest::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
+/// The faces an ingested SVG's `<text>` is set in, and what it becomes.
+#[cfg(feature = "svg-text")]
+pub use svg_text::SvgFonts;
 
 /// The things a page draws, as the interpreter produced them.
 ///

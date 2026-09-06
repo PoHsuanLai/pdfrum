@@ -472,6 +472,8 @@ impl Document {
             doc: self,
             inner: EditDoc::new(&self.inner),
             stamp_mod_date: false,
+            #[cfg(feature = "svg-text")]
+            svg_fonts: crate::SvgFonts::new(),
         }
     }
 }
@@ -488,6 +490,11 @@ pub struct DocEdit<'a> {
     /// Whether [`DocEdit::set_metadata`] was called, so a save that is not
     /// reproducible stamps `/ModDate` with its own time.
     stamp_mod_date: bool,
+    /// The faces an ingested SVG's `<text>` is set in. Empty until
+    /// [`DocEdit::set_svg_fonts`], and an empty set is what makes every
+    /// `<text>` a reported gap rather than a drawn one.
+    #[cfg(feature = "svg-text")]
+    pub(crate) svg_fonts: crate::SvgFonts,
 }
 
 impl<'a> DocEdit<'a> {
@@ -512,6 +519,38 @@ impl<'a> DocEdit<'a> {
 }
 
 impl DocEdit<'_> {
+    /// The faces an ingested SVG's `<text>` is set in, for the rest of this
+    /// session.
+    ///
+    /// Set once, and every [`Canvas::draw_svg`](crate::Canvas::draw_svg) and
+    /// [`DocEdit::compile_svg`] after it lays its text out in these faces and
+    /// draws it as **outlines**. Without this the set is empty, every
+    /// `<text>` is reported as
+    /// [`Unsupported::Text`](crate::Unsupported::Text) and nothing of it is
+    /// drawn — which is what this crate did before the `svg-text` feature
+    /// existed, and still does with the feature off.
+    ///
+    /// A session field rather than an argument on the four ingestion entry
+    /// points: a caller's font set does not change between one logo and the
+    /// next, and threading it through every signature would grow four
+    /// surfaces to say one thing.
+    ///
+    /// ```no_run
+    /// use pdfrum::{Document, SvgFonts};
+    ///
+    /// let mut fonts = SvgFonts::new();
+    /// fonts.register(std::fs::read("Inter.ttf")?);
+    ///
+    /// let doc = Document::open("in.pdf")?;
+    /// let mut edit = doc.edit();
+    /// edit.set_svg_fonts(fonts);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[cfg(feature = "svg-text")]
+    pub fn set_svg_fonts(&mut self, fonts: crate::SvgFonts) {
+        self.svg_fonts = fonts;
+    }
+
     /// Replace the document's `/Info` metadata (ISO 32000-1 §14.3.3).
     ///
     /// Every field of `metadata` is written as a PDF text string —

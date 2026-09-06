@@ -52,7 +52,10 @@ fn run(input: &Path, output: &Path, title: &str) -> Result<u32, pdfrum::Error> {
             Stroke::new(grey, 0.75),
         );
         c.text(title, &font, 9.0, Point::new(MARGIN, y + 4.0), grey);
-        let number = format!("{} / {total}", u32::from(c.page()) + 1);
+        // Every canvas `draw_pages` hands out is a page's, so this is
+        // always `Some`; the `None` case is a Form XObject.
+        let index = c.page().map_or(0, u32::from);
+        let number = format!("{} / {total}", index + 1);
         let width = c.text_width(&number, &font, 9.0);
         c.text(
             &number,
