@@ -323,3 +323,48 @@ mod tests {
         }
     }
 }
+
+/// An sRGB ICC profile, encoded, for a writer that must embed one.
+///
+/// PDF/A requires an `/OutputIntent` whose `/DestOutputProfile` is an embedded
+/// ICC profile, and the conversion has to produce those bytes from somewhere.
+/// It comes from here rather than from a vendored binary blob because
+/// `moxcms` is already the colour engine in this crate and already models a
+/// profile — `docs/design/pdfa.md` §6 records the alternative that was
+/// declined, which was to check a 3 KB `.icc` file into the tree.
+///
+/// Returns nothing if the encoder refuses, which it does not for the built-in
+/// sRGB profile; the caller reports it rather than writing an intent whose
+/// profile is empty, since that is a worse PDF/A failure than having none.
+#[must_use]
+pub fn srgb_profile_bytes() -> Option<Vec<u8>> {
+    moxcms::ColorProfile::new_srgb().encode().ok()
+}
+
+#[cfg(test)]
+mod srgb_profile_tests {
+    use super::srgb_profile_bytes;
+
+    // The conversion embeds these bytes as a PDF/A output intent's
+    // `/DestOutputProfile`, so they must be a profile a validator accepts: an
+    // ICC header whose declared size matches, an `RGB ` data space and a
+    // `mntr` device class.
+    #[test]
+    fn the_srgb_profile_encodes_as_a_well_formed_icc_profile() {
+        let bytes = srgb_profile_bytes().expect("the built-in sRGB profile encodes");
+        assert!(bytes.len() > 128, "an ICC profile is at least a header");
+        let field = |at: usize| bytes.get(at..at + 4).expect("an ICC header is 128 bytes");
+        let declared =
+            u32::from_be_bytes(field(0).try_into().expect("four bytes are four bytes")) as usize;
+        assert_eq!(
+            declared,
+            bytes.len(),
+            "the header's size field is the truth"
+        );
+        assert_eq!(field(12), b"mntr", "a display device class");
+        assert_eq!(field(16), b"RGB ", "an RGB data colour space");
+        assert_eq!(field(36), b"acsp", "the ICC signature");
+        // And the engine reads back what it wrote.
+        assert!(moxcms::ColorProfile::new_from_slice(&bytes).is_ok());
+    }
+}
