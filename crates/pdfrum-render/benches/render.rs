@@ -122,13 +122,56 @@ fn warm_samples(stem: &str) -> usize {
     }
 }
 
+/// Whether this document leaves a resident set the next benchmark would pay
+/// for.
+///
+/// The same three stems [`cold_samples`] and [`warm_samples`] already single
+/// out, for a second consequence of the same property. They are measured
+/// **last** within their group, because a criterion group is one process and
+/// what they leave on the heap is charged to whatever runs next.
+///
+/// Measured with `/usr/bin/time -v` on the bench binary: `shading_gouraud`
+/// alone peaks at 27,184 kB and reads 1.2546 ms; `image_bug_583804` then
+/// `shading_gouraud` peaks at 520,980 kB and reads 1.3004 ms. Repeating the
+/// pairing gave +5.4% once and +0.4% another time — the magnitude is unstable,
+/// which is the signature of allocator and page-cache state rather than a code
+/// path. The retention itself is deliberate: the decoded-image cache holds up
+/// to its 100 MiB budget rather than empty itself
+/// (`crates/pdfrum-page/src/image/cache.rs`), which is what makes
+/// `image_bug_583804`'s own warm render 30-34% faster.
+///
+/// Ordering them last does not make the suite immune — it removes the one
+/// perturbation large enough to clear a 3-5% band. On 2026-09-06 it was
+/// clearing them wholesale: two runs of the same binary at the same commit
+/// reported 34 and 27 regressions sharing only 13 rows, and the warm cluster
+/// moved from `render-warm-vello-cpu` (14 rows) to `render-warm-tinyskia`
+/// (13 rows), which no code change can do.
+fn leaves_a_large_heap(stem: &str) -> bool {
+    matches!(
+        stem,
+        "image_bug_718762" | "image_bug_583804" | "image_bug_898443"
+    )
+}
+
+/// The corpus with the heavy documents moved to the end, order otherwise kept.
+///
+/// Returns them in two passes rather than sorting, so the light documents keep
+/// exactly the order they had and a reader can see that the only change is
+/// where the heavy three sit.
+fn light_then_heavy() -> impl Iterator<Item = &'static pdfrum_corpus::Doc> {
+    CORPUS
+        .iter()
+        .filter(|doc| !leaves_a_large_heap(doc.stem))
+        .chain(CORPUS.iter().filter(|doc| leaves_a_large_heap(doc.stem)))
+}
+
 /// First-render latency: a fresh session inside the timed closure.
 ///
 /// The cache state a caller gets who opens a document, draws a page, and exits.
 fn cold<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
     let mut group = c.benchmark_group(name);
     let options = RenderOptions::default();
-    for doc in CORPUS {
+    for doc in light_then_heavy() {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
             continue;
         };
@@ -165,7 +208,7 @@ fn cold<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
 fn warm<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
     let mut group = c.benchmark_group(name);
     let options = RenderOptions::default();
-    for doc in CORPUS {
+    for doc in light_then_heavy() {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
             continue;
         };
