@@ -106,7 +106,7 @@ pub use content::{
 pub use doc::EditDoc;
 pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
-pub use font::embed::{EmbeddedFont, FontEncoding};
+pub use font::embed::{EmbeddedFont, FontEncoding, MissingGlyph};
 pub use font::{GidMap, Subsetted, subset};
 pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};

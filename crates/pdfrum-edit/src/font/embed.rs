@@ -82,35 +82,137 @@ impl EmbeddedFont {
     #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u8> {
         let mut out = Vec::with_capacity(text.len());
-        match &self.kind {
-            EncodeKind::Identity { unicode_to_gid } => {
-                for ch in text.chars() {
-                    let gid = unicode_to_gid.get(&u32::from(ch)).copied().unwrap_or(0);
-                    out.extend_from_slice(&gid.to_be_bytes());
-                }
-            }
-            EncodeKind::Simple { unicode_to_code } => {
-                for ch in text.chars() {
-                    out.push(unicode_to_code.get(&u32::from(ch)).copied().unwrap_or(0));
-                }
-            }
-            EncodeKind::CustomCid { unicode_to_cid } => {
-                for ch in text.chars() {
-                    let cid = unicode_to_cid.get(&ch).copied().unwrap_or(0);
-                    out.extend_from_slice(&u16::try_from(cid).unwrap_or(0).to_be_bytes());
-                }
-            }
-            EncodeKind::WinAnsi => {
-                for ch in text.chars() {
-                    let code = u16::try_from(u32::from(ch))
-                        .ok()
-                        .map_or(0, |u| FaceEncoding::Latin1.charcode_from_unicode(u));
-                    out.push(u8::try_from(code).unwrap_or(0));
-                }
-            }
+        let notdef = self.kind.notdef();
+        for ch in text.chars() {
+            push_code(&mut out, self.code_of(ch).unwrap_or(notdef));
         }
         out
     }
+
+    /// Character codes for `text`, refusing a character this font cannot
+    /// draw.
+    ///
+    /// The same encoding as [`EmbeddedFont::encode`], with the `.notdef`
+    /// fallback replaced by an error. This is what a caller who is *placing*
+    /// text wants: a watermark whose degree sign silently became a blank is
+    /// worse than one that refused to be written.
+    ///
+    /// ```
+    /// use pdfrum_edit::{EditDoc, StandardFont};
+    /// use pdfrum_parser::{LoadOptions, load};
+    /// use std::sync::Arc;
+    ///
+    /// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../../tests/files/hello.pdf")[..]);
+    /// let doc = load(bytes, &LoadOptions::default())?;
+    /// let mut edit = EditDoc::new(&doc);
+    /// let font = edit.standard_font(StandardFont::Helvetica)?;
+    ///
+    /// assert!(font.encode_checked("Hi").is_ok());
+    /// // WinAnsi has no Han: refused rather than drawn blank.
+    /// assert_eq!(font.encode_checked("\u{4e00}").unwrap_err().character, '\u{4e00}');
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`MissingGlyph`] naming the first character with no glyph, and its
+    /// byte offset in `text`.
+    pub fn encode_checked(&self, text: &str) -> Result<Vec<u8>, MissingGlyph> {
+        let mut out = Vec::with_capacity(text.len());
+        for (offset, ch) in text.char_indices() {
+            let code = self.code_of(ch).ok_or(MissingGlyph {
+                character: ch,
+                offset,
+            })?;
+            push_code(&mut out, code);
+        }
+        Ok(out)
+    }
+
+    /// The code `ch` is drawn through, or `None` when this font has no glyph
+    /// for it.
+    fn code_of(&self, ch: char) -> Option<Code> {
+        let missing = |code: u32| (code != 0).then_some(code);
+        match &self.kind {
+            EncodeKind::Identity { unicode_to_gid } => unicode_to_gid
+                .get(&u32::from(ch))
+                .copied()
+                .and_then(|gid| (gid != 0).then_some(gid))
+                .map(Code::Two),
+            EncodeKind::Simple { unicode_to_code } => unicode_to_code
+                .get(&u32::from(ch))
+                .copied()
+                .and_then(|code| (code != 0).then_some(code))
+                .map(Code::One),
+            EncodeKind::CustomCid { unicode_to_cid } => unicode_to_cid
+                .get(&ch)
+                .copied()
+                .and_then(missing)
+                .and_then(|cid| u16::try_from(cid).ok())
+                .map(Code::Two),
+            EncodeKind::WinAnsi => u16::try_from(u32::from(ch))
+                .ok()
+                .map(|u| FaceEncoding::Latin1.charcode_from_unicode(u))
+                .and_then(missing)
+                .and_then(|code| u8::try_from(code).ok())
+                .map(Code::One),
+        }
+    }
+}
+
+/// One character's code in an embedded font's encoding: one byte for a simple
+/// font, two big-endian for a composite one.
+///
+/// A tiny enum rather than a `(bytes, width)` pair so the two widths cannot be
+/// mixed up at the push.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Code {
+    /// A one-byte code (simple, or one of the standard 14).
+    One(u8),
+    /// A two-byte big-endian CID or GID (composite).
+    Two(u16),
+}
+
+impl EncodeKind {
+    /// This encoding's `.notdef`, **in its own code width**.
+    ///
+    /// A composite font's codes are two bytes, so its `.notdef` is two zero
+    /// bytes and not one: writing a single zero would shift every code after
+    /// it by a byte and turn the rest of the string into noise.
+    fn notdef(&self) -> Code {
+        match self {
+            Self::Identity { .. } | Self::CustomCid { .. } => Code::Two(0),
+            Self::Simple { .. } | Self::WinAnsi => Code::One(0),
+        }
+    }
+}
+
+/// Append `code`'s bytes.
+fn push_code(out: &mut Vec<u8>, code: Code) {
+    match code {
+        Code::One(byte) => out.push(byte),
+        Code::Two(pair) => out.extend_from_slice(&pair.to_be_bytes()),
+    }
+}
+
+/// A character an embedded font has no glyph for.
+///
+/// What [`EmbeddedFont::encode_checked`] returns instead of writing
+/// `.notdef`.
+///
+/// ```
+/// use pdfrum_edit::MissingGlyph;
+///
+/// let missing = MissingGlyph { character: '\u{4e00}', offset: 3 };
+/// assert_eq!(missing.to_string(), "the font has no glyph for '\u{4e00}' at byte 3");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the font has no glyph for {character:?} at byte {offset}")]
+pub struct MissingGlyph {
+    /// The character with no glyph.
+    pub character: char,
+    /// Its byte offset in the string that was encoded.
+    pub offset: usize,
 }
 
 /// Kind of program, sniffed from the leading bytes.
@@ -1081,6 +1183,30 @@ mod tests {
             .expect("standard");
         assert_eq!(standard.encode("Hi"), b"Hi");
         assert_eq!(standard.encode("\u{4e00}"), vec![0]);
+    }
+
+    // A composite font's `.notdef` is **two** bytes, not one. A one-byte
+    // fallback would shift every code after it by a byte and turn the rest of
+    // the string into noise, which is exactly what a shared `.notdef`
+    // constant did when `encode_checked` was factored out of `encode`.
+    #[test]
+    fn a_composite_notdef_keeps_the_two_byte_width() {
+        let doc = loaded();
+        let mut edit = EditDoc::new(&doc);
+        let font = edit
+            .embed_font(TINY, FontEncoding::Composite)
+            .expect("embeds");
+        // One unmappable character between two mappable ones: still three
+        // two-byte codes, with the middle one zero.
+        let codes = font.encode("H\u{4e00}H");
+        assert_eq!(codes.len(), 6, "two bytes per character");
+        assert_eq!(codes.get(2..4), Some(&[0, 0][..]), "a two-byte .notdef");
+        // And the checked encoder refuses rather than writing a `.notdef` at
+        // all. `tiny.ttf` has no glyph for either character, so the refusal
+        // names the first one — which is the rule: the first miss stops the
+        // whole string.
+        let missing = font.encode_checked("H\u{4e00}H").expect_err("refused");
+        assert_eq!((missing.character, missing.offset), ('H', 0));
     }
 
     #[test]
