@@ -60,8 +60,8 @@ use pdfrum_render::{
 use vello_cpu::color::palette::css::TRANSPARENT;
 use vello_cpu::peniko::{ImageBrush, ImageSampler};
 use vello_cpu::{
-    CompositeMode, Level, Mask, PixelFormat, RasterizerSettings, RenderContext, RenderMode,
-    RenderSettings, Resources,
+    CompositeMode, Level, Mask, PixelFormat, PixmapMut, RasterizerSettings, RenderContext,
+    RenderMode, RenderSettings, Resources,
 };
 
 pub use convert::{to_blend_mode, to_mix};
@@ -114,16 +114,33 @@ enum Frame {
 #[derive(Debug)]
 pub struct VelloCpuDevice {
     ctx: RenderContext,
-    /// The pixels the scene is composited over: the clear colour, or a
-    /// non-isolated group's backdrop.
-    base: Pixmap,
+    /// The pixels the scene is composited over.
+    seed: Seed,
     frames: Vec<Frame>,
     width: u32,
     height: u32,
 }
 
+/// What a target's pixels start out as, before the scene composites over them.
+///
+/// A uniform clear colour is not a pixmap: it is four bytes plus the rule for
+/// writing them, and a target-sized buffer holding one repeated pixel is that
+/// value paid for at the target's whole area. Only a non-isolated group's
+/// backdrop is genuinely per-pixel, so only that variant carries a buffer.
+/// The distinction is worth a type because most targets are the uniform case
+/// — every transparency group, soft mask, pattern cell and the page itself —
+/// and on a 4473 pt square page at 150 DPI the buffer that variant no longer
+/// allocates is 331 MiB, written once, copied once and dropped.
+#[derive(Debug)]
+enum Seed {
+    /// Every pixel the same premultiplied colour.
+    Solid(peniko::Color),
+    /// A non-isolated group's backdrop, pixel for pixel.
+    Backdrop(Pixmap),
+}
+
 impl VelloCpuDevice {
-    fn new(width: u32, height: u32, base: Pixmap) -> Self {
+    fn new(width: u32, height: u32, seed: Seed) -> Self {
         let (w, h) = (
             u16::try_from(width.min(MAX_TARGET_DIMENSION)).unwrap_or(u16::MAX),
             u16::try_from(height.min(MAX_TARGET_DIMENSION)).unwrap_or(u16::MAX),
@@ -135,7 +152,7 @@ impl VelloCpuDevice {
         let ctx = RenderContext::new_with(w.max(1), h.max(1), settings);
         Self {
             ctx,
-            base,
+            seed,
             frames: Vec::new(),
             width,
             height,
@@ -154,7 +171,7 @@ impl VelloCpuDevice {
         }
     }
 
-    /// Rasterize the recorded scene over `base`.
+    /// Rasterize the recorded scene over the seed.
     fn rasterize(&self) -> Pixmap {
         let (Ok(w), Ok(h)) = (u16::try_from(self.width), u16::try_from(self.height)) else {
             return Pixmap::new(self.width, self.height);
@@ -162,15 +179,20 @@ impl VelloCpuDevice {
         if w == 0 || h == 0 {
             return Pixmap::new(self.width, self.height);
         }
-        let mut target = vello_cpu::Pixmap::new(w, h);
-        // Seed with the clear colour or backdrop, then composite the scene
-        // over it: `CompositeMode::Replace` would discard both.
-        let dst = target.data_as_u8_slice_mut();
-        let src = self.base.data();
-        let n = dst.len().min(src.len());
-        if let (Some(d), Some(s)) = (dst.get_mut(..n), src.get(..n)) {
-            d.copy_from_slice(s);
-        }
+        // The result buffer is the render target: `vello_cpu` rasterizes
+        // through a `PixmapMut` borrowed over any `&mut [u8]`, so a
+        // `vello_cpu::Pixmap` of its own and the copy back out of it are both
+        // avoidable. The two buffers are the same premultiplied RGBA8 bytes in
+        // the same order, and only one of them now exists at a time — 331 MiB
+        // apiece on the 4473 pt square page.
+        let mut out = match &self.seed {
+            // A transparent seed is `Pixmap::new`'s zeroing and no more.
+            Seed::Solid(color) if *color == peniko::Color::TRANSPARENT => {
+                Pixmap::new(self.width, self.height)
+            }
+            Seed::Solid(color) => Pixmap::filled(self.width, self.height, *color),
+            Seed::Backdrop(base) => base.clone(),
+        };
         let settings = RasterizerSettings {
             render_mode: PINNED_RENDER_MODE,
             composite_mode: CompositeMode::SrcOver,
@@ -178,8 +200,13 @@ impl VelloCpuDevice {
             offset: (0, 0),
         };
         let mut resources = Resources::new();
-        self.ctx.render_with(&mut target, &mut resources, settings);
-        convert::from_vello_pixmap(&target)
+        // Seeded above, then composited over: `CompositeMode::Replace` would
+        // discard the seed.
+        let Some(target) = PixmapMut::new(w, h, out.data_mut()) else {
+            return out;
+        };
+        self.ctx.render_with(target, &mut resources, settings);
+        out
     }
 }
 
@@ -340,16 +367,11 @@ impl RasterBackend for VelloCpuBackend {
 
     fn new_target(&self, w: u32, h: u32, clear: peniko::Color) -> Self::Device {
         let (w, h) = (w.min(MAX_TARGET_DIMENSION), h.min(MAX_TARGET_DIMENSION));
-        let base = if clear == peniko::Color::TRANSPARENT {
-            Pixmap::new(w, h)
-        } else {
-            Pixmap::filled(w, h, clear)
-        };
-        VelloCpuDevice::new(w, h, base)
+        VelloCpuDevice::new(w, h, Seed::Solid(clear))
     }
 
     fn new_target_with_backdrop(&self, base: &Pixmap) -> Self::Device {
-        VelloCpuDevice::new(base.width(), base.height(), base.clone())
+        VelloCpuDevice::new(base.width(), base.height(), Seed::Backdrop(base.clone()))
     }
 
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
