@@ -401,38 +401,114 @@ pub(crate) fn strip_bullet(text: &str) -> &str {
     }
 }
 
-/// The number a line opens with, when it opens with one: `1.`, `2)`, and
-/// the section numbers `2.1` and `5.4.2` that a table of contents and a
-/// numbered heading carry. Each group is at most three digits, and the
-/// label is closed by a point, a bracket or — for a multi-part number —
+/// A script's numerals and the punctuation that closes a label written in
+/// them. A marker style is one row of this table, so supporting a new
+/// script is one entry rather than an edit in three `matches!` arms.
+///
+/// `open` is the bracket a *bracketing* style opens with — `（1）`, whose
+/// number is fenced on both sides rather than merely closed. It is a
+/// generalisation of the plain style, not a separate one: a style with no
+/// `open` simply has nothing to consume before the numerals.
+///
+/// `joins_groups` says whether a label may be multi-part (`2.1`, `5.4.2`).
+/// Only the plain style is: a bracketed number is a single ordinal.
+///
+/// Every field is filled from a shape a corpus document actually carries.
+/// Closers and brackets with no document behind them — `(1)` in ASCII
+/// brackets, `1。`, a bare `1）` — are deliberately absent: widening the
+/// table on a guess would make lines into lists the document never marked,
+/// which is the inference this crate declines to make.
+struct MarkerStyle {
+    /// The bracket the label opens with, for a bracketing style.
+    open: Option<char>,
+    /// Whether a character is a numeral of this style's script.
+    numeral: fn(char) -> bool,
+    /// The punctuation that may close the label.
+    closers: &'static [char],
+    /// Whether `n.n` may join two groups into one label.
+    joins_groups: bool,
+}
+
+/// Every marker style read here, most specific first. Each is justified by
+/// a shape the corpus actually carries; a style with no evidence in a
+/// document is not guessed at, per the crate's scope rule.
+const MARKER_STYLES: &[MarkerStyle] = &[
+    // `（1）` — a full-width bracketed ordinal, the sub-item marker of
+    // `text_cjk_functions`.
+    MarkerStyle {
+        open: Some('（'),
+        numeral: |c| c.is_ascii_digit() || is_fullwidth_digit(c),
+        closers: &['）'],
+        joins_groups: false,
+    },
+    // `1.`, `2)`, `2.1`, and the CJK-closed `1.1、` of
+    // `text_cjk_functions`.
+    MarkerStyle {
+        open: None,
+        numeral: |c| c.is_ascii_digit() || is_fullwidth_digit(c),
+        closers: &['.', ')', '、'],
+        joins_groups: true,
+    },
+];
+
+/// U+FF10-U+FF19, the full-width forms of `0`-`9`.
+fn is_fullwidth_digit(c: char) -> bool {
+    ('\u{ff10}'..='\u{ff19}').contains(&c)
+}
+
+/// The number a line opens with, when it opens with one: `1.`, `2)`, the
+/// section numbers `2.1` and `5.4.2` that a table of contents and a
+/// numbered heading carry, the CJK-closed `1.1、`, and the full-width
+/// bracketed `（1）`. Each group is at most three numerals, and the label
+/// is closed by one of its style's closers or — for a multi-part number —
 /// by the space before the text.
 fn leading_number(text: &str) -> Option<&str> {
+    MARKER_STYLES
+        .iter()
+        .find_map(|style| leading_number_in(text, style))
+}
+
+/// The label at the head of `text` read as one style, or `None` if the
+/// text does not open in that style.
+fn leading_number_in<'a>(text: &'a str, style: &MarkerStyle) -> Option<&'a str> {
     let mut end = 0;
-    let mut groups = 0;
-    loop {
-        let digits = text
-            .get(end..)?
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .count();
-        if digits == 0 || digits > 3 {
+    if let Some(open) = style.open {
+        if !text.starts_with(open) {
             return None;
         }
-        end += digits;
+        end += open.len_utf8();
+    }
+    let mut groups = 0;
+    loop {
+        let numerals: usize = text
+            .get(end..)?
+            .chars()
+            .take_while(|c| (style.numeral)(*c))
+            .map(char::len_utf8)
+            .sum();
+        let count = text.get(end..end + numerals)?.chars().count();
+        if count == 0 || count > 3 {
+            return None;
+        }
+        end += numerals;
         groups += 1;
         match text.get(end..)?.chars().next() {
-            // A point may close the label or join the next group; a digit
-            // after it means another group.
+            // A point may close the label or join the next group; a
+            // numeral after it means another group.
             Some('.')
-                if text
-                    .get(end + 1..)?
-                    .starts_with(|c: char| c.is_ascii_digit()) =>
+                if style.joins_groups
+                    && text
+                        .get(end + 1..)?
+                        .starts_with(|c: char| (style.numeral)(c)) =>
             {
                 end += 1;
             }
-            Some(c @ ('.' | ')')) => {
+            Some(c) if style.closers.contains(&c) => {
                 let closed = text.get(end + c.len_utf8()..)?;
-                return (closed.starts_with(char::is_whitespace) && !closed.trim().is_empty())
+                // A bracketed label needs no space after it: `（1）显示`
+                // is closed by the bracket itself.
+                let separated = style.open.is_some() || closed.starts_with(char::is_whitespace);
+                return (separated && !closed.trim().is_empty())
                     .then(|| text.get(..end + c.len_utf8()))?;
             }
             // `2.1 Background`: the space closes a multi-part number.
@@ -764,7 +840,8 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
 #[cfg(test)]
 mod tests {
     use super::{
-        blocks, blocks_among, has_dash_lead_in, is_leader_entry, leading_number, normalize,
+        blocks, blocks_among, has_dash_lead_in, is_leader_entry, item_text, leading_number,
+        normalize,
     };
     use crate::ast::{Block, ListMarker};
     use crate::lines::{DrawnImage, Line};
@@ -1373,6 +1450,44 @@ mod tests {
         assert_eq!(leading_number("2.1"), None);
         assert_eq!(leading_number("2019 was a year"), None);
         assert_eq!(leading_number("Plain text"), None);
+
+        // Widening to the CJK closers and the bracketing marker must not
+        // widen what counts as a marker in the first place: a decimal that
+        // opens a sentence is still prose, and so is a bare bracketed
+        // number with nothing after it.
+        assert_eq!(leading_number("3,14 is pi"), None);
+        assert_eq!(leading_number("1,024 bytes"), None);
+        assert_eq!(leading_number("（1）"), None);
+    }
+
+    /// `1.1、 全部文档` and `（1）显示` from `text_cjk_functions`: a label
+    /// closed by the CJK enumeration comma, and one fenced in full-width
+    /// brackets. Both were read as prose before, so each line swallowed
+    /// the sub-items under it into one paragraph.
+    #[test]
+    fn a_cjk_closer_and_a_full_width_bracket_are_list_markers() {
+        assert_eq!(leading_number("1.1、 全部文档"), Some("1.1、"));
+        assert_eq!(leading_number("1、 文件管理"), Some("1、"));
+        assert_eq!(leading_number("（1）显示: 大小图标切换"), Some("（1）"));
+        assert_eq!(leading_number("（12） 十二"), Some("（12）"));
+        // The same shapes in the full-width numerals U+FF10-U+FF19.
+        assert_eq!(leading_number("１. 全部文档"), Some("１."));
+        assert_eq!(leading_number("（１）显示"), Some("（１）"));
+
+        // A bracket with no number, an unclosed bracket, and a marker with
+        // nothing after it are all not markers.
+        assert_eq!(leading_number("（一）显示"), None);
+        assert_eq!(leading_number("（1 显示"), None);
+        assert_eq!(leading_number("1、"), None);
+    }
+
+    /// The label a marker carries is stripped from the item's text, so a
+    /// `Labelled` list does not print its number twice.
+    #[test]
+    fn a_cjk_marker_is_stripped_from_the_item_text() {
+        assert_eq!(item_text("1.1、 全部文档"), "全部文档");
+        assert_eq!(item_text("（1）显示: 大小图标切换"), "显示: 大小图标切换");
+        assert_eq!(item_text("1. Definition"), "Definition");
 
         let page = Rect::new(0.0, 0.0, 612.0, 792.0);
         let lines = vec![
