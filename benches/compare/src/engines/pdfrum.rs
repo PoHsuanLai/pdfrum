@@ -8,7 +8,7 @@ use pdfrum::{
     VelloCpuBackend,
 };
 
-use crate::model::{Ctx, Op, Output, Raster, Timed};
+use crate::model::{Ctx, Op, Output, Raster, RenderProfile, Timed};
 
 /// The `chars` stream as text, which is the stream `pdfium_test --txt`
 /// writes: `FPDFText_GetUnicode` for every `i` in `FPDFText_CountChars`
@@ -56,13 +56,35 @@ fn session(doc: &Document, ctx: &Ctx<'_>) -> RenderSession {
     session
 }
 
+/// The render options the run's profile asks for.
+///
+/// `Default` is `RenderOptions::scaled`, which is what a caller who writes
+/// no options gets: `smooth_paths`, `interpolate_images` and `annotations`
+/// all on (`crates/pdfrum/src/render.rs:69-72`). `Parity` clears the three,
+/// which is the cheapest configuration the public API offers and what
+/// `docs/benchmarks/README.md`'s parity columns measure. Glyph antialiasing
+/// stays on in both: no peer offers a knob for it, so turning it off would
+/// swap one asymmetry for another.
+fn options(ctx: &Ctx<'_>) -> RenderOptions {
+    let options = RenderOptions::scaled(ctx.scale());
+    match ctx.profile {
+        RenderProfile::Default => options,
+        RenderProfile::Parity => RenderOptions {
+            smooth_paths: false,
+            interpolate_images: false,
+            annotations: false,
+            ..options
+        },
+    }
+}
+
 /// Every page on `threads` threads sharing one `Document` (`Sync`), each
 /// thread with its own backend and `RenderSession`, pages dealt round-robin.
 pub fn render_all(path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
     let doc = open(path, ctx)?;
     let pages = doc.page_count() as usize;
     let threads = threads.clamp(1, pages.max(1));
-    let options = RenderOptions::scaled(ctx.scale());
+    let options = options(ctx);
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
             .map(|first| {
@@ -108,7 +130,7 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
             let doc = open(path, ctx)?;
             let page = doc.page(0)?;
             let backend = VelloCpuBackend::new();
-            let options = RenderOptions::scaled(ctx.scale());
+            let options = options(ctx);
             let mut session = session(&doc, ctx);
             let (times_ms, pixmap) =
                 ctx.measure(|| Ok(page.render_on(&backend, &options, &mut session)?))?;
@@ -132,5 +154,50 @@ pub fn run(op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
                 output: Output::Text(text),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::time::Duration;
+
+    use super::{Ctx, Op, Output, RenderProfile, run};
+
+    fn ctx(profile: RenderProfile) -> Ctx<'static> {
+        Ctx {
+            dpi: 150.0,
+            font_dir: None,
+            pdfium_lib: None,
+            password: None,
+            warm_runs: 0,
+            budget: Duration::from_secs(30),
+            profile,
+        }
+    }
+
+    fn render(profile: RenderProfile) -> Vec<u8> {
+        let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("../corpus/vector_paths_1751.pdf");
+        assert!(file.is_file(), "corpus file missing: {}", file.display());
+        let timed = run(Op::Render, &file, &ctx(profile)).expect("render");
+        match timed.output {
+            Output::Rendered(raster) => raster.rgba,
+            other => panic!("not a raster: {other:?}"),
+        }
+    }
+
+    /// The whole point of `--parity` is that it renders different pixels: a
+    /// profile that quietly produced the default raster would report a
+    /// speed gap that bought nothing. A path-heavy corpus file must differ
+    /// once path antialiasing is off.
+    #[test]
+    fn parity_changes_the_pixels() {
+        let default = render(RenderProfile::Default);
+        let parity = render(RenderProfile::Parity);
+        assert_eq!(default.len(), parity.len(), "same page, same size");
+        assert_ne!(
+            default, parity,
+            "parity produced the default raster: the profile is not reaching RenderOptions"
+        );
     }
 }

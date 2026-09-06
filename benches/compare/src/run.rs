@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::child::{self, ChildArgs, Status};
 use crate::engines;
-use crate::model::{Op, median};
+use crate::model::{Op, RenderProfile, median};
 use crate::oracle::Oracle;
 use crate::pixels::{self, RenderDiff};
 use crate::text::{self, TextDiff};
@@ -62,6 +62,21 @@ pub struct EngineRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     pub note: String,
+    /// What this engine's configuration computes under the run's profile:
+    /// one `(work item, answer)` pair per `engines::WorkItem`, where the
+    /// answer is `yes`, `no`, `no knob` or `not determined`, each with the
+    /// source it was read from. Empty for an engine that does not render.
+    #[serde(default)]
+    pub work: Vec<WorkCell>,
+}
+
+/// One cell of an engine's work matrix, flattened for the JSON.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkCell {
+    pub item: String,
+    pub answer: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// A coverage-matrix entry: one feature verified by one file.
@@ -84,6 +99,11 @@ pub struct RunJson {
     pub generated_at: String,
     pub commit: String,
     pub label: String,
+    /// The profile that produced these rows. Recorded, never inferred from
+    /// `label`: a run named "parity" that was taken with the defaults would
+    /// otherwise be indistinguishable from one that was not.
+    #[serde(default)]
+    pub profile: RenderProfile,
     pub machine: Machine,
     pub corpus: Corpus,
     pub oracle: OracleRecord,
@@ -128,6 +148,8 @@ pub struct OracleRecord {
 /// What `run` was asked to do.
 pub struct RunConfig {
     pub label: String,
+    /// Which render settings every engine is asked for.
+    pub profile: RenderProfile,
     pub corpus_root: PathBuf,
     pub files: Vec<PathBuf>,
     pub rule: String,
@@ -232,6 +254,14 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
             ran,
             reason,
             note: info.note.to_owned(),
+            work: engines::work(name, config.profile)
+                .into_iter()
+                .map(|(item, support)| WorkCell {
+                    item: item.name().to_owned(),
+                    answer: support.cell().to_owned(),
+                    source: support.source().map(str::to_owned),
+                })
+                .collect(),
         });
     }
     if config.files.is_empty() {
@@ -262,6 +292,7 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
             Some(&config.repo_root),
         ),
         label: config.label.clone(),
+        profile: config.profile,
         machine: Machine {
             hostname: command_line("hostname", &[], None),
             cpus: std::thread::available_parallelism().map_or(0, std::num::NonZero::get),
@@ -375,6 +406,7 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
                     pdfium_lib: config.pdfium_lib.as_deref(),
                     password,
                     warm_runs: config.warm_runs,
+                    profile: config.profile,
                     budget: config.timeout.mul_f64(0.6),
                     timeout: config.timeout,
                 })?;
