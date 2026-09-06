@@ -41,9 +41,19 @@ assert!(converted.report.is_empty(), "an empty page is all vectors");
 # }
 ```
 
+`page_to_svg` takes the engine's own `Page` and `RenderOptions`, which is
+what a caller who already holds a page-object graph has. A caller coming
+from the `pdfrum` facade holds the facade's wrappers instead — different
+types on purpose — and reaches the same conversion through
+`pdfrum::Page::to_svg`, behind the facade's default-off `svg` feature. That
+is the shorter path, and `examples/convert.rs` takes it: nothing in it names
+an engine crate.
+
 The shipped crate depends on nothing beyond the geometry vocabulary the
-engine already speaks; base64 and a small lossless PNG encoder are written
-in-crate rather than pulled in.
+engine already speaks; base64 is written in-crate rather than pulled in. The
+PNG behind an embedded image is not: it is `pdfrum-render`'s own encoder,
+reached by turning on that crate's `png` feature rather than by adding a
+second edge to the `png` crate.
 
 `docs/design/svg.md` records the full mapping table, the five things that
 have no faithful SVG expression, and the round-trip scores the export

@@ -82,17 +82,19 @@ in-crate instead, per STYLE.md §5:
 
 - **base64** (`src/xml.rs`), nineteen lines, checked against the RFC 4648
   vectors.
-- **a PNG encoder** (`src/png.rs`). The `png` crate is tool-and-test-only
-  under DEPS.md and a library crate may not use it. The encoder writes a
-  valid, lossless, **uncompressed** PNG: `IHDR`, one `IDAT` holding a zlib
-  stream of *stored* deflate blocks (RFC 1951 §3.2.4), `IEND`, filter type 0
-  on every scanline, with a nibble-table CRC-32 and Adler-32 both checked
-  against their reference vectors. Stored blocks cost roughly the raw pixels
-  plus 0.1%, and base64 a third again on top; a real compressor would often
-  manage a fraction of that. That is the price of the closed dependency set,
-  it is paid only by the regions that are pixels anyway, and it costs nothing
-  in fidelity — every byte is the byte the engine produced. A caller who wants
-  the file smaller recompresses the `data:` payloads afterwards.
+The PNG behind an `<image>` `data:` URI is *not* one of them. It was, once —
+an in-crate encoder writing stored deflate blocks, on the reading that `png`
+is tool-and-test-only under DEPS.md — but `pdfrum-render` already carries the
+`png` crate behind its own `png` feature for `Pixmap::encode_png`, so the
+choice was never between a dependency and none: it was between one encoder in
+the workspace and two. This crate turns that feature on and hands the encoder
+a `Pixmap`. The regions that are pixels are now really deflated rather than
+stored, which is where the export's size went, and the pixels are still
+exactly the bytes the engine produced.
+
+The one subtlety is alpha: the engine's pixmaps are premultiplied and PNG's
+alpha is straight, so `SvgDevice::draw_image` unpremultiplies first and wraps
+the result in a `Pixmap` purely to reach the encoder.
 
 ## 3. The rasterized-region report
 
