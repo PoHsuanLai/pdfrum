@@ -11,7 +11,9 @@ fidelity that makes this engine worth using. Everything below is vector
 interchange and programmatic drawing, which is where the architecture
 already sits.
 
-Nothing here has started. Order is a recommendation, not a commitment.
+Order is a recommendation, not a commitment. M24, M25 and M26 are met;
+each carries its outcome, its measured numbers and its named debt at the end
+of its own section.
 
 M23-M26 add capability. **M27 and M28 are different: they are the two places
 the engine is strictly behind a peer with nothing bought in exchange** --
@@ -347,6 +349,80 @@ disagreements enumerated and adjudicated; `to_pdfa(A2b)` produces files
 veraPDF passes for the inputs it accepts and a named compromise list for the
 rest; `docs/design/pdfa.md` carries the requirement table and the oracle
 comparison.
+
+**MET 2026-09-07, with the shortfall measured and named below.** All four
+items shipped. Items 1 and 2 — the checker and its veraPDF scoring — landed
+first as their own pass; items 3 and 4 build on them.
+
+**Items 1 and 2.** `Document::check_pdfa(level)` in
+`crates/pdfrum-doc/src/pdfa/`, 24 clauses across A-1b and A-2b, scored over
+88 file-level pairs. The oracle earned its keep on the first scored run: **34
+disagreements, every one a defect on our side** — ten wrong ISO citations, a
+clause that is not an ISO 19005 requirement at all, and four checks enforcing
+the *popular summary* of a rule rather than the rule. After those corrections
+the checker and veraPDF disagree about **four distinct requirements across 82
+scored pairs**, each adjudicated in `docs/design/pdfa.md` §6.
+
+**Items 3 and 4.** `Document::to_pdfa(level, policy)` in
+`crates/pdfrum/src/pdfa/`, behind the `edit` feature because it writes a file.
+The measured result, which is the exit criterion:
+
+> **veraPDF A-2b over the 44-file corpus: 0 passed before conversion, 10
+> after.**
+
+Not one corpus file is PDF/A to begin with — they are rendering fixtures — and
+the test asserts that zero rather than assuming it, so the after-number is a
+conversion result rather than a statement about the corpus. All 44 convert and
+reopen; one file veraPDF previously **declined to parse at all**
+(`shading_type4_5`) comes out of the rewrite as a file it validates and passes.
+The count is pinned by `A2B_PASS_FLOOR` in `crates/pdfrum/tests/pdfa_convert.rs`
+so it cannot quietly regress.
+
+**Item 4's shape.** `Policy` is a struct of `Concession` enums, one per kind of
+compromise, every one `Refuse` by default; `Conversion` carries a
+`Vec<Compromise>` and a `Vec<Refusal>`, both matchable rather than formatted.
+A refusal **writes no file**, and the survey/apply split means the same entry
+produces both the edit and its report line — so a compromise reaching the file
+has a report entry by construction. The test
+`the_strict_policy_refuses_what_the_lossy_policy_compromises` proved that
+design earns its place by catching one repair (clearing an annotation's hiding
+flags) that changed the document under a policy authorizing nothing.
+
+**No new dependency, at all.** `Cargo.toml` and `Cargo.lock` are untouched by
+this pass; a default `pdfrum` stays at **87 crates**. The rule said "`moxcms`
+is already in the tree and no new colour dependency is taken", and the
+OutputIntent's ICC profile is `moxcms::ColorProfile::new_srgb().encode()`,
+exposed as `pdfrum_page::srgb_profile_bytes` and asserted well-formed there.
+The XMP packet is generated without an XML crate for the same reason the
+checker reads one without a parser (STYLE.md §5).
+
+**Named debt, in size order** — `docs/design/pdfa.md` §§10-11 carry the full
+list with the rule and file count for each:
+
+1. **Font embedding and substitution.** `Policy::unembeddable_font` detects
+   and refuses; the substitution behind `Accept` is unwritten, so 21 of 44
+   files stay blocked on 6.2.11.4.1. The largest single item, and a font
+   problem rather than a PDF/A one.
+2. **Page rasterization.** `Policy::unrepresentable_content` likewise refuses
+   rather than rasterizing. A-2b permits transparency so no corpus file needs
+   it, and wiring it would make `to_pdfa` take a `RasterBackend` — a signature
+   change worth making when the repair is real.
+3. **A CMYK output intent** — 5 files, 6.2.4.3-3. `moxcms` has a built-in sRGB
+   profile and no CMYK one, and a correct CMYK profile is LUT data rather than
+   a formula. **Left for the user** as a dependency-or-vendored-asset question
+   rather than decided in this pass.
+4. **Non-UTF-8 resource names** — 13 files, 6.1.8-1. Renaming means rewriting
+   every content stream that names the resource, which needs the interpreter
+   the checker also does without.
+5. **Checker gaps inherited** — §4's list, of which the content-stream gap is
+   what blocks item 4 above.
+
+Two items of the pipeline as item 3 wrote it were not needed and were not
+built: **form-field flattening** (the facade already has `DocEdit::flatten`,
+and no corpus file needed it to pass — the widget repairs were cheaper and
+kept the fields editable) and **rewriting colour into the intent's space** (an
+output intent *defines* what the existing device colour means, so writing one
+made 33 files' `DeviceRGB` legal without touching a single colour operand).
 
 ## M27 — Peak render memory: decode at the size the page draws
 

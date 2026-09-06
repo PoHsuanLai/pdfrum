@@ -80,6 +80,11 @@ mod outline;
 mod owned_form;
 mod owned_page;
 mod page;
+/// PDF/A conversion. Behind `edit` because it writes a file, which is what
+/// that feature gates; the *checker* needs no feature and is in the default
+/// set (`docs/design/pdfa.md` §2).
+#[cfg(feature = "edit")]
+mod pdfa;
 mod profile;
 mod render;
 #[cfg(feature = "edit")]
@@ -279,6 +284,17 @@ pub use pdfrum_doc::{Action, ActionKind, Dest, Link};
 pub use pdfrum_doc::pdfa::{
     Clause as PdfaClause, Level as PdfaLevel, Report as PdfaReport, Subject as PdfaSubject,
     Violation as PdfaViolation,
+};
+
+/// PDF/A *conversion*: what the caller authorizes before it runs, and what it
+/// says it did afterwards.
+///
+/// Returned by and passed to [`Document::to_pdfa`]. Behind `edit` because the
+/// conversion writes a file; the checker above needs no feature.
+#[cfg(feature = "edit")]
+pub use pdfa::{
+    Compromise as PdfaCompromise, Concession as PdfaConcession, Conversion as PdfaConversion,
+    Dpi as PdfaDpi, Policy as PdfaPolicy, RasterCause as PdfaRasterCause, Refusal as PdfaRefusal,
 };
 
 /// Everything a document reported repairing, working around, or refusing.

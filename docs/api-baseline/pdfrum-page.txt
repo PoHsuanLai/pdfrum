@@ -817,4 +817,5 @@ pub fn pdfrum_page::load_pattern<R: pdfrum_object::resolve::Resolve>(&pdfrum_obj
 pub fn pdfrum_page::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::Page, &mut pdfrum_page::OcContext, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Visibility
 pub fn pdfrum_page::parse_content(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_page::Op>
 pub fn pdfrum_page::parse_program(&[u8], &[f32], &[f32]) -> core::option::Option<pdfrum_page::PostScript>
+pub fn pdfrum_page::srgb_profile_bytes() -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_page::uncolored_pattern_rgb(&pdfrum_page::ColorSpace, &[f32], bool) -> pdfrum_page::Rgb
