@@ -68,8 +68,9 @@ pub fn render(json: &RunJson) -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "Run `{}` — commit {} — {} files — {} DPI — timeout {} s — {} warm runs — generated {}",
+        "Run `{}` — profile `{}` — commit {} — {} files — {} DPI — timeout {} s — {} warm runs — generated {}",
         json.label,
+        json.profile.name(),
         json.commit,
         json.corpus.files,
         json.dpi,
@@ -118,6 +119,8 @@ pub fn render(json: &RunJson) -> String {
             }
         );
     }
+
+    work_matrix(&mut out, json);
 
     let _ = writeln!(
         out,
@@ -462,6 +465,201 @@ pub fn render(json: &RunJson) -> String {
         );
     }
     out
+}
+
+/// Two runs of the same corpus side by side: what the defaults cost and what
+/// that buys, per engine and per file.
+///
+/// The pair is the deliverable. A parity number alone says only "we are
+/// faster with things turned off", which nobody doubted; the gap and the
+/// SSIM it costs are the finding. Every engine's rows appear in both
+/// columns, so an engine the profile cannot move shows the same number
+/// twice — which is itself the evidence that the profile did not silently
+/// change it.
+pub fn profiles(base: &RunJson, parity: &RunJson) -> anyhow::Result<String> {
+    use crate::model::RenderProfile;
+    if base.profile != RenderProfile::Default {
+        anyhow::bail!(
+            "the first JSON is a `{}` run, not a `default` one",
+            base.profile.name()
+        );
+    }
+    if parity.profile != RenderProfile::Parity {
+        anyhow::bail!(
+            "the second JSON is a `{}` run, not a `parity` one",
+            parity.profile.name()
+        );
+    }
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "Profiles — `{}` (default, commit {}) against `{}` (parity, commit {}) — {} DPI\n",
+        base.label, base.commit, parity.label, parity.commit, base.dpi
+    );
+    let _ = writeln!(
+        out,
+        "Load: default run `{}` → `{}`; parity run `{}` → `{}`.\n",
+        base.machine.loadavg_before,
+        base.machine.loadavg_after,
+        parity.machine.loadavg_before,
+        parity.machine.loadavg_after
+    );
+
+    work_matrix(&mut out, base);
+    work_matrix(&mut out, parity);
+
+    let _ = writeln!(
+        out,
+        "\n### Speed — median across files, milliseconds, default vs parity\n"
+    );
+    let _ = writeln!(
+        out,
+        "| engine | op | cold default | cold parity | cold delta | warm default | warm parity | warm delta |"
+    );
+    separator(&mut out, 8);
+    for engine in &base.engines {
+        if !engine.ran {
+            continue;
+        }
+        for op in Op::ALL {
+            if !engine.ops.contains(&op) {
+                continue;
+            }
+            let times = |json: &RunJson, pick: fn(&Row) -> Option<f64>| -> Option<f64> {
+                let values: Vec<f64> = rows_for(json, &engine.name, op)
+                    .filter(|row| row.status == Status::Ok)
+                    .filter_map(pick)
+                    .collect();
+                median(&values)
+            };
+            let cold_a = times(base, |row| row.cold_ms);
+            let cold_b = times(parity, |row| row.cold_ms);
+            let warm_a = times(base, |row| row.warm_ms);
+            let warm_b = times(parity, |row| row.warm_ms);
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} | {} | {} | {} | {} | {} |",
+                engine.name,
+                op.name(),
+                fmt_ms(cold_a),
+                fmt_ms(cold_b),
+                fmt_delta(cold_a, cold_b),
+                fmt_ms(warm_a),
+                fmt_ms(warm_b),
+                fmt_delta(warm_a, warm_b)
+            );
+        }
+    }
+
+    let _ = writeln!(
+        out,
+        "\n### Fidelity — SSIM against the oracle, both profiles, files where parity changed the pixels\n"
+    );
+    let _ = writeln!(
+        out,
+        "| engine | file | SSIM default | SSIM parity | delta | differing px default | differing px parity |"
+    );
+    separator(&mut out, 7);
+    let mut moved = 0usize;
+    let mut same = 0usize;
+    for engine in &base.engines {
+        if !engine.ops.contains(&Op::Render) || !engine.ran {
+            continue;
+        }
+        for row in rows_for(base, &engine.name, Op::Render) {
+            let Some(ours) = row.render else { continue };
+            let Some(theirs) = rows_for(parity, &engine.name, Op::Render)
+                .find(|other| other.file == row.file)
+                .and_then(|other| other.render)
+            else {
+                continue;
+            };
+            if (theirs.ssim - ours.ssim).abs() < 1e-6
+                && (theirs.differing_pct - ours.differing_pct).abs() < 1e-6
+            {
+                same += 1;
+                continue;
+            }
+            moved += 1;
+            let _ = writeln!(
+                out,
+                "| {} | {} | {:.4} | {:.4} | {:+.4} | {:.2}% | {:.2}% |",
+                engine.name,
+                row.file,
+                ours.ssim,
+                theirs.ssim,
+                theirs.ssim - ours.ssim,
+                ours.differing_pct,
+                theirs.differing_pct
+            );
+        }
+    }
+    if moved == 0 {
+        let _ = writeln!(out, "| — | none | | | | | |");
+    }
+    let _ = writeln!(
+        out,
+        "\n{moved} compared files changed pixels under parity; {same} were byte-identical in both profiles."
+    );
+    Ok(out)
+}
+
+/// `parity - default` as a signed percentage of the default, or `-`.
+fn fmt_delta(default: Option<f64>, parity: Option<f64>) -> String {
+    match (default, parity) {
+        (Some(a), Some(b)) if a > 0.0 => format!("{:+.1}%", 100.0 * (b - a) / a),
+        _ => "-".to_owned(),
+    }
+}
+
+/// What each render configuration computes — the table that makes an
+/// asymmetry between two engines' settings visible instead of leaving it in
+/// the `note` prose. One column per work item, one footnote per distinct
+/// source, and `not determined` wherever the peer's source did not settle
+/// the question.
+fn work_matrix(out: &mut String, json: &RunJson) {
+    let with_work: Vec<&crate::run::EngineRecord> = json
+        .engines
+        .iter()
+        .filter(|engine| !engine.work.is_empty())
+        .collect();
+    if with_work.is_empty() {
+        return;
+    }
+    let items: Vec<&str> = with_work[0].work.iter().map(|c| c.item.as_str()).collect();
+    let _ = writeln!(
+        out,
+        "\n### What this configuration computes — profile `{}`\n",
+        json.profile.name()
+    );
+    let _ = writeln!(out, "| engine | {} |", items.join(" | "));
+    separator(out, 1 + items.len());
+    let mut sources: BTreeMap<String, usize> = BTreeMap::new();
+    for engine in &with_work {
+        let cells: Vec<String> = engine
+            .work
+            .iter()
+            .map(|cell| {
+                let Some(source) = cell.source.as_ref() else {
+                    return cell.answer.clone();
+                };
+                let next = sources.len() + 1;
+                let mark = *sources.entry(source.clone()).or_insert(next);
+                format!("{} [{mark}]", cell.answer)
+            })
+            .collect();
+        let _ = writeln!(out, "| {} | {} |", engine.name, cells.join(" | "));
+    }
+    let mut ordered: Vec<(&String, &usize)> = sources.iter().collect();
+    ordered.sort_by_key(|(_, mark)| **mark);
+    let _ = writeln!(out);
+    for (source, mark) in ordered {
+        let _ = writeln!(out, "[{mark}] `{source}`");
+    }
+    let _ = writeln!(
+        out,
+        "\n`no knob` means the crate exposes no setting for that item, so the profile cannot move it; `not determined` means the crate's own source did not settle the question and nothing is guessed here."
+    );
 }
 
 /// One coverage cell: the three ops, with the oracle score where there is one.

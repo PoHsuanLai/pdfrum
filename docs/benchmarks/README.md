@@ -41,9 +41,16 @@ compare run --label corpus44 --corpus ../../benches/corpus \
 compare run --label pdfium-sample --corpus /path/to/pdfium-c++/testing/corpus --every 4 ...
 compare run --label coverage --corpus /path/to/pdfium-c++/testing --spec coverage.json ...
 compare adoption --scratch /tmp/compare-adoption --pdfium-lib ... --out ...-adoption.json
+compare run --label corpus44-parity --parity ...   # the matched-work profile
 compare report <json>                       # the tables, from the JSON alone
 compare report <json> --losses              # the loss list as JSON
+compare profiles <default.json> <parity.json>      # the two profiles side by side
 ```
+
+`--parity` renders pdfrum with `smooth_paths`, `interpolate_images` and
+`annotations` all off, so the cost of the defaults can be measured; the
+profile is recorded in the JSON and `compare profiles` refuses a pair that is
+not one `default` and one `parity`. See "Render profiles" below.
 
 `report` reads a `run` JSON. The throughput and adoption tables come out of
 their own subcommands, which re-render from a complete `--out` file without
@@ -198,6 +205,38 @@ engines, measured back to back on the same files, were readable there.
 milliseconds can be quoted. The same box is now where the workspace ratchet
 is measured; the internal working notes has that rule.
 
+### Render profiles, and what a configuration computes
+
+Every engine is invoked with its own defaults, which is what `cargo add
+<engine>` delivers — but "defaults" is not self-evidently like-for-like, so
+the harness states the comparison rather than assuming it.
+
+Each engine that rasterizes carries a **work matrix**: for each of path
+antialiasing, glyph antialiasing, image interpolation, annotation drawing and
+form-field appearance generation, whether its benchmark configuration does
+that work, with the file and line of the crate's own source that says so.
+The four answers are `yes`, `no`, `no knob` (the crate exposes no setting, so
+no profile can move it) and `not determined` (the source did not settle it —
+never a guess). `compare report` prints the matrix for every run and the JSON
+records it per engine.
+
+Each run is taken under a **render profile**, recorded in the JSON as
+`"profile"` and never inferred from the run's label:
+
+- `default` — every engine's own defaults. Runs 1–3 are all `default`.
+- `parity` (`compare run --parity`) — pdfrum rendered with the cheapest
+  configuration its public API offers (`smooth_paths: false`,
+  `interpolate_images: false`, `annotations: false`), so the cost of the
+  defaults is measurable. Glyph antialiasing stays on: no peer offers a knob
+  for it. An engine with no equivalent knob records `no knob` and renders
+  exactly as it did under `default`.
+
+`compare profiles <default.json> <parity.json>` puts the pair side by side —
+speed per engine and op in both profiles, and, for every file where parity
+changed the pixels, the SSIM under both. The pair is the deliverable: a
+parity number alone says only "we are faster with things turned off", which
+nobody doubted. Run 4 below is the result.
+
 ### Losses
 
 For every file and op, any peer whose score is better than pdfrum's — SSIM
@@ -219,6 +258,14 @@ licence; and, for every crate in the normal tree, the count of the token
 for pdfrum) — a grep, approximate, counts `unsafe fn`, `unsafe impl` and
 `unsafe {` alike and counts nothing in comments away.
 
+Two rows are the same crate under a different feature set:
+`pdfrum-parse-only` is `default-features = false` (a bare parser, matching
+what `lopdf` and `pdf` do) and `pdfrum-render-only` adds `vello-cpu` and
+`codecs-all` (matching what `hayro` does). They exist so the size and
+dependency columns compare like with like instead of charging the full
+default set against a peer that does less; their licence and
+`unsafe`-in-crate figures are still `pdfrum`'s.
+
 ### Coverage
 
 `benches/compare/coverage.json` names one PDFium corpus file per feature in
@@ -228,7 +275,14 @@ nothing else; no cell comes from a README.
 
 ## Numbers
 
-**Three runs. Run 3 is the one to read** — the whole chain in one sitting on
+**Four runs. Run 3 is the one to read for absolutes**, and **run 4 answers
+the separate question of whether the comparison is like-for-like** — it adds
+a per-engine matrix of what each configuration actually computes, and a
+`--parity` profile that turns pdfrum's optional work off so its cost can be
+measured. Run 4's own milliseconds were taken on a loaded box and are a
+ratio between two profiles of one engine, never a cross-engine absolute.
+
+Run 3 is the whole chain in one sitting on
 an idle box, at commit `8a02d57b1fa7`. Runs 1 and 2 are kept below as
 history: they were measured on a box carrying a load average of 30–40 on its
 32 cores, so their **speed columns are superseded and must not be quoted**;
@@ -858,6 +912,197 @@ coverage table in run 3 reproduces run 1's, which is the expected result and
 a check on the harness. The one exception is `pdfium-render`'s own render
 buckets on the 209-file sample (158 → 159 inside the floor), which is that
 library's own noise, not ours.
+
+### Run 4 — matched work: what our defaults compute, and what they cost
+
+Runs 1–3 invoke every engine the way `cargo add <engine>` delivers it, and
+say so only in a free-text `note` per engine. That leaves a fair question
+unanswered: **are we computing more than the peers and losing on speed for
+it, with nothing in the tables saying so?** Run 4 answers it two ways — a
+structured work matrix that makes any asymmetry visible, and a second render
+profile that turns our optional work off so the cost is measurable.
+
+#### The `--parity` profile
+
+`compare run --parity` renders pdfrum with the cheapest configuration its
+public API offers: `smooth_paths: false`, `interpolate_images: false`,
+`annotations: false`. Glyph antialiasing stays on in both profiles,
+deliberately — no peer offers a knob for it, so turning ours off would swap
+one asymmetry for another rather than remove one.
+
+The profile is a `RenderProfile` enum on the run's `Ctx`, not three booleans
+threaded through the harness, and every engine module decides what it means
+for its own API. The run's JSON records `"profile": "default"` or
+`"parity"`; it is **never** inferred from `--label`, so a run named `parity`
+that was taken with the defaults cannot masquerade as one that was not.
+
+#### What each configuration computes
+
+`compare report` now prints this table for every run, and every cell was read
+out of the named crate's own source in the local registry checkout — not out
+of its README.
+
+| engine | path AA | text AA | image interp | annotations | form fields |
+|---|---|---|---|---|---|
+| pdfrum (default) | yes [1] | yes [1] | yes [1] | yes [1] | yes [1] |
+| pdfrum (parity) | no [1] | yes [1] | no [1] | no [1] | no [1] |
+| hayro | no knob [2] | no knob [2] | yes [3] | yes [4] | not determined |
+| pdf_oxide | no knob [5] | no knob [5] | not determined | yes [6] | not determined |
+| pdfium-render | yes [7] | yes [7] | yes [7] | yes [7] | yes [7] |
+| mupdf | yes [8] | yes [8] | not determined | yes [9] | yes [9] |
+
+[1] `crates/pdfrum/src/render.rs:69-72` — `RenderOptions::default`
+[2] `hayro-0.7.1/src/lib.rs:141` — the `vello_cpu::RenderSettings` are fixed inside `hayro::render`; the public `RenderSettings` has no AA field
+[3] `hayro-0.7.1/src/renderer.rs:224` — `ImageQuality::Medium` when `/Interpolate`, `Low` otherwise
+[4] `hayro-interpret-0.7.0/src/interpret/mod.rs:121` — `render_annotations: true`
+[5] `pdf_oxide-0.3.77/src/rendering/mod.rs:66,80` — `paint.anti_alias = true`, unconditional
+[6] `pdf_oxide-0.3.77/src/rendering/page_renderer.rs:140` — `render_annotations: true`
+[7] `pdfium-render-0.9.3/src/pdf/document/page/render_config.rs:76` — `PdfRenderConfig::new()`
+[8] `mupdf-0.8.0/src/context.rs:195` — the crate's own test asserts the default `aa_level` is 8
+[9] `mupdf-0.8.0/src/page.rs:49` — `to_pixmap(.., show_extras = true)`
+
+`no knob` means the crate exposes no setting for that item, so `--parity`
+cannot move it. `not determined` means the crate's source did not settle the
+question; nothing is guessed.
+
+**The premise turns out to be wrong, and this is the main finding.** Every
+peer that rasterizes antialiases paths and glyphs, and every one of them
+draws annotations by default. `pdfium-render`'s bare `PdfRenderConfig::new()`
+— which reads like a minimal configuration — in fact sets
+`do_set_flag_render_annotations: true` and `do_render_form_data: true` and
+leaves all three `NO_SMOOTH` flags false, so it is doing *exactly* the work
+pdfrum's defaults do. `mupdf`'s wrapper never calls `set_aa_level`, and its
+own test asserts the default is full 8-bit antialiasing. So runs 1–3 were
+already like-for-like on these four items; the asymmetry the tables were
+suspected of hiding is not there. The cells we could not settle are image
+interpolation in `pdf_oxide` and in `mupdf`, and form-field appearance
+generation in `hayro` and `pdf_oxide`; those say "not determined" and stay
+that way until someone reads further.
+
+#### Default vs parity — a null result on this box, with a small real effect underneath
+
+`data/2026-09-06-80f7d2e4bc01-corpus44-default.json` and
+`-corpus44-parity.json`, `compare profiles` of the pair.
+
+**These are not idle-box numbers.** They were taken on `frieren` — the
+shared 32-core box, rustc 1.97.1 — deliberately, because `himmel` was busy
+with a `cargo bench` that must not be disturbed. The one-minute load average
+ranged between 8 and 46 across the runs; the JSON records the reading before
+and after each one. **The run-3 tables above remain the reference for
+every cross-engine absolute.** What follows is only a ratio between two
+profiles of the same engine, measured back to back. `pdfium-render` does not
+appear at all: there is no `libpdfium.so` on this box.
+
+The first back-to-back pair looked like a clear win for parity: warm render
+median 16.85 → 15.28 ms, −9.3%. It is not trustworthy, and the control says
+so. `--parity` provably cannot reach `hayro`, `pdf_oxide` or `mupdf` — they
+have no knobs, and their work rows above are identical in both profiles — yet
+in the same pair `hayro` "improved" 21% and `mupdf` 23%. That movement is
+box noise, and the load happened to fall from 46 to 15 across the two runs,
+biasing the second one fast.
+
+So the measurement was repeated as three interleaved pairs
+(`data/2026-09-06-80f7d2e4bc01-paired-{1,2,3}-{default,parity}.json`), each
+default run immediately followed by its parity run, at load 9–17 throughout.
+Comparing whole-run warm render medians, the engines that cannot move swing
+as much as the one that can:
+
+| engine | pair 1 | pair 2 | pair 3 | can `--parity` move it? |
+|---|---|---|---|---|
+| pdfrum | −2.5% | −9.8% | −6.0% | yes |
+| hayro | −21.0% | +2.8% | +8.9% | no |
+| mupdf | +34.9% | −5.7% | +5.3% | no |
+
+**On the whole-run medians this box cannot separate the two profiles.** The
+controls swing ±35% between paired runs; pdfrum's gap sits inside that band.
+
+A paired *per-file* ratio is sharper, because it cancels the between-file
+variance that dominates a 44-file median. Taking parity/default per file and
+then the median over the corpus:
+
+| engine | pair 1 | pair 2 | pair 3 | pooled median | pooled p10 | pooled p90 |
+|---|---|---|---|---|---|---|
+| pdfrum | 0.935 | 0.946 | 0.989 | 0.975 (n=132) | 0.653 | 1.372 |
+| hayro | 0.968 | 1.019 | 1.004 | 1.014 (n=132) | 0.777 | 1.411 |
+| mupdf | 1.088 | 0.998 | 1.023 | 1.011 (n=126) | 0.782 | 1.440 |
+
+Here pdfrum is below 1.0 in all three pairs while both controls straddle it,
+which is a real signal rather than drift. **The honest conclusion: turning
+path antialiasing, image interpolation and annotation drawing off buys
+roughly 3–6% of warm render time — small enough that this box cannot resolve
+it on whole-run medians, and visible only as a paired per-file effect.** The
+per-file spread (p10 0.65, p90 1.37) is far wider than the effect. An
+idle-box repetition of the three pairs would tighten this; it has not been
+done.
+
+The direction of the finding matters more than its size: our defaults are
+**not** where a speed gap against the peers comes from. They cost a few
+percent, and the peers are paying the same cost with no way to opt out.
+
+#### What parity costs in fidelity
+
+Turning antialiasing off changes the pixels, and the SSIM against
+`pdfium_test --png` must be read beside the speed. 27 of the 44 files changed
+at all; 17 were byte-identical in both profiles.
+
+| file class | n | median SSIM default | median SSIM parity | median delta | worst file |
+|---|---|---|---|---|---|
+| forms | 7 | 0.9992 | 0.9631 | −0.0361 | −0.1374 (`forms_widgets_407.pdf`) |
+| image | 9 | 0.9960 | 0.9960 | ±0.0000 | −0.0150 (`image_ccitt_3bigpreview.pdf`) |
+| mixed | 5 | 1.0000 | 0.9996 | −0.0004 | −0.1318 (`mixed_formfield.pdf`) |
+| shading | 8 | 0.9999 | 0.9990 | −0.0009 | −0.0050 (`shading_tcpdf_058.pdf`) |
+| text | 9 | 1.0000 | 0.9993 | −0.0006 | −0.0411 (`text_tcpdf_063.pdf`) |
+| vector | 6 | 1.0000 | 0.9988 | −0.0011 | −0.0106 (`vector_en_system.pdf`) |
+
+The forms class is where parity is ruinous, and it explains a detail worth
+recording: the widget appearances that runs 1–3 render arrive through the
+page's *generated appearance streams*, and `annotations: false` suppresses
+them too. `forms_widgets_407.pdf` goes 1.95% differing pixels to 34.26%, and
+`mixed_formfield.pdf` 0.67% to 34.38% — the fields simply are not drawn. The
+image class barely moves at all, which says image interpolation is doing
+almost nothing on this corpus. **Parity is a measurement instrument, not a
+configuration anyone should ship**: it drops 7 of 44 files below the 0.99
+conformance floor to buy a few percent.
+
+#### Feature-matched build (adoption)
+
+`data/2026-09-06-80f7d2e4bc01-adoption-featurematched.json`. This was cheap
+to add — `compare adoption` already builds one consumer crate per engine
+from a `[dependencies]` line, so a second and third pdfrum row with a
+trimmed feature set needed only the rows, not new machinery — so it was
+built rather than deferred.
+
+| engine | features | crates in tree | clean release build | stripped hello-world | `unsafe` in tree |
+|---|---|---|---|---|---|
+| pdfrum | default (`vello-cpu, edit, forms, codecs-all, system-fonts`) | 88 | 17 s | 1.1 MiB | 6932 |
+| pdfrum-render-only | `default-features = false` + `vello-cpu, codecs-all` | 78 | 14 s | 1.0 MiB | 5984 |
+| pdfrum-parse-only | `default-features = false` | 63 | 12 s | 1.0 MiB | 1655 |
+
+A consumer who only needs what `lopdf` or `pdf` does — parse and reach the
+page tree — takes 63 crates rather than 88, and the `unsafe` in that tree
+falls from 6932 to 1655, because the rasterizer and its image codecs are the
+bulk of it. A consumer who needs what `hayro` does — parse and render, no
+editing and no form state machine — takes 78. The stripped hello-world barely
+moves, because it links only what it calls. These three rows were measured on
+the same loaded box as the profiles above: the build-time column in
+particular is not comparable with run 3d's idle-box column, while the
+crate-count and `unsafe` columns are properties of the dependency graph and
+are.
+
+#### Reproducing run 4
+
+```sh
+B=benches/compare/target/release/pdfrum-compare
+$B run --label corpus44-default          --corpus benches/corpus --checkout $C --scratch $D/s  --out $D/default.json
+$B run --label corpus44-parity  --parity --corpus benches/corpus --checkout $C --scratch $D/sp --out $D/parity.json
+$B profiles $D/default.json $D/parity.json
+$B adoption --scratch $D/adoption --out $D/adoption.json \
+    --engines pdfrum,pdfrum-parse-only,pdfrum-render-only
+```
+
+`compare profiles` refuses a pair whose recorded profiles are not one
+`default` and one `parity`, so the two halves of a comparison cannot be
+mixed up by filename.
 
 ### Run 1 (history) — `benches/corpus` (44 files, the M12 measurement set)
 

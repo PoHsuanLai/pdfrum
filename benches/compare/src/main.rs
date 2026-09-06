@@ -32,7 +32,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
-use crate::model::{Ctx, Op};
+use crate::model::{Ctx, Op, RenderProfile};
 
 #[derive(Parser)]
 #[command(
@@ -55,6 +55,14 @@ enum Cmd {
         /// Only the losses, as a list.
         #[arg(long)]
         losses: bool,
+    },
+    /// Put two runs of the same corpus side by side — the point of
+    /// `--parity` is the pair, not either number alone.
+    Profiles {
+        /// The `default`-profile run.
+        default_json: PathBuf,
+        /// The `--parity` run of the same corpus.
+        parity_json: PathBuf,
     },
     /// Measure the cost of adopting each engine.
     Adoption(AdoptionArgs),
@@ -116,6 +124,23 @@ struct RunArgs {
     /// Keep the rows `--out` already holds and run only the files it lacks.
     #[arg(long)]
     resume: bool,
+    /// Render with the cheapest comparable settings every engine offers —
+    /// no path antialiasing, no image interpolation, no annotation drawing —
+    /// so a reader can see what the defaults cost. The profile is recorded
+    /// in the JSON; it is never inferred from `--label`.
+    #[arg(long)]
+    parity: bool,
+}
+
+impl RunArgs {
+    /// The profile the flag selects.
+    fn profile(&self) -> RenderProfile {
+        if self.parity {
+            RenderProfile::Parity
+        } else {
+            RenderProfile::Default
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -184,6 +209,8 @@ struct ChildCli {
     warm: usize,
     #[arg(long, default_value_t = 6000)]
     budget_ms: u64,
+    #[arg(long, value_enum, default_value_t = RenderProfile::Default)]
+    profile: RenderProfile,
 }
 
 fn repo_root() -> PathBuf {
@@ -211,6 +238,7 @@ fn main() -> Result<()> {
                 password: args.password.as_deref(),
                 warm_runs: args.warm,
                 budget: Duration::from_millis(args.budget_ms),
+                profile: args.profile,
             };
             child::run_child(&args.engine, args.op, &args.file, &args.out, &ctx)
         }
@@ -223,6 +251,20 @@ fn main() -> Result<()> {
             } else {
                 print!("{}", report::render(&run));
             }
+            Ok(())
+        }
+        Cmd::Profiles {
+            default_json,
+            parity_json,
+        } => {
+            let read = |path: &PathBuf| -> Result<run::RunJson> {
+                let text = std::fs::read_to_string(path)
+                    .with_context(|| format!("reading {}", path.display()))?;
+                Ok(serde_json::from_str(&text)?)
+            };
+            let base = read(&default_json)?;
+            let parity = read(&parity_json)?;
+            print!("{}", report::profiles(&base, &parity)?);
             Ok(())
         }
         Cmd::Adoption(args) => {
@@ -271,6 +313,7 @@ fn main() -> Result<()> {
                 password: None,
                 warm_runs: 0,
                 budget: Duration::ZERO,
+                profile: RenderProfile::Default,
             };
             let rows = throughput::run(
                 &corpus_root,
@@ -288,6 +331,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Run(args) => {
+            let profile = args.profile();
             let checkout = args
                 .checkout
                 .clone()
@@ -349,6 +393,7 @@ fn main() -> Result<()> {
             };
             let config = run::RunConfig {
                 label: args.label,
+                profile,
                 corpus_root,
                 files,
                 rule,

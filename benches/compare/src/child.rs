@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::engines;
-use crate::model::{ChildReport, Ctx, Op, Output, vm_hwm_kb};
+use crate::model::{ChildReport, Ctx, Op, Output, RenderProfile, vm_hwm_kb};
 use crate::pixels;
 
 /// How an (engine, file, op) run ended.
@@ -117,6 +117,8 @@ pub struct ChildArgs<'a> {
     pub pdfium_lib: Option<&'a Path>,
     pub password: Option<&'a str>,
     pub warm_runs: usize,
+    /// Which render settings the child is asked for.
+    pub profile: RenderProfile,
     pub budget: Duration,
     pub timeout: Duration,
 }
@@ -140,6 +142,8 @@ pub fn spawn(args: &ChildArgs<'_>) -> Result<Outcome> {
         .arg(args.warm_runs.to_string())
         .arg("--budget-ms")
         .arg(args.budget.as_millis().to_string())
+        .arg("--profile")
+        .arg(args.profile.name())
         // Single-threaded, as PLAN.md §M21 asks: `lopdf` parses with rayon by
         // default, and this keeps every engine on one core.
         .env("RAYON_NUM_THREADS", "1")

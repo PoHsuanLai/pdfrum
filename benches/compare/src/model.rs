@@ -45,6 +45,50 @@ impl Op {
     }
 }
 
+/// Which set of render settings an engine is asked for.
+///
+/// Two profiles, not three booleans threaded through the harness: the point
+/// of the mode is that a reader can always tell which of two configurations
+/// produced a number, and a `bool` per knob would let a run be half one and
+/// half the other. Every engine module decides what a profile *means* for
+/// its own API, and says so through [`crate::engines::work`].
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize,
+    clap::ValueEnum,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum RenderProfile {
+    /// What `cargo add <engine>` gives a caller who writes no options: every
+    /// engine's own defaults. This is what runs 1-3 measured.
+    #[default]
+    Default,
+    /// The cheapest comparable configuration the engine offers: no path
+    /// antialiasing, no image interpolation, no annotation drawing. An
+    /// engine with no such knob records that it has none rather than
+    /// silently rendering its default anyway.
+    Parity,
+}
+
+impl RenderProfile {
+    /// The name a table, a JSON field and a command line use.
+    pub fn name(self) -> &'static str {
+        match self {
+            RenderProfile::Default => "default",
+            RenderProfile::Parity => "parity",
+        }
+    }
+}
+
 /// A rendered page as an engine produced it. `premultiplied` says whether
 /// the alpha has already been multiplied into the colour channels, which the
 /// comparison undoes by compositing over white either way.
@@ -100,6 +144,8 @@ pub struct Ctx<'a> {
     pub warm_runs: usize,
     /// Wall-clock budget for the warm runs; a slow file keeps fewer.
     pub budget: Duration,
+    /// Which render settings this run asks every engine for.
+    pub profile: RenderProfile,
 }
 
 impl Ctx<'_> {
