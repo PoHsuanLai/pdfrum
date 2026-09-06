@@ -21,7 +21,9 @@ pub pdfrum_edit::Error::EncryptedSaveUnsupported
 pub pdfrum_edit::Error::ImageDataLength
 pub pdfrum_edit::Error::ImageDataLength::expected: usize
 pub pdfrum_edit::Error::ImageDataLength::found: usize
+pub pdfrum_edit::Error::InlinePage(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::Io(core::io::error::Error)
+pub pdfrum_edit::Error::MissingGlyph(pdfrum_edit::MissingGlyph)
 pub pdfrum_edit::Error::NoDestinationCatalog
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
 pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
@@ -76,6 +78,7 @@ pub fn pdfrum_edit::EditDoc<'_>::fetch(&self, pdfrum_object::object::ObjRef) -> 
 pub struct pdfrum_edit::EmbeddedFont
 impl pdfrum_edit::EmbeddedFont
 pub fn pdfrum_edit::EmbeddedFont::encode(&self, &str) -> alloc::vec::Vec<u8>
+pub fn pdfrum_edit::EmbeddedFont::encode_checked(&self, &str) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_edit::MissingGlyph>
 pub fn pdfrum_edit::EmbeddedFont::object(&self) -> pdfrum_object::object::ObjRef
 pub struct pdfrum_edit::EmbeddedImage
 impl pdfrum_edit::EmbeddedImage
@@ -109,6 +112,9 @@ pub struct pdfrum_edit::IvSource
 impl pdfrum_edit::IvSource
 pub fn pdfrum_edit::IvSource::from_document(&[u8]) -> Self
 pub const fn pdfrum_edit::IvSource::from_seed(u64) -> Self
+pub struct pdfrum_edit::MissingGlyph
+pub pdfrum_edit::MissingGlyph::character: char
+pub pdfrum_edit::MissingGlyph::offset: usize
 pub struct pdfrum_edit::NUpOptions
 pub pdfrum_edit::NUpOptions::grid: (u32, u32)
 pub pdfrum_edit::NUpOptions::sheet: (f32, f32)

@@ -48,6 +48,7 @@ pub use pdfrum::Kid
 pub use pdfrum::LimitExceeded
 pub use pdfrum::Limits
 pub use pdfrum::Link
+pub use pdfrum::MissingGlyph
 pub use pdfrum::Modifiers
 pub use pdfrum::Name
 pub use pdfrum::NoScripts
@@ -143,6 +144,9 @@ pub type pdfrum::ErrorCode::Error = pdfrum::UnknownErrorCode
 pub fn pdfrum::ErrorCode::try_from(u32) -> core::result::Result<pdfrum::ErrorCode, pdfrum::UnknownErrorCode>
 impl core::fmt::Display for pdfrum::ErrorCode
 pub fn pdfrum::ErrorCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum pdfrum::Fill
+pub pdfrum::Fill::EvenOdd
+pub pdfrum::Fill::NonZero
 pub enum pdfrum::FlattenMode
 pub pdfrum::FlattenMode::Display
 pub pdfrum::FlattenMode::Print
@@ -186,6 +190,13 @@ pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
 pub pdfrum::LinkTarget::Uri(alloc::string::String)
+pub enum pdfrum::Paint
+pub pdfrum::Paint::Fill(peniko::Color)
+pub pdfrum::Paint::FillStroke(peniko::Color, pdfrum::Stroke)
+pub pdfrum::Paint::Stroke(pdfrum::Stroke)
+impl pdfrum::Paint
+pub fn pdfrum::Paint::fill(self) -> core::option::Option<peniko::Color>
+pub fn pdfrum::Paint::stroke(self) -> core::option::Option<pdfrum::Stroke>
 pub enum pdfrum::Rotation
 pub pdfrum::Rotation::Half
 pub pdfrum::Rotation::None
@@ -263,6 +274,24 @@ pub fn pdfrum::Bookmark<'_>::depth(&self) -> usize
 pub fn pdfrum::Bookmark<'_>::is_open(&self) -> bool
 pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum::Bookmark<'_>::title(&self) -> alloc::string::String
+pub struct pdfrum::Canvas<'a, 'b>
+impl pdfrum::Canvas<'_, '_>
+pub fn pdfrum::Canvas<'_, '_>::bounds(&self) -> kurbo::rect::Rect
+pub fn pdfrum::Canvas<'_, '_>::clip(&mut self, impl kurbo::shape::Shape, pdfrum::Fill)
+pub fn pdfrum::Canvas<'_, '_>::draw(&mut self, impl kurbo::shape::Shape, pdfrum::Paint, pdfrum::Fill)
+pub fn pdfrum::Canvas<'_, '_>::fill(&mut self, impl kurbo::shape::Shape, peniko::Color)
+pub fn pdfrum::Canvas<'_, '_>::fill_rect(&mut self, kurbo::rect::Rect, peniko::Color)
+pub fn pdfrum::Canvas<'_, '_>::fill_rounded_rect(&mut self, kurbo::rect::Rect, f64, peniko::Color)
+pub fn pdfrum::Canvas<'_, '_>::image(&mut self, &pdfrum_edit::image::EmbeddedImage, kurbo::rect::Rect)
+pub fn pdfrum::Canvas<'_, '_>::line(&mut self, kurbo::point::Point, kurbo::point::Point, pdfrum::Stroke)
+pub fn pdfrum::Canvas<'_, '_>::opacity(&mut self, f64)
+pub fn pdfrum::Canvas<'_, '_>::page(&self) -> pdfrum_common::page_index::PageIndex
+pub fn pdfrum::Canvas<'_, '_>::saved(&mut self, impl core::ops::function::FnOnce(&mut Self))
+pub fn pdfrum::Canvas<'_, '_>::size(&self) -> kurbo::size::Size
+pub fn pdfrum::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, pdfrum::Stroke)
+pub fn pdfrum::Canvas<'_, '_>::text(&mut self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64, kurbo::point::Point, peniko::Color)
+pub fn pdfrum::Canvas<'_, '_>::text_width(&self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64) -> f64
+pub fn pdfrum::Canvas<'_, '_>::transform(&mut self, kurbo::affine::Affine)
 pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::add_attachment(&mut self, &str, &[u8], &pdfrum::AttachmentOptions) -> pdfrum::Result<usize>
@@ -288,6 +317,9 @@ pub fn pdfrum::DocEdit<'_>::set_rotation(&mut self, impl core::convert::Into<pdf
 pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
+impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::draw_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::ops::function::FnOnce(&mut pdfrum::Canvas<'_, '_>)) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::draw_pages(&mut self, impl core::ops::function::FnMut(&mut pdfrum::Canvas<'_, '_>)) -> pdfrum::Result<()>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::flatten(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum::FlattenMode) -> pdfrum::Result<pdfrum::Flattened>
 impl pdfrum::DocEdit<'_>
@@ -687,6 +719,11 @@ pub fn pdfrum::StampOptionsBuilder::font_size(self, f32) -> Self
 pub fn pdfrum::StampOptionsBuilder::margin(self, f64) -> Self
 pub fn pdfrum::StampOptionsBuilder::opacity(self, f32) -> Self
 pub fn pdfrum::StampOptionsBuilder::position(self, pdfrum::StampPosition) -> Self
+pub struct pdfrum::Stroke
+pub pdfrum::Stroke::color: peniko::Color
+pub pdfrum::Stroke::width: f64
+impl pdfrum::Stroke
+pub fn pdfrum::Stroke::new(peniko::Color, f64) -> Self
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color
