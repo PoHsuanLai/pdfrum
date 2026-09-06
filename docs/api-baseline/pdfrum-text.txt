@@ -88,7 +88,6 @@ pub fn pdfrum_text::TextPage::words(&self) -> alloc::vec::Vec<pdfrum_text::Word>
 impl core::fmt::Display for pdfrum_text::TextPage
 pub fn pdfrum_text::TextPage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_text::TextRun
-pub pdfrum_text::TextRun::advance: f64
 pub pdfrum_text::TextRun::char_space: f32
 pub pdfrum_text::TextRun::font: alloc::sync::Arc<pdfrum_font::Font>
 pub pdfrum_text::TextRun::font_size: f32

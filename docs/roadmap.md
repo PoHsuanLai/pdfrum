@@ -284,3 +284,31 @@ board's 1785 text pages together.
 **Exit:** byte-exact on 30 of 44 or better with none of the current 22
 lost, `text_quick_start` diagnosed with its cause named whether or not it is
 fixed, and the board's text rows moving only upward.
+
+**MET 2026-09-06.** Byte-exact **43 of 44** (from 22), none of the 22 lost;
+whitespace-normalized 41 → 43. The board's text pages went **1785 → 2055 of
+2067** and its non-empty pages **760 → 993 of 1005**, with 159 files gaining
+text pages and **none losing any**; overall the board went 1551 → 1707
+passing with 0 rows down, and the scoreboard was re-recorded.
+
+All three items had **one** cause, and it was ours. `ProcessInsertObject`
+was instrumented per item in a private, hardlinked PDFium build (the oracle
+checkout was never written to), and the three remaining candidates were
+refuted: `GetPos`, the text-matrix composition and `FindPreviousTextObject`
+all agreed with ours to six decimal places. The divergence was one conjunct
+in our own degenerate-object gate — `run.advance < SIZE_EPSILON` beside the
+box test, a `[oracle-bug]` ruling that PDFium's
+`fabs(GetRect().Width()) < kSizeEpsilon` was losing a spaces-only object's
+word separator. It was not: `GenerateSpace` already emits that separator
+from the geometry, so keeping the object emitted it twice. Removing the
+conjunct closed item 1 (`text_quick_start` 0.641 → 1.000, byte-exact on all
+eleven pages), item 2 (the spurious space was that duplicate), and item 3
+(`text_tcpdf_055`'s C0 run lived in exactly such a discarded object, so its
+row is empty for the same reason) at once. `TextRun::advance` lost its last
+reader and was removed. `image_ccitt_3bigpreview.pdf` is the one file still
+not byte-exact, at F1 0.9988, and its residual is a duplicated `Clips` in
+the vertical CJK region — a duplicate-object question, not a spacing one.
+The upstream draft `text-object-bbox-gate-drops-spaces.md` was not
+withdrawn but bounded with this measurement. See
+`docs/benchmarks/losses-explained.md`, "The generated space was our own
+rescue".
