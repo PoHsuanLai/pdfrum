@@ -33,6 +33,7 @@ pub(crate) use cie::{CalGray, CalRgb, Lab};
 /// around it: `Pixels::sample_bytes` reaches it directly, and the two spellings
 /// are proved equal exhaustively rather than assumed.
 pub use device::adobe_cmyk_to_srgb;
+pub use icc::srgb_profile_bytes;
 pub(crate) use icc::{IccBased, IccProfile, is_valid_icc_components};
 pub(crate) use indexed::Indexed;
 pub(crate) use load::ColorSpaceCache;

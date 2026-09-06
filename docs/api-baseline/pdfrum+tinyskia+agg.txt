@@ -207,6 +207,56 @@ pub pdfrum::Paint::Stroke(pdfrum::Stroke)
 impl pdfrum::Paint
 pub fn pdfrum::Paint::fill(&self) -> core::option::Option<peniko::Color>
 pub fn pdfrum::Paint::stroke(&self) -> core::option::Option<&pdfrum::Stroke>
+#[non_exhaustive] pub enum pdfrum::PdfaCompromise
+pub pdfrum::PdfaCompromise::ActionRemoved
+pub pdfrum::PdfaCompromise::ActionRemoved::holder: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::ActionRemoved::kind: alloc::string::String
+pub pdfrum::PdfaCompromise::AnnotationFlagsChanged
+pub pdfrum::PdfaCompromise::AnnotationFlagsChanged::annotation: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::AnnotationFlagsChanged::page: u32
+pub pdfrum::PdfaCompromise::AnnotationRemoved
+pub pdfrum::PdfaCompromise::AnnotationRemoved::annotation: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::AnnotationRemoved::page: u32
+pub pdfrum::PdfaCompromise::AnnotationRemoved::subtype: alloc::string::String
+pub pdfrum::PdfaCompromise::EmbeddedFileRemoved
+pub pdfrum::PdfaCompromise::EmbeddedFileRemoved::file: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum::PdfaCompromise::EmbeddedFileRemoved::name: alloc::string::String
+pub pdfrum::PdfaCompromise::FontSubstituted
+pub pdfrum::PdfaCompromise::FontSubstituted::base_name: alloc::string::String
+pub pdfrum::PdfaCompromise::FontSubstituted::font: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::FontSubstituted::substitute: &'static str
+pub pdfrum::PdfaCompromise::ObjectMetadataRemoved
+pub pdfrum::PdfaCompromise::ObjectMetadataRemoved::object: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::OptionalContentRemoved
+pub pdfrum::PdfaCompromise::OptionalContentRemoved::catalog: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaCompromise::PageRasterized
+pub pdfrum::PdfaCompromise::PageRasterized::cause: pdfrum::PdfaRasterCause
+pub pdfrum::PdfaCompromise::PageRasterized::dpi: pdfrum::PdfaDpi
+pub pdfrum::PdfaCompromise::PageRasterized::page: u32
+impl core::fmt::Display for pdfrum::PdfaCompromise
+pub fn pdfrum::PdfaCompromise::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum pdfrum::PdfaConcession
+pub pdfrum::PdfaConcession::Accept
+pub pdfrum::PdfaConcession::Refuse
+impl pdfrum::PdfaConcession
+pub const fn pdfrum::PdfaConcession::accepts(self) -> bool
+#[non_exhaustive] pub enum pdfrum::PdfaRasterCause
+pub pdfrum::PdfaRasterCause::Transparency
+pub pdfrum::PdfaRasterCause::UnembeddableFont
+impl core::fmt::Display for pdfrum::PdfaRasterCause
+pub fn pdfrum::PdfaRasterCause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum::PdfaRefusal
+pub pdfrum::PdfaRefusal::ForbiddenFeature
+pub pdfrum::PdfaRefusal::ForbiddenFeature::holder: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaRefusal::ForbiddenFeature::kind: alloc::string::String
+pub pdfrum::PdfaRefusal::UnembeddableFont
+pub pdfrum::PdfaRefusal::UnembeddableFont::base_name: alloc::string::String
+pub pdfrum::PdfaRefusal::UnembeddableFont::font: pdfrum_object::object::ObjRef
+pub pdfrum::PdfaRefusal::UnrepresentableContent
+pub pdfrum::PdfaRefusal::UnrepresentableContent::cause: pdfrum::PdfaRasterCause
+pub pdfrum::PdfaRefusal::UnrepresentableContent::page: u32
+impl core::fmt::Display for pdfrum::PdfaRefusal
+pub fn pdfrum::PdfaRefusal::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum::StampPosition
 pub pdfrum::StampPosition::BottomLeft
 pub pdfrum::StampPosition::BottomRight
@@ -356,7 +406,9 @@ pub fn pdfrum::Document::render_session(&self) -> pdfrum::RenderSession
 pub fn pdfrum::Document::revision_bytes(&self, usize) -> core::option::Option<&[u8]>
 pub fn pdfrum::Document::revisions(&self) -> alloc::vec::Vec<pdfrum::Revision>
 pub fn pdfrum::Document::stream_data(&self, pdfrum_object::object::ObjRef) -> pdfrum::Result<alloc::vec::Vec<u8>>
+pub fn pdfrum::Document::to_pdfa(&self, impl core::convert::AsRef<std::path::Path>, pdfrum_doc::pdfa::report::Level, &pdfrum::PdfaPolicy) -> pdfrum::Result<pdfrum::PdfaConversion>
 pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
+pub fn pdfrum::Document::write_pdfa_to(&self, &mut impl core::io::write::Write, pdfrum_doc::pdfa::report::Level, &pdfrum::PdfaPolicy) -> pdfrum::Result<pdfrum::PdfaConversion>
 pub fn pdfrum::Document::xmp_metadata(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum::Document
@@ -616,6 +668,29 @@ pub fn pdfrum::PathBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum::PathBuilder::rect(kurbo::rect::Rect) -> Self
 impl core::default::Default for pdfrum::PathBuilder
 pub fn pdfrum::PathBuilder::default() -> Self
+pub struct pdfrum::PdfaConversion
+pub pdfrum::PdfaConversion::compromises: alloc::vec::Vec<pdfrum::PdfaCompromise>
+pub pdfrum::PdfaConversion::level: pdfrum_doc::pdfa::report::Level
+pub pdfrum::PdfaConversion::refusals: alloc::vec::Vec<pdfrum::PdfaRefusal>
+impl pdfrum::PdfaConversion
+pub fn pdfrum::PdfaConversion::converted(&self) -> bool
+pub fn pdfrum::PdfaConversion::faithful(&self) -> bool
+pub fn pdfrum::PdfaConversion::rasterized_pages(&self) -> alloc::vec::Vec<u32>
+impl core::fmt::Display for pdfrum::PdfaConversion
+pub fn pdfrum::PdfaConversion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum::PdfaDpi(pub u16)
+impl core::fmt::Display for pdfrum::PdfaDpi
+pub fn pdfrum::PdfaDpi::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct pdfrum::PdfaPolicy
+pub pdfrum::PdfaPolicy::forbidden_feature: pdfrum::PdfaConcession
+pub pdfrum::PdfaPolicy::unembeddable_font: pdfrum::PdfaConcession
+pub pdfrum::PdfaPolicy::unrepresentable_content: pdfrum::PdfaConcession
+impl pdfrum::PdfaPolicy
+pub const fn pdfrum::PdfaPolicy::forbidden_feature(self, pdfrum::PdfaConcession) -> Self
+pub const fn pdfrum::PdfaPolicy::lossy() -> Self
+pub const fn pdfrum::PdfaPolicy::strict() -> Self
+pub const fn pdfrum::PdfaPolicy::unembeddable_font(self, pdfrum::PdfaConcession) -> Self
+pub const fn pdfrum::PdfaPolicy::unrepresentable_content(self, pdfrum::PdfaConcession) -> Self
 pub struct pdfrum::PreparedPage<'a>
 impl pdfrum::PreparedPage<'_>
 pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, &B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>

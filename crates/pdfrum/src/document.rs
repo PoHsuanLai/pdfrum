@@ -403,6 +403,80 @@ impl Document {
         report
     }
 
+    /// Converts the document to PDF/A, writing it to `path`.
+    ///
+    /// `policy` says what to do about a document that cannot be converted
+    /// faithfully, and the returned [`PdfaConversion`](crate::PdfaConversion)
+    /// names every compromise the conversion made. The two are the same
+    /// vocabulary seen from either side: a
+    /// [`PdfaRefusal`](crate::PdfaRefusal) names the `policy` field that would
+    /// have permitted it.
+    ///
+    /// **Nothing is written when the conversion refuses.** `path` is untouched
+    /// and [`PdfaConversion::converted`](crate::PdfaConversion::converted) is
+    /// false, so a caller cannot mistake a refusal for a conversion by looking
+    /// at the file.
+    ///
+    /// The default [`PdfaPolicy`](crate::PdfaPolicy) refuses every compromise,
+    /// which means a document with anything PDF/A forbids will refuse rather
+    /// than quietly lose it. [`PdfaPolicy::lossy`](crate::PdfaPolicy::lossy)
+    /// is the other end.
+    ///
+    /// ```no_run
+    /// use pdfrum::{Document, PdfaLevel, PdfaPolicy};
+    ///
+    /// let doc = Document::open("in.pdf")?;
+    /// let outcome = doc.to_pdfa("out.pdf", PdfaLevel::A2b, &PdfaPolicy::lossy())?;
+    /// assert!(outcome.converted());
+    /// for page in outcome.rasterized_pages() {
+    ///     eprintln!("page {} is now an image", page + 1);
+    /// }
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`](crate::Error::Io) when the file cannot be written, and
+    /// [`Error::Save`](crate::Error::Save) when the document cannot be
+    /// serialized. A *refusal* is not an error: it is a value, because the
+    /// caller is expected to inspect it and widen the policy.
+    #[cfg(feature = "edit")]
+    pub fn to_pdfa(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        level: pdfrum_doc::PdfaLevel,
+        policy: &crate::PdfaPolicy,
+    ) -> Result<crate::PdfaConversion> {
+        let (conversion, bytes) = crate::pdfa::convert(self, level, *policy)?;
+        if let Some(bytes) = bytes {
+            std::fs::write(path.as_ref(), &bytes)?;
+        }
+        Ok(conversion)
+    }
+
+    /// Converts the document to PDF/A, writing it to any sink.
+    ///
+    /// As [`Document::to_pdfa`], except that on a refusal **nothing is written
+    /// to `out`** — the sink is left exactly as it was found, so a caller
+    /// appending to a buffer does not have to unwind.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::to_pdfa`].
+    #[cfg(feature = "edit")]
+    pub fn write_pdfa_to(
+        &self,
+        out: &mut impl std::io::Write,
+        level: pdfrum_doc::PdfaLevel,
+        policy: &crate::PdfaPolicy,
+    ) -> Result<crate::PdfaConversion> {
+        let (conversion, bytes) = crate::pdfa::convert(self, level, *policy)?;
+        if let Some(bytes) = bytes {
+            out.write_all(&bytes)?;
+        }
+        Ok(conversion)
+    }
+
     #[cfg(feature = "forms")]
     /// The document's interactive form, if it has one.
     ///
