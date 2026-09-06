@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <defs>
+    <filter id="blur"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+  <g id="blurred" filter="url(#blur)">
+    <rect x="40" y="40" width="120" height="120" fill="#3366cc"/>
+  </g>
+</svg>

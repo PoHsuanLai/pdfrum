@@ -338,6 +338,60 @@ tool-and-test-only list below for a *new* edge, but it is already an optional
 library dependency of `pdfrum-render`, so using it here adds no crate to the
 graph and keeps one encoder in the workspace rather than two.
 
+### The second application: `usvg`, M25 (2026-09-07)
+
+M24 wrote SVG and added nothing to any tree. M25 **reads** it, and reading SVG
+properly is a specification — the CSS cascade, `use` expansion, `viewBox`
+fitting, two gradient coordinate systems, `href` chains. `usvg` implements all
+of it in pure Rust. This is the first new **runtime** dependency of the SVG
+milestones and it is default-off behind `pdfrum/svg-ingest`; a caller who
+never meets an SVG resolves without it, and a caller who only *exports* one
+pays nothing either, because export and ingestion are deliberately two
+features rather than one.
+
+| Crate | Version | Configuration | Why |
+|---|---|---|---|
+| `usvg` **lib, feature-gated** | `=0.47.0` | `default-features = false` | Resolves an SVG document to a tree of paths, groups and images with every transform and reference already applied. Writing a second incomplete SVG parser is declined in the roadmap and here |
+| `png` **lib, feature-gated** | `=0.18.1` | default | Decodes a PNG an SVG `<image>` carried, so it embeds as PDF image samples rather than being dropped |
+
+**The configuration, named as the rule requires.** The defaults are `text`,
+`system-fonts` and `memmap-fonts`. All three exist to *shape text*, which
+would mean a second font stack — `fontdb`, `rustybuzz`, `ttf-parser`,
+`unicode-bidi`, `unicode-script`, `unicode-vo` — standing beside the one
+pdfrum already carries, and SVG text must map through `pdfrum-font` rather
+than through a rival. Dropping them is the point rather than a saving.
+
+**The consequence is recorded, not hidden.** Without `text`, `usvg`'s
+converter has no arm for `EId::Text`: a `<text>` element leaves *no node* in
+the resolved tree. Ingestion therefore detects `<text>` in the source XML,
+before the parse, and reports it as unsupported rather than drawing it. That
+is named debt in the roadmap's M25 entry, and `docs/design/svg-ingest.md` §6
+states it in full.
+
+**Measured, in that configuration.** 27 crates in the subtree, of which 17 are
+already in the workspace's normal tree. The increment is **10 crates**:
+`usvg`, `base64`, `data-url`, `float-cmp`, `imagesize`, `pico-args`,
+`simplecss`, `siphasher`, `svgtypes`, `xmlwriter`. All pure Rust; no `cc`, no
+`-sys`, so `scripts/ci.nu`'s pure-Rust check passes unchanged. `pico-args` and
+`xmlwriter` serve `usvg`'s CLI and its writer but are non-optional
+dependencies of its *library*; they are carried rather than patched around.
+
+0.47.0 is the same version as `resvg` above, which depends on it, so the two
+share one entry in the lock. It resolves `kurbo` **0.13.1** and
+`tiny-skia-path` **0.12.0**, both versions this workspace already pins, so no
+duplicate geometry or path crate enters the graph.
+
+**`png` moves off the tool-and-test-only list, narrowly.** The rule above
+says a library crate may not reach for it, and that rule was written for the
+*encoding* direction — turning a pixmap into a file is the caller's business,
+not the engine's, which is why `pdfrum-svg` writes its own encoder under
+STYLE.md §5. Decoding is a different question: an SVG's `<image href>` arrives
+as PNG bytes that must become PDF image samples, and a PNG decoder is
+thousands of lines of filters, interlacing and bit-depth normalisation that
+STYLE.md §5's "write the thirty lines" test does not reach. It is optional and
+reached only through `svg-ingest`, so a default `cargo add pdfrum` still does
+not compile it.
+
 ## Rejected: a machine-learning runtime for `pdfrum-markdown` (2026-09-06)
 
 Markdown extraction meets cases a model would answer better than a

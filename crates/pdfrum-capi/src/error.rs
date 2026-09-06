@@ -38,6 +38,10 @@ pub enum pdfrum_code {
     /// A limit in `pdfrum_limits` — pixels, time, or a parser bound — was
     /// reached. A cancelled operation reports this code.
     Limit = 9,
+    /// An SVG handed to the library would not resolve. Only reachable in a
+    /// build whose facade carries the `svg-ingest` feature; the number is the
+    /// facade's either way.
+    Svg = 10,
     /// A pointer this library requires was null, an index was out of range, or
     /// a string was not UTF-8. The caller's contract was not met; the library
     /// answered rather than crashed.
@@ -61,6 +65,7 @@ impl pdfrum_code {
             pdfrum::ErrorCode::Save => pdfrum_code::Save,
             pdfrum::ErrorCode::Text => pdfrum_code::Text,
             pdfrum::ErrorCode::Limit => pdfrum_code::Limit,
+            pdfrum::ErrorCode::Svg => pdfrum_code::Svg,
             // `ErrorCode` is `#[non_exhaustive]`, so this arm is required and
             // cannot be dropped. A variant added upstream lands here rather
             // than breaking the build of a released header; it reports as
