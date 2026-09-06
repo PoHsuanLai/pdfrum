@@ -71,27 +71,50 @@ Every backend we have rasterizes. `RenderDevice` does not: `fill_path`,
 `stroke_path`, `push_clip` and `push_layer` take `kurbo::BezPath`,
 `peniko` colours and blend modes, and glyphs reach the device as outlines
 above the hinting threshold. The vector information is already flowing
-through the trait; only the two ends of `RasterBackend` — `new_target`,
-`snapshot`, `finish` — insist on a `Pixmap`. M24 opens that end and writes
-one vector consumer.
+through the trait, and `RenderDevice` is object-safe, so **an SVG consumer
+needs no change to `RasterBackend` at all**.
 
-1. **A backend whose output is not pixels.** `RasterBackend`'s three
-   pixmap-typed methods become generic in what a backend produces, or a
-   sibling trait carries the vector case; whichever lands, the five existing
-   backends compile unchanged and their behaviour is byte-identical. This is
-   the only invasive part of M24 and it goes in its own commit, with the
-   conformance board byte-identical across it.
+**Amended 2026-09-07, before any code was written.** This milestone
+originally opened with "a backend whose output is not pixels" — making
+`RasterBackend`'s `new_target`/`snapshot`/`finish` generic. Investigation
+refuted the premise those rested on. `Pixmap` is not a value the engine
+hands back at the end; it is an intermediate the engine does *arithmetic*
+on, at fourteen `finish`/`snapshot` sites. `walk.rs:699` finishes a
+transparency group and immediately calls `remove_backdrop` —
+`C = Cn + (Cn - C0) x (a0/agn - a0)` per ISO 32000 §11.4.6 — and the same
+shape repeats for `knockout_over`, `knockout_replace`, `luminosity_mask`
+and `multiply_alpha_mask`. None of those has a vector meaning. A generic
+`Output` would compile only if every site were bounded on a trait
+supplying them, which an SVG backend could satisfy only by rasterizing:
+the raster fallback wearing a type parameter. The change would have broken
+a public trait across four backends and removed not one `draw_image` from
+the output.
+
+So the trait stays. `pdfrum-svg` is a [`RenderDevice`] driven by the
+existing walk with an ordinary raster backend supplying offscreen targets.
+Direct fills, strokes, clips, layers and glyph outlines — the large
+majority of every corpus file — arrive as vectors; the compositing
+subtrees arrive as `draw_image`, which is where item 3 wanted a raster
+fallback anyway. Moving compositing out of the pixel domain is a real
+milestone, but it is its own, not this one's first commit.
+
+1. ~~**A backend whose output is not pixels.**~~ **Withdrawn 2026-09-07,
+   see above.** `RasterBackend` is unchanged and the five existing backends
+   are untouched, so M24 no longer has an invasive commit.
 2. **`crates/pdfrum-svg`.** A `RenderDevice` that accumulates SVG: paths as
    `<path>` with the fill rule, clips as `<clipPath>`, layers as `<g>` with
    `opacity` and `mix-blend-mode`, images as embedded data URIs, glyphs as
    filled outlines. Output is a string or a writer, not a file, so a caller
    composes it.
-3. **What SVG cannot say, said plainly.** Non-isolated and knockout
-   transparency groups (ISO 32000 §11.4.6) have no SVG equivalent; mesh
-   shadings (types 4-7) have none either. Each such subtree is rendered to a
-   pixmap by an ordinary raster backend and embedded as an image, and the
-   crate reports which regions it had to rasterize so a caller knows what
-   they got. A silent raster fallback is the failure mode to avoid.
+3. **What SVG cannot say, said plainly.** Every region the walk delivers
+   as pixels is reported with its cause, so a caller knows exactly what they
+   got. That set is wider than this milestone first assumed, because the
+   engine composites in the pixel domain: non-isolated and knockout
+   transparency groups (ISO 32000 §11.4.6) and mesh shadings (types 4-7),
+   and also soft masks and tiling-pattern cells. Recording them is not a
+   special case bolted onto a vector pipeline — it is the natural output of
+   noting every `draw_image` the walk makes. A silent raster fallback is the
+   failure mode to avoid.
 4. **Its own correctness story, because the board cannot score it.** The
    conformance board compares our pixels to `pdfium_test`'s, and an SVG file
    has none. M24's proof is a round trip: render the SVG with `resvg` at the

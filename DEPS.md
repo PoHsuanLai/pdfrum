@@ -274,6 +274,27 @@ backtracking, which V8 under PDFium also does not. pdfrum is therefore
 bounded where the oracle hangs and unbounded only where the oracle is too.
 The measurement is a probe run against a V8-enabled build.
 
+## Take what we need, not what a crate defaults to (2026-09-07)
+
+User rule. A dependency is judged on the tree it actually pulls in *our*
+configuration, not on its default feature set, and the burden is to check
+before asserting either way.
+
+The case that produced it: `usvg` was described here as heavy, on the
+strength of `fontdb`, `harfrust`, `skrifa`, `memmap` and four `unicode-*`
+crates appearing in its graph. Measured, every one of those is an optional
+default feature. `usvg` with `--no-default-features` is **18 crates against
+66** — an XML parser (`roxmltree`), a CSS selector engine (`simplecss`), an
+SVG type parser (`svgtypes`), and small numeric utilities, two of which
+(`kurbo`, `tiny-skia-path`) this workspace already carries. It still
+resolves CSS classes, `use` references, nested transforms and shape-to-path
+conversion, verified by a probe crate before the claim was made a second
+time.
+
+So: `default-features = false` and an explicit feature list is the default
+posture for a new dependency, and a rejection on size has to name the
+configuration it measured.
+
 ## Rejected: a machine-learning runtime for `pdfrum-markdown` (2026-09-06)
 
 Markdown extraction meets cases a model would answer better than a
