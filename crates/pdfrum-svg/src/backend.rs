@@ -221,12 +221,7 @@ impl<D: RenderDevice> RenderDevice for SvgDevice<D> {
         // reported, because a region silently lost is exactly what the report
         // exists to prevent — it just has no element.
         //
-        // `Pixmap::encode_png` writes the buffer it is given verbatim, and
-        // PNG's alpha is straight, so the straight-alpha bytes are wrapped in
-        // a `Pixmap` purely to reach that encoder — the engine's own pixmaps
-        // are premultiplied and would come out wrong.
-        let png = Pixmap::from_vec(img.width(), img.height(), img.to_straight_rgba())
-            .and_then(|straight| straight.encode_png().ok());
+        let png = img.encode_png().ok();
 
         // Classification and recording happen under one borrow: the pending
         // witnesses are this draw's evidence and are consumed by it, so the
