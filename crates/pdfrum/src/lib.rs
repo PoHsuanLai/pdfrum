@@ -88,6 +88,8 @@ mod session;
 mod signature;
 #[cfg(feature = "edit")]
 mod stamp;
+#[cfg(feature = "svg-ingest")]
+mod svg_ingest;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
@@ -208,6 +210,10 @@ pub use signature::Signature;
 /// [`DocEdit::stamp_image`] draw, and where.
 #[cfg(feature = "edit")]
 pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
+/// SVG drawn into a page as vectors: [`Canvas::draw_svg`], how it is placed,
+/// and everything it could not carry.
+#[cfg(feature = "svg-ingest")]
+pub use svg_ingest::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
 
 /// The things a page draws, as the interpreter produced them.
 ///

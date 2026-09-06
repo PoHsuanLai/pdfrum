@@ -86,6 +86,7 @@ fn error_code_displays_its_domain_and_converts_both_ways() {
         ErrorCode::Save,
         ErrorCode::Text,
         ErrorCode::Limit,
+        ErrorCode::Svg,
     ];
     for code in all {
         assert_eq!(ErrorCode::try_from(u32::from(code)), Ok(code));
@@ -94,10 +95,10 @@ fn error_code_displays_its_domain_and_converts_both_ways() {
     }
     assert_eq!(ErrorCode::WrongPassword.to_string(), "wrong-password");
 
-    // The numbering has no 0 and stops at 9; TryFrom is fallible because the
+    // The numbering has no 0 and stops at 10; TryFrom is fallible because the
     // enum is non_exhaustive and most u32s name nothing.
     assert!(ErrorCode::try_from(0).is_err());
-    assert!(ErrorCode::try_from(10).is_err());
+    assert!(ErrorCode::try_from(11).is_err());
     assert!(ErrorCode::try_from(u32::MAX).is_err());
 }
 
