@@ -217,10 +217,16 @@ impl<D: RenderDevice> RenderDevice for SvgDevice<D> {
         }
         // The encoding is done before the borrow, because it is the expensive
         // part and holding the cell across it would serialise nothing useful.
-        // `None` means the pixmap will not encode: the region is *still*
+        // A failure means the pixmap will not encode: the region is *still*
         // reported, because a region silently lost is exactly what the report
         // exists to prevent — it just has no element.
-        let png = crate::png::encode_rgba(img.width(), img.height(), &img.to_straight_rgba());
+        //
+        // `Pixmap::encode_png` writes the buffer it is given verbatim, and
+        // PNG's alpha is straight, so the straight-alpha bytes are wrapped in
+        // a `Pixmap` purely to reach that encoder — the engine's own pixmaps
+        // are premultiplied and would come out wrong.
+        let png = Pixmap::from_vec(img.width(), img.height(), img.to_straight_rgba())
+            .and_then(|straight| straight.encode_png().ok());
 
         // Classification and recording happen under one borrow: the pending
         // witnesses are this draw's evidence and are consumed by it, so the

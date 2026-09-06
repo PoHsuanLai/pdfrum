@@ -138,6 +138,18 @@ pub use pdfrum_markdown::Block;
 pub mod markdown {
     pub use pdfrum_markdown::{render, render_with_images};
 }
+/// SVG export: what [`Page::to_svg`] returns, and the [`RasterBackend`]
+/// wrapper underneath it for a caller driving the walk themselves — behind the
+/// default-off `svg` feature.
+///
+/// The conversion itself is a method on [`Page`], not a free function here,
+/// because it takes this crate's [`RenderOptions`] rather than the engine's;
+/// `pdfrum-svg`'s own `page_to_svg` is the entry point for a caller who
+/// already holds a page-object graph.
+#[cfg(feature = "svg")]
+pub mod svg {
+    pub use pdfrum_svg::{RasterCause, RasterRegion, RasterReport, SvgBackend, SvgDevice, SvgPage};
+}
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
 /// — behind the default-off `script` feature.
