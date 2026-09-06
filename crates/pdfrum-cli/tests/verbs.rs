@@ -862,3 +862,61 @@ fn every_new_verb_writes_to_stdout_on_a_dash() {
     }
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// `extract markdown -o DIR` writes a document whose image links resolve
+/// from beside it, and go on resolving after the directory is moved.
+///
+/// The regression this pins: the link used to be the same path the image was
+/// written to, which is relative to the working directory rather than to the
+/// Markdown. The natural invocation -- Markdown and images in one directory
+/// -- then produced `![](out/x.png)` inside `out/doc.md`, and every link was
+/// dead. Asserting the files exist is not enough to catch that; the test has
+/// to resolve each link from the Markdown's own directory.
+#[test]
+fn markdown_image_links_resolve_from_beside_the_document() -> Result<(), String> {
+    let dir = scratch("markdown-images").map_err(|e| e.to_string())?;
+    let pdf = fixture("rotated_image.pdf");
+    stdout(&[
+        "extract",
+        "markdown",
+        &pdf.display().to_string(),
+        "-o",
+        &dir.display().to_string(),
+    ])?;
+
+    let doc = dir.join("rotated_image.md");
+    let text = std::fs::read_to_string(&doc).map_err(|e| format!("{}: {e}", doc.display()))?;
+
+    let links: Vec<&str> = text
+        .match_indices("](")
+        .filter_map(|(i, _)| {
+            let rest = &text[i + 2..];
+            rest.find(')').map(|end| &rest[..end])
+        })
+        .filter(|l| *l != "image")
+        .collect();
+    assert!(!links.is_empty(), "no image links written:\n{text}");
+
+    for link in &links {
+        assert!(
+            !link.contains('/'),
+            "a link carrying a directory cannot survive a move: {link}"
+        );
+        assert!(
+            dir.join(link).is_file(),
+            "link does not resolve from beside the document: {link}"
+        );
+    }
+
+    // The whole point of a bare name: the directory moves as one piece.
+    let moved = dir.with_file_name("markdown-images-moved");
+    let _ = std::fs::remove_dir_all(&moved);
+    std::fs::rename(&dir, &moved).map_err(|e| e.to_string())?;
+    for link in &links {
+        assert!(
+            moved.join(link).is_file(),
+            "link stopped resolving after the directory moved: {link}"
+        );
+    }
+    Ok(())
+}

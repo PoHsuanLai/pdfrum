@@ -167,13 +167,14 @@ pub fn markdown_pages(
     doc: &Document,
     spec: Option<&str>,
     images: Option<(&Path, &str)>,
-) -> Result<Vec<PageMarkdown>> {
+) -> Result<(Vec<PageMarkdown>, usize)> {
     let selected = pages::select(spec, doc.page_count())?;
     let blocks = match selected.as_slice() {
         [only] => vec![doc.page(*only)?.markdown_blocks()],
         many => doc.markdown_blocks(many.iter().copied().map(PageIndex::from))?,
     };
     let mut out_pages = Vec::with_capacity(blocks.len());
+    let mut written = 0usize;
     for (&index, blocks) in selected.iter().zip(&blocks) {
         let number = out::page_number(PageIndex::from(index));
         let mut links: HashMap<usize, String> = HashMap::new();
@@ -191,13 +192,13 @@ pub fn markdown_pages(
                     let Some(image) = page_images.get(i) else {
                         continue;
                     };
-                    let path = dir.join(format!(
-                        "{stem}-p{number}-{}.{}",
-                        i + 1,
-                        image_format(image)
-                    ));
-                    write_image(image, &path)?;
-                    links.insert(i, path.display().to_string());
+                    // The file name is the link. The Markdown is written
+                    // into the same directory, so a bare name resolves from
+                    // beside it -- and the directory moves as one piece.
+                    let name = format!("{stem}-p{number}-{}.{}", i + 1, image_format(image));
+                    write_image(image, &dir.join(&name))?;
+                    links.insert(i, name);
+                    written += 1;
                 }
             }
         }
@@ -206,39 +207,62 @@ pub fn markdown_pages(
             markdown: pdfrum::markdown::render_with_images(blocks, |i| links.get(&i).cloned()),
         });
     }
-    Ok(out_pages)
+    Ok((out_pages, written))
 }
 
 /// [`markdown_pages`] with every image a placeholder: what a session hands
 /// back, which writes no files.
 pub fn page_markdown(doc: &Document, spec: Option<&str>) -> Result<Vec<PageMarkdown>> {
-    markdown_pages(doc, spec, None)
+    Ok(markdown_pages(doc, spec, None)?.0)
 }
 
-/// The pages as Markdown, one document, a horizontal rule between pages;
-/// `-o DIR` writes and links the images (see [`markdown_pages`]).
+/// The pages as Markdown, one document, a horizontal rule between pages.
+///
+/// Without `-o DIR` the Markdown goes to stdout and every image is the
+/// `![alt](image)` placeholder, because a link would have nothing to point
+/// at. With it, `DIR` gets the document as `<stem>.md` and every image
+/// beside it, each linked by bare file name -- so the directory is one
+/// self-contained piece that keeps working wherever it is moved. Writing the
+/// Markdown anywhere else would break those links, which is why `-o` writes
+/// it rather than leaving it on stdout to be redirected.
 pub fn markdown(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
     dir: Option<&Path>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     if let Some(dir) = dir {
         std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     }
     let stem = out::stem(file);
-    let out_pages = markdown_pages(&doc, spec, dir.map(|d| (d, stem.as_str())))?;
+    let (out_pages, written) = markdown_pages(&doc, spec, dir.map(|d| (d, stem.as_str())))?;
     if json {
         out::json(&out_pages)?;
-    } else {
-        for (i, p) in out_pages.iter().enumerate() {
-            if i > 0 {
-                outln!("\n---\n");
-            }
-            out!("{}", p.markdown);
+        return Ok(ExitCode::SUCCESS);
+    }
+    let mut document = String::new();
+    for (i, p) in out_pages.iter().enumerate() {
+        if i > 0 {
+            document.push_str("\n---\n\n");
         }
+        document.push_str(&p.markdown);
+    }
+    match dir {
+        Some(dir) => {
+            let path = dir.join(format!("{stem}.md"));
+            std::fs::write(&path, &document)
+                .with_context(|| format!("cannot write {}", path.display()))?;
+            let detail = match written {
+                0 => format!("{} pages", out_pages.len()),
+                1 => format!("{} pages, 1 image", out_pages.len()),
+                n => format!("{} pages, {n} images", out_pages.len()),
+            };
+            out::summary(term, &path, "written", Some(&detail));
+        }
+        None => out!("{document}"),
     }
     Ok(ExitCode::SUCCESS)
 }
