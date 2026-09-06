@@ -13,6 +13,12 @@ already sits.
 
 Nothing here has started. Order is a recommendation, not a commitment.
 
+M23-M26 add capability. **M27 and M28 are different: they are the two places
+the engine is strictly behind a peer with nothing bought in exchange** --
+peak render memory, and text extraction's byte-exact count. Every other loss
+in `docs/benchmarks/losses-explained.md` is a tradeoff with something on the
+other side of it. These two are not, which is why they are milestones.
+
 ## M23 — The canvas: drawing on a page without writing operators
 
 `pdfrum-edit` can already place an image, merge pages and rewrite objects,
@@ -189,3 +195,92 @@ disagreements enumerated and adjudicated; `to_pdfa(A2b)` produces files
 veraPDF passes for the inputs it accepts and a named compromise list for the
 rest; `docs/design/pdfa.md` carries the requirement table and the oracle
 comparison.
+
+## M27 — Peak render memory: decode at the size the page draws
+
+The one place this engine is strictly behind every peer with nothing bought
+for it. On `image_bug_583804.pdf` peak resident memory is 1539 MiB where
+mupdf peaks at 914 and no measured peer exceeds 1 GiB; wall time on that
+file is 1.5 s against mupdf's 0.16 s. The corpus median is 51.5 MiB, so this
+is one shape of document rather than a systemic cost — a page whose images
+are far larger than the area they are drawn into.
+
+Every other loss in `docs/benchmarks/losses-explained.md` is a tradeoff with
+something on the other side of it: f32 compositing buys fidelity, the eager
+page walk buys an infallible page count and damaged-file recovery. This one
+buys nothing. That is why it is a milestone and the others are rows in a
+table.
+
+1. **Decode to the drawn size, not the stored size.** The image-rows
+   pipeline already reduces before painting; the reduction has to move
+   *above* the decode so the full-resolution buffer is never materialized.
+   For JPEG that wants `zune-jpeg`'s `scale_denom`, which does not exist yet
+   and is filed upstream; until it lands, a nearest-neighbour 1/2, 1/4, 1/8
+   reduce immediately after decode and before the general resample gets most
+   of the win with no upstream dependency.
+2. **Band the very large page.** A page whose target exceeds a budget is
+   rendered in horizontal bands and composited, so the peak is the band and
+   not the page. The budget is a number a caller can set, with a default
+   that keeps the common page in one piece.
+3. **Evict.** The decoded-image cache keeps its last entry however large
+   (`crates/pdfrum-page/src/image/cache.rs`) — a rule that exists because a
+   16-bit image's packed samples exceeded the budget and the sole entry was
+   evicted on every insert, making a warm render slower than a cold one.
+   That rule is right for correctness and wrong for a peak: the fix is a
+   budget that counts what is resident, not a special case that exempts one
+   entry from counting.
+
+Not in M27: making `image_bug_583804` fast. Its wall time is a separate
+question from its footprint, and conflating them is how the last pass on
+this file produced a warm regression instead of a fix.
+
+**Rules:** the conformance board stays byte-identical, row for row — a
+memory pass that moves a pixel has failed; every change is measured by peak
+`VmHWM` of the harness child, the same instrument
+`docs/benchmarks/README.md` publishes, not by reasoning about allocations.
+**Exit:** peak resident memory under 1 GiB on `image_bug_583804.pdf` with
+the board unchanged, the corpus median no worse, and the render-warm rows
+for that file no slower than the baseline they land on.
+
+
+## M28 — Text extraction: the last twenty files
+
+Text extraction is byte-exact on 22 of 44 corpus files against PDFium's 42.
+The whitespace-normalized figure is 41 of 44, so the shape of the output is
+right and the difference is spacing: spurious generated spaces at object
+boundaries, and one document at F1 0.641.
+
+This is inferior rather than a tradeoff — there is no property we gain by
+emitting a space PDFium does not. It is also the last correctness column
+where a peer leads us; render fidelity now leads pdfium-render 38/44 to
+29/44.
+
+1. **`text_quick_start.pdf`, F1 0.641 — the cause is not known.** Three
+   named causes have each been refuted by measurement: the dot-leader
+   hypothesis (leaders are one line on both sides), the harness comparing
+   the wrong stream (fixed; the row did not move), and a fractional
+   character width (implemented as a newtype; a measured no-op, because
+   widths are already truncated at parse where PDFium truncates them, with
+   zero fractional widths across 1420 corpus files). The remaining
+   candidates are positional — `GetPos`, the text-matrix composition, or
+   `FindPreviousTextObject`'s choice of previous run — and settling it needs
+   per-item instrumentation in a PDFium build, which is the first work item
+   and not an afterthought.
+2. **The spurious generated space.** `pipeline.rs:696` and `:1139` are
+   `ProcessInsertObject` and `GenerateSpace` transcribed line for line, and
+   the transcription has been checked. So the divergence is in what reaches
+   them, not in the rules themselves: a position, a width, or a boundary
+   decision one level up.
+3. **`text_tcpdf_055`'s C0 row.** We emit `^@ ^A ^B ... ^_` where PDFium
+   emits nothing, and those codes are legitimately in `char_list_` on both
+   sides — so PDFium's empty row is an input-geometry or charcode-mapping
+   difference, not a filtering rule. Same instrumentation, same pass.
+
+**Rules:** the oracle-bug rule applies — where PDFium is wrong we implement
+the correct behaviour, cite both sides, and bucket the golden as
+not-achievable rather than matching a defect; a fix that raises one file and
+lowers another is not a fix, so every change is scored across all 44 and the
+board's 1785 text pages together.
+**Exit:** byte-exact on 30 of 44 or better with none of the current 22
+lost, `text_quick_start` diagnosed with its cause named whether or not it is
+fixed, and the board's text rows moving only upward.
