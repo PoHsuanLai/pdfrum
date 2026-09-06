@@ -37,7 +37,7 @@ use crate::{Color, DocEdit, Error, Result};
 /// An enum rather than two `Option<Color>` fields because the three states
 /// are what the PDF paint operators actually offer, and "neither" is not one
 /// of them: a caller who wants to paint nothing does not call the method.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Paint {
     /// Filled only. Written as `f` or `f*`.
     Fill(Color),
@@ -56,9 +56,9 @@ impl Paint {
     /// assert_eq!(Paint::Fill(Color::BLACK).fill(), Some(Color::BLACK));
     /// ```
     #[must_use]
-    pub fn fill(self) -> Option<Color> {
+    pub fn fill(&self) -> Option<Color> {
         match self {
-            Self::Fill(color) | Self::FillStroke(color, _) => Some(color),
+            Self::Fill(color) | Self::FillStroke(color, _) => Some(*color),
             Self::Stroke(_) => None,
         }
     }
@@ -72,7 +72,7 @@ impl Paint {
     /// assert!(Paint::Stroke(Stroke::new(Color::BLACK, 2.0)).stroke().is_some());
     /// ```
     #[must_use]
-    pub fn stroke(self) -> Option<Stroke> {
+    pub fn stroke(&self) -> Option<&Stroke> {
         match self {
             Self::Stroke(stroke) | Self::FillStroke(_, stroke) => Some(stroke),
             Self::Fill(_) => None,
@@ -80,25 +80,290 @@ impl Paint {
     }
 }
 
-/// A stroke's colour and width, in canvas units.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A stroke's colour, width and pen shape, in canvas units.
+///
+/// The fields stay public and every one but `color` and `width` has a
+/// default, so `Stroke { cap: LineCap::Round, ..Stroke::new(color, 1.0) }`
+/// works and the four settings ISO 32000-1 §8.4.3.3-§8.4.3.6 name are
+/// reachable without builder ceremony. [`Stroke::new`] keeps meaning what it
+/// always meant: PDF's own defaults — butt cap, miter join, miter limit 10,
+/// no dash.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Stroke {
     /// The colour. Its alpha is honoured, as an `/ExtGState` `/CA`.
     pub color: Color,
     /// The line width in canvas units — page points.
     pub width: f64,
+    /// How the open ends of a subpath are drawn. `J`.
+    pub cap: LineCap,
+    /// How two segments meet at a corner. `j`.
+    pub join: LineJoin,
+    /// Where a [`LineJoin::Miter`] corner becomes a bevel instead, as the
+    /// ratio of miter length to line width. `M`.
+    pub miter_limit: MiterLimit,
+    /// The on/off pattern, or `None` for a solid line. `d`.
+    pub dash: Option<Dash>,
 }
 
 impl Stroke {
-    /// A stroke of `color` at `width` points.
+    /// A solid stroke of `color` at `width` points, with PDF's default pen:
+    /// butt cap, miter join, miter limit 10.
     ///
     /// ```
     /// let hairline = pdfrum::Stroke::new(pdfrum::Color::BLACK, 0.5);
     /// assert_eq!(hairline.width, 0.5);
+    /// assert_eq!(hairline.cap, pdfrum::LineCap::Butt);
+    /// assert!(hairline.dash.is_none());
     /// ```
     #[must_use]
     pub fn new(color: Color, width: f64) -> Self {
-        Self { color, width }
+        Self {
+            color,
+            width,
+            cap: LineCap::Butt,
+            join: LineJoin::Miter,
+            miter_limit: MiterLimit::default(),
+            dash: None,
+        }
+    }
+
+    /// The same stroke with `cap` at its open ends.
+    ///
+    /// ```
+    /// use pdfrum::{Color, LineCap, Stroke};
+    ///
+    /// let round = Stroke::new(Color::BLACK, 4.0).with_cap(LineCap::Round);
+    /// assert_eq!(round.cap, LineCap::Round);
+    /// ```
+    #[must_use]
+    pub fn with_cap(mut self, cap: LineCap) -> Self {
+        self.cap = cap;
+        self
+    }
+
+    /// The same stroke with `join` at its corners.
+    ///
+    /// ```
+    /// use pdfrum::{Color, LineJoin, Stroke};
+    ///
+    /// let soft = Stroke::new(Color::BLACK, 4.0).with_join(LineJoin::Round);
+    /// assert_eq!(soft.join, LineJoin::Round);
+    /// ```
+    #[must_use]
+    pub fn with_join(mut self, join: LineJoin) -> Self {
+        self.join = join;
+        self
+    }
+
+    /// The same stroke with `limit` on its miter joins.
+    ///
+    /// ```
+    /// use pdfrum::{Color, MiterLimit, Stroke};
+    ///
+    /// let blunt = Stroke::new(Color::BLACK, 4.0).with_miter_limit(MiterLimit::new(2.0));
+    /// assert_eq!(blunt.miter_limit.get(), 2.0);
+    /// ```
+    #[must_use]
+    pub fn with_miter_limit(mut self, limit: MiterLimit) -> Self {
+        self.miter_limit = limit;
+        self
+    }
+
+    /// The same stroke dashed by `dash`.
+    ///
+    /// ```
+    /// use pdfrum::{Color, Dash, Stroke};
+    ///
+    /// let dashed = Stroke::new(Color::BLACK, 1.0)
+    ///     .with_dash(Dash::new(&[4.0, 2.0], 0.0).expect("a valid dash"));
+    /// assert!(dashed.dash.is_some());
+    /// ```
+    #[must_use]
+    pub fn with_dash(mut self, dash: Dash) -> Self {
+        self.dash = Some(dash);
+        self
+    }
+}
+
+/// How the open ends of a stroked subpath are drawn — ISO 32000-1 §8.4.3.3's
+/// line cap style, written as `J`.
+///
+/// An enum rather than the `0`/`1`/`2` the operator takes: the wire spelling
+/// is an encoding detail (STYLE.md §2), and `LineCap::Round` says at a call
+/// site what `1` does not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineCap {
+    /// Squared off exactly at the endpoint. PDF's default.
+    #[default]
+    Butt,
+    /// A half-disc of the line's width centred on the endpoint.
+    Round,
+    /// A half-square projecting half a line width past the endpoint.
+    Square,
+}
+
+impl LineCap {
+    /// The operand `J` takes.
+    fn operand(self) -> u8 {
+        match self {
+            Self::Butt => 0,
+            Self::Round => 1,
+            Self::Square => 2,
+        }
+    }
+}
+
+/// How two segments meet at a corner — ISO 32000-1 §8.4.3.4's line join
+/// style, written as `j`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineJoin {
+    /// Extended outer edges meeting in a point, beveled past
+    /// [`Stroke::miter_limit`]. PDF's default.
+    #[default]
+    Miter,
+    /// An arc of the line's width around the corner point.
+    Round,
+    /// The notch between the two segments filled with a triangle.
+    Bevel,
+}
+
+impl LineJoin {
+    /// The operand `j` takes.
+    fn operand(self) -> u8 {
+        match self {
+            Self::Miter => 0,
+            Self::Round => 1,
+            Self::Bevel => 2,
+        }
+    }
+}
+
+/// The ratio of miter length to line width past which a [`LineJoin::Miter`]
+/// corner is drawn beveled instead — ISO 32000-1 §8.4.3.5's `M`.
+///
+/// A newtype rather than a bare `f64` because the value has a floor: the
+/// miter length is never shorter than the line width, so a ratio below 1
+/// asks for something that cannot happen. It clamps rather than refusing,
+/// unlike [`Dash`], because every out-of-range ratio has one obviously
+/// intended reading and none of them makes a reader reject the stream.
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct MiterLimit(f64);
+
+impl MiterLimit {
+    /// A miter limit of `ratio`, clamped up to 1; a non-finite ratio gives
+    /// the default.
+    ///
+    /// ```
+    /// use pdfrum::MiterLimit;
+    ///
+    /// assert_eq!(MiterLimit::new(4.0).get(), 4.0);
+    /// assert_eq!(MiterLimit::new(0.5).get(), 1.0);
+    /// assert_eq!(MiterLimit::new(f64::NAN).get(), 10.0);
+    /// ```
+    #[must_use]
+    pub fn new(ratio: f64) -> Self {
+        if ratio.is_finite() {
+            Self(ratio.max(1.0))
+        } else {
+            Self::default()
+        }
+    }
+
+    /// The ratio.
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::MiterLimit::default().get(), 10.0);
+    /// ```
+    #[must_use]
+    pub fn get(self) -> f64 {
+        self.0
+    }
+}
+
+impl Default for MiterLimit {
+    /// PDF's own initial value, 10 (ISO 32000-1 table 52).
+    fn default() -> Self {
+        Self(10.0)
+    }
+}
+
+/// A dash pattern — ISO 32000-1 §8.4.3.6's dash array and phase, written as
+/// `d`.
+///
+/// # Why construction is fallible
+///
+/// `d` is one of the few graphics-state operators a reader may reject
+/// outright: a negative length, or an array summing to zero, is not a
+/// degenerate dash but an *invalid* one, and a viewer that refuses it refuses
+/// the whole content stream — every later operator with it. So an invalid
+/// array is caught here, at construction, rather than normalized into a
+/// pattern the caller did not ask for and cannot see. [`Dash::new`] returns
+/// `None` and nothing reaches the stream.
+///
+/// A solid line is spelled `Stroke::dash = None`, so an empty array is
+/// refused too: it has a valid PDF spelling, but it means the thing the
+/// `Option` already says.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Dash {
+    /// Alternating on and off lengths, all finite and non-negative, summing
+    /// to more than zero.
+    lengths: Vec<f64>,
+    /// How far into the pattern the line starts. Finite and non-negative.
+    phase: f64,
+}
+
+impl Dash {
+    /// A dash of alternating on/off `lengths`, starting `phase` units into
+    /// the pattern.
+    ///
+    /// `None` if `lengths` is empty, holds anything negative or not finite,
+    /// or sums to zero, or if `phase` is negative or not finite — each of
+    /// which is an invalid `d` operand rather than an unusual one.
+    ///
+    /// ```
+    /// use pdfrum::Dash;
+    ///
+    /// assert!(Dash::new(&[4.0, 2.0], 0.0).is_some());
+    /// assert!(Dash::new(&[4.0, -2.0], 0.0).is_none());
+    /// assert!(Dash::new(&[0.0, 0.0], 0.0).is_none());
+    /// assert!(Dash::new(&[], 0.0).is_none());
+    /// ```
+    #[must_use]
+    pub fn new(lengths: &[f64], phase: f64) -> Option<Self> {
+        if lengths.is_empty() || !phase.is_finite() || phase < 0.0 {
+            return None;
+        }
+        if lengths
+            .iter()
+            .any(|length| !length.is_finite() || *length < 0.0)
+        {
+            return None;
+        }
+        if lengths.iter().sum::<f64>() <= 0.0 {
+            return None;
+        }
+        Some(Self {
+            lengths: lengths.to_vec(),
+            phase,
+        })
+    }
+
+    /// The alternating on/off lengths.
+    ///
+    /// ```
+    /// let dash = pdfrum::Dash::new(&[3.0, 1.0], 0.5).expect("a valid dash");
+    /// assert_eq!(dash.lengths(), &[3.0, 1.0]);
+    /// assert_eq!(dash.phase(), 0.5);
+    /// ```
+    #[must_use]
+    pub fn lengths(&self) -> &[f64] {
+        &self.lengths
+    }
+
+    /// How far into the pattern the line starts.
+    #[must_use]
+    pub fn phase(&self) -> f64 {
+        self.phase
     }
 }
 
@@ -396,10 +661,11 @@ impl Canvas<'_, '_> {
         if path.elements().is_empty() {
             return;
         }
+        let operator = paint_operator(&paint, rule);
         self.out.push_str("q\n");
         self.set_paint(paint);
         self.write_path(&path);
-        self.out.push_str(paint_operator(paint, rule));
+        self.out.push_str(operator);
         self.out.push_str("\nQ\n");
     }
 
@@ -618,27 +884,62 @@ impl Canvas<'_, '_> {
         }
     }
 
-    /// Write the colour and width operators `paint` asks for.
+    /// Write the colour, width and pen operators `paint` asks for.
     fn set_paint(&mut self, paint: Paint) {
+        let (fill, stroke) = match paint {
+            Paint::Fill(color) => (Some(color), None),
+            Paint::Stroke(stroke) => (None, Some(stroke)),
+            Paint::FillStroke(color, stroke) => (Some(color), Some(stroke)),
+        };
+
         // Alpha rides on an `/ExtGState`, since `rg`/`RG` carry none.
-        let alpha = paint
-            .fill()
+        let alpha = fill
             .map(alpha_of)
             .into_iter()
-            .chain(paint.stroke().map(|s| alpha_of(s.color)))
+            .chain(stroke.as_ref().map(|stroke| alpha_of(stroke.color)))
             .fold(1.0_f64, f64::min);
         if alpha < 1.0 {
             self.opacity(alpha);
         }
-        if let Some(color) = paint.fill() {
+        if let Some(color) = fill {
             self.write_rgb(color);
             self.out.push_str(" rg\n");
         }
-        if let Some(stroke) = paint.stroke() {
+        if let Some(stroke) = stroke {
             self.write_rgb(stroke.color);
             self.out.push_str(" RG\n");
             write_f64(&mut self.out, stroke.width.max(0.0));
             self.out.push_str(" w\n");
+            self.write_pen(&stroke);
+        }
+    }
+
+    /// Write the cap, join, miter-limit and dash operators, each only when it
+    /// differs from the graphics state's own initial value (ISO 32000-1
+    /// table 52): the drawing runs inside a fresh `q`, so an unwritten one is
+    /// already what the caller asked for and the stream stays short.
+    fn write_pen(&mut self, stroke: &Stroke) {
+        if stroke.cap != LineCap::Butt {
+            let _ = writeln!(self.out, "{} J", stroke.cap.operand());
+        }
+        if stroke.join != LineJoin::Miter {
+            let _ = writeln!(self.out, "{} j", stroke.join.operand());
+        }
+        if stroke.miter_limit != MiterLimit::default() {
+            write_f64(&mut self.out, stroke.miter_limit.get());
+            self.out.push_str(" M\n");
+        }
+        if let Some(dash) = &stroke.dash {
+            self.out.push('[');
+            for (i, length) in dash.lengths().iter().enumerate() {
+                if i > 0 {
+                    self.out.push(' ');
+                }
+                write_f64(&mut self.out, *length);
+            }
+            self.out.push_str("] ");
+            write_f64(&mut self.out, dash.phase());
+            self.out.push_str(" d\n");
         }
     }
 
@@ -850,7 +1151,7 @@ fn quad_to_cubic(previous: Point, control: Point, end: Point) -> (Point, Point) 
 }
 
 /// The paint operator for a paint and a fill rule (ISO 32000-1 table 60).
-fn paint_operator(paint: Paint, rule: Fill) -> &'static str {
+fn paint_operator(paint: &Paint, rule: Fill) -> &'static str {
     match (paint, rule) {
         (Paint::Fill(_), Fill::NonZero) => " f",
         (Paint::Fill(_), Fill::EvenOdd) => " f*",

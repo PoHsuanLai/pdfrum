@@ -94,9 +94,10 @@ mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 /// Drawing on an existing page: [`Canvas`] from [`DocEdit::draw_page`],
-/// with [`Paint`], [`Stroke`] and [`Fill`] saying how a shape is painted.
+/// with [`Paint`], [`Stroke`] and [`Fill`] saying how a shape is painted and
+/// [`LineCap`], [`LineJoin`], [`MiterLimit`] and [`Dash`] shaping the pen.
 #[cfg(feature = "edit")]
-pub use canvas::{Canvas, Fill, Paint, Stroke};
+pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 pub use document::{
     Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions,
     OpenOptionsBuilder, Revision, UnknownFontFileKind,

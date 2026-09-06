@@ -52,6 +52,7 @@ pub use pdfrum::MissingGlyph
 pub use pdfrum::Modifiers
 pub use pdfrum::Name
 pub use pdfrum::NoScripts
+pub use pdfrum::NotAQuarterTurn
 pub use pdfrum::ObjRef
 pub use pdfrum::Object
 pub use pdfrum::ObjectError
@@ -60,7 +61,6 @@ pub use pdfrum::Operation
 pub use pdfrum::PageBox
 pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
-pub use pdfrum::PageRotation
 pub use pdfrum::PdfString
 pub use pdfrum::PdfVersion
 pub use pdfrum::Permissions
@@ -78,6 +78,7 @@ pub use pdfrum::RenderDevice
 pub use pdfrum::RenderError
 pub use pdfrum::Resolve
 pub use pdfrum::Response
+pub use pdfrum::Rotation
 pub use pdfrum::SaveError
 pub use pdfrum::ScrollView
 pub use pdfrum::Section
@@ -128,6 +129,7 @@ pub pdfrum::ErrorCode::Open = 2
 pub pdfrum::ErrorCode::Read = 4
 pub pdfrum::ErrorCode::Render = 5
 pub pdfrum::ErrorCode::Save = 7
+pub pdfrum::ErrorCode::Svg = 10
 pub pdfrum::ErrorCode::Text = 8
 pub pdfrum::ErrorCode::WrongPassword = 3
 impl pdfrum::ErrorCode
@@ -181,6 +183,14 @@ pub fn pdfrum::ImageEncoding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 impl core::str::traits::FromStr for pdfrum::ImageEncoding
 pub type pdfrum::ImageEncoding::Err = pdfrum::UnknownImageEncoding
 pub fn pdfrum::ImageEncoding::from_str(&str) -> core::result::Result<pdfrum::ImageEncoding, pdfrum::UnknownImageEncoding>
+pub enum pdfrum::LineCap
+pub pdfrum::LineCap::Butt
+pub pdfrum::LineCap::Round
+pub pdfrum::LineCap::Square
+pub enum pdfrum::LineJoin
+pub pdfrum::LineJoin::Bevel
+pub pdfrum::LineJoin::Miter
+pub pdfrum::LineJoin::Round
 pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
@@ -190,22 +200,8 @@ pub pdfrum::Paint::Fill(peniko::Color)
 pub pdfrum::Paint::FillStroke(peniko::Color, pdfrum::Stroke)
 pub pdfrum::Paint::Stroke(pdfrum::Stroke)
 impl pdfrum::Paint
-pub fn pdfrum::Paint::fill(self) -> core::option::Option<peniko::Color>
-pub fn pdfrum::Paint::stroke(self) -> core::option::Option<pdfrum::Stroke>
-pub enum pdfrum::Rotation
-pub pdfrum::Rotation::Half
-pub pdfrum::Rotation::None
-pub pdfrum::Rotation::Quarter
-pub pdfrum::Rotation::ThreeQuarter
-impl pdfrum::Rotation
-pub fn pdfrum::Rotation::degrees(self) -> u32
-impl core::convert::From<pdfrum_page::page::Rotation> for pdfrum::Rotation
-pub fn pdfrum::Rotation::from(pdfrum_page::page::Rotation) -> pdfrum::Rotation
-impl core::fmt::Display for pdfrum::Rotation
-pub fn pdfrum::Rotation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::str::traits::FromStr for pdfrum::Rotation
-pub type pdfrum::Rotation::Err = pdfrum::NotAQuarterTurn
-pub fn pdfrum::Rotation::from_str(&str) -> core::result::Result<pdfrum::Rotation, pdfrum::NotAQuarterTurn>
+pub fn pdfrum::Paint::fill(&self) -> core::option::Option<peniko::Color>
+pub fn pdfrum::Paint::stroke(&self) -> core::option::Option<&pdfrum::Stroke>
 pub enum pdfrum::StampPosition
 pub pdfrum::StampPosition::BottomLeft
 pub pdfrum::StampPosition::BottomRight
@@ -287,6 +283,11 @@ pub fn pdfrum::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, pdfru
 pub fn pdfrum::Canvas<'_, '_>::text(&mut self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64, kurbo::point::Point, peniko::Color)
 pub fn pdfrum::Canvas<'_, '_>::text_width(&self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64) -> f64
 pub fn pdfrum::Canvas<'_, '_>::transform(&mut self, kurbo::affine::Affine)
+pub struct pdfrum::Dash
+impl pdfrum::Dash
+pub fn pdfrum::Dash::lengths(&self) -> &[f64]
+pub fn pdfrum::Dash::new(&[f64], f64) -> core::option::Option<Self>
+pub fn pdfrum::Dash::phase(&self) -> f64
 pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::add_attachment(&mut self, &str, &[u8], &pdfrum::AttachmentOptions) -> pdfrum::Result<usize>
@@ -453,7 +454,12 @@ pub pdfrum::Metadata::modification_date: core::option::Option<alloc::string::Str
 pub pdfrum::Metadata::producer: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::subject: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::title: core::option::Option<alloc::string::String>
-pub struct pdfrum::NotAQuarterTurn(_)
+pub struct pdfrum::MiterLimit(_)
+impl pdfrum::MiterLimit
+pub fn pdfrum::MiterLimit::get(self) -> f64
+pub fn pdfrum::MiterLimit::new(f64) -> Self
+impl core::default::Default for pdfrum::MiterLimit
+pub fn pdfrum::MiterLimit::default() -> Self
 pub struct pdfrum::OpenOptions
 pub pdfrum::OpenOptions::limits: pdfrum_common::limits::Limits
 pub pdfrum::OpenOptions::password: core::option::Option<alloc::vec::Vec<u8>>
@@ -525,7 +531,7 @@ pub fn pdfrum::OwnedPage::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::OwnedPage::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
 pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::OwnedPage::rotation(&self) -> pdfrum::Rotation
+pub fn pdfrum::OwnedPage::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::OwnedPage::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::OwnedPage::text(&self) -> pdfrum_text::TextPage
 pub fn pdfrum::OwnedPage::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
@@ -554,7 +560,7 @@ pub fn pdfrum::Page<'a>::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
 pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::PreparedPage<'a>
 pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum::Rotation
+pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::Page<'a>::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
@@ -623,6 +629,8 @@ impl pdfrum::RenderOptions
 pub fn pdfrum::RenderOptions::builder() -> pdfrum::RenderOptionsBuilder
 pub fn pdfrum::RenderOptions::fit(f64, f64, u32, u32) -> pdfrum::RenderOptions
 pub fn pdfrum::RenderOptions::scaled(f64) -> pdfrum::RenderOptions
+impl core::convert::From<&pdfrum::RenderOptions> for pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::from(&pdfrum::RenderOptions) -> Self
 impl core::default::Default for pdfrum::RenderOptions
 pub fn pdfrum::RenderOptions::default() -> Self
 pub struct pdfrum::RenderOptionsBuilder(_)
@@ -656,6 +664,8 @@ pub pdfrum::SaveOptions::update: pdfrum::Update
 pub pdfrum::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 impl pdfrum::SaveOptions
 pub fn pdfrum::SaveOptions::builder() -> pdfrum::SaveOptionsBuilder
+impl core::convert::From<&pdfrum::SaveOptions> for pdfrum_edit::write::SaveOptions
+pub fn pdfrum_edit::write::SaveOptions::from(&pdfrum::SaveOptions) -> Self
 pub struct pdfrum::SaveOptionsBuilder(_)
 impl pdfrum::SaveOptionsBuilder
 pub fn pdfrum::SaveOptionsBuilder::build(self) -> pdfrum::SaveOptions
@@ -697,10 +707,18 @@ pub fn pdfrum::StampOptionsBuilder::margin(self, f64) -> Self
 pub fn pdfrum::StampOptionsBuilder::opacity(self, f32) -> Self
 pub fn pdfrum::StampOptionsBuilder::position(self, pdfrum::StampPosition) -> Self
 pub struct pdfrum::Stroke
+pub pdfrum::Stroke::cap: pdfrum::LineCap
 pub pdfrum::Stroke::color: peniko::Color
+pub pdfrum::Stroke::dash: core::option::Option<pdfrum::Dash>
+pub pdfrum::Stroke::join: pdfrum::LineJoin
+pub pdfrum::Stroke::miter_limit: pdfrum::MiterLimit
 pub pdfrum::Stroke::width: f64
 impl pdfrum::Stroke
 pub fn pdfrum::Stroke::new(peniko::Color, f64) -> Self
+pub fn pdfrum::Stroke::with_cap(self, pdfrum::LineCap) -> Self
+pub fn pdfrum::Stroke::with_dash(self, pdfrum::Dash) -> Self
+pub fn pdfrum::Stroke::with_join(self, pdfrum::LineJoin) -> Self
+pub fn pdfrum::Stroke::with_miter_limit(self, pdfrum::MiterLimit) -> Self
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color

@@ -11,8 +11,8 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::float_cmp)]
 
 use pdfrum::{
-    Affine, Color, Dict, Document, Fill, Name, ObjRef, Object, PageIndex, Paint, Point, Rect,
-    Resolve, SaveOptions, StandardFont, Stroke,
+    Affine, Color, Dash, Dict, Document, Fill, LineCap, LineJoin, MiterLimit, Name, ObjRef, Object,
+    PageIndex, Paint, Point, Rect, Resolve, SaveOptions, StandardFont, Stroke,
 };
 
 /// Save `edit` and reload it, which is the round trip every test here makes.
@@ -125,6 +125,55 @@ fn an_emitted_stream_reparses() {
     assert!(text.contains(" f"), "filled: {text}");
     assert!(text.contains(" S"), "stroked: {text}");
     assert!(text.contains("2 w"), "line width: {text}");
+}
+
+// M25's stroke attributes: cap, join, miter limit and dash all reach the
+// stream, and the defaults do not. This is a facade capability in its own
+// right -- a caller who never touches SVG gets it from `draw_page` -- so it
+// is proved here rather than only through the SVG round trip.
+#[test]
+fn a_strokes_pen_reaches_the_stream() {
+    let doc = Document::open("tests/fixtures/hello_world.pdf").expect("opens");
+    let mut edit = doc.edit();
+    edit.draw_page(0, |c| {
+        c.line(
+            Point::new(10.0, 10.0),
+            Point::new(100.0, 10.0),
+            Stroke::new(Color::BLACK, 3.0)
+                .with_cap(LineCap::Round)
+                .with_join(LineJoin::Bevel)
+                .with_miter_limit(MiterLimit::new(2.5))
+                .with_dash(Dash::new(&[6.0, 3.0], 1.5).expect("a valid dash")),
+        );
+        // A plain stroke writes none of the four: the drawing runs inside a
+        // fresh `q`, so PDF's own initial state is already what it asked for.
+        c.line(
+            Point::new(10.0, 30.0),
+            Point::new(100.0, 30.0),
+            Stroke::new(Color::BLACK, 1.0),
+        );
+    })
+    .expect("draws");
+
+    let text = contents(&round_trip(&edit), 0);
+    assert!(text.contains("1 J"), "round cap: {text}");
+    assert!(text.contains("2 j"), "bevel join: {text}");
+    assert!(text.contains("2.5 M"), "miter limit: {text}");
+    assert!(text.contains("[6 3] 1.5 d"), "dash: {text}");
+    assert_eq!(text.matches(" J").count(), 1, "only the one cap: {text}");
+    assert_eq!(text.matches(" d").count(), 1, "only the one dash: {text}");
+}
+
+// An invalid dash array never reaches the stream, because it never becomes a
+// `Dash`: a viewer that refuses a `d` with a negative operand refuses every
+// operator after it, so the refusal is at construction.
+#[test]
+fn an_invalid_dash_is_refused_at_construction() {
+    assert!(Dash::new(&[4.0, -1.0], 0.0).is_none(), "negative length");
+    assert!(Dash::new(&[0.0, 0.0], 0.0).is_none(), "sums to zero");
+    assert!(Dash::new(&[], 0.0).is_none(), "empty is `dash: None`");
+    assert!(Dash::new(&[4.0], -1.0).is_none(), "negative phase");
+    assert!(Dash::new(&[4.0, f64::NAN], 0.0).is_none(), "not finite");
 }
 
 // Item 3: appended, not rewritten. The page's original stream is still there,

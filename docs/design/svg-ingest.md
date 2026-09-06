@@ -71,6 +71,8 @@ drawing session over an editable document.
 | `Group` `clip-path` | the children's outlines concatenated, then `W n` (or `W* n`) |
 | `Path` solid `fill` | `rg` + `f` / `f*` |
 | `Path` solid `stroke` | `RG` + `w` + `S` |
+| `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit` | `J`, `j`, `M` |
+| `stroke-dasharray`, `stroke-dashoffset` | `d` |
 | both | `B` / `B*` |
 | `fill-rule="evenodd"` | the starred operator |
 | `fill-opacity`, `stroke-opacity`, `stop-opacity` | folded into the colour's alpha, which becomes an `/ExtGState` |
@@ -174,26 +176,22 @@ gradient, which is the same work `<pattern>` needs.
 narrows the clip to one path's subpaths, and we concatenate the children into
 a single outline. The nested-intersection case is not expressible this way.
 
-**Stroke attributes beyond colour and width.** `M23`'s `Canvas::Stroke`
-carries exactly those two, so `stroke-linecap`, `stroke-linejoin`,
-`stroke-miterlimit`, `stroke-dasharray` and `stroke-dashoffset` are dropped —
-every stroke inks with the PDF default cap and join and no dash. PDF has an
-operator for each of them (`J`, `j`, `M`, `d`), so this is a **canvas** gap
-rather than a mapping one: closing it means widening `Stroke`, which is M23's
-type and is used by callers who are not ingesting SVG.
+**Only one stroke value has no faithful spelling: `stroke-linejoin:
+miter-clip`.** The other four cross whole — `stroke-linecap`,
+`stroke-linejoin`'s miter, round and bevel, `stroke-miterlimit`,
+`stroke-dasharray` and `stroke-dashoffset` become `J`, `j`, `M` and `d`
+(ISO 32000-1 §8.4.3.3-§8.4.3.6), carried by `Stroke`'s `cap`, `join`,
+`miter_limit` and `dash`. SVG 2's `miter-clip` clips the miter at the limit
+where PDF bevels it, and `j` has no third spelling, so it lands on the miter
+join it is a variant of rather than on a visibly blunter bevel. Unreported,
+for the same reason group opacity is: the shape is there and is mitered, and
+the difference shows only past the limit.
 
-It is unreported, and that is a judgement rather than an oversight: a
-butt-capped line where the source asked for a round cap is a half-pixel
-difference at the ends, not a missing shape, and reporting it on every dashed
-or round-joined stroke would bury the report items that mean something. It is
-named debt in the roadmap instead. The one case where it is visible rather
-than subtle is a **dashed** stroke, which draws solid.
-
-**No fixture exercises it**, deliberately: a dashed stroke would fail the
-Vector floor, and correctly so. Adding one and then lowering the floor to
-accommodate it would be the floor being chosen rather than measured, which is
-the thing §5 exists to prevent. The gap is recorded here and in the roadmap
-instead, and a fixture belongs in the pass that closes it.
+An all-zero `stroke-dasharray` is legal SVG and means solid, but the same
+array through `d` is invalid PDF — a reader may reject the whole content
+stream over it. `Dash::new` refuses it (along with a negative length, a
+negative phase and a non-finite one), and the stroke stays solid, which is
+what the SVG asked for.
 
 `paint-order` and `shape-rendering` are likewise not read: the first because
 the canvas paints fill-then-stroke through `B`, which is the SVG default and
@@ -218,7 +216,7 @@ read back fails here instead of passing on an in-memory shortcut.
 ### The fixture store, and what a missing one means
 
 Unlike M24's, this corpus **is committed**: `crates/pdfrum/tests/fixtures/svg`
-is seventeen small hand-written documents, not multi-megabyte artifacts
+is eighteen small hand-written documents, not multi-megabyte artifacts
 generated from a build of the oracle. There is therefore no legitimate "the
 store is absent" case, and the test says so — a missing or empty directory
 **fails**, and a `.svg` with no row in the `FIXTURES` table fails too, so a
@@ -240,7 +238,7 @@ is named beside each.
 | Alpha | 0.95 | `opacity_groups` 0.9669 |
 | Image | 0.92 | `image_png` 0.9315 |
 
-The run, all seventeen fixtures:
+The run, all eighteen fixtures:
 
 | fixture | vs `resvg` | report |
 |---|---|---|
@@ -252,6 +250,7 @@ The run, all seventeen fixtures:
 | `use_and_defs` | 1.0000 | — |
 | `css_styles` | 1.0000 | — |
 | `clip_path` | 1.0000 | — |
+| `stroke_pen` | 0.9999 | — |
 | `opacity_groups` | 0.9669 | — |
 | `gradient_linear` | 0.9991 | — |
 | `gradient_radial` | 0.9992 | — |
@@ -262,12 +261,13 @@ The run, all seventeen fixtures:
 | `declined_mask` | 0.8229 | `mask` |
 | `declined_blend` | 0.8543 | `blend-mode` |
 
-Eight of the twelve carried fixtures score a flat **1.0000** against an
+Eight of the thirteen carried fixtures score a flat **1.0000** against an
 independent implementation — paths, fill rules, nested transforms, `use`
 expansion, the CSS cascade and clipping are translations rather than
-approximations, and the numbers say so. The three that are not are the three
-§4 explains: stroke joins inked slightly differently, group opacity
-composited differently, and a raster resampled by a different filter.
+approximations, and the numbers say so. The five that are not fall to three
+causes §4 explains: stroke joins and caps inked slightly differently, group
+opacity composited differently, and a raster resampled by a different
+filter.
 
 **The five `declined_*` fixtures carry no floor** and their scores are not
 evidence of quality — the two renderers are drawing different pictures by
