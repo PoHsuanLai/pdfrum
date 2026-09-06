@@ -1,10 +1,12 @@
-# A text object whose glyph bounding box is empty is dropped, so spaces in their own text object are lost
+# A text object whose glyph bounding box is empty is dropped, losing spaces and, on some files, real letters
 
 **Status:** drafted 2026-09-02, not yet filed.
 
 **Confidence:** observed output.
 
-**Repro files:** `whitespace.pdf, bug_444176962.pdf` in `../repro/`.
+**Repro files:** `whitespace.pdf, bug_444176962.pdf` in `../repro/`;
+`bug_921.pdf` in the checkout's own `testing/resources/`, which is the
+stronger repro because what it loses is running prose, not whitespace.
 
 **Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).
 **Re-verified at** `a043bed4a` (2026-09-05): the gate at `cpdf_textpage.cpp:881` and `:1076` and `kSizeEpsilon` at `:42` are unchanged.
@@ -18,7 +20,7 @@ posted.
 
 ---
 
-## a text object whose glyph bounding box is empty is dropped, so spaces in their own text object are lost
+## a text object whose glyph bounding box is empty is dropped, losing spaces and, on some files, real letters
 
 **What steps will reproduce the problem?**
 
