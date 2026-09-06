@@ -204,13 +204,23 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// of the reading-order machinery.
     pub(crate) fn offer(&mut self, index: usize, diags: &mut Diagnostics) {
         let Some(run) = self.run(index) else { return };
-        // `[oracle-bug]` Gate on the **advance**, not the glyph bounding box.
-        // `cpdf_textpage.cpp:881` tests `GetRect().Width()`, which
-        // `cpdf_textobject.cpp:305-331` builds from `GetCharBBox` — so an
-        // object made only of spaces, whose boxes are empty but whose `w0`
-        // per §9.4.3 is not, disappears before extraction. See
-        // [`TextRun::advance`](crate::object::TextRun::advance).
-        if run.advance < SIZE_EPSILON && run.rect.width().abs() < SIZE_EPSILON {
+        // Gate on the glyph bounding box, as `cpdf_textpage.cpp:1081` does
+        // with `fabs(GetRect().Width()) < kSizeEpsilon`, so an object whose
+        // glyphs occupy no width never reaches extraction.
+        //
+        // This used to carry an extra `run.advance < SIZE_EPSILON` conjunct,
+        // ruled an `[oracle-bug]` on the reasoning that an object made only
+        // of spaces has empty glyph boxes but a nonzero `w0` per §9.4.3, so
+        // PDFium was losing a word separator. **Measurement refuted that**
+        // (M28): the separator is not lost, because the inter-object rules
+        // below (`decide`/`GenerateSpace`) already emit a space wherever the
+        // geometry calls for one. Keeping the object as well double-counted
+        // it, which was the whole of the "spurious generated space" defect —
+        // it cost 21 of the 44 benchmark files their byte-exact match
+        // (22 → 43) and `text_quick_start.pdf` its F1 (0.641 → 1.000),
+        // while the whitespace-normalized count rose 41 → 43, so no token
+        // boundary was lost anywhere by dropping these objects.
+        if run.rect.width().abs() < SIZE_EPSILON {
             diags.record(Severity::Recovered, DiagKind::TextObjectDegenerate, None);
             return;
         }
@@ -279,9 +289,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
         for index in batch {
             let Some(run) = self.run(index) else { continue };
             // Re-checked, because the batch may hold an object whose box
-            // changed meaning since it was offered. `[oracle-bug]`: the
-            // advance rescues a spaces-only object, as at `offer`.
-            if run.advance < SIZE_EPSILON && run.rect.width().abs() < SIZE_EPSILON {
+            // changed meaning since it was offered — the same gate as
+            // `offer`, and `cpdf_textpage.cpp:886`.
+            if run.rect.width().abs() < SIZE_EPSILON {
                 continue;
             }
             let state = self.pre_marked_content(run, diags);

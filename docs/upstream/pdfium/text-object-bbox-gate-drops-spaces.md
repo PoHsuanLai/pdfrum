@@ -105,3 +105,20 @@ extracted text and so emits `U+0020` for those glyphs
 same as today for every file where the heuristic was already producing the
 right answer. Without it, a corpus-wide `0x20` → `0xA0` change appears at every
 such space.
+
+**How often the mask holds, measured (2026-09-06).** pdfrum implemented the
+suggested advance-based predicate and then measured it against `pdfium_test`
+over 44 benchmark documents and a 1759-file conformance corpus. On real
+documents the mask described above holds essentially everywhere: keeping these
+objects made the extracted text *differ from PDFium's on 21 of the 44 files*
+and on 159 corpus files, and in every case the difference was a **duplicated**
+separator — the inter-object heuristic had already emitted one — never a
+recovered one. pdfrum has therefore reverted to PDFium's box gate.
+
+This does not withdraw the report; it bounds it. The loss is real for the two
+repro files above, where the space is alone in its object with no neighbouring
+object for the heuristic to span. It is not observable wherever another text
+object precedes or follows, which is the overwhelming majority of real
+content. A fix should be scoped to the isolated case, and any change to the
+predicate needs to be scored against the extracted text of a large corpus,
+because the heuristic and the gate are load-bearing together.

@@ -1425,7 +1425,8 @@ fn extract_words_lists_every_word_with_its_box_font_and_size() {
     // y-up page space.
     assert!(rows[0]["x1"].as_f64() <= rows[1]["x0"].as_f64());
     assert!(rows[2]["y0"].as_f64() > rows[0]["y1"].as_f64());
-    // The corpus guide's first page has 45 words.
+    // The corpus guide's first page has 33 words -- the oracle's own count
+    // for this page, which our text has matched byte for byte since M28.
     let guide = json(&[
         "extract",
         "words",
@@ -1435,7 +1436,7 @@ fn extract_words_lists_every_word_with_its_box_font_and_size() {
         "--json",
     ])
     .unwrap();
-    assert_eq!(guide.as_array().unwrap().len(), 45);
+    assert_eq!(guide.as_array().unwrap().len(), 33);
     assert!(
         stdout(&["extract", "words", fx("fixtures/bug_674771.pdf")])
             .unwrap()

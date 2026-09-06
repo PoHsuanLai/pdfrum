@@ -78,23 +78,6 @@ pub struct TextRun {
     /// The object's bounding box in page space, stroke-inflated when the
     /// render mode strokes.
     pub rect: Rect,
-    /// Total advance width in page space: `w0` summed over the object's
-    /// glyphs (ISO 32000-1 §9.4.3), measured through the text matrix.
-    ///
-    /// Distinct from the bounding box (§9.2.2): a space has an empty box and
-    /// a non-zero `w0`, so an object made only of spaces still has an
-    /// advance.
-    // `[oracle-bug]` PDFium has no such field: `cpdf_textpage.cpp:881` and
-    // `:1076` decide whether a text object exists at all from
-    // `GetRect().Width()`, which `cpdf_textobject.cpp:305-331` builds from the
-    // glyph **bounding boxes**. §9.2.2 keeps displacement and bounding box
-    // distinct, and a space's box is empty while its `w0` is not, so any
-    // object made only of spaces vanishes before extraction
-    // (`crbug.com/40643656`, `crbug.com/444176962`). pdf.js keeps such a
-    // character two independent ways (`evaluator.js:3079-3084`,
-    // `:2924-2939`) and makes its whitespace drop an **opt-out**
-    // (`keepWhiteSpace: true`), not a loss.
-    pub advance: f64,
     /// The marks enclosing the object.
     pub marks: pdfrum_page::ContentMarks,
     /// What each shown character's Type 3 glyph procedure declared, empty for
@@ -370,7 +353,6 @@ pub(crate) fn build(content: &Content<TextObject>, index: ObjectIndex) -> Option
         // it from the stored four coefficients plus `pos_`.
         text_matrix: with_translation(object.matrix, object.position),
         rect: Rect::ZERO,
-        advance: 0.0,
         marks: content.marks.clone(),
         type3: object.type3_metrics.clone(),
     };
@@ -493,18 +475,6 @@ fn layout(run: &mut TextRun, codes: &[CharCode], mode: TextRenderMode, line_widt
         );
     }
     run.rect = rect;
-    // `[oracle-bug]` The advance the pen actually travelled, measured in page
-    // space through the same matrix the box goes through, so the two are
-    // comparable against one epsilon. `pen` is signed — a negative font size
-    // or a leading kern runs it backwards — so the magnitude is what the
-    // "does this object occupy space" question wants.
-    let m = run.text_matrix.as_coeffs();
-    let (dx, dy) = if vertical {
-        (m[2] * f64::from(pen), m[3] * f64::from(pen))
-    } else {
-        (m[0] * f64::from(pen), m[1] * f64::from(pen))
-    };
-    run.advance = dx.hypot(dy);
 }
 
 /// Every text object on a page, in the order a pre-order walk reaches them,
