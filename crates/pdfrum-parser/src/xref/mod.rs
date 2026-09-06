@@ -25,6 +25,8 @@ mod classic;
 mod rebuild;
 mod stream;
 
+use std::sync::Arc;
+
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Name, Object, names};
 
@@ -111,6 +113,23 @@ struct EntryTable {
     /// How many slots are occupied, kept incrementally: `len` is read per
     /// document and counting it otherwise means scanning the vector.
     occupied: usize,
+    /// One past the largest occupied object number, kept incrementally for
+    /// the same reason `occupied` is. `last` is read on **every object
+    /// fetch**, because `Store::get` calls `Xref::is_valid_object_number`
+    /// before it looks anything up (`crate::store`), and deriving it with a
+    /// backwards scan makes that fetch O(number of slots) — quadratic over a
+    /// document whose objects are each fetched once, on a buffer larger than
+    /// L2 for a table of any size (9950 objects at 32 bytes a slot is
+    /// 318 KiB).
+    ///
+    /// Measured on `forms_widgets_407`, the corpus's largest table, this was
+    /// **not** what made that file's open slow — the scan does not show up in
+    /// a cachegrind A/B — so this field is a bound made unreachable rather
+    /// than a regression repaired. It stays because the bound is real and the
+    /// field costs one `usize`.
+    ///
+    /// Only `put` raises this, and only `truncate` and `clear` lower it.
+    end: usize,
 }
 
 impl EntryTable {
@@ -136,6 +155,7 @@ impl EntryTable {
                 self.occupied += 1;
             }
             *slot = Some(entry);
+            self.end = self.end.max(idx + 1);
         }
     }
 
@@ -167,12 +187,11 @@ impl EntryTable {
     }
 
     /// The largest object number the table describes.
+    ///
+    /// Read per object fetch, so it is a field read and not a scan; see
+    /// `end` for what that costs when it is not.
     fn last(&self) -> u32 {
-        self.slots
-            .iter()
-            .rposition(Option::is_some)
-            .and_then(|i| u32::try_from(i).ok())
-            .unwrap_or(0)
+        u32::try_from(self.end.saturating_sub(1)).unwrap_or(u32::MAX)
     }
 
     /// Drop every slot at or past `size`.
@@ -181,6 +200,14 @@ impl EntryTable {
         if let Some(dropped) = self.slots.get(keep..) {
             self.occupied -= dropped.iter().flatten().count();
             self.slots.truncate(keep);
+            // The scan a fetch no longer pays for, paid once here instead:
+            // truncation is the one operation that can lower the end, and it
+            // runs per document rather than per object.
+            self.end = self
+                .slots
+                .iter()
+                .rposition(Option::is_some)
+                .map_or(0, |i| i + 1);
         }
     }
 
@@ -188,6 +215,7 @@ impl EntryTable {
     fn clear(&mut self) {
         self.slots.clear();
         self.occupied = 0;
+        self.end = 0;
     }
 }
 
@@ -522,14 +550,17 @@ pub fn read_xref(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Dict), crate::Error> {
-    let (xref, trailer, _) = read_xref_full(file, limits, diags)?;
+    // This entry point takes a plain slice, so it is the one place that has
+    // to pay for the reference count. Every reader inside the crate arrives
+    // through `read_xref_full` with the `Arc` it already holds.
+    let (xref, trailer, _) = read_xref_full(&Arc::from(file), limits, diags)?;
     Ok((xref, trailer.dict))
 }
 
 /// Read cross-reference information, reporting the shape it turned out to
 /// have — see [`XrefShape`].
 pub(crate) fn read_xref_full(
-    file: &[u8],
+    file: &Arc<[u8]>,
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Trailer, XrefShape), crate::Error> {
@@ -595,6 +626,49 @@ mod tests {
         let mut x = Xref::new();
         assert!(x.add_normal(limits().max_object_number, 0, false, 1, &limits()));
         assert!(!x.add_normal(limits().max_object_number + 1, 0, false, 1, &limits()));
+    }
+
+    /// The cached end tracks the same value a backwards scan would find.
+    ///
+    /// `last` is a field read rather than a scan because `Store::get`
+    /// consults it per fetch; this pins the two against each other across
+    /// every operation that can move it — growing, overwriting, truncating
+    /// down and back up, and clearing.
+    #[test]
+    fn the_cached_end_matches_a_scan_after_every_operation() {
+        fn scanned(x: &Xref) -> u32 {
+            u32::try_from(
+                x.entries
+                    .slots
+                    .iter()
+                    .rposition(Option::is_some)
+                    .map_or(0, |i| i),
+            )
+            .unwrap_or(0)
+        }
+
+        let mut x = Xref::new();
+        assert_eq!(x.last_object_number(), scanned(&x));
+        x.add_normal(9, 0, false, 90, &limits());
+        assert_eq!(x.last_object_number(), 9);
+        assert_eq!(x.last_object_number(), scanned(&x));
+        // Writing below the end does not move it.
+        x.add_normal(3, 0, false, 30, &limits());
+        assert_eq!(x.last_object_number(), 9);
+        assert_eq!(x.last_object_number(), scanned(&x));
+        // Overwriting the end does not move it either.
+        x.add_normal(9, 0, false, 91, &limits());
+        assert_eq!(x.last_object_number(), scanned(&x));
+        // Truncating lowers it, to the largest survivor.
+        x.set_size(5);
+        assert_eq!(x.last_object_number(), scanned(&x));
+        // And growing again raises it.
+        x.add_normal(20, 0, false, 200, &limits());
+        assert_eq!(x.last_object_number(), 20);
+        assert_eq!(x.last_object_number(), scanned(&x));
+        x.set_size(0);
+        assert_eq!(x.last_object_number(), 0);
+        assert_eq!(x.last_object_number(), scanned(&x));
     }
 
     #[test]
