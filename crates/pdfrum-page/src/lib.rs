@@ -104,8 +104,9 @@ pub use ops::{
 };
 pub use optional::{OcContext, UsageType, Visibility, page_visibility};
 pub use page::{
-    Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, Page, PageObject, PathObject, Rotation,
-    ShadingObject, TextObject, TextSegment, derive_boxes, display_size_from_dict,
+    Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, NotAQuarterTurn, Page, PageObject,
+    PathObject, Rotation, ShadingObject, TextObject, TextSegment, derive_boxes,
+    display_size_from_dict,
 };
 pub use pattern::{Pattern, ShadingPattern, TileRange, TilingPattern, uncolored_pattern_rgb};
 pub use resources::Resources;

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use pdfrum_common::{Diagnostics, LimitExceeded, Limits, Operation, PageIndex};
 use pdfrum_object::{Name, Resolve, names};
-use pdfrum_page::BuildContext;
+use pdfrum_page::{BuildContext, Rotation};
 use pdfrum_parser::PageDict;
 
 use crate::{
@@ -49,12 +49,12 @@ impl<'a> Page<'a> {
             &mut diags,
         );
         doc.note(&diags);
-        let rotation = Rotation::from(pdfrum_page::Rotation::from_degrees(
+        let rotation = pdfrum_page::Rotation::from_degrees(
             dict.inherited(&Name::from("Rotate"), &doc.inner)
                 .as_ref()
                 .and_then(pdfrum_object::Object::as_int)
                 .unwrap_or(0),
-        ));
+        );
         Ok(Page {
             doc,
             dict: Arc::new(dict),
@@ -683,97 +683,6 @@ pub(crate) fn build_graph(
     );
     doc.note(&diags);
     page
-}
-
-/// A page's `/Rotate`, normalized to one of four quarter turns
-/// (ISO 32000-1 §7.7.3.3).
-///
-/// The value is always clockwise and always a multiple of 90 degrees: a
-/// document writing `/Rotate 450` means [`Rotation::Quarter`], and one
-/// writing `-90` means [`Rotation::ThreeQuarter`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Rotation {
-    /// Not rotated.
-    #[default]
-    None,
-    /// 90 degrees clockwise.
-    Quarter,
-    /// 180 degrees.
-    Half,
-    /// 270 degrees clockwise.
-    ThreeQuarter,
-}
-
-impl Rotation {
-    /// The rotation in degrees clockwise: 0, 90, 180 or 270.
-    #[must_use]
-    pub fn degrees(self) -> u32 {
-        match self {
-            Rotation::None => 0,
-            Rotation::Quarter => 90,
-            Rotation::Half => 180,
-            Rotation::ThreeQuarter => 270,
-        }
-    }
-}
-
-/// The error [`Rotation`]'s [`FromStr`](std::str::FromStr) returns: the
-/// string named no quarter turn.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("not a quarter turn: {0}")]
-pub struct NotAQuarterTurn(String);
-
-impl std::fmt::Display for Rotation {
-    /// The degrees clockwise as a bare number: `0`, `90`, `180` or `270`.
-    ///
-    /// Round-trips through [`FromStr`](std::str::FromStr).
-    ///
-    /// ```
-    /// assert_eq!(pdfrum::Rotation::Quarter.to_string(), "90");
-    /// ```
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.degrees(), f)
-    }
-}
-
-impl std::str::FromStr for Rotation {
-    type Err = NotAQuarterTurn;
-
-    /// The inverse of [`Display`](std::fmt::Display): `"0"`, `"90"`, `"180"`
-    /// and `"270"`, and nothing else.
-    ///
-    /// Not `"450"` and not `"-90"`. Normalizing a document's out-of-range
-    /// `/Rotate` happens where the file is read; doing it here would make a
-    /// caller's round trip lossy.
-    ///
-    /// # Errors
-    ///
-    /// [`NotAQuarterTurn`] when the string is not one of those four.
-    ///
-    /// ```
-    /// assert_eq!("270".parse(), Ok(pdfrum::Rotation::ThreeQuarter));
-    /// assert!("45".parse::<pdfrum::Rotation>().is_err());
-    /// ```
-    fn from_str(s: &str) -> core::result::Result<Rotation, NotAQuarterTurn> {
-        match s {
-            "0" => Ok(Rotation::None),
-            "90" => Ok(Rotation::Quarter),
-            "180" => Ok(Rotation::Half),
-            "270" => Ok(Rotation::ThreeQuarter),
-            other => Err(NotAQuarterTurn(other.to_owned())),
-        }
-    }
-}
-
-impl From<pdfrum_page::Rotation> for Rotation {
-    fn from(inner: pdfrum_page::Rotation) -> Rotation {
-        match inner {
-            pdfrum_page::Rotation::None => Rotation::None,
-            pdfrum_page::Rotation::Quarter => Rotation::Quarter,
-            pdfrum_page::Rotation::Half => Rotation::Half,
-            pdfrum_page::Rotation::ThreeQuarter => Rotation::ThreeQuarter,
-        }
-    }
 }
 
 /// A page whose content has been interpreted, ready to be drawn any number

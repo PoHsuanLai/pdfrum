@@ -33,7 +33,12 @@ use std::sync::Arc;
 /// The default page size when `/MediaBox` is missing or empty: US Letter.
 pub const DEFAULT_MEDIA_BOX: Rect = Rect::new(0.0, 0.0, 612.0, 792.0);
 
-/// A page's rotation, in quarter turns clockwise.
+/// A page's `/Rotate`, normalized to one of four quarter turns
+/// (ISO 32000-1 §7.7.3.3).
+///
+/// The value is always clockwise and always a multiple of 90 degrees: a
+/// document writing `/Rotate 450` means [`Rotation::Quarter`], and one
+/// writing `-90` means [`Rotation::ThreeQuarter`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Rotation {
     /// Upright.
@@ -63,6 +68,17 @@ impl Rotation {
         }
     }
 
+    /// The rotation in degrees clockwise: 0, 90, 180 or 270.
+    #[must_use]
+    pub fn degrees(self) -> u32 {
+        match self {
+            Self::None => 0,
+            Self::Quarter => 90,
+            Self::Half => 180,
+            Self::ThreeQuarter => 270,
+        }
+    }
+
     /// Quarter turns clockwise.
     #[must_use]
     pub fn quarters(self) -> u8 {
@@ -88,6 +104,54 @@ impl Rotation {
             Self::Quarter => Affine::new([0.0, -1.0, 1.0, 0.0, -bottom, right]),
             Self::Half => Affine::new([-1.0, 0.0, 0.0, -1.0, right, top]),
             Self::ThreeQuarter => Affine::new([0.0, 1.0, -1.0, 0.0, top, -left]),
+        }
+    }
+}
+
+/// The error [`Rotation`]'s [`FromStr`](std::str::FromStr) returns: the
+/// string named no quarter turn.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("not a quarter turn: {0}")]
+pub struct NotAQuarterTurn(String);
+
+impl std::fmt::Display for Rotation {
+    /// The degrees clockwise as a bare number: `0`, `90`, `180` or `270`.
+    ///
+    /// Round-trips through [`FromStr`](std::str::FromStr).
+    ///
+    /// ```
+    /// assert_eq!(pdfrum_page::Rotation::Quarter.to_string(), "90");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.degrees(), f)
+    }
+}
+
+impl std::str::FromStr for Rotation {
+    type Err = NotAQuarterTurn;
+
+    /// The inverse of [`Display`](std::fmt::Display): `"0"`, `"90"`, `"180"`
+    /// and `"270"`, and nothing else.
+    ///
+    /// Not `"450"` and not `"-90"`. Normalizing a document's out-of-range
+    /// `/Rotate` is [`Rotation::from_degrees`]'s job; doing it here would
+    /// make a caller's round trip lossy.
+    ///
+    /// # Errors
+    ///
+    /// [`NotAQuarterTurn`] when the string is not one of those four.
+    ///
+    /// ```
+    /// assert_eq!("270".parse(), Ok(pdfrum_page::Rotation::ThreeQuarter));
+    /// assert!("45".parse::<pdfrum_page::Rotation>().is_err());
+    /// ```
+    fn from_str(s: &str) -> core::result::Result<Rotation, NotAQuarterTurn> {
+        match s {
+            "0" => Ok(Rotation::None),
+            "90" => Ok(Rotation::Quarter),
+            "180" => Ok(Rotation::Half),
+            "270" => Ok(Rotation::ThreeQuarter),
+            other => Err(NotAQuarterTurn(other.to_owned())),
         }
     }
 }

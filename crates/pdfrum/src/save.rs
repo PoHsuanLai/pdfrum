@@ -961,25 +961,41 @@ impl DocEdit<'_> {
     }
 }
 
+/// This crate's options as the writer's own.
+///
+/// Public for the same reason [`RenderOptions`](crate::RenderOptions)'s is:
+/// `pdfrum-edit` takes its own type, and the two do not line up field for
+/// field -- this crate's `update` is the engine's `mode`, and the engine's
+/// `keep_original` is not exposed here at all.
+///
+/// ```
+/// let engine = pdfrum_edit::SaveOptions::from(&pdfrum::SaveOptions::default());
+/// assert!(!engine.subset_new_fonts);
+/// ```
+impl From<&SaveOptions> for pdfrum_edit::SaveOptions {
+    fn from(options: &SaveOptions) -> Self {
+        Self {
+            mode: match options.update {
+                Update::Rewrite => SaveMode::Full,
+                Update::Incremental => SaveMode::Incremental,
+            },
+            version: options.version,
+            // An encrypted document saves **encrypted**, under the handler its
+            // password opened, so the output opens with that same password. The
+            // regenerated content streams of an edited page go through the same
+            // cipher as everything else, because they are written the same way.
+            remove_security: options.remove_security,
+            subset_new_fonts: options.subset_new_fonts,
+            id_source: options.id_source,
+            encrypt: options.encrypt.clone(),
+            ..Self::default()
+        }
+    }
+}
+
 /// The one place a [`SaveOptions`] becomes the writer's own options.
 fn write_edit(edit: &EditDoc<'_>, options: &SaveOptions, out: &mut impl Write) -> Result<()> {
-    let opts = pdfrum_edit::SaveOptions {
-        mode: match options.update {
-            Update::Rewrite => SaveMode::Full,
-            Update::Incremental => SaveMode::Incremental,
-        },
-        version: options.version,
-        // An encrypted document saves **encrypted**, under the handler its
-        // password opened, so the output opens with that same password. The
-        // regenerated content streams of an edited page go through the same
-        // cipher as everything else, because they are written the same way.
-        remove_security: options.remove_security,
-        subset_new_fonts: options.subset_new_fonts,
-        id_source: options.id_source,
-        encrypt: options.encrypt.clone(),
-        ..pdfrum_edit::SaveOptions::default()
-    };
-    pdfrum_edit::save(edit, &opts, out)?;
+    pdfrum_edit::save(edit, &pdfrum_edit::SaveOptions::from(options), out)?;
     Ok(())
 }
 
