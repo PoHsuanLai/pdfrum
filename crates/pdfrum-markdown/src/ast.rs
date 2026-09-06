@@ -17,8 +17,8 @@ pub enum Block {
     Paragraph(String),
     /// A list; each item is one line of text.
     List {
-        /// Whether the items were numbered.
-        ordered: bool,
+        /// How the items were marked, which decides how they are written.
+        marker: ListMarker,
         /// The items, bullets and numbers stripped.
         items: Vec<String>,
     },
@@ -35,6 +35,25 @@ pub enum Block {
         /// figure that drew no image, which is its alternative text alone.
         index: Option<usize>,
     },
+}
+
+/// How a list's items are marked.
+///
+/// A document that carries its own numbers keeps them: `2.1 Background`
+/// and `5.4 Virus Scan` are section numbers a cross-reference points at,
+/// and a renderer that renumbered them from one would write `1.` and
+/// `4.` — the wrong section. A list the producer marked with bullets, or
+/// numbered without the numbers surviving into the text, is renumbered by
+/// the Markdown renderer as before.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListMarker {
+    /// Bullets: written `- `.
+    Bullet,
+    /// Numbered by the renderer, from one: written `1. `, `2. `, …
+    Ordered,
+    /// Numbered by the document, one label per item, in the same order —
+    /// `1.`, `2.1`, `5.4` — written as the page had them.
+    Labelled(Vec<String>),
 }
 
 impl Block {
