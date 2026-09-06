@@ -15,14 +15,20 @@ part of a Rust install:
 
 ```bash
 cargo binstall nu                        # required: the scripts are nushell
-cargo install cargo-nextest --locked     # required by the gate
+cargo binstall cargo-nextest             # required by the gate
 cargo install cargo-public-api --locked  # required by the API snapshot gate
 rustup toolchain install nightly         # rustdoc JSON is nightly-only
-cargo install cargo-deny --locked        # optional; the gate skips it if absent
+cargo binstall cargo-deny                # optional; the gate skips it if absent
 cargo install cbindgen --locked          # optional; for the C header check
-cargo install wasm-bindgen-cli --locked  # optional; for the WebAssembly tests
+cargo binstall wasm-bindgen-cli          # optional; for the WebAssembly tests
 rustup target add wasm32-unknown-unknown # optional; for the WebAssembly tests
 ```
+
+`binstall` fetches a prebuilt binary where the project publishes one and falls
+back to a source build where it does not; `cargo-public-api` and `cbindgen`
+publish none, which is why those two still say `cargo install`. Both spellings
+work for every tool here -- `cargo install <tool> --locked` is always correct
+and always slower.
 
 Each optional tool the gate cannot find becomes a printed note and the run
 continues. A contributor who never touches the C ABI should not need `cbindgen`

@@ -236,10 +236,10 @@ of done for every change.
 
 ```bash
 cargo binstall nu                      # required: the scripts are nushell
-cargo install cargo-nextest --locked   # required by the gate
+cargo binstall cargo-nextest           # required by the gate
 cargo install cargo-public-api --locked  # required by the snapshot gate
 rustup toolchain install nightly         # rustdoc JSON is nightly-only
-cargo install cargo-deny --locked      # optional; the gate skips it if absent
+cargo binstall cargo-deny              # optional; the gate skips it if absent
 ```
 
 **Paths outside this repository.** The oracle checkout, the oracle binary,

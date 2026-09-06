@@ -36,7 +36,7 @@ jobs:
     name: fmt, clippy, tests, docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install the toolchain
         run: |
@@ -45,20 +45,42 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup default stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
 
-      - name: Install the tools the gate needs
-        run: |
-          cargo install cargo-nextest --locked
-          cargo install cargo-public-api --locked
-          cargo install cargo-deny --locked
-          cargo install cbindgen --locked
-          cargo install wasm-bindgen-cli --locked
+      # The gate's tools, fetched as binaries rather than built from source.
+      # `rust-cache` above does not help here: it caches build artifacts, not
+      # `~/.cargo/bin`, so every `cargo install` paid a full compile on every
+      # run. Three tiers, because no single mechanism covers the set:
+      #
+      #   1. `install-action` knows the tool and fetches from its releases.
+      #   2. It does not, but the project publishes Linux binaries, so
+      #      `binstall` finds them. `binstall` itself comes from tier 1, which
+      #      is what keeps this from bootstrapping with a compile.
+      #   3. The project publishes no binary at all and source is the only
+      #      option. `cargo-public-api` and `cbindgen` ship none as of
+      #      2026-09-07; check again before assuming they still do not.
+      #
+      # Actions are pinned by commit SHA, not tag: a tag is mutable and these
+      # run with a token that can read the repository.
+      - name: Install the prebuilt tools
+        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        with:
+          # `wasm-bindgen` must match the `wasm-bindgen` crate version in
+          # `crates/pdfrum-wasm/Cargo.toml`; a mismatch is a runtime error.
+          # Keep the two in step (DEPS.md records the same constraint).
+          tool: cargo-nextest,cargo-deny,wasm-bindgen@0.2.128,cargo-binstall
 
       - name: Install nushell
-        # The scripts are nushell. `--locked` so a transitive bump cannot
-        # break the run on a day nothing here changed.
-        run: cargo install nu --locked
+        # The scripts are nushell. `install-action` does not carry it, but
+        # nushell publishes x86-64 Linux binaries and `binstall` takes them.
+        run: cargo binstall --no-confirm --locked nu
+
+      - name: Install the tools that publish no binary
+        # Source builds, because there is nothing to fetch. `--locked` so a
+        # transitive bump cannot break the run on a day nothing here changed.
+        run: |
+          cargo install cargo-public-api --locked
+          cargo install cbindgen --locked
 
       - name: The gate
         # Runs fmt, clippy, nextest, doctests, rustdoc, the public-API
