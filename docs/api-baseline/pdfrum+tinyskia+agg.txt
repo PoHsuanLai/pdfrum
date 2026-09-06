@@ -281,7 +281,7 @@ pub fn pdfrum::Canvas<'_, '_>::fill_rounded_rect(&mut self, kurbo::rect::Rect, f
 pub fn pdfrum::Canvas<'_, '_>::image(&mut self, &pdfrum_edit::image::EmbeddedImage, kurbo::rect::Rect)
 pub fn pdfrum::Canvas<'_, '_>::line(&mut self, kurbo::point::Point, kurbo::point::Point, pdfrum::Stroke)
 pub fn pdfrum::Canvas<'_, '_>::opacity(&mut self, f64)
-pub fn pdfrum::Canvas<'_, '_>::page(&self) -> pdfrum_common::page_index::PageIndex
+pub fn pdfrum::Canvas<'_, '_>::page(&self) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum::Canvas<'_, '_>::saved(&mut self, impl core::ops::function::FnOnce(&mut Self))
 pub fn pdfrum::Canvas<'_, '_>::size(&self) -> kurbo::size::Size
 pub fn pdfrum::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, pdfrum::Stroke)
