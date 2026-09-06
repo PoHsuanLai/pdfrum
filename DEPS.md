@@ -274,6 +274,39 @@ backtracking, which V8 under PDFium also does not. pdfrum is therefore
 bounded where the oracle hangs and unbounded only where the oracle is too.
 The measurement is a probe run against a V8-enabled build.
 
+## Rejected: a machine-learning runtime for `pdfrum-markdown` (2026-09-06)
+
+Markdown extraction meets cases a model would answer better than a
+heuristic: whether a borderless block of text is a table, whether a bold run
+is a heading or emphasis, what a scanned page says. MinerU-rs answers them
+with SLANet, a UNet line segmenter and OCR, and answers them well.
+
+**Declined for this workspace**, on the user's ruling: `pdfrum-markdown`
+represents what the document states and does not infer what it omits. The
+crate is a few thousand lines with no dependency outside this workspace, and
+that is the property that makes it usable in a build script or a serverless
+function without weighing a runtime.
+
+**Not behind a feature flag either.** §"The isolation is a feature flag,
+which is the weaker mechanism" above already records why: an optional
+dependency is still one the lockfile carries, `cargo deny` must rule on, the
+pure-Rust check must special-case and CI must build both ways. `javascript`
+earned that cost because running a document's own scripts is intrinsic to a
+PDF engine. Inferring table structure from pixels is not intrinsic to
+converting a PDF to Markdown.
+
+**What this does not decline.** Most of what a document model recovers, a
+PDF already states — ruling lines are path objects with exact coordinates,
+text carries its positions, sizes and baselines. A model reading those from
+a rasterized page is compensating for having rasterized it. We did not, so
+we read them, which is not an approximation of the model but strictly better
+input than the model gets. MinerU's *classical* stages — logical grid
+inference from a set of lines, cell assembly, span recovery — are ordinary
+geometry and portable on their own terms, with attribution.
+
+The place for a model is a document-understanding project layered on this
+crate, which is where MinerU already sits.
+
 ## Tools & tests only
 
 `anyhow`, `clap` (pdfrum-tool and pdfrum-cli), `png` (encode output; also

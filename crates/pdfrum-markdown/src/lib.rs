@@ -24,6 +24,30 @@
 //! its image objects — a build that asked for no samples has none — for a
 //! figure to know which image it drew.
 //!
+//! # What this crate will and will not do
+//!
+//! **It represents what the document states, and it does not infer what the
+//! document omits.** A PDF carries far more than a rasterized page shows:
+//! ruling lines are path objects with exact coordinates, text carries its
+//! own positions, sizes and baselines, a tagged document names its own
+//! structure. All of that is read. What is *not* in the file — whether a
+//! borderless block of text is a table, whether a bold run is a heading or
+//! emphasis, what a scanned page says — would have to be guessed, and this
+//! crate does not guess.
+//!
+//! That is a scope rule, not a limitation to be lifted later. It is what
+//! keeps the crate to a few thousand lines with no dependency outside this
+//! workspace, so a caller converting documents in a build script or a
+//! function takes it without weighing a runtime. A model would answer the
+//! declined cases better than a heuristic ever will; the place for one is a
+//! document-understanding project layered on top of this crate, not inside
+//! it. No feature flag either — an optional heavy dependency is still a
+//! dependency to police.
+//!
+//! Where the reading runs out, the block is emitted as the text it is
+//! rather than as a structure we are not sure of. Losing a table's grid is
+//! recoverable; inventing one is not.
+//!
 //! ```
 //! use pdfrum::Document;
 //! use pdfrum_common::Limits;
