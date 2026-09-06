@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#ffffff"/>
+  <text x="100" y="60" font-family="Roboto" font-size="28" text-anchor="middle" fill="#000000">Middle</text>
+  <text x="190" y="110" font-family="Roboto" font-size="28" text-anchor="end" fill="#803020">End</text>
+  <text x="10" y="160" font-family="Roboto" font-size="28" fill="#206040">Start</text>
+</svg>

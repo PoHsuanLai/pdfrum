@@ -97,6 +97,11 @@ enum Class {
     Alpha,
     /// An embedded raster image, resampled by each engine's own filter.
     Image,
+    /// `<text>` laid out by `usvg` and drawn as glyph outlines. Only reachable
+    /// with the `svg-text` feature; without it a `<text>` is a declined
+    /// fixture instead.
+    #[cfg(feature = "svg-text")]
+    Text,
 }
 
 /// The floor each class clears against `resvg`'s own render of the same file.
@@ -111,6 +116,8 @@ fn floor(class: Class) -> f64 {
         Class::Gradient => GRADIENT_FLOOR,
         Class::Alpha => ALPHA_FLOOR,
         Class::Image => IMAGE_FLOOR,
+        #[cfg(feature = "svg-text")]
+        Class::Text => TEXT_FLOOR,
     }
 }
 
@@ -139,6 +146,20 @@ const ALPHA_FLOOR: f64 = 0.95;
 /// and nothing else. Worst — and the only file in the class: `image_png`,
 /// 0.9315.
 const IMAGE_FLOOR: f64 = 0.92;
+/// Glyph outlines. `usvg` lays the text out on both sides from the *same*
+/// committed face and flattens it to filled paths, so what our pipeline
+/// carries is ordinary path geometry — and the measurement says so: all four
+/// files carrying `<text>` score a flat **1.0000**, `declined_text` included,
+/// which is the highest agreement of any class in the corpus. The class is
+/// separate from `Vector` anyway, because what it proves is different: that
+/// `usvg`'s layout, anchoring and `tspan` runs survive the trip, not that a
+/// rectangle does.
+///
+/// The floor is 0.99 rather than 1.0 for the reason every other class's is
+/// set just under its worst file: a face's hinting or a rasterizer's
+/// antialiasing changing under us should be a review, not a red build.
+#[cfg(feature = "svg-text")]
+const TEXT_FLOOR: f64 = 0.99;
 
 /// Every fixture, with what it is there to prove.
 ///
@@ -160,11 +181,41 @@ const FIXTURES: &[(&str, Expect)] = &[
     ("gradient_radial", Expect::Carried(Class::Gradient)),
     ("image_png", Expect::Carried(Class::Image)),
     ("declined_filter", Expect::Declined(Unsupported::Filter)),
-    ("declined_text", Expect::Declined(Unsupported::Text)),
+    ("declined_text", TEXT_EXPECT),
     ("declined_pattern", Expect::Declined(Unsupported::Pattern)),
     ("declined_mask", Expect::Declined(Unsupported::Mask)),
     ("declined_blend", Expect::Declined(Unsupported::BlendMode)),
+    // M25 item 3. What these three prove depends on the feature, which is
+    // why `TEXT_EXPECT` is a constant rather than a literal: with `svg-text`
+    // the text is laid out in the face this test registers and drawn as
+    // outlines, and it must clear the Text floor with an empty report; with
+    // the feature off there is no text stack, nothing is drawn, and the same
+    // files must **report** the loss. Both are properties worth holding, and
+    // a fixture that is scored under one of them by accident is exactly what
+    // the completeness check below exists to prevent.
+    ("text_basic", TEXT_EXPECT),
+    ("text_anchored", TEXT_EXPECT),
+    ("text_styled", TEXT_EXPECT),
 ];
+
+/// What a fixture carrying `<text>` proves in this build.
+///
+/// See the note on the rows above. `declined_text` shares this constant
+/// rather than staying declined, and the reason is a measured surprise worth
+/// recording: `usvg` falls back to the first registered face when a `<text>`
+/// names a family nothing registers, so with a face
+/// registered *no* `<text>` is ever declined for a missing family — it is set
+/// in the fallback and it scores 1.0000, because `resvg` given the same
+/// database does exactly the same thing. The genuinely-reported path is an
+/// **empty** font set, which
+/// [`text_is_reported_when_no_face_is_registered`] proves on its own rather
+/// than by hoping a fixture reaches it.
+#[cfg(feature = "svg-text")]
+const TEXT_EXPECT: Expect = Expect::Carried(Class::Text);
+/// Without the text stack a `<text>` leaves no node in the tree, and the loss
+/// is raised from the source XML instead — the behaviour M25 shipped.
+#[cfg(not(feature = "svg-text"))]
+const TEXT_EXPECT: Expect = Expect::Declined(Unsupported::Text);
 
 /// The committed fixture directory.
 fn fixture_dir() -> PathBuf {
@@ -175,6 +226,32 @@ fn fixture_dir() -> PathBuf {
 fn source(stem: &str) -> String {
     std::fs::read_to_string(fixture_dir().join(format!("{stem}.svg")))
         .unwrap_or_else(|e| panic!("fixture {stem}.svg: {e}"))
+}
+
+/// The one face every `text_*` fixture names, as bytes.
+///
+/// Already committed for the font tests, so the text fixtures cost the
+/// repository no new artifact. Both sides of the comparison are given *this*
+/// face and nothing else — neither ours nor `resvg`'s side may reach the
+/// host's installed fonts, or the score would measure whichever Roboto the
+/// build machine happens to have.
+#[cfg(feature = "svg-text")]
+fn text_face() -> Vec<u8> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roboto.ttf");
+    std::fs::read(&path).unwrap_or_else(|e| panic!("the committed face {}: {e}", path.display()))
+}
+
+/// The faces an ingestion session lays `<text>` out in.
+#[cfg(feature = "svg-text")]
+fn svg_fonts() -> pdfrum::SvgFonts {
+    let mut fonts = pdfrum::SvgFonts::new();
+    assert!(fonts.register(text_face()), "the committed face registers");
+    assert_eq!(
+        fonts.families(),
+        ["Roboto"],
+        "the text fixtures name exactly this family"
+    );
+    fonts
 }
 
 /// Draw `svg` into a fresh square page and render the saved PDF.
@@ -197,6 +274,8 @@ fn ingest_and_render(svg: &str) -> (ssim::Image, Vec<Unsupported>) {
         Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
     )
     .expect("the page box is set");
+    #[cfg(feature = "svg-text")]
+    edit.set_svg_fonts(svg_fonts());
 
     let mut reported = Vec::new();
     edit.draw_page(0, |canvas| {
@@ -248,8 +327,21 @@ fn ingest_and_render(svg: &str) -> (ssim::Image, Vec<Unsupported>) {
 /// The independent reference. On white because that is what an opaque PDF
 /// page is cleared to, so the two images composite the same way.
 fn reference(svg: &str) -> ssim::Image {
-    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default())
-        .expect("resvg parses the fixture");
+    #[cfg_attr(
+        not(feature = "svg-text"),
+        expect(unused_mut, reason = "the text fixtures fill it in")
+    )]
+    let mut options = resvg::usvg::Options::default();
+    // The reference is given *only* the committed face, never the host's
+    // installed fonts: `resvg`'s own `Options::default` carries an empty
+    // database and nothing here calls `load_system_fonts`, so the score
+    // compares two layouts of the same face rather than two machines.
+    #[cfg(feature = "svg-text")]
+    {
+        options.fontdb_mut().load_font_data(text_face());
+        "Roboto".clone_into(&mut options.font_family);
+    }
+    let tree = resvg::usvg::Tree::from_str(svg, &options).expect("resvg parses the fixture");
     let mut pixmap = resvg::tiny_skia::Pixmap::new(SIDE, SIDE).expect("a 200x200 pixmap");
     pixmap.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(
@@ -369,17 +461,260 @@ fn every_reported_construct_has_a_fixture_that_raises_it() {
     // gradient, which `usvg` normalises away in the cases a small fixture can
     // express. Both are recorded as named debt in `docs/roadmap.md`'s M25
     // entry rather than left as an unexplained gap.
-    for what in [
+    // `Text` is in this list only without `svg-text`. With the feature and a
+    // face registered, the corpus draws its text rather than reporting it —
+    // that is the point of the feature — and the report path is proven by
+    // `text_is_reported_when_no_face_is_registered` instead, which reaches it
+    // through an empty font set rather than through a fixture. Dropping it
+    // from the list here rather than weakening the assertion keeps this test
+    // saying exactly one thing.
+    #[cfg(not(feature = "svg-text"))]
+    let expected = [
         Unsupported::Filter,
         Unsupported::Mask,
         Unsupported::Text,
         Unsupported::Pattern,
         Unsupported::BlendMode,
-    ] {
+    ];
+    #[cfg(feature = "svg-text")]
+    let expected = [
+        Unsupported::Filter,
+        Unsupported::Mask,
+        Unsupported::Pattern,
+        Unsupported::BlendMode,
+    ];
+    for what in expected {
         assert!(
             seen.contains(&what),
             "no fixture raises {}, so the report path for it is unproven",
             what.name()
         );
     }
+}
+
+/// A compiled form draws the **same picture** the inline path draws.
+///
+/// M25 item 2's other half. `tests/svg_form.rs` proves the file holds one
+/// copy of the content however many pages place it; that is a claim about
+/// objects, and it would be satisfied by a form that draws the wrong thing.
+/// This is the pixel claim beside it: every carried fixture, compiled through
+/// [`DocEdit::compile_svg`](pdfrum::DocEdit::compile_svg) and placed with
+/// [`Canvas::place_svg`](pdfrum::Canvas::place_svg), renders the same as the
+/// same fixture drawn inline.
+///
+/// Scored against our own inline render rather than against `resvg`, and the
+/// bar is near-identity rather than a class floor: the two paths write the
+/// *same* operators into different places, so anything less is a defect in
+/// the form's placement transform and not a difference between two
+/// implementations. The floors in the table above are what says the inline
+/// path is right in the first place.
+#[test]
+fn a_compiled_form_draws_what_the_inline_path_draws() {
+    println!("\n{:<22} {:>14}", "fixture", "form vs inline");
+    let mut failures = Vec::new();
+    for (stem, expect) in FIXTURES {
+        // The declined fixtures are scored nowhere: what they prove is a
+        // report item, and both sides here are ours, so a comparison would
+        // only re-measure the inline path against itself.
+        if !matches!(expect, Expect::Carried(_)) {
+            continue;
+        }
+        let svg = source(stem);
+        let (inline, _) = ingest_and_render(&svg);
+        let compiled = compile_and_render(&svg);
+        let score = ssim::compare(&compiled, &inline).expect("both images are 200x200");
+        println!("{stem:<22} {score:>14.4}");
+        if score < FORM_MATCHES_INLINE {
+            failures.push(format!(
+                "{stem}: {score:.4} against the inline render, floor {FORM_MATCHES_INLINE}"
+            ));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "a compiled form drew something the inline path did not:\n  {}",
+        failures.join("\n  ")
+    );
+}
+
+/// Below this, the form's placement transform has moved the drawing.
+///
+/// **Not** a class floor and not comparable to the four above: both sides are
+/// our own renderer emitting the same operators, so the only honest bar is
+/// near-identity, and antialiasing along the placement clip's edge is the
+/// entire budget. Measured, like the others, and the measurement was
+/// stronger than the bar: **all twelve** carried fixtures score a flat 1.0000
+/// against the inline render, gradients and the embedded raster included, on
+/// the run in `docs/design/svg-ingest.md` §8. The floor is left just below
+/// rather than at 1.0 so that a future rasterizer's antialiasing change is a
+/// review rather than a red build.
+const FORM_MATCHES_INLINE: f64 = 0.999;
+
+/// Compile `svg` into a form, place it on a fresh square page, render the
+/// saved PDF.
+///
+/// The mirror of [`ingest_and_render`] through the form path, and it saves
+/// and reopens for the same reason: a form whose `/Resources` this crate
+/// writes but cannot read back must fail here rather than pass in memory.
+fn compile_and_render(svg: &str) -> ssim::Image {
+    let doc = Document::open(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/hello_world.pdf"),
+    )
+    .expect("the fixture opens");
+    let mut edit = doc.edit();
+    edit.set_page_box(
+        0,
+        pdfrum::PageBox::Media,
+        Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
+    )
+    .expect("the page box is set");
+    #[cfg(feature = "svg-text")]
+    edit.set_svg_fonts(svg_fonts());
+
+    let (form, _) = edit.compile_svg(svg).expect("the fixture compiles");
+    edit.draw_page(0, |canvas| {
+        // The same white ground `ingest_and_render` lays down, so the two
+        // images differ only by what the SVG put on them.
+        canvas.fill_rect(
+            Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
+            pdfrum::Color::WHITE,
+        );
+        canvas.place_svg(
+            &form,
+            Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
+            SvgFit::Contain,
+        );
+    })
+    .expect("the placement succeeds");
+
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &SaveOptions::default())
+        .expect("the document saves");
+    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let page = saved.page(0).expect("the page survives the save");
+    let pixmap = pdfrum_render::render_page(
+        &page.objects(),
+        &RenderOptions::default(),
+        &TinySkiaBackend::new(),
+        &mut Diagnostics::default(),
+    )
+    .expect("the page renders");
+
+    ssim::Image {
+        width: pixmap.width(),
+        height: pixmap.height(),
+        rgba: pixmap.to_straight_rgba(),
+    }
+}
+
+/// A `<text>` this session has no face for is **reported**, never swallowed.
+///
+/// M25 item 3's other half, and the one the fixture table cannot state. With
+/// a face registered, `usvg` falls back to the default family for any name it
+/// does not know, so every `<text>` draws and none is declined — which is
+/// good behaviour and is what the table above measures. The reported path is
+/// reached when the session has **no** face at all, and that is what this
+/// checks: the same fixtures, an empty [`SvgFonts`](pdfrum::SvgFonts), and an
+/// `Unsupported::Text` for each one, carrying the element's own id.
+///
+/// It is also the property that keeps the feature honest against its own
+/// off-state: with `svg-text` off these files report exactly the same thing,
+/// raised from the source XML instead of from the walk.
+#[cfg(feature = "svg-text")]
+#[test]
+fn text_is_reported_when_no_face_is_registered() {
+    for stem in [
+        "text_basic",
+        "text_anchored",
+        "text_styled",
+        "declined_text",
+    ] {
+        let doc = Document::open(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/hello_world.pdf"),
+        )
+        .expect("the fixture opens");
+        let mut edit = doc.edit();
+        // No `set_svg_fonts`: the session's set is empty, which is the state
+        // a caller who never registered a face is in.
+        let mut reported = Vec::new();
+        edit.draw_page(0, |canvas| {
+            let report = canvas
+                .draw_svg(
+                    &source(stem),
+                    Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
+                    SvgFit::Contain,
+                )
+                .expect("the fixture resolves");
+            reported = report.items().to_vec();
+        })
+        .expect("the drawing succeeds");
+
+        assert!(
+            reported.iter().any(|item| item.what == Unsupported::Text),
+            "{stem}: no face is registered, so its text must be reported; \
+             the report held {:?}",
+            reported.iter().map(|i| i.what).collect::<Vec<_>>()
+        );
+        assert!(
+            Unsupported::Text.is_dropped(),
+            "text with no face draws nothing, so it is a dropped construct \
+             rather than an approximated one"
+        );
+    }
+}
+
+/// Text goes into the page as **outlines**, not as an embedded font.
+///
+/// The roadmap's item 3 default, and a claim about the file rather than the
+/// pixels: a page carrying the text as glyph outlines has no font resource
+/// for it and no text-showing operator, so it renders identically wherever it
+/// is opened. The pixel half is the `text_*` rows in the table above.
+#[cfg(feature = "svg-text")]
+#[test]
+fn ingested_text_is_outlines_rather_than_an_embedded_font() {
+    let doc = Document::open(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/hello_world.pdf"),
+    )
+    .expect("the fixture opens");
+    // What the page already says, before anything is drawn on it: the
+    // fixture's own "Hello, world!". The assertion below is that ingesting
+    // `text_basic` — whose word is "Vector" — adds *nothing* to this, which
+    // is what "outlines, not embedded text" means in the file.
+    let before = doc
+        .page(0)
+        .expect("the fixture has a page")
+        .text()
+        .to_string();
+
+    let mut edit = doc.edit();
+    edit.set_svg_fonts(svg_fonts());
+    edit.draw_page(0, |canvas| {
+        canvas
+            .draw_svg(
+                &source("text_basic"),
+                Rect::new(0.0, 0.0, f64::from(SIDE), f64::from(SIDE)),
+                SvgFit::Contain,
+            )
+            .expect("the fixture resolves");
+    })
+    .expect("the drawing succeeds");
+
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &SaveOptions::default())
+        .expect("the document saves");
+    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let page = saved.page(0).expect("the page survives the save");
+
+    let after = page.text().to_string();
+    assert!(
+        !after.contains("Vector"),
+        "an outlined `<text>` leaves no extractable text — the word the SVG \
+         set must not appear in the page's text: {after:?}"
+    );
+    assert_eq!(
+        after, before,
+        "ingesting text as outlines adds no text-showing operator at all: \
+         that is the trade the outline default makes, and \
+         `docs/design/svg-ingest.md` §6 records it"
+    );
 }

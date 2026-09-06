@@ -217,7 +217,33 @@ impl SvgFit {
     /// applied to the whole subtree is the only spelling that also gets
     /// nested `transform` attributes and gradient coordinate systems right.
     fn place(self, size: kurbo::Size, into: Rect) -> Affine {
-        let (sx, sy) = match self {
+        let placed = self.fit_box(size, into);
+        let (sx, sy) = self.scale(size, into);
+        // The box, then the flip about its own top edge, so SVG (0,0) lands
+        // at the placed box's top-left.
+        Affine::new([sx, 0.0, 0.0, -sy, placed.x0, placed.y1])
+    }
+
+    /// The rectangle a box of `size` occupies inside `into` under this fit.
+    ///
+    /// The placement without the flip: what a Form `XObject`, whose content
+    /// already carries the flip, is mapped onto. [`SvgFit::place`] is this
+    /// plus the y negation.
+    fn fit_box(self, size: kurbo::Size, into: Rect) -> Rect {
+        let (sx, sy) = self.scale(size, into);
+        let (width, height) = (size.width * sx, size.height * sy);
+        // Centred in the destination, which is what `xMidYMid` means and what
+        // both `Contain` and `Cover` leave over on one axis.
+        let origin = Point::new(
+            into.x0 + (into.width() - width) / 2.0,
+            into.y0 + (into.height() - height) / 2.0,
+        );
+        Rect::from_origin_size(origin, kurbo::Size::new(width, height))
+    }
+
+    /// The per-axis scale this fit applies to a box of `size` inside `into`.
+    fn scale(self, size: kurbo::Size, into: Rect) -> (f64, f64) {
+        match self {
             Self::Contain => {
                 let s = (into.width() / size.width).min(into.height() / size.height);
                 (s, s)
@@ -227,36 +253,55 @@ impl SvgFit {
                 (s, s)
             }
             Self::Stretch => (into.width() / size.width, into.height() / size.height),
-        };
-        // Centre the scaled box in the destination, then flip y about the
-        // destination's own top edge so SVG (0,0) lands at the top-left.
-        let dx = into.x0 + (into.width() - size.width * sx) / 2.0;
-        let dy = into.y1 - (into.height() - size.height * sy) / 2.0;
-        Affine::new([sx, 0.0, 0.0, -sy, dx, dy])
+        }
     }
 }
 
 /// The `usvg` parse options this crate uses.
 ///
 /// Built here rather than taken from the caller because every field `usvg`
-/// offers either concerns text — which this build has no stack for — or is a
-/// resource-loading hook whose defaults are the safe ones. The single
-/// exception is the document's own directory, which a caller who reads an SVG
-/// from a file needs so that a relative `<image href>` resolves.
-fn parse_options(resources_dir: Option<std::path::PathBuf>) -> usvg::Options<'static> {
-    usvg::Options {
+/// offers either concerns text — whose faces arrive through
+/// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) instead of
+/// through a `usvg` type on our surface — or is a resource-loading hook whose
+/// defaults are the safe ones. The one exception is the document's own
+/// directory, which a caller who reads an SVG from a file needs so that a
+/// relative `<image href>` resolves.
+///
+/// With `svg-text` off, `session` is not read at all: there is no text stack
+/// to give faces to, and the parameter would be the dead option STYLE.md §4
+/// forbids — so with the feature off the function does not take one.
+fn parse_options(
+    resources_dir: Option<std::path::PathBuf>,
+    #[cfg(feature = "svg-text")] session: &crate::DocEdit<'_>,
+) -> usvg::Options<'static> {
+    #[cfg_attr(
+        not(feature = "svg-text"),
+        expect(unused_mut, reason = "text fills it in")
+    )]
+    let mut options = usvg::Options {
         resources_dir,
         ..usvg::Options::default()
+    };
+    #[cfg(feature = "svg-text")]
+    {
+        let (db, default_family) = session.svg_fonts.parts();
+        options.fontdb = db;
+        // Left at `usvg`'s own default when the set named none, so a document
+        // that does name a family still resolves against what is registered.
+        if !default_family.is_empty() {
+            default_family.clone_into(&mut options.font_family);
+        }
     }
+    options
 }
 
 /// Whether the source XML contains a `<text>` element `usvg` will have
 /// dropped.
 ///
-/// The text stack is not compiled in (`docs/design/svg-ingest.md` §6), so a
-/// `<text>` element leaves **no node** in the resolved tree — there is
-/// nothing for the walk to notice. Reporting it therefore has to happen
-/// before the parse, against the bytes.
+/// Without a text stack — the `svg-text` feature off, or on with no face
+/// registered — a `<text>` element leaves **no node** in the resolved tree
+/// (`docs/design/svg-ingest.md` §6). There is nothing for the walk to notice,
+/// so reporting it has to happen before the parse, against the bytes.
 ///
 /// A substring scan rather than a second XML parse: the question is only
 /// whether to raise a report item, the cost of a false positive is one
@@ -270,6 +315,37 @@ fn mentions_text(svg: &str) -> bool {
             .next()
             .is_none_or(|c| c.is_whitespace() || c == '>' || c == '/')
     })
+}
+
+/// Record the `<text>` this session cannot draw, before the walk that will
+/// not see it.
+///
+/// The one place both ingestion entry points ask the question, so the inline
+/// and the compiled spellings cannot drift apart on it.
+///
+/// It fires whenever the session has no text stack to lay the element out
+/// with — the `svg-text` feature off, or on with **no face registered** — and
+/// the second case is not a special case but the same one: `usvg` with an
+/// empty font database drops a `<text>` exactly as a `usvg` without the
+/// feature does, leaving no node behind. Reporting it here rather than
+/// trusting the walk is what keeps the module's guarantee intact, because a
+/// walk cannot notice something that is not in the tree.
+///
+/// With a face registered the walk sees each element and reports per element
+/// with its id, which is strictly better than this document-wide answer; that
+/// is why this is silent in that case rather than raising a second item.
+fn report_dropped_text(
+    svg: &str,
+    report: &mut SvgIngestReport,
+    #[cfg(feature = "svg-text")] session: &crate::DocEdit<'_>,
+) {
+    #[cfg(feature = "svg-text")]
+    if !session.svg_fonts.is_empty() {
+        return;
+    }
+    if mentions_text(svg) {
+        report.push(Unsupported::Text, "");
+    }
 }
 
 impl Canvas<'_, '_> {
@@ -334,15 +410,20 @@ impl Canvas<'_, '_> {
         fit: SvgFit,
         resources_dir: Option<&std::path::Path>,
     ) -> crate::Result<SvgIngestReport> {
-        let tree = usvg::Tree::from_str(svg, &parse_options(resources_dir.map(Into::into)))
-            .map_err(crate::Error::Svg)?;
+        let options = parse_options(
+            resources_dir.map(Into::into),
+            #[cfg(feature = "svg-text")]
+            self.session(),
+        );
+        let tree = usvg::Tree::from_str(svg, &options).map_err(crate::Error::Svg)?;
 
         let mut report = SvgIngestReport::default();
-        // Raised before the walk, because a dropped `<text>` leaves no node
-        // in the tree for the walk to see.
-        if mentions_text(svg) {
-            report.push(Unsupported::Text, "");
-        }
+        report_dropped_text(
+            svg,
+            &mut report,
+            #[cfg(feature = "svg-text")]
+            self.session(),
+        );
 
         let placement = fit.place(tree.size().to_kurbo(), into);
         self.saved(|c| {
@@ -355,6 +436,134 @@ impl Canvas<'_, '_> {
             walk.group(tree.root());
         });
         Ok(report)
+    }
+
+    /// Place an [`SvgForm`](crate::SvgForm) compiled by
+    /// [`DocEdit::compile_svg`](crate::DocEdit::compile_svg), fitting its
+    /// box into `into` the way [`Canvas::draw_svg`] fits a document.
+    ///
+    /// The deduplicating spelling of `draw_svg`: the SVG is compiled once and
+    /// this writes one `Do` per placement, so the same logo on twenty pages
+    /// is one content stream rather than twenty. The un-fitted placement is
+    /// this without the fit, stretching the form's box onto the rectangle.
+    ///
+    /// ```
+    /// use pdfrum::{Document, Rect, SvgFit};
+    ///
+    /// const LOGO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
+    ///     viewBox=\"0 0 10 10\">\
+    ///     <circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"#c00\"/></svg>";
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let mut edit = doc.edit();
+    /// let (logo, report) = edit.compile_svg(LOGO)?;
+    /// assert!(report.is_empty());
+    /// edit.draw_pages(|c| c.place_svg(&logo, Rect::new(10.0, 10.0, 60.0, 60.0), SvgFit::Contain))?;
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn place_svg(&mut self, form: &crate::SvgForm, into: Rect, fit: SvgFit) {
+        // The form's box is the SVG's own, so fitting it into the
+        // destination is the same computation `draw_svg` does on the tree's
+        // size — minus the y flip, which the form's content already carries.
+        let box_size = form.bbox().size();
+        if box_size.width == 0.0 || box_size.height == 0.0 {
+            return;
+        }
+        self.saved(|c| {
+            c.clip(into, Fill::NonZero);
+            c.place_form(form, fit.fit_box(box_size, into));
+        });
+    }
+}
+
+impl crate::DocEdit<'_> {
+    /// Compile an SVG document once, into a Form `XObject` any number of
+    /// pages can place.
+    ///
+    /// The deduplicating half of [`Canvas::draw_svg`]. That method writes the
+    /// SVG's operators **inline** into the page it is drawing on, which is
+    /// right for one placement and wasteful for many: the same logo on twenty
+    /// pages becomes twenty copies of the same content. This compiles the
+    /// document into a single `/Subtype /Form` object with its own `/BBox`
+    /// and `/Resources`, and [`Canvas::place_svg`] then writes one `Do` per
+    /// page against it.
+    ///
+    /// Nothing about the mapping differs — a form's content stream holds the
+    /// same operators `draw_svg` would have written, and the returned
+    /// [`SvgIngestReport`] is the same report. What differs is that the
+    /// operators are written **once**, and that the fit is chosen per
+    /// placement rather than baked in: the form's box is the SVG's own, so
+    /// one compiled logo can be placed [`SvgFit::Contain`] on one page and
+    /// [`SvgFit::Cover`] on another.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Svg`](crate::Error::Svg) when `usvg` cannot resolve the
+    /// document, exactly as [`Canvas::draw_svg`] reports it.
+    ///
+    /// ```
+    /// use pdfrum::{Document, Rect, SvgFit};
+    ///
+    /// const LOGO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
+    ///     viewBox=\"0 0 10 10\">\
+    ///     <rect width=\"10\" height=\"10\" fill=\"#0a0\"/></svg>";
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// let (logo, _) = edit.compile_svg(LOGO)?;
+    /// assert_eq!(logo.bbox().width(), 10.0);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn compile_svg(&mut self, svg: &str) -> crate::Result<(crate::SvgForm, SvgIngestReport)> {
+        self.compile_svg_from(svg, None)
+    }
+
+    /// Compile an SVG whose relative `<image href>` links resolve against
+    /// `resources_dir`.
+    ///
+    /// [`DocEdit::compile_svg`](crate::DocEdit::compile_svg) is this with no
+    /// directory, which is right for
+    /// a document held in memory; one read from a file wants the file's own
+    /// directory here, or its linked images do not load. The same pairing
+    /// [`Canvas::draw_svg`] and [`Canvas::draw_svg_from`] have.
+    ///
+    /// # Errors
+    ///
+    /// As [`DocEdit::compile_svg`](crate::DocEdit::compile_svg).
+    pub fn compile_svg_from(
+        &mut self,
+        svg: &str,
+        resources_dir: Option<&std::path::Path>,
+    ) -> crate::Result<(crate::SvgForm, SvgIngestReport)> {
+        let options = parse_options(
+            resources_dir.map(Into::into),
+            #[cfg(feature = "svg-text")]
+            self,
+        );
+        let tree = usvg::Tree::from_str(svg, &options).map_err(crate::Error::Svg)?;
+
+        let mut report = SvgIngestReport::default();
+        report_dropped_text(
+            svg,
+            &mut report,
+            #[cfg(feature = "svg-text")]
+            self,
+        );
+
+        // The form's box is the SVG's own size in a y-**up** space, so a
+        // placement is a plain rectangle-to-rectangle map and the y flip
+        // lives once inside the form rather than at every placement.
+        let size = tree.size().to_kurbo();
+        let bbox = Rect::from_origin_size(Point::ZERO, size);
+        let form = self.compile_form(bbox, |c| {
+            c.transform(SvgFit::Stretch.place(size, bbox));
+            let mut walk = Walk {
+                canvas: c,
+                report: &mut report,
+            };
+            walk.group(tree.root());
+        })?;
+        Ok((form, report))
     }
 }
 
@@ -424,12 +633,52 @@ impl Walk<'_, '_, '_> {
             usvg::Node::Group(group) => self.group(group),
             usvg::Node::Path(path) => self.path(path),
             usvg::Node::Image(image) => self.image(image),
-            // Unreachable with this build's `usvg` — the text stack is not
-            // compiled in, so the parser never constructs the variant. The
-            // arm exists because the enum is the crate's, not ours, and a
-            // future build that did carry text should not silently drop it.
-            usvg::Node::Text(text) => self.report.push(Unsupported::Text, text.id()),
+            usvg::Node::Text(text) => self.text(text),
         }
+    }
+
+    /// Draw one `<text>` element, as outlines.
+    ///
+    /// M25's roadmap item 3. `usvg` has already done the hard half — resolved
+    /// the family against the faces
+    /// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) registered,
+    /// run the bidi and the shaping, positioned every glyph, applied
+    /// `text-anchor` and `textLength` and any `textPath` — and
+    /// [`flattened`](usvg::Text::flattened) hands back the result as an
+    /// ordinary group of filled paths. So the mapping is: walk that group
+    /// like any other. Nothing about §2's table changes, because glyph
+    /// outlines *are* paths.
+    ///
+    /// **Outlines rather than embedded text** is the deliberate default and
+    /// the roadmap's own: the page needs no font embedded and no encoding to
+    /// get right, and it renders identically in every viewer. What it costs
+    /// is selectable text, which `docs/design/svg-ingest.md` §6 records
+    /// alongside what embedding would need.
+    ///
+    /// An empty flattened group means `usvg` resolved no face for the
+    /// element's family — the caller registered none, or none that matches —
+    /// so nothing is drawn and the loss is reported per element, with the
+    /// element's own id. A missing face is a reported gap, never a silent one.
+    #[cfg(feature = "svg-text")]
+    fn text(&mut self, text: &usvg::Text) {
+        let flattened = text.flattened();
+        if flattened.children().is_empty() {
+            self.report.push(Unsupported::Text, text.id());
+            return;
+        }
+        self.group(flattened);
+    }
+
+    /// Report one `<text>` this build cannot draw.
+    ///
+    /// Unreachable with `svg-text` off — the text stack is not compiled in,
+    /// so the parser never constructs the variant, and the pre-parse scan in
+    /// [`report_dropped_text`] is what raises the item instead. The arm
+    /// exists because the enum is `usvg`'s and not ours, and a build that did
+    /// carry text must not silently drop it.
+    #[cfg(not(feature = "svg-text"))]
+    fn text(&mut self, text: &usvg::Text) {
+        self.report.push(Unsupported::Text, text.id());
     }
 
     /// Draw one path, with whatever of its fill and stroke maps.
@@ -871,6 +1120,9 @@ fn exponential(from: Object, to: Object) -> Dict {
 mod tests {
     use super::*;
 
+    // The scan exists only where there is no text stack to put a node in the
+    // tree; with `svg-text` the walk sees the element itself.
+    #[cfg(not(feature = "svg-text"))]
     #[test]
     fn text_is_seen_in_the_source_because_the_tree_will_not_have_it() {
         assert!(mentions_text("<svg><text x='0'>hi</text></svg>"));
