@@ -155,6 +155,7 @@ const FIXTURES: &[(&str, Expect)] = &[
     ("use_and_defs", Expect::Carried(Class::Vector)),
     ("css_styles", Expect::Carried(Class::Vector)),
     ("clip_path", Expect::Carried(Class::Vector)),
+    ("stroke_pen", Expect::Carried(Class::Vector)),
     ("opacity_groups", Expect::Carried(Class::Alpha)),
     ("gradient_linear", Expect::Carried(Class::Gradient)),
     ("gradient_radial", Expect::Carried(Class::Gradient)),

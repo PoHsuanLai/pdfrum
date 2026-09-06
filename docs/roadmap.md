@@ -191,7 +191,7 @@ issues M23 canvas calls, so an SVG goes into a page as vectors.
 
 Scored against **`resvg`** rendering the same file directly — an independent
 parser, geometry and rasterizer — with the board's own SSIM, over a committed
-seventeen-file corpus. **Eight of the twelve carried fixtures score a flat
+eighteen-file corpus. **Eight of the thirteen carried fixtures score a flat
 1.0000**; the published per-class floors are Vector 0.99, Gradient 0.99,
 Alpha 0.95, Image 0.92, each set just under its class's worst file, named
 with the full run in `docs/design/svg-ingest.md` §5. Gates: **4414 workspace
@@ -226,15 +226,25 @@ so it is detected in the source XML and **reported** as `Unsupported::Text`
 rather than drawn. Neither the outline default nor the embedded-font option
 exists yet; closing it is a font-and-layout problem (§6).
 
-**Stroke attributes beyond colour and width: named debt.** M23's
-`Canvas::Stroke` carries only those two, so `stroke-linecap`,
-`stroke-linejoin`, `stroke-miterlimit` and `stroke-dasharray` are dropped —
-every stroke inks with the PDF default cap and join, and a **dashed stroke
-draws solid**. PDF has `J`, `j`, `M` and `d` for all four, so this is a canvas
-gap rather than a mapping one, and closing it widens a type M23 owns and other
-callers use. Unreported deliberately (`docs/design/svg-ingest.md` §4): a cap
-difference is a half-pixel at the ends, and an item on every stroke would bury
-the report entries that mean something.
+**Stroke attributes beyond colour and width: MET 2026-09-07, in a later
+pass.** `Stroke` now carries `cap`, `join`, `miter_limit` and `dash` beside
+its colour and width, written as `J`, `j`, `M` and `d`
+(ISO 32000-1 §8.4.3.3-§8.4.3.6). `LineCap` and `LineJoin` are enums, not the
+integers the operators take; `MiterLimit` clamps to PDF's floor of 1; `Dash`
+refuses at construction the arrays a reader may reject the whole content
+stream over — a negative length, a negative or non-finite phase, an array
+summing to zero. `Stroke::new` still means what it always meant, PDF's own
+default pen, and the fields stay public with `with_*` methods beside them, so
+existing callers keep compiling. The one cost is that `Stroke` and `Paint`
+lost `Copy`, since a dash array is a `Vec`.
+
+This is a **facade** capability, not an SVG one — any `DocEdit::draw_page`
+caller gets it — and it is proved twice: `tests/canvas.rs` reads the four
+operators back out of the decoded content stream, and a new `stroke_pen`
+fixture in the ingestion corpus scores **0.9999** against `resvg`, clearing
+the unmoved Vector floor of 0.99. The one SVG value with no faithful PDF
+spelling is `stroke-linejoin: miter-clip`, which lands on the miter join it
+is a variant of (`docs/design/svg-ingest.md` §4).
 
 **Also unimplemented, each reported rather than swallowed:** SVG filters
 (declined outright, per item 4), `<mask>` and non-normal blend modes (both
@@ -247,7 +257,7 @@ collapses to the average of its stops.
 
 **One exit criterion was met differently than written.** The `resvg` test
 suite is not vendored here and cannot be fetched offline, so the corpus is
-seventeen hand-written fixtures covering the feature matrix by class rather
+eighteen hand-written fixtures covering the feature matrix by class rather
 than a subset of that suite. Because they are committed, the test has no
 legitimate skip: a missing or empty fixture directory **fails**, and a `.svg`
 with no row in the table fails too. The ingestion half went into a new
