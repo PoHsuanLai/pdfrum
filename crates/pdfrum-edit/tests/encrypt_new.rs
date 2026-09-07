@@ -2,8 +2,10 @@
 //!
 //! No oracle can do this, so the test is the round trip: the file this
 //! crate writes opens in this crate's own parser with either password, with
-//! the permissions asked for, and not with a wrong one; a reproducible save
-//! is byte-identical; a document that already has a handler is refused.
+//! the permissions asked for, and not with a wrong one; a document that
+//! already has a handler is refused. The secrets come from the operating
+//! system, so the seed that pins `/ID` and the subset tags leaves the key
+//! and the ciphertext free to differ between two saves.
 
 #![expect(
     clippy::expect_used,
@@ -113,13 +115,90 @@ fn the_content_survives_the_cipher() {
     );
 }
 
+// A seed governs the identifiers, never the secrets: /UE and /OE wrap the
+// file key, so two saves under one seed carrying different /UE carry
+// different keys, and the ciphertext differs with them.
 #[test]
-fn a_fixed_id_source_makes_the_encrypted_save_reproducible() {
+fn one_seed_still_gives_two_encrypted_saves_two_keys() {
     let a = encrypted(&hello(), print_only(), IdSource::Fixed([3; 16]));
     let b = encrypted(&hello(), print_only(), IdSource::Fixed([3; 16]));
-    assert_eq!(a, b);
-    let c = encrypted(&hello(), print_only(), IdSource::Fixed([4; 16]));
-    assert_ne!(a, c, "a different seed gives different salts and key");
+    assert_ne!(a, b, "the same seed must not reproduce a file key");
+    assert_ne!(wrapped_key(&a), wrapped_key(&b));
+}
+
+// Every enciphered payload differs between two saves of one document: the
+// vectors are drawn per save, so even a repeated key would not repeat a
+// leading block. A plaintext stream — the XMP packet ISO 32000-1 §14.3.2
+// exempts — is the one that legitimately matches.
+#[test]
+fn two_encryptions_of_one_document_use_different_vectors() {
+    let a = streams(&encrypted(&hello(), print_only(), IdSource::Fixed([3; 16])));
+    let b = streams(&encrypted(&hello(), print_only(), IdSource::Fixed([3; 16])));
+    assert_ne!(a, b);
+    assert!(
+        a.iter().zip(&b).any(|(left, right)| left != right),
+        "no enciphered payload changed between two saves"
+    );
+    for (left, right) in a.iter().zip(&b) {
+        assert!(
+            left == right || left.get(..16) != right.get(..16),
+            "two payloads differ but share a leading block, so they share a vector"
+        );
+    }
+}
+
+// What a seed does still govern: an unencrypted save is byte-for-byte the
+// same file every time, `/ID` and subset tags included.
+#[test]
+fn a_fixed_id_source_makes_an_unencrypted_save_reproducible() {
+    let plain = |seed| {
+        let doc = open(&hello(), b"").expect("opens");
+        let edit = EditDoc::new(&doc);
+        let options = SaveOptions {
+            mode: SaveMode::Full,
+            id_source: IdSource::Fixed(seed),
+            ..SaveOptions::default()
+        };
+        let mut out = Vec::new();
+        save(&edit, &options, &mut out).expect("saves");
+        out
+    };
+    assert_eq!(plain([3; 16]), plain([3; 16]));
+    assert_ne!(plain([3; 16]), plain([4; 16]));
+}
+
+/// The `/UE` string of a written file: the file key wrapped under the user
+/// password's intermediate hash (ISO 32000-2 §7.6.4.4.7, algorithm 8). Two
+/// files with the same passwords and different `/UE` have different keys.
+fn wrapped_key(bytes: &[u8]) -> Vec<u8> {
+    let doc = open(bytes, b"owner").expect("opens");
+    let (dict, _) = doc.encrypt_dict().expect("has /Encrypt");
+    dict.get(names::UE, &doc)
+        .expect("/UE")
+        .get()
+        .as_string()
+        .expect("/UE is a string")
+        .encode()
+}
+
+/// Every stream payload the file carries, as written — ciphertext, since a
+/// save encrypts what it writes.
+fn streams(bytes: &[u8]) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut rest = bytes;
+    while let Some(at) = rest.windows(6).position(|w| w == b"stream") {
+        let body = rest.get(at + 6..).unwrap_or_default();
+        let body = body
+            .strip_prefix(b"\r\n".as_slice())
+            .or_else(|| body.strip_prefix(b"\n".as_slice()))
+            .unwrap_or(body);
+        let Some(end) = body.windows(9).position(|w| w == b"endstream") else {
+            break;
+        };
+        out.push(body.get(..end).unwrap_or_default().to_vec());
+        rest = body.get(end + 9..).unwrap_or_default();
+    }
+    out
 }
 
 #[test]
