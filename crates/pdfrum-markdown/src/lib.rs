@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 pub mod ast;
 pub mod heuristics;
 pub mod layout;
