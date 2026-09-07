@@ -37,9 +37,6 @@ use crate::{Dict, Error};
 #[derive(Clone)]
 pub struct ByteSpan {
     buf: Bytes,
-    /// Where `buf` begins in the buffer it was carved from. Carried because
-    /// `Bytes` does not record it and [`range`](Self::range) publishes it.
-    start: usize,
 }
 
 impl ByteSpan {
@@ -60,10 +57,8 @@ impl ByteSpan {
                 len: file.len(),
             });
         }
-        let start = range.start;
         Ok(Self {
             buf: Bytes::from_owner(file).slice(range),
-            start,
         })
     }
 
@@ -72,17 +67,13 @@ impl ByteSpan {
     pub fn whole(file: Arc<[u8]>) -> Self {
         Self {
             buf: Bytes::from_owner(file),
-            start: 0,
         }
     }
 
     /// An empty window.
     #[must_use]
     pub fn empty() -> Self {
-        Self {
-            buf: Bytes::new(),
-            start: 0,
-        }
+        Self { buf: Bytes::new() }
     }
 
     /// The bytes in the window.
@@ -103,12 +94,6 @@ impl ByteSpan {
         self.buf.is_empty()
     }
 
-    /// Where the window sits in its backing buffer.
-    #[must_use]
-    pub fn range(&self) -> Range<usize> {
-        self.start..self.start.saturating_add(self.buf.len())
-    }
-
     /// A sub-window, with offsets relative to this window's start.
     ///
     /// # Errors
@@ -122,10 +107,8 @@ impl ByteSpan {
                 len: self.len(),
             });
         }
-        let start = self.start.saturating_add(range.start);
         Ok(Self {
             buf: self.buf.slice(range),
-            start,
         })
     }
 }
@@ -158,7 +141,6 @@ impl fmt::Debug for ByteSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ByteSpan")
             .field("len", &self.len())
-            .field("at", &self.start)
             .finish_non_exhaustive()
     }
 }
@@ -175,7 +157,6 @@ impl From<Vec<u8>> for ByteSpan {
     fn from(bytes: Vec<u8>) -> Self {
         Self {
             buf: Bytes::from(bytes),
-            start: 0,
         }
     }
 }
@@ -229,7 +210,6 @@ mod tests {
         assert_eq!(&*span, b"234");
         assert_eq!(span.len(), 3);
         assert!(!span.is_empty());
-        assert_eq!(span.range(), 2..5);
     }
 
     #[test]
