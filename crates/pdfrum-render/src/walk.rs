@@ -1310,6 +1310,80 @@ fn render_pattern_text<B: RasterBackend>(
     clip::pop(device, pushed);
 }
 
+/// A run whose colour is a pattern and which **is** stroked.
+///
+/// Where the unstroked arm replaces the run with its bounding rectangle, this
+/// one keeps the glyphs: each outline becomes a path object of its own,
+/// carrying the run's colour and stroke state, and goes through the ordinary
+/// single-object render — so the pattern machinery paints each glyph's fill,
+/// its stroke, or both, exactly as it would for a hand-written path.
+///
+/// The outline is handed over already in device space with an identity object
+/// matrix, matching `SetPathMatrix(CFX_Matrix())`: the run's own text matrix
+/// is folded into the glyph placement rather than left for `ProcessPath` to
+/// apply. The stroke-CTM split the ordinary stroked-text path performs is
+/// deliberately absent — `DrawTextPathWithPattern` composes `mtTextMatrix`
+/// alone and never consults `text_state().GetCTM()`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a synthetic path object needs everything the real one does, plus \
+              the paint kinds the run resolved to"
+)]
+fn render_pattern_text_stroked<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+    kinds: crate::text::TextPaintKinds,
+) {
+    // The bitmap path is a fill-only optimisation and this arm always strokes,
+    // so the placement is asked for outlines. The buffer is the session's,
+    // lent out and given back, as in `render_text`.
+    let mut glyphs = std::mem::take(&mut caches.placed_glyphs);
+    crate::text::place_glyphs_into(
+        &mut glyphs,
+        object,
+        state,
+        &mut caches.glyphs,
+        to_device,
+        &ctx.opts,
+        kinds,
+    );
+    // `path.set_filltype(fill ? kWinding : kNoFill)`: a stroke-only run
+    // contributes no fill, and the pattern machinery reads the rule to decide
+    // whether to paint one.
+    let fill_rule = if kinds.fill {
+        pdfrum_page::FillRule::Winding
+    } else {
+        pdfrum_page::FillRule::None
+    };
+    for glyph in &glyphs {
+        let path = glyph.device_path();
+        render_path::<B>(
+            ctx,
+            device,
+            backend,
+            caches,
+            &pdfrum_page::PathObject {
+                path,
+                matrix: Affine::IDENTITY,
+                fill_rule,
+                stroke: true,
+            },
+            state,
+            to_device,
+            device_box,
+            diags,
+        );
+    }
+    caches.placed_glyphs = glyphs;
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "the type-3 arm needs the device box and diagnostics the ordinary \
@@ -1344,33 +1418,28 @@ fn render_text<B: RasterBackend>(
         return;
     }
     // A pattern-coloured glyph run goes to `DrawTextPathWithPattern`, which
-    // returns before the ordinary draw. Its unstroked arm
-    // (`cpdf_renderstatus.cpp:1290-1310`) does not draw glyphs at all: it
-    // builds a **synthetic path object** — the run's own bounding rectangle,
-    // filled winding, carrying the text's colour and general state, with the
-    // run itself appended to a copy of the current clip path — and sends that
-    // through `RenderSingleObject`. The pattern then paints the rectangle and
-    // the text clip cuts it to the glyphs.
+    // returns before the ordinary draw. The gate is upstream's `bPattern`:
+    // the colour the run will actually use — the stroke colour for a stroked
+    // run, the fill colour for a filled one — being a pattern.
     //
-    // That is the whole shape, and it is why this could not be written until
-    // the clip stack learned to hold text runs.
-    if kinds.fill && !kinds.stroke && state.fill.is_pattern() {
-        render_pattern_text(
-            ctx, device, backend, caches, object, state, to_device, device_box, diags,
-        );
-        return;
-    }
-    // With a stroke in play the run *is* drawn glyph by glyph, each outline
-    // becoming its own path object — so the ordinary path below handles it,
-    // and only the colour that will not resolve is drained. A pattern colour
-    // has no components, so letting it through would paint the black that
-    // `to_rgb`'s absence falls back to.
-    let kinds = crate::text::TextPaintKinds {
-        fill: kinds.fill && !state.fill.is_pattern(),
-        stroke: kinds.stroke && !state.stroke.is_pattern(),
-        ..kinds
-    };
-    if !kinds.fill && !kinds.stroke {
+    // The two arms differ in what they hand the pattern machinery. Unstroked,
+    // no glyph is drawn at all: the run becomes a synthetic path object of its
+    // own bounding rectangle, with the run appended to a copy of the current
+    // clip path, so the pattern paints the rectangle and the text clip cuts it
+    // back to the glyph shapes. Stroked, the glyphs are kept and each outline
+    // becomes a path object in its own right.
+    let pattern_run =
+        (kinds.stroke && state.stroke.is_pattern()) || (kinds.fill && state.fill.is_pattern());
+    if pattern_run {
+        if kinds.stroke {
+            render_pattern_text_stroked(
+                ctx, device, backend, caches, object, state, to_device, device_box, diags, kinds,
+            );
+        } else {
+            render_pattern_text(
+                ctx, device, backend, caches, object, state, to_device, device_box, diags,
+            );
+        }
         return;
     }
     let (fill, stroke) = colors(ctx, state, ObjectKind::Text);
