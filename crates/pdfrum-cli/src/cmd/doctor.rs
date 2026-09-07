@@ -28,6 +28,8 @@ pub struct Report {
 struct Notice {
     severity: &'static str,
     offset: Option<u64>,
+    /// The variant identifier, which `schema doctor` publishes and the
+    /// table prints.
     what: String,
 }
 
