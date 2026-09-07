@@ -16,3 +16,11 @@
 # Note this is a *default*, not a lock. `CARGO_INCREMENTAL=1 cargo build`
 # still turns it on for one invocation if a genuine edit loop wants it.
 incremental = false
+
+# `getrandom` reaches `wasm32-unknown-unknown` through the Web Crypto API, and
+# selecting that backend takes a cfg as well as the `wasm_js` feature
+# `pdfrum-wasm` enables. The target has no OS interface of its own, so without
+# it the crate is a deliberate compile error rather than a silent fallback —
+# and a PDF's file key and AES vectors are exactly what must not fall back.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

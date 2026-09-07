@@ -3,10 +3,10 @@
 // padded password; revisions 5 and 6 verify a SHA-2 hash and unwrap a 32-byte
 // AES-256 key that the file stores directly.
 //
-// No global state and no `getrandom` dependency is why the vector is an
-// argument. `pdfrum-edit` derives one deterministically from the file's own
-// bytes and a per-object counter, which makes a save reproducible; a caller
-// wanting unpredictable vectors passes its own source.
+// The AES-CBC initialisation vector is an argument rather than something this
+// crate mints, because a decrypting caller reads it off the ciphertext and
+// only an encrypting one has to produce it. `pdfrum-edit` draws vectors from
+// the operating system for every save.
 //
 // Building an `/Encrypt` dictionary is out of scope: `/O`, `/U`, `/OE`, `/UE`
 // and `/Perms` are written by whoever chose the passwords, and a
@@ -41,7 +41,7 @@ mod standard;
 #[cfg(test)]
 mod test_fixtures;
 
-pub use create::{ENTROPY_LEN, standard_r6};
+pub use create::{ENTROPY_LEN, KeyMaterial, standard_r6};
 pub use key::SmallKey;
 pub use object::{CryptClass, Iv};
 pub use permissions::Permissions;
@@ -62,6 +62,11 @@ pub enum Error {
     /// The password is neither the user nor the owner password.
     #[error("the supplied password is not the user or owner password")]
     WrongPassword,
+    /// The operating system's cryptographic generator is unavailable, so no
+    /// file key can be minted. Raised only when creating an encrypted file;
+    /// opening one needs no randomness.
+    #[error("the operating system's random generator is unavailable")]
+    NoEntropy,
     /// `/Filter` names a handler other than `/Standard`. Public-key handlers
     /// (`/Adobe.PubSec`) land here.
     #[error("/Filter {0:?} is not the standard security handler")]

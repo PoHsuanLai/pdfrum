@@ -128,6 +128,10 @@ moxcms = "=0.9.0"
 aes = "=0.9.3"
 cbc = "=0.2.1"
 cipher = "=0.5.2"
+# OS entropy for file keys and AES vectors. Pure Rust: on each platform a
+# direct syscall (`getrandom(2)`, `arc4random_buf`, `RtlGenRandom`), no C
+# shim and no build script.
+getrandom = "=0.4.3"
 md-5 = "=0.11.0"
 sha1 = "=0.11.0"
 sha2 = "=0.11.0"

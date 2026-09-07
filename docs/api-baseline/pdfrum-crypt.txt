@@ -14,6 +14,7 @@ pub pdfrum_crypt::Error::CipherKeyLength::len: usize
 pub pdfrum_crypt::Error::MalformedEncryptDict(&'static str)
 pub pdfrum_crypt::Error::MismatchedCryptFilters
 pub pdfrum_crypt::Error::MissingCryptFilter(alloc::boxed::Box<[u8]>)
+pub pdfrum_crypt::Error::NoEntropy
 pub pdfrum_crypt::Error::UnsupportedHandler(alloc::boxed::Box<[u8]>)
 pub pdfrum_crypt::Error::WrongPassword
 pub enum pdfrum_crypt::PasswordEncoding
@@ -79,6 +80,9 @@ pub pdfrum_crypt::EncryptParams::version: i64
 pub struct pdfrum_crypt::Iv(pub [u8; 16])
 impl pdfrum_crypt::Iv
 pub const fn pdfrum_crypt::Iv::bytes(&self) -> &[u8; 16]
+pub struct pdfrum_crypt::KeyMaterial(_)
+impl pdfrum_crypt::KeyMaterial
+pub fn pdfrum_crypt::KeyMaterial::from_os() -> core::result::Result<Self, pdfrum_crypt::Error>
 pub struct pdfrum_crypt::Permissions
 pub pdfrum_crypt::Permissions::annotate: bool
 pub pdfrum_crypt::Permissions::assemble: bool
@@ -108,4 +112,4 @@ pub fn pdfrum_crypt::md5(&[u8]) -> [u8; 16]
 pub fn pdfrum_crypt::parse_encrypt_dict(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::result::Result<pdfrum_crypt::EncryptParams, pdfrum_crypt::Error>
 pub fn pdfrum_crypt::rc4(&[u8], &[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_crypt::sha1(&[u8]) -> [u8; 20]
-pub fn pdfrum_crypt::standard_r6(&[u8], &[u8], pdfrum_crypt::Permissions, bool, &[u8; 64]) -> core::result::Result<(pdfrum_object::dict::Dict, pdfrum_crypt::SecurityHandler), pdfrum_crypt::Error>
+pub fn pdfrum_crypt::standard_r6(&[u8], &[u8], pdfrum_crypt::Permissions, bool, &pdfrum_crypt::KeyMaterial) -> core::result::Result<(pdfrum_object::dict::Dict, pdfrum_crypt::SecurityHandler), pdfrum_crypt::Error>

@@ -7,8 +7,10 @@
 //! standard, and a file this crate writes should be one its reader would
 //! choose. Opening covers every revision regardless.
 //!
-//! Randomness is the caller's: the file key and the four salts come in as
-//! 64 bytes, so a save asked to be reproducible can be.
+//! The file key and the four salts are 64 bytes of operating-system
+//! randomness, held by [`KeyMaterial`]. That type is the only way to reach
+//! [`standard_r6`], and its only constructor draws from the OS, so no derived
+//! or reproducible byte sequence can stand in for a key.
 
 use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
 
@@ -22,6 +24,32 @@ use crate::standard::{r6_prepared, revision6_hash};
 /// user validation salt, user key salt, owner validation salt and owner key
 /// salt, 8 bytes each.
 pub const ENTROPY_LEN: usize = 64;
+
+/// The secret bytes behind one encrypted file: the AES-256 file key and the
+/// four revision-6 salts (ISO 32000-2 §7.6.4.4.7, algorithms 8 and 9).
+///
+/// The bytes come from the operating system's cryptographic generator and
+/// from nowhere else. There is no constructor taking a seed, a slice or a
+/// byte array, so a caller cannot substitute a derived sequence: an
+/// unguessable file key is a property of the type, not of the call site.
+/// Neither `Clone` nor `Debug`, so the bytes are neither duplicated across
+/// two files nor printed.
+pub struct KeyMaterial([u8; ENTROPY_LEN]);
+
+impl KeyMaterial {
+    /// Sixty-four fresh bytes from the operating system.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoEntropy`] when the platform's generator is unavailable —
+    /// the only outcome besides success, since a partial read is not one the
+    /// underlying interface reports.
+    pub fn from_os() -> Result<Self, Error> {
+        let mut bytes = [0u8; ENTROPY_LEN];
+        getrandom::fill(&mut bytes).map_err(|_| Error::NoEntropy)?;
+        Ok(Self(bytes))
+    }
+}
 
 /// The `/P` bits this crate names; every other bit is reserved and written
 /// as 1, which is what ISO 32000-2 Table 22 asks for.
@@ -44,8 +72,9 @@ pub fn standard_r6(
     owner: &[u8],
     permissions: Permissions,
     encrypt_metadata: bool,
-    entropy: &[u8; ENTROPY_LEN],
+    key_material: &KeyMaterial,
 ) -> Result<(Dict, SecurityHandler), Error> {
+    let entropy = &key_material.0;
     let owner = if owner.is_empty() { user } else { owner };
     let user_prepared = r6_prepared(6, user).ok_or(Error::WrongPassword)?;
     let owner_prepared = r6_prepared(6, owner).ok_or(Error::WrongPassword)?;
@@ -146,18 +175,13 @@ fn slice<const N: usize>(entropy: &[u8; ENTROPY_LEN], at: usize) -> Result<[u8; 
 
 #[cfg(test)]
 mod tests {
-    use super::standard_r6;
+    use super::{KeyMaterial, standard_r6};
     use crate::permissions::Permissions;
     use crate::{CryptClass, SecurityHandler};
     use pdfrum_object::{NoResolve, ObjRef};
 
-    fn entropy() -> [u8; 64] {
-        std::array::from_fn(|i| {
-            u8::try_from(i)
-                .unwrap_or(0)
-                .wrapping_mul(37)
-                .wrapping_add(11)
-        })
+    fn entropy() -> KeyMaterial {
+        KeyMaterial::from_os().unwrap()
     }
 
     #[test]

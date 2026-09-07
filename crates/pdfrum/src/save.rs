@@ -45,6 +45,10 @@ pub struct SaveOptions {
     /// Where the trailer's fresh `/ID` bytes come from: random per save by
     /// default, or [`IdSource::Fixed`] for a reproducible file — the same
     /// input then saves to the same bytes, subset-font tags included.
+    ///
+    /// It governs identifiers only. An [`SaveOptions::encrypt`] save draws
+    /// its file key and AES vectors from the operating system whatever this
+    /// is set to, so encrypted output is never byte-reproducible.
     pub id_source: IdSource,
     /// Encrypt an unencrypted document on the way out — AES-256, revision
     /// 6 — under these passwords and permissions. A document that is
