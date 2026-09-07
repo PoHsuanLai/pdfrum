@@ -28,7 +28,6 @@ mod convert;
 mod error;
 mod readback;
 
-use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use kurbo::{Affine, BezPath, Rect, Stroke};
@@ -75,15 +74,19 @@ pub const MAX_TARGET_DIMENSION: u32 = pdfrum_render::MAX_TARGET_DIMENSION;
 ///
 /// Holds the device and queue by reference — the whole point of injection —
 /// plus one [`Renderer`], which owns the compiled compute pipelines and is
-/// far too expensive to build per target. The [`RefCell`] is the only
+/// far too expensive to build per target. The [`Mutex`] around it is the only
 /// interior mutability in the crate, and it is here because:
 /// [`RasterBackend::finish`] takes `&self` while [`Renderer::render_to_texture`]
 /// needs `&mut`, and threading a `&mut` backend through the engine would
-/// change the trait for three CPU backends that do not need it.
+/// change the trait for three CPU backends that do not need it. A mutex rather
+/// than a cell because `vello` declares `Renderer: Send`, so this is what keeps
+/// the backend `Send + Sync` alongside every other public type in the
+/// workspace; it is taken with `try_lock`, so two threads sharing one backend
+/// are refused rather than serialised.
 pub struct VelloBackend<'a> {
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
-    renderer: RefCell<Renderer>,
+    renderer: Mutex<Renderer>,
     limits: Limits,
     faults: Faults,
     /// Present only when [`request_adapter`] built this backend, rather than
@@ -194,7 +197,7 @@ impl<'a> VelloBackend<'a> {
         Ok(Self {
             device,
             queue,
-            renderer: RefCell::new(renderer),
+            renderer: Mutex::new(renderer),
             limits: Limits {
                 max_dimension: device.limits().max_texture_dimension_2d,
             },
@@ -354,10 +357,11 @@ impl<'a> VelloBackend<'a> {
             return Ok(Pixmap::new(w, h));
         }
         self.check_target(w, h)?;
-        // Only borrowed elsewhere if a caller re-entered `finish` from inside
-        // it, which the trait's shape makes impossible; an error beats a
-        // panic (STYLE §3).
-        let Ok(mut renderer) = self.renderer.try_borrow_mut() else {
+        // Only held elsewhere if a second thread is rendering on this same
+        // backend, or if a previous render panicked and poisoned the lock.
+        // Either way an error beats a panic (STYLE §3), and refusing is the
+        // honest answer: one `Renderer` cannot serve two renders at once.
+        let Ok(mut renderer) = self.renderer.try_lock() else {
             return Err(Error::Render("the renderer was already in use".to_owned()));
         };
         let pixels = readback::render_and_read(
@@ -697,6 +701,21 @@ impl VelloBackend<'static> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The GPU backend carries the same `Send + Sync` surface as the CPU
+    /// ones. `Renderer` is `Send` and not `Sync` — `vello` asserts the first
+    /// itself — which is exactly what a `Mutex` is enough for, and asserting
+    /// it here is what keeps a later field from quietly costing an embedder
+    /// the ability to hold one backend behind an `Arc`.
+    #[test]
+    fn the_backend_and_its_targets_are_send_and_sync() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<VelloBackend<'static>>();
+        // `vello::Scene` is plain encoded geometry, so a target travels to
+        // whichever thread rasterizes it.
+        send_sync::<VelloDevice>();
+        send_sync::<Error>();
+    }
 
     #[test]
     fn the_antialiasing_mode_is_pinned_to_area() {

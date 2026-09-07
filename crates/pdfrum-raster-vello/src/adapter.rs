@@ -50,9 +50,9 @@ pub struct OwnedDevice {
 /// *why* is the fourteen GPU tests in `tests/gpu.rs` — under `cargo test`
 /// they share one process, and
 /// one leaked device between them is the difference between a bounded cost and
-/// a per-test one. `VelloBackend` itself cannot live here: its `RefCell`
-/// makes it `!Sync`, and a `Renderer` is cheap enough beside a whole device
-/// that the device is where the saving is.
+/// a per-test one. `VelloBackend` itself does not live here: it borrows its
+/// device for a lifetime a `static` cannot name, and a `Renderer` is cheap
+/// enough beside a whole device that the device is where the saving is.
 static SHARED: OnceLock<Result<Opened, Error>> = OnceLock::new();
 
 /// A leaked device, its queue, and what adapter they came from.
