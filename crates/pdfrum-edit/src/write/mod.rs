@@ -249,11 +249,15 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     );
     let encrypt_number = slot.as_ref().map(|s| s.number);
     let active_handler = fresh.as_ref().map_or(handler, |(_, h)| h);
-    let security = (keep_security || fresh.is_some()).then(|| encrypt::Security {
-        handler: active_handler,
-        ivs: encrypt::IvSource::from_document(base.bytes()),
-        encrypt_object: encrypt_number,
-    });
+    let security = if keep_security || fresh.is_some() {
+        Some(encrypt::Security {
+            handler: active_handler,
+            ivs: encrypt::IvSource::from_os()?,
+            encrypt_object: encrypt_number,
+        })
+    } else {
+        None
+    };
 
     let mut sink = Counting::new(out);
     let mut offsets = ObjectOffsets::new();
@@ -522,7 +526,7 @@ fn fresh_encryption(
         &encryption.owner_password,
         encryption.permissions,
         encryption.encrypt_metadata,
-        &opts.id_source.entropy(),
+        &pdfrum_crypt::KeyMaterial::from_os().map_err(|_| Error::NoEntropy)?,
     )
     .map(Some)
     .map_err(|_| Error::PasswordNotText)
