@@ -150,11 +150,25 @@ impl TilingPattern {
     ///
     /// A degenerate `/BBox` still produces a tile; only a size that will not
     /// fit an `i32` aborts.
+    ///
+    /// The two edges narrow to `f32` **before** the ceiling, because
+    /// `CFX_FloatRect` is single-precision and the ceiling is exactly where
+    /// that precision shows. A `/Matrix` scale of `0.4` over a 100-unit
+    /// `/BBox` is the case: the nearest `f32` to `0.4` is a shade above it, so
+    /// the edge is `40.000001` in double precision and ceils to 41, while the
+    /// same product rounded to `f32` is exactly `40` and ceils to 40. One
+    /// extra row and column stretches the whole cell by a fortieth and
+    /// smears every tile's contents against its neighbours.
     #[must_use]
     pub fn cell_size(&self, to_device: Affine) -> Option<(i32, i32)> {
         let cell = (to_device * self.matrix).transform_rect_bbox(self.bbox);
-        let width = cell.width().ceil();
-        let height = cell.height().ceil();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the narrowing is the point: `CFX_FloatRect` is `float`"
+        )]
+        let narrow = |edge: f64| f64::from(edge as f32);
+        let width = narrow(cell.width()).ceil();
+        let height = narrow(cell.height()).ceil();
         if !width.is_finite()
             || !height.is_finite()
             || width > f64::from(i32::MAX)
@@ -256,6 +270,23 @@ mod tests {
         };
         let (w, h) = p.cell_size(Affine::IDENTITY).expect("a cell");
         assert!(w >= 1 && h >= 1);
+    }
+
+    #[test]
+    fn a_scale_that_is_whole_only_in_single_precision_gives_a_whole_cell() {
+        // `2_uncolor_tiling.pdf`: a 100-unit `/BBox` under a `/Matrix` scale of
+        // `0.4`. The nearest `f32` to `0.4` is above it, so the edge is
+        // `40.000001` in double precision; `CFX_FloatRect` holds `40` exactly.
+        let scale = f64::from(0.4f32);
+        let p = TilingPattern {
+            bbox: Rect::new(0.0, 0.0, 100.0, 100.0),
+            ..pattern(100.0, 100.0)
+        };
+        assert_eq!(
+            p.cell_size(Affine::scale(scale)),
+            Some((40, 40)),
+            "the ceiling must not see the widening error"
+        );
     }
 
     #[test]
