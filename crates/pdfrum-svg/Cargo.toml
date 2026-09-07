@@ -44,7 +44,7 @@ resvg.workspace = true
 # The facade depends on this crate under its own `svg` feature, so this is a
 # *dev*-dependency cycle. Cargo permits that and it appears in no published
 # normal tree.
-pdfrum = { workspace = true, features = ["svg", "tinyskia"] }
+pdfrum = { path = "../pdfrum", features = ["svg", "tinyskia"] }
 pdfrum-corpus.workspace = true
 # The golden store keys a PDF by the first sixteen hex digits of its SHA-256,
 # so finding the oracle's PNG means computing one.

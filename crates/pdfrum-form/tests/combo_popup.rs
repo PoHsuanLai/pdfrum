@@ -3,11 +3,10 @@
 //!
 //! # Why this file exists
 //!
-//! `bug_736695_3.
-//! **false pass**: 0.997003, above the 0.99 floor, on an image where the
-//! oracle had selected `Spain` and pdfrum had selected nothing and dropped
-//! focus. The whole disagreement was a 150×15 box, which SSIM over a
-//! 595×342 page cannot resolve — so the metric said pass while the state was
+//! `bug_736695_3` was a **false pass**: 0.997003, above the 0.99 floor, on an
+//! image where the oracle had selected `Spain` and pdfrum had selected nothing
+//! and dropped focus. The whole disagreement was a 150×15 box, which SSIM over
+//! a 595×342 page cannot resolve — so the metric said pass while the state was
 //! wrong in the one way the script was written to check.
 //!
 //! Every geometric number below is the fixture's own, read from

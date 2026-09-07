@@ -33,7 +33,7 @@ vello.workspace = true
 #
 # It does NOT put wgpu in the facade's tree: a dev-dependency is an edge from
 # this crate to the facade, not the reverse.
-pdfrum.workspace = true
+pdfrum = { path = "../pdfrum" }
 pdfrum-corpus.workspace = true
 pdfrum-parser.workspace = true
 pdfrum-raster-agg.workspace = true
