@@ -67,7 +67,7 @@ cargo install pdfrum-cli
 
 | | |
 |---|---|
-| Safe | `unsafe` is forbidden in the library. (The C ABI is the one exception, and only at `extern "C"`). |
+| Safe | `unsafe` is forbidden in the library. (The C ABI is the one exception, and only inside `extern "C"` or a private helper of one). |
 | Pure Rust | no C/C++ in a library build |
 | Thread-safe | every public type is `Send + Sync` |
 | JavaScript | The `javascript` feature runs the document's own scripts via the [boa engine](https://crates.io/crates/boa_engine) |
