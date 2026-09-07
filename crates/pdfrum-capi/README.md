@@ -1,6 +1,6 @@
 # `libpdfrum`
 
-C ABI over [`pdfrum`](../pdfrum): `libpdfrum.so`, `libpdfrum.a`, `pdfrum.h`.
+C ABI over [`pdfrum`](https://crates.io/crates/pdfrum): `libpdfrum.so`, `libpdfrum.a`, `pdfrum.h`.
 Every export is an opaque handle plus one call into the facade. This is the
 one workspace crate where `unsafe` is allowed, and only inside `extern "C"`
 (or a private helper of one). Zeroed option structs are the defaults.
@@ -50,7 +50,20 @@ int main(void) {
 - Render: `pdfrum_page_render_size`, allocate `stride * height`, then
   `pdfrum_page_render`. RGBA8, straight alpha, top-down.
 
-No JavaScript — the facade's `javascript` feature is not forwarded.
-`pdfrum_page_markdown` is behind `#ifdef PDFRUM_MARKDOWN`.
+## Features
 
-`crates/pdfrum-capi/ctest/run.sh` is the checked example.
+| feature | default | adds |
+|---|:---:|---|
+| `markdown` | off | `pdfrum_page_markdown`, behind `#ifdef PDFRUM_MARKDOWN` |
+| `capi` | — | required by `cargo cbuild` / `cinstall`; gates nothing |
+
+No JavaScript: the facade's `javascript` feature is not forwarded, so a
+document's scripts are data here whatever the Rust build does.
+
+`publish = false` — nothing `cargo add`s a cdylib. The published surface is
+[`include/pdfrum.h`](https://github.com/PoHsuanLai/pdfrum/blob/main/crates/pdfrum-capi/include/pdfrum.h),
+which a CI snapshot gate diffs, and
+[`ctest/run.sh`](https://github.com/PoHsuanLai/pdfrum/blob/main/crates/pdfrum-capi/ctest/run.sh)
+is the checked example.
+
+MIT OR Apache-2.0

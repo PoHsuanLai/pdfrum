@@ -1,15 +1,29 @@
 # Roadmap
 
-pdfrum reads, repairs, renders, extracts, edits and signs PDFs. It is not a
-typesetting system. Markup-to-layout is Typst's problem.
+pdfrum reads, repairs, renders, extracts, edits and signs PDF files. It is
+not a typesetting system: markup-to-layout is Typst's problem, and a document
+this library writes is one it was given the pages for.
 
-Shipped: canvas (`pdfrum::Canvas`), SVG export and ingestion, PDF/A, the C
-ABI, WASM, and the `pdfrum` CLI.
+## Shipped
 
-Open work is in the issue tracker. Strictly behind a peer, nothing bought
-in exchange:
+The canvas API (`pdfrum::Canvas`), SVG export and ingestion, PDF/A conversion
+and conformance reporting, the C ABI, the WebAssembly binding, and the
+`pdfrum` CLI.
 
-- **Warm median render** vs mupdf (`vello_cpu`'s scalar `F32Kernel::pack` /
-  `unpack`, filed upstream).
+## Open
 
-Public-key (`Adobe.PubSec`) encryption is not implemented.
+Tracked as issues. Everything here is strictly behind a peer, with nothing
+bought in exchange — a gap we can name and measure, not a feature we lack.
+
+| | against | where it is |
+|---|---|---|
+| Warm median render | mupdf | `vello_cpu`'s scalar `F32Kernel::pack` / `unpack`, filed upstream |
+
+## Not planned
+
+| | |
+|---|---|
+| Public-key encryption (`Adobe.PubSec`) | ISO 32000-1 §7.6.4; the standard security handler is complete |
+| XFA | superseded, and deprecated in PDF 2.0 |
+| A viewer | no window, caret or widget chrome — an embedder owns those |
+| Typesetting | see above |
