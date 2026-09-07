@@ -197,7 +197,7 @@ impl Totals {
     }
 
     /// The share matched over the goldens that hold more than a byte-order
-    /// mark — the number an exit criterion reads.
+    /// mark.
     pub fn text_nonempty_rate(&self) -> Option<f64> {
         (self.text.substantive > 0)
             .then(|| f64::from(self.text.substantive_matched) / f64::from(self.text.substantive))

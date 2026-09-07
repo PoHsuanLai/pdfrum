@@ -279,9 +279,9 @@ impl fmt::Display for Violation {
 ///
 /// [`Report::conforms`] is the one-bit answer; the violations are the reason.
 /// A report is always complete for the checks this engine implements, which
-/// is not the same as complete for ISO 19005 — see the design note. A caller
-/// that needs the distinction should treat a passing report as "we found
-/// nothing", not as a certificate.
+/// is not the same as complete for ISO 19005. A caller that needs the
+/// distinction should treat a passing report as "we found nothing", not as a
+/// certificate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     /// The level checked against.

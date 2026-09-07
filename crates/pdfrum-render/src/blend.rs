@@ -833,9 +833,9 @@ mod tests {
         // `D(x) = if x <= 0.25 { ((16x-12)x+4)x } else { sqrt(x) }`, but it is
         // **not** any closed form of it: 35 of the 256 entries differ from
         // `round(255*D)` and 102 from `trunc(255*D)`, so it is hand-tuned and
-        // the transcription is the authority. (Render brief Q7 claims the
-        // round-trip is exact for all 256; measured, it is not — erratum.)
-        // What must hold is that no entry drifts more than one count from
+        // the transcription is the authority. The round-trip is not exact
+        // for all 256. What must hold is that no entry drifts more than one
+        // count from
         // `D`, which pins the transcription against a typo.
         for (i, entry) in COLOR_SQRT.iter().enumerate() {
             #[expect(clippy::cast_precision_loss, reason = "i < 256 is exact in f64")]
@@ -894,13 +894,12 @@ mod tests {
     #[test]
     fn softlight_divides_twice() {
         // The low branch spells its scaling as `/255/255`, not `/65025`.
-        // The brief flags this as a truncation trap; exhaustively, it is not
-        // one — on this branch the numerator is always non-negative (since
-        // `src < 128` makes `255 - 2*src >= 1`), and truncating twice by 255
-        // equals truncating once by 65025 for every non-negative value.
-        // (Render brief test 33's premise is an erratum.) The spelling is
-        // still ported verbatim, and this test pins the equivalence so a
-        // future negative-input path cannot silently change meaning.
+        // Exhaustively, that is not a truncation trap: on this branch the
+        // numerator is always non-negative (since `src < 128` makes
+        // `255 - 2*src >= 1`), and truncating twice by 255 equals truncating
+        // once by 65025 for every non-negative value. The spelling is still
+        // ported verbatim, and this test pins the equivalence so a future
+        // negative-input path cannot silently change meaning.
         for back in 0..=255i32 {
             for src in 0..128i32 {
                 let n = (255 - 2 * src) * back * (255 - back);

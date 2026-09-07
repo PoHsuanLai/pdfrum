@@ -471,9 +471,8 @@ mod tests {
         let d = dest(vec![Object::Int(11), Object::Name(Name::from("Fit"))]);
         let mut diags = Diagnostics::default();
         // Page 11 of a document that may have three pages: the number is
-        // returned as it stands. `Some` now says "the file named a page",
-        // which is a different question from "that page exists" -- the two
-        // used to share one `-1` channel and could not be told apart.
+        // returned as it stands. `Some` says "the file named a page", which
+        // is a different question from "that page exists".
         assert_eq!(
             d.page_index(&NoResolve, |_| Some(PageIndex::FIRST), &mut diags),
             Some(PageIndex::new(11))

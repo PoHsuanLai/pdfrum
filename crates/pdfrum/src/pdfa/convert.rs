@@ -2,8 +2,7 @@
 //!
 //! # The shape
 //!
-//! Two passes over the document, and they are separate for a reason the
-//! roadmap's fourth item forces. The first pass **surveys**: it walks the
+//! Two passes over the document. The first pass **surveys**: it walks the
 //! object graph deciding what each repair would be and, where the repair is a
 //! compromise, whether [`Policy`] authorizes it. Nothing is written. If the
 //! survey collects a [`Refusal`], the conversion stops there and the caller
@@ -220,7 +219,7 @@ impl Plan {
 
 /// The two obstacles this pipeline can detect and cannot yet repair.
 ///
-/// Both repairs are named debt: substituting a
+/// Both repairs are not implemented yet: substituting a
 /// font whose program is missing, and rasterizing a page whose content the
 /// level forbids. Neither exists, so both concessions refuse — but they refuse
 /// *having looked*, which is the difference between a policy field that is
@@ -228,8 +227,7 @@ impl Plan {
 ///
 /// The detection is the checker's, not a second implementation of it: the
 /// `Clause` enum is exactly the list of things wrong with the document, and
-/// `Subject` carries the `ObjRef` precisely so a converter can act on one
-/// (§3). This is that design being used.
+/// `Subject` carries the `ObjRef` precisely so a converter can act on one.
 ///
 /// What each concession means here, given the repair does not exist:
 ///

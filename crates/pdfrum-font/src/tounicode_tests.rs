@@ -270,7 +270,7 @@ fn bfrange_commits_when_the_count_agrees() {
 }
 
 // ---------------------------------------------------------------------------
-// The U+FFFF indicator collision, and OQ-3's measured answers.
+// The U+FFFF indicator collision, and the measured answers.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -283,7 +283,7 @@ fn a_destination_of_exactly_u_ffff_is_unrepresentable() {
     assert_eq!(text(&map, 0x11), "\u{fff1}");
     assert_eq!(text(&map, 0x1f), "", "0xFFFF collides with the indicator");
 
-    // **OQ-3(a), measured against the oracle**: the next value is 0x10000,
+    // Measured against the oracle: the next value is 0x10000,
     // whose low half is 0, so `lookup` returns a single NUL rather than
     // nothing. The oracle's `--txt` for this exact case emits U+0000, which is
     // only reachable through this path — its "no unicode" fallback would have
@@ -306,7 +306,7 @@ fn a_bfchar_mapping_to_u_ffff_is_lost_the_same_way() {
 }
 
 // ---------------------------------------------------------------------------
-// StringDataAdd — OQ-3(b), measured.
+// StringDataAdd, measured.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -318,15 +318,13 @@ fn string_data_add_increments_the_last_unit() {
 
 #[test]
 fn string_data_add_does_not_carry_at_0xffff() {
-    // The design brief describes a base-65536 increment in which 0xFFFF wraps
-    // to 0 and carries. It does not: the C++'s `wchar_t` is 32 bits, so
-    // 0xFFFF + 1 is 0x10000 and the carry test `ch < str[i-1]` is false.
-    // Confirmed by a probe run against the C++ oracle.
+    // The C++'s `wchar_t` is 32 bits, so 0xFFFF + 1 is 0x10000 and the carry
+    // test `ch < str[i-1]` is false — not a base-65536 wrap. Confirmed by a
+    // probe run against the C++ oracle.
     assert_eq!(string_data_add(&[0xFFFF]), vec![0x10000]);
     assert_eq!(string_data_add(&[0x0041, 0xFFFF]), vec![0x0041, 0x10000]);
     assert_eq!(string_data_add(&[0xFFFF, 0xFFFF]), vec![0xFFFF, 0x10000]);
-    // The string therefore never lengthens, which is the second half of the
-    // brief's claim that also does not hold.
+    // The string therefore never lengthens.
     assert_eq!(string_data_add(&[0xFFFF]).len(), 1);
 }
 
@@ -465,7 +463,7 @@ fn a_surrogate_pair_becomes_one_char() {
 
 #[test]
 fn an_unpaired_surrogate_becomes_the_replacement_character() {
-    // Divergence D3: `char` cannot hold a lone surrogate.
+    // `char` cannot hold a lone surrogate.
     let map = map_of("1 beginbfchar<01><d841 0041>endbfchar");
     assert_eq!(chars(&map, 1), vec!['\u{fffd}', 'A']);
     // A high surrogate as the *only* unit is a single-unit destination, so it

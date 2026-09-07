@@ -1,10 +1,6 @@
 //! End-to-end form routing: a click focuses, typing edits, undo restores.
 //!
-//! These assertions were unwritable while the facade's dispatch was inert —
-//! every one of them would have passed vacuously against a session that
-//! consumed nothing and changed nothing, which is why the crate's earlier
-//! tests all drove the edit control directly instead. They drive the
-//! **facade**, which is the surface a bridge actually calls.
+//! These drive the **facade**, which is the surface a bridge actually calls.
 //!
 //! The fixture is `text_form.pdf`: one text field, `/Rect [100 100 200 130]`,
 //! `/DA (0 0 0 rg /F1 12 Tf)` over Helvetica. A click at (120, 115) lands
@@ -87,8 +83,8 @@ fn typing_with_no_focus_changes_nothing() {
     assert!(session.focused_text().is_none());
 }
 
-/// The worked example the milestone's exit criterion asks for, as an
-/// assertion rather than only as prose: click, type, read, undo.
+/// Click, type, read, undo — one round trip, as an assertion rather than
+/// only as prose.
 #[test]
 fn click_type_read_undo_is_one_round_trip() {
     let doc = document();
@@ -487,8 +483,7 @@ fn select_all_on_an_empty_field_selects_nothing_and_succeeds() {
 /// embedding interface, which is why its expectation is `Times(0)` off XFA
 /// and `Times(1)` on: the *observation* is version-dependent there. Here a
 /// focus change is an ordinary entry in the returned list, so there is one
-/// answer and no version split — which is the divergence D2 records, asserted
-/// rather than assumed.
+/// answer and no version split.
 #[test]
 fn taking_focus_reports_the_change_in_the_updates() {
     let doc = document();

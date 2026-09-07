@@ -1,5 +1,5 @@
 //! The round-trip invariants a saved file must satisfy for another reader to
-//! open it (design brief §4, R1–R15; §7.5's P1–P5).
+//! open it.
 //!
 //! These are the crate's centre of gravity. A serializer's unit tests can say
 //! only that it produced the bytes it meant to; these say that those bytes
@@ -106,7 +106,7 @@ fn fixtures() -> Vec<(&'static str, Vec<u8>)> {
 }
 
 // ---------------------------------------------------------------------------
-// R1 / P1 — every offset names the object it claims
+// Every offset names the object it claims
 // ---------------------------------------------------------------------------
 
 /// The `(object number, offset)` pairs a classic table declares.
@@ -155,7 +155,7 @@ fn table_entries(bytes: &[u8]) -> Vec<(u32, u64)> {
     out
 }
 
-// R1: PDFium rejects an object whose parsed header number differs from the
+// PDFium rejects an object whose parsed header number differs from the
 // requested one, so a shifted offset makes the object unfetchable rather
 // than merely slow to find.
 #[test]
@@ -180,7 +180,7 @@ fn every_offset_names_the_object_it_claims() {
     }
 }
 
-// R2: a `startxref` that does not name the `xref` keyword sends the reader to
+// A `startxref` that does not name the `xref` keyword sends the reader to
 // the rebuild — recoverable, but a silent fidelity change.
 #[test]
 fn startxref_names_the_cross_reference() {
@@ -203,7 +203,7 @@ fn startxref_names_the_cross_reference() {
     }
 }
 
-// R3: a stream whose `/Length` disagrees with its payload is tolerated by
+// A stream whose `/Length` disagrees with its payload is tolerated by
 // PDFium's own reader, which re-scans for `endstream` — but the oracle's
 // writer guarantees it, so ours must.
 #[test]
@@ -229,7 +229,7 @@ fn every_stream_length_matches_its_payload() {
     }
 }
 
-// R4: `/Size` drives the reader's object-map allocation, so understating it
+// `/Size` drives the reader's object-map allocation, so understating it
 // makes the objects above it unfetchable.
 #[test]
 fn size_covers_every_object_written() {
@@ -249,7 +249,7 @@ fn size_covers_every_object_written() {
     }
 }
 
-// R5: a `/Root` written as a direct dictionary is invalid however good the
+// A `/Root` written as a direct dictionary is invalid however good the
 // dictionary is — the reader treats it as damage and rebuilds.
 #[test]
 fn the_catalog_is_a_reachable_reference_with_pages() {
@@ -271,7 +271,7 @@ fn the_catalog_is_a_reachable_reference_with_pages() {
     }
 }
 
-// R6: the sweep that decides what to write and the graph the reader walks
+// The sweep that decides what to write and the graph the reader walks
 // must be the same graph, or the output names objects that are not there.
 #[test]
 fn every_reference_written_resolves() {
@@ -332,7 +332,7 @@ fn collect_references(object: &Object, out: &mut Vec<ObjRef>, depth: u32) {
     }
 }
 
-// R9: generations are read from a file and never written back. The only
+// Generations are read from a file and never written back. The only
 // `65535` in the output is the free head's.
 #[test]
 fn every_generation_written_is_zero() {
@@ -365,7 +365,7 @@ fn every_generation_written_is_zero() {
 }
 
 // ---------------------------------------------------------------------------
-// P2 — a save is a function of its input
+// A save is a function of its input
 // ---------------------------------------------------------------------------
 
 // The C++ pins this as `SavedDocsAreEqualAfterParse`: materializing objects
@@ -388,7 +388,7 @@ fn saving_twice_gives_the_same_bytes_even_after_a_page_walk() {
     }
 }
 
-// P2 proper: saving a reload of a save reproduces it.
+// Saving a reload of a save reproduces it.
 #[test]
 fn saving_a_reloaded_save_is_idempotent() {
     for (name, bytes) in fixtures() {
@@ -422,10 +422,10 @@ fn a_random_id_source_changes_the_output_and_nothing_else() {
 }
 
 // ---------------------------------------------------------------------------
-// P3 / R7 / R8 — the append discipline
+// The append discipline
 // ---------------------------------------------------------------------------
 
-// R7: the original bytes are never rewritten. Signatures, byte-range digests
+// The original bytes are never rewritten. Signatures, byte-range digests
 // and the `/Prev` chain all depend on it.
 #[test]
 fn an_incremental_save_leaves_the_original_bytes_untouched() {
@@ -448,7 +448,7 @@ fn an_incremental_save_leaves_the_original_bytes_untouched() {
     }
 }
 
-// R8: one `/Prev`, two `startxref`s, two `%%EOF`s — the pinned shape of a
+// One `/Prev`, two `startxref`s, two `%%EOF`s — the pinned shape of a
 // file that has been incrementally saved once.
 #[test]
 fn an_incremental_save_chains_to_the_original_table() {
@@ -566,7 +566,7 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
 }
 
 // ---------------------------------------------------------------------------
-// P5 / R11 — semantic survival
+// Semantic survival
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -602,7 +602,7 @@ fn pages_survive_a_save_with_their_geometry() {
     }
 }
 
-// R12/R14: what survives a save is the *decoded* content, not the encoding.
+// What survives a save is the *decoded* content, not the encoding.
 //
 // The distinction is the stream writer's decision table. A stream that
 // already declared a `/Filter` is copied verbatim — that is what keeps an
@@ -643,8 +643,8 @@ fn untouched_content_survives_a_save() {
     );
 }
 
-// The other half of R14: a stream that arrived compressed is copied verbatim,
-// so its bytes — and any checksum taken over them — survive untouched.
+// A stream that arrived compressed is copied verbatim, so its bytes — and
+// any checksum taken over them — survive untouched.
 #[test]
 fn an_already_compressed_stream_is_copied_verbatim() {
     // Save once to get a document whose content stream is flate-encoded,
@@ -905,7 +905,7 @@ fn every_damaged_shape_that_opens_saves_to_something_that_opens() {
 }
 
 // ---------------------------------------------------------------------------
-// R1–R11 over a *mutated* save
+// The properties above, re-asked of a *mutated* save
 // ---------------------------------------------------------------------------
 
 /// Every fixture with page 0 regenerated, so the properties above can be
@@ -915,9 +915,8 @@ fn every_damaged_shape_that_opens_saves_to_something_that_opens() {
 /// an ordinary one never touches: a stream object replaced in the overlay
 /// rather than copied through, a `/Contents` entry reshaped, and a page
 /// dictionary rewritten. Each is a fresh chance to write an offset that names
-/// the wrong object or a `/Length` that disagrees with its payload — which is
-/// exactly what R1 and R3 are about, and why they are worth re-asking rather
-/// than assumed to carry over.
+/// the wrong object or a `/Length` that disagrees with its payload, so those
+/// properties are re-asked rather than assumed to carry over.
 fn mutated_fixtures() -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     for (name, bytes) in fixtures() {
@@ -982,7 +981,7 @@ fn a_mutated_save_holds_every_structural_invariant() {
     let mutated = mutated_fixtures();
     assert!(!mutated.is_empty(), "no fixture regenerated anything");
     for (name, bytes) in &mutated {
-        // R1: every offset names the object it claims.
+        // Every offset names the object it claims.
         for (num, offset) in table_entries(bytes) {
             let at = usize::try_from(offset).expect("an offset inside the file");
             let header = format!("{num} 0 obj");
@@ -991,8 +990,8 @@ fn a_mutated_save_holds_every_structural_invariant() {
                 "{name}: object {num}'s offset does not name it"
             );
         }
-        // R3: every `/Length` matches its payload, R4: `/Size` covers what was
-        // written, R5: the catalog is reachable. Re-asked through the reader,
+        // Every `/Length` matches its payload, `/Size` covers what was
+        // written, and the catalog is reachable. Re-asked through the reader,
         // which is what a second implementation would do.
         let reopened = open(bytes);
         let catalog = reopened.catalog().expect("a reachable catalog");
@@ -1004,7 +1003,7 @@ fn a_mutated_save_holds_every_structural_invariant() {
     }
 }
 
-// R11 over a mutated save: reloading finds the added object, and finds it on
+// Reloading a mutated save finds the added object, and finds it on
 // the page it was added to.
 #[test]
 fn a_mutated_save_reloads_with_the_object_that_was_added() {

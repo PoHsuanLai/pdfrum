@@ -4,9 +4,7 @@
 //! it. There is nothing here that owns a widget, points at one, or observes
 //! one — a focus target is an identifier, a dirty entry is an identifier, and
 //! a function that mutates the session cannot invalidate a reference someone
-//! else is holding. The C++ this reproduces re-checks a weak pointer after
-//! every callback, sixteen times in two functions; here the checks are not
-//! forgotten, they are unnecessary.
+//! else is holding.
 //!
 //! Focus is owned per **document**, not per page: one field has the keyboard
 //! at a time, whichever page it is on.

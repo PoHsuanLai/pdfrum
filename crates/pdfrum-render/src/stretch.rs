@@ -1770,8 +1770,8 @@ mod tests {
     /// an image whose four channels are equal.
     ///
     /// This is the licence [`crate::image::reduced_mask_pixmap`] spends: the
-    /// soft-mask path reduces one channel where it used to reduce four copies
-    /// of it, and the two must not be allowed to drift. Asserted over a
+    /// soft-mask path reduces one channel, not four copies of it, and the
+    /// two must not be allowed to drift. Asserted over a
     /// lattice of ratios rather than one, because the tap tables differ per
     /// size and an equality that held only at 8:1 would be an accident.
     #[test]

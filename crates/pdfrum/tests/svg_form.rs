@@ -1,23 +1,21 @@
 //! The Form `XObject`: one SVG, many placements, **one** copy of the content.
 //!
-//! roadmap item 2. `Canvas::draw_svg` writes the SVG's operators inline
-//! into the page it is drawing on; for one placement that is equivalent to a
-//! form and it is what shipped first. For the same logo on twenty pages it is
-//! twenty copies of the same content, and the exit criterion asked for one
-//! object placed twenty times instead.
+//! `Canvas::draw_svg` writes the SVG's operators inline into the page it is
+//! drawing on; for one placement that is equivalent to a form. For the same
+//! logo on twenty pages it would be twenty copies of the same content. A form
+//! XObject is one object placed twenty times instead.
 //!
 //! That is a claim about the **file**, not about the picture, so it is what
 //! this file measures: every stream in the saved document is decoded and the
 //! ones carrying the SVG's own operators are counted. The assertion is that
 //! exactly one does, however many pages placed it. A test that only rendered
-//! each page correctly would pass just as happily on the inline spelling,
-//! which is the thing this milestone item exists to replace.
+//! each page correctly would pass just as happily on the inline spelling.
 //!
 //! Counting decoded streams rather than raw bytes is deliberate: the save
 //! flate-compresses what it writes, so a search of the file's bytes would
 //! find nothing and pass vacuously. `tests/svg_ingest.rs` is the pixel half —
 //! that the form draws the same picture the inline path draws, scored against
-//! `resvg`. The two together are the item: same picture, one object.
+//! `resvg`. The two together: same picture, one object.
 
 // A fixture that will not open or a count that does not hold is the failure
 // this file exists to catch, and `expect` is how a test says so.
@@ -80,8 +78,8 @@ fn streams_carrying(doc: &Document, needle: &[u8]) -> usize {
 
 /// Which spelling of the drawing a document was built with.
 ///
-/// An enum rather than a `compiled: bool`, because the two are the milestone
-/// item's before and after and the test reads better naming them.
+/// An enum rather than a `compiled: bool`, so the test names the two
+/// spellings rather than a boolean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Spelling {
     /// `Canvas::draw_svg` on every page: the operators written once per page.

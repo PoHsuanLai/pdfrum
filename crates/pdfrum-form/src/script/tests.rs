@@ -48,7 +48,7 @@ fn with_script(trigger: &str, source: &str) -> ScriptCascade {
     cascade
 }
 
-// ---- app.alert: the function the milestone is scored on ----
+// ---- app.alert ----
 
 #[test]
 fn a_plain_alert_is_prefixed_with_the_literal_alert() {
@@ -224,9 +224,8 @@ fn every_thrown_error_carries_the_function_name() {
 /// `testing/resources/javascript/expect.js`.
 ///
 /// The two things it exercises that nothing else does: `eval`, which
-/// `expect` is built on and which is therefore not removable (brief §5.3
-/// keeps it, and this is why), and `' threw ' + e`, which is what makes the
-/// bare-string throw observable.
+/// `expect` is built on and which is therefore not removable, and
+/// `' threw ' + e`, which is what makes the bare-string throw observable.
 #[test]
 fn expect_js_drives_the_binding_the_way_the_fixtures_do() {
     const EXPECT_JS: &str = r"
@@ -1131,7 +1130,7 @@ fn the_three_way_calculation_gate_is_reproduced() {
     assert!(!unchanged("event.value = 'different';", "same"));
 }
 
-// ---- deliverable 4: the sandbox, as a tested property ----
+// ---- the sandbox, as a tested property ----
 
 /// **`while(true)` terminates.** The assertion is on the diagnostic and the
 /// refusal, not on elapsed time — but the budget is small enough that this
@@ -1347,7 +1346,7 @@ fn a_reentrant_script_is_refused() {
     assert!(cascade.stops().is_empty());
 }
 
-// ---- deliverable 4: no I/O is reachable ----
+// ---- no I/O is reachable ----
 
 /// **The DOM exposes no way to reach the outside world.**
 ///
@@ -1355,8 +1354,8 @@ fn a_reentrant_script_is_refused() {
 /// a reading of the source, which is the difference between a security claim
 /// and a security property.
 ///
-/// The four the brief §5.3 names, plus every filesystem, network and process
-/// name a script might reach for. `launchURL` is present because upstream's
+/// Every filesystem, network and process name a script might reach for.
+/// `launchURL` is present because upstream's
 /// body is literally a comment and `return Success()` — reproducing a no-op
 /// is not a capability — but it is asserted to *do nothing*.
 ///
@@ -1392,7 +1391,7 @@ fn no_io_is_reachable_from_a_script() {
 /// A timer is **recorded and never fired**, and the object it returns is the
 /// opaque handle `constructor.in` asks about.
 ///
-/// Not firing is the ruling rather than a gap: the oracle's registry is
+/// Not firing is a choice rather than a gap: the oracle's registry is
 /// process-wide state this workspace does not build, a timer inside an alert
 /// never fires anyway, and a one-shot with `ms == 0` never runs its script at
 /// all.
@@ -1491,15 +1490,11 @@ fn a_script_that_will_not_parse_is_recorded_rather_than_fatal() {
 
 // ---- an uncaught throw is reported, and does not truncate the rest ----
 
-/// **The defect this closes.** A call to a name the object model does not
-/// bind throws, and before this pdfrum printed nothing for the rest of that
-/// document with no word anywhere about why. `bug_421304870`'s
-/// `this.getAnnots()` was the original case; it is bound now, so the test
-/// uses a name that is still not — which is the honest shape, since the
-/// property being tested is about *unbound names in general* rather than
-/// about that one method.
+/// A call to a name the object model does not bind throws, and yields one
+/// diagnostic carrying the *whence* and the engine's *message*. The test uses
+/// a name that is still unbound — the property is unbound names in general,
+/// not one method.
 ///
-/// One diagnostic, carrying the *whence* and the engine's *message* — because
 /// `DiagKind::ScriptFailed` alone can say that a script threw but not which
 /// one or what it said, and both are the information a reader came for.
 #[test]

@@ -200,7 +200,7 @@ impl ToUnicode {
     /// Unicode scalar where PDFium's `wchar_t` is not:
     ///
     /// - A **valid surrogate pair** is combined into one `char`.
-    /// - An **unpaired surrogate** becomes U+FFFD (divergence D3).
+    /// - An **unpaired surrogate** becomes U+FFFD.
     ///
     /// A stored value of `0x10000` or above is masked to its low 16 bits
     /// before the U+FFFF test, so a code can map to a single NUL — measured
@@ -248,7 +248,7 @@ impl ToUnicode {
     /// unreachable through [`reverse`](Self::reverse) as well. Values that
     /// are not Unicode scalars (unpaired surrogates, which the C++'s
     /// `wchar_t` map holds and Rust's `char` cannot) are skipped for the same
-    /// reason a lookup would yield U+FFFD for them (divergence D3).
+    /// reason a lookup would yield U+FFFD for them.
     pub fn reverse_pairs(&self) -> impl Iterator<Item = (char, u32)> + '_ {
         self.reverse_entries()
             .filter_map(|(unicode, code)| Some((char::from_u32(unicode)?, code)))
@@ -362,8 +362,8 @@ impl ToUnicode {
 /// above it is already a scalar value (only the incrementing `bfrange` form
 /// produces one) and is taken directly.
 ///
-/// Divergence D3: PDFium keeps unpaired surrogates as values, which `char`
-/// cannot hold, so they become U+FFFD here. A *valid* pair combines normally,
+/// PDFium keeps unpaired surrogates as values, which `char` cannot hold, so
+/// they become U+FFFD here. A *valid* pair combines normally,
 /// which is what the `NonBmpUnicodeLookup` assertion pins.
 fn units_to_chars(units: &[u32]) -> SmallVec<[char; 2]> {
     let mut out = SmallVec::new();
@@ -375,7 +375,7 @@ fn units_to_chars(units: &[u32]) -> SmallVec<[char; 2]> {
             continue;
         }
         // A high surrogate takes the next unit with it, when that unit is a
-        // low surrogate; anything else is a lone surrogate (D3).
+        // low surrogate; anything else is a lone surrogate.
         if (0xd800..0xdc00).contains(&unit)
             && let Some(&low @ 0xdc00..=0xdfff) = units.get(i)
         {
@@ -733,11 +733,11 @@ fn commit_range(range: &Range, map: &mut ToUnicode) {
 /// Increment a destination string by one, as the multi-destination `bfrange`
 /// form does per code.
 ///
-/// **This is a base-2³² increment, not the base-65536 one the design brief
-/// describes.** PDFium's `wchar_t` is 32 bits on the platform the oracle is
-/// built for, so `0xFFFF + 1` is `0x10000` — larger, not wrapped — and the
-/// carry arm never fires. Since [`string_to_units`] emits a fresh unit every
-/// four hex digits, no element starts above `0xFFFF` either, which makes the
+/// **This is a base-2³² increment.** PDFium's `wchar_t` is 32 bits on the
+/// platform the oracle is built for, so `0xFFFF + 1` is `0x10000` — larger,
+/// not wrapped — and the carry arm never fires. Since [`string_to_units`]
+/// emits a fresh unit every four hex digits, no element starts above
+/// `0xFFFF` either, which makes the
 /// carry arm **unreachable from any input at all**. It is written out anyway
 /// because the algorithm has one and a reader should be able to see why it
 /// never runs. Measured against the oracle, not inferred.

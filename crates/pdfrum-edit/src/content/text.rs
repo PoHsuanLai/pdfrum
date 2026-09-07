@@ -25,14 +25,13 @@
 //! `Tf` needs a subtype: `Type1`, `TrueType` or `Type0`. A Type 3 font has
 //! none of those, and the C++ answers by returning after `q ` and `BT ` are
 //! already written, leaving both unclosed. We build into a scratch buffer and
-//! discard it, so an unclassifiable font contributes nothing (divergence D6).
+//! discard it, so an unclassifiable font contributes nothing.
 //!
 //! A constructed object (`font: None`, `font_source: Some`) is the exception.
 //! The caller named the dict, so the Type 3 refusal does not apply; size
 //! lives in the glyph matrix (`Affine::scale(size)`). We write it as `Tf`
 //! and divide it out of `Tm`, matching the stream a parsed object of that
-//! size writes. The previous `font: None` refusal was the latent bug that
-//! made `TextBuilder` non-functional for new text.
+//! size writes.
 
 use pdfrum_common::kurbo::Affine;
 use pdfrum_font::Font;
@@ -71,11 +70,8 @@ pub(crate) fn emit_text_body(
     resource: &pdfrum_object::Name,
 ) -> bool {
     // A parsed object has `font: Some`; a constructed one has `font: None`
-    // and `font_source: Some`, with size only in the matrix. Refusing the
-    // latter was the latent bug that made `TextBuilder` emit nothing for
-    // new text — loading a Helvetica stand-in just to pass the subtype
-    // check was the wrong kind of fix. Skip the Type 3 refusal here: the
-    // caller named the dict.
+    // and `font_source: Some`, with size only in the matrix. Skip the Type 3
+    // refusal here: the caller named the dict.
     let (size, constructed) = match text.font.as_ref() {
         Some((font, size)) => {
             if font_subtype(font).is_none() {
@@ -306,7 +302,7 @@ mod tests {
     }
 
     // A font with no subtype drops the whole object rather than leaving `BT`
-    // unclosed the way the C++ does (D6).
+    // unclosed the way the C++ does.
     #[test]
     fn a_font_we_cannot_classify_emits_nothing() {
         let mut out = String::from("existing");

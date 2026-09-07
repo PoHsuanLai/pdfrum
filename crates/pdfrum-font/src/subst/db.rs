@@ -3,9 +3,8 @@
 //! `fontdb` is used purely as a face **enumerator** — the role
 //! `SystemFontInfoIface` played — while the ranking is our port of PDFium's
 //! own, so a substitution is predictable rather than dependent on someone
-//! else's heuristics. That resolves OQ-6(b) in the direction the brief
-//! recommended: `fontdb`'s query ranking is a different function, and Tier-B
-//! results would drift with its version.
+//! else's heuristics. `fontdb`'s query ranking is a different function, and
+//! substitution results would drift with its version.
 
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use super::charset::charset_for_code_page_bit;
@@ -92,8 +91,7 @@ impl FaceInfo {
     /// Whether this face agrees with the request on **every** term.
     ///
     /// The early-exit the substitution ladder takes: a face scoring the
-    /// maximum cannot be beaten, so the search stops. This is the predicate
-    /// `SIMILARITY_SCORE_MAX` used to be public for — the caller wants the
+    /// maximum cannot be beaten, so the search stops. The caller wants the
     /// question, not the number.
     #[must_use]
     pub fn is_exact_match(
@@ -379,9 +377,9 @@ pub struct SystemFontDb {
 }
 
 /// Where a scanned face's bytes come from — read only when the face is
-/// chosen. The scan used to copy every installed face into memory and keep
-/// all of them; on a host with 490 MB of fonts that was 1.1 GB resident per
-/// substituted font, for the one face the ladder picks.
+/// chosen. Copying every installed face into memory would be 1.1 GB resident
+/// per substituted font on a host with 490 MB of fonts, for the one face the
+/// ladder picks.
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 #[derive(Debug, Clone)]
 enum FaceSource {
@@ -442,8 +440,8 @@ impl SystemFontDb {
                     // The scan's hot path, and the reason this is not a plain
                     // `read`: `describe` wants two small tables, and reading
                     // every enumerated file whole cost 20.5 ms of `read` per
-                    // cold render on the oracle's 33.8 MB font set
-                    // (measured 2026-09-06). A probe fetches the table
+                    // cold render on the oracle's 33.8 MB font set.
+                    // A probe fetches the table
                     // directory and those two tables and nothing else; a file
                     // with no directory at all — a bare CFF, a Type 1 `.pfb` —
                     // falls back to the whole-file read it had before.

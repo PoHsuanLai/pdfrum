@@ -39,7 +39,7 @@ pub fn is_valid_icc_components(n: i64) -> bool {
 /// `moxcms` replaces the C++'s lcms here. The *ladder* around a rejection is
 /// pinned exactly; which malformed profiles get rejected is the colour
 /// engine's judgement and is measured against the oracle rather than
-/// specified (brief Q2).
+/// specified.
 pub struct IccProfile {
     /// The prepared transform to sRGB, when the profile is usable.
     transform: Option<Arc<moxcms::TransformF32Executor>>,

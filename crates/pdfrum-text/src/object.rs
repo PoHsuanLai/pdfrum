@@ -9,10 +9,10 @@
 // code per glyph, the text-space x each one sits at, the adjustment that
 // followed it, and the object's bounding box.
 //
-// Deriving that here rather than storing it in the page crate is the Q2
-// resolution: it is a pure function of data the page crate already publishes,
-// it is only ever wanted by this crate, and the page object stays a small
-// record. The derivation is one pass with a running pen —
+// Deriving that here rather than storing it in the page crate keeps it a
+// pure function of data the page crate already publishes; it is only ever
+// wanted by this crate, and the page object stays a small record. The
+// derivation is one pass with a running pen —
 // the same accumulation the renderer performs when it draws the run, and
 // the same one `CPDF_TextObject::CalcPositionDataInternal` performs to fill
 // its own arrays.
@@ -259,7 +259,7 @@ impl GlyphWidth {
 }
 
 /// The width of one character code in glyph units, through the extractor's
-/// own three-rung fallback ladder (`GetCharWidth`, design brief §1.7c).
+/// own three-rung fallback ladder (`GetCharWidth`).
 ///
 /// Distinct from [`Font::char_width`], which is only the first rung and stays
 /// fractional. The second re-encodes the code to bytes and re-decodes them,
@@ -530,9 +530,8 @@ pub enum ObjectGate {
     /// `crbug.com/444176962`; the draft is
     /// `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
     ///
-    /// Ruled by the user, 2026-09-06: implement the correct behaviour, cite
-    /// both sides, and bucket the golden as not-achievable rather than match
-    /// the defect.
+    /// Implement the correct behaviour, cite both sides, and bucket the
+    /// golden as not-achievable rather than match the defect.
     ShowsCharacters,
     /// The box is empty and the object shows nothing but spaces and control
     /// codes. Dropped, as PDFium drops it.

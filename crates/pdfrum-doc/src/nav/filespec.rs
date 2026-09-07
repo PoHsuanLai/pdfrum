@@ -5,8 +5,8 @@
 //! `/UF`, `/F`, `/DOS`, `/Mac`, `/Unix` — with two details that matter:
 //!
 //! - Each is **type-filtered to a string**, so a `/UF` written as a *name*
-//!   contributes nothing. That filter is the fix for a real security bug: a
-//!   name-valued `/UF /http://evil.org` used to read back as text.
+//!   contributes nothing. A name-valued `/UF /http://evil.org` is not a
+//!   file name.
 //! - `/UF` decodes as PDF text (byte-order mark aware); every other key, and
 //!   a bare string file specification, decodes as **Latin-1**. Two different
 //!   functions, deliberately not unified.
@@ -166,9 +166,8 @@ fn latin1(bytes: &[u8]) -> String {
 /// Translates a file name from PDF's platform-independent form.
 ///
 /// On this platform it is the identity: the whole slash-translation machinery
-/// is compiled only for Windows and macOS. The rules for those platforms are
-/// recorded in the design brief so a future port has them; they are not
-/// reproduced here, and the Windows branch in particular reads past the end
+/// is compiled only for Windows and macOS. Those platform rules are not
+/// implemented here, and the Windows branch in particular reads past the end
 /// of a one- or two-character path, which we would not reproduce even if it
 /// were enabled.
 ///
@@ -260,8 +259,7 @@ mod tests {
 
     #[test]
     fn a_name_valued_key_contributes_nothing() {
-        // The crbug.com/959183 fix: a name-typed `/UF` used to read back as
-        // its text.
+        // crbug.com/959183: a name-typed `/UF` is not a file name.
         let evil = spec(&[
             ("UF", Object::Name(Name::from("http://evil.org"))),
             ("F", text(b"safe.pdf")),

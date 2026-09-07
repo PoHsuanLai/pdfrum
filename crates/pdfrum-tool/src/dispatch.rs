@@ -35,12 +35,10 @@
 //!    no pairing state whatsoever, so there is nothing here that *could*
 //!    synthesize the missing edge.
 //!
-//! The right button is not dropped either. It has no method on the facade —
-//! a `button` argument and a `down: bool` beside it was an enum spelled as
-//! arguments — so a right-button line becomes an [`Event::MouseDown`] or
-//! [`Event::MouseUp`] handed to [`pdfrum::FormSession::apply`], which is the
-//! shape the value already had. The correct behaviour for those lines is to
-//! consume nothing, and that is still what happens.
+//! The right button is not dropped either. It has no dedicated method on the
+//! facade, so a right-button line becomes an [`Event::MouseDown`] or
+//! [`Event::MouseUp`] handed to [`pdfrum::FormSession::apply`]. Those lines
+//! consume nothing.
 
 // The oracle readings behind facts 1 and 2 above, kept out of the published
 // docs but not lost. Page space: public/fpdf_formfill.h documents page_x and

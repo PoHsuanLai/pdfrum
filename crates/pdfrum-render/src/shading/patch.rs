@@ -15,7 +15,7 @@
 //! coverage *value*, where hard-edging thresholds that value at the midpoint.
 //! A pixel two abutting cells each cover by 40% is painted by both under the
 //! first rule and dropped by both under the second — a white pin-hole through
-//! every internal seam, which is what this rasterizer used to draw.
+//! every internal seam.
 //!
 //! The cells still go into a scratch buffer at **alpha 1.0**, and the
 //! shading's alpha is applied exactly once, when that buffer is blitted. That

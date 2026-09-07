@@ -11,7 +11,7 @@
 //! crash, and so `blob_integrity` can test the reader against the same
 //! invariants the generator checked.
 
-/// The generated table data (§3.3 of the design brief).
+/// The generated table data.
 static BLOB: &[u8] = include_bytes!("../tables/cmaps.bin");
 
 /// `"PMC1"` little-endian: pdfrum CMaps, format 1.
@@ -215,8 +215,8 @@ mod tests {
         name, total_len, word_arrays_identical, word_record,
     };
 
-    /// The registry entry counts and CID→Unicode lengths the design brief
-    /// §1.3 tabulates from the C++ source.
+    /// The registry entry counts and CID→Unicode lengths tabulated from the
+    /// C++ source.
     const EXPECT: [(usize, usize); REGISTRY_COUNT] =
         [(14, 30284), (14, 19088), (20, 15444), (11, 18352)];
 
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_shapes_match_the_brief() {
+    fn registry_shapes_match_the_tabulated_counts() {
         for (reg, (entries, uni)) in EXPECT.iter().copied().enumerate() {
             assert_eq!(entry_count(reg), entries, "registry {reg} entry count");
             assert_eq!(cid2unicode_len(reg), uni, "registry {reg} CID2Unicode len");

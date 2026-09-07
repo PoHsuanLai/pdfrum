@@ -9,8 +9,7 @@
 //! frequent source of bugs and is worth restating whenever it comes up.
 //!
 //! `kurbo::Affine` multiplies right-to-left, so the code writes
-//! `parent * pattern` — the pattern's matrix applied first, then the parent's
-//! (design brief D14).
+//! `parent * pattern` — the pattern's matrix applied first, then the parent's.
 //!
 //! One asymmetry to know: a **bare shading** reached through the `sh`
 //! operator ignores any `/Matrix` on its dictionary entirely. The matrix is
@@ -86,10 +85,7 @@ impl Pattern {
     // is no independent implementation to weigh: pdf.js is canvas-backed and
     // has no pattern cache at all. We keep no cache either, which cannot
     // alias; if one is ever added it must be keyed on
-    // `(ObjRef, parent_matrix, is_shading)`. This is the audit's A24,
-    // previously recorded as design brief D15 — "declined", where the
-    // oracle-bug rule makes it obligatory. Note the brief describes the fix as
-    // a `(ObjRef, parent_matrix)` key; what shipped is stronger.
+    // `(ObjRef, parent_matrix, is_shading)`.
     #[must_use]
     pub fn load<R: Resolve>(
         obj: &Object,

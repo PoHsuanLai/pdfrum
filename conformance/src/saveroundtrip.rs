@@ -8,8 +8,7 @@
 //!
 //! 1. **pdfrum saves** every corpus file (`pdfrum-tool --save`).
 //! 2. **The oracle reopens** what pdfrum wrote and renders it. A load failure
-//! here is the exit criterion failing: another implementation could not
-//!    read our output.
+//!    here means another implementation could not read our output.
 //! 3. **pdfrum re-renders** the saved file and the result is compared against
 //!    the *original's* golden render at the Tier-B floor. This is what catches
 //!    a save that opens but has lost something.
@@ -39,9 +38,9 @@
 //!
 //! Since an encrypted document saves *encrypted*, so its whole sweep runs
 //! under a password: pdfrum opens it with `--password=`, saves it, and the
-//! oracle is handed the same password to reopen it with. That is the
-//! milestone's exit criterion in one line — a file another implementation can
-//! open with the password it was given, and which renders what it always did.
+//! oracle is handed the same password to reopen it with: a file another
+//! implementation can open with the password it was given, and which renders
+//! what it always did.
 //!
 //! It also asks the question the plaintext sweep cannot: the harness first
 //! checks that the oracle **fails** to open the saved file with no password.
@@ -134,8 +133,7 @@ pub struct SaveOutcome {
     pub path: String,
     /// Whether pdfrum wrote a file at all.
     pub saved: bool,
-    /// Whether the **oracle** reopened and rendered what pdfrum wrote. This
-    /// is the exit criterion.
+    /// Whether the **oracle** reopened and rendered what pdfrum wrote.
     pub oracle_reopened: bool,
     /// Whether the incremental save's output kept the original as its prefix
     /// and chained its cross-reference, and the oracle reopened it too.
@@ -537,7 +535,7 @@ fn check_incremental(
     // An encrypted document is no longer excused: since its appended
     // objects are enciphered under the key the original bytes already use, so
     // the append discipline applies to it exactly as it does to any other
-    // file (edit brief §1.9).
+    // file.
     if doc.xref_was_rebuilt() {
         return true;
     }
@@ -592,7 +590,7 @@ fn check_incremental(
 pub struct SaveTotals {
     /// Files the tool wrote a document for.
     pub saved: u64,
-    /// Files the oracle reopened — the exit criterion.
+    /// Files the oracle reopened.
     pub oracle_reopened: u64,
     /// Files whose pixels were compared.
     pub compared: u64,
@@ -608,7 +606,7 @@ pub struct SaveTotals {
     /// Encrypted files swept under a password.
     pub encrypted: u64,
     /// Encrypted files whose saved copy the oracle refused to open without a
-    /// password — the exit criterion's other half.
+    /// password.
     pub still_encrypted: u64,
     /// Files skipped before any check ran.
     pub skipped: u64,
@@ -677,8 +675,8 @@ impl SaveTotals {
 
     /// The share of encrypted files whose saved copy is still encrypted.
     ///
-    /// The exit criterion pairs this with [`Self::reopen_rate`]: the
-    /// oracle opens the file *with* the password and refuses it *without*.
+    /// Pair with [`Self::reopen_rate`]: the oracle opens the file *with* the
+    /// password and refuses it *without*.
     #[must_use]
     pub fn still_encrypted_rate(&self) -> Option<f64> {
         rate(self.still_encrypted, self.encrypted)

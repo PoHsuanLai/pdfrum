@@ -210,10 +210,9 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
     let doc = Document::open(HELLO).expect("open");
     let page = doc.page(0).expect("page");
     let opts = RenderOptions::default();
-    // Three backends, each named at the call site rather than selected by an
-    // enum the facade owns (2026-09-02). The two that are not the facade's
-    // default are dev-dependencies here, which is exactly what a caller who
-    // wants one writes.
+    // Three backends, each named at the call site. The two that are not the
+    // facade's default are dev-dependencies here, which is exactly what a
+    // caller who wants one writes.
     let vello = page
         .render_on(
             &pdfrum::VelloCpuBackend::new(),
@@ -337,11 +336,8 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one() {
 
 /// `render` is `render_on` with the default backend and a fresh session, and
 /// `text` is `text_on` with a fresh one — byte for byte, not merely close.
-///
-/// This is what the 2026-09-03 fold of `render_with` / `render_with_on` /
-/// `render_session` / `render_session_on` into `render_on` (and `text_with` /
-/// `text_session` into `text_on`) has to preserve: the convenience forms are
-/// the general one with a default argument and nothing else.
+/// The convenience forms are the general one with a default argument and
+/// nothing else.
 #[test]
 fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
     let doc = Document::open(BOOKMARKS).expect("open");
@@ -366,14 +362,8 @@ fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
     }
 }
 
-/// The substitution-options case survives the fold.
-///
-/// Before 2026-09-03 the only way to render or extract with a configured
-/// [`pdfrum::BuildContext`] was `render_with` / `text_with`, which took one
-/// directly. Those are gone; the context is now reached as `session.build`,
-/// and this proves that route reaches the same place — a session whose build
-/// half carries substitution options renders and extracts exactly as a
-/// standalone context so configured would have.
+/// A session's `build` half is how a caller supplies a configured
+/// [`pdfrum::BuildContext`]. `render_on` is how a caller supplies a backend.
 #[test]
 fn a_sessions_build_half_still_carries_substitution_options() {
     let doc = Document::open(BOOKMARKS).expect("open");
@@ -384,11 +374,9 @@ fn a_sessions_build_half_still_carries_substitution_options() {
     let mut session = pdfrum::RenderSession::new();
     session.build = pdfrum::BuildContext::with_substitution(substitution.clone());
 
-    // The same context, standing alone, is what the withdrawn `render_with`
-    // and `text_with` took. Driving it through `paint` is no longer possible
-    // from outside the crate, so the check is that the session route produces
-    // what a default one does for a document with no substituted font, and
-    // that the configured context is genuinely the one in use.
+    // The check is that the session route produces what a default one does
+    // for a document with no substituted font, and that the configured
+    // context is genuinely the one in use.
     let mut plain = pdfrum::RenderSession::new();
     for page in doc.pages() {
         let configured = page
@@ -408,7 +396,7 @@ fn a_sessions_build_half_still_carries_substitution_options() {
     }
 
     // And the context really is the configured one: it is reachable, `&mut`,
-    // and replaceable in place, which is the whole of what `render_with` gave.
+    // and replaceable in place.
     session.build = pdfrum::BuildContext::with_substitution(substitution);
     let text = doc.page(0).expect("page").text_on(&mut session).to_string();
     assert!(text.contains("Page1"));
@@ -660,9 +648,8 @@ fn a_filled_form_round_trips_through_save_and_reopen() {
 fn a_field_that_already_holds_an_empty_value_takes_the_new_one() {
     // A merged field-and-widget dictionary with `/V ()` already in it — the
     // common shape a form authoring tool writes. The value edit and the
-    // widget edit target the same object; the widget's copy used to be
-    // folded back over the edited one and its old `/V ()` won, so the file
-    // came out unchanged while the save reported success.
+    // widget edit target the same object, so the new value is what the file
+    // holds.
     let pdf = b"%PDF-1.7\n\
 1 0 obj<</Type/Catalog/Pages 2 0 R/AcroForm<</Fields[4 0 R]/DA(/Helv 0 Tf 0 g)>>>>endobj\n\
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n\
@@ -1198,9 +1185,8 @@ fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
     }
 
     // `session.build` is a public field, so a caller who wants the build half
-    // alone — to configure it, or to hand it to a `FormSession` — still has
-    // it. That is what the withdrawn `render_with` / `text_with` were for,
-    // and replacing it in place is how a caller reaches the configured case.
+    // alone — to configure it, or to hand it to a `FormSession` — has it.
+    // Replacing it in place is how a caller reaches the configured case.
     session.build = pdfrum::BuildContext::new();
     let text = doc.page(0).expect("page").text_on(&mut session).to_string();
     assert!(text.contains("Page1"));
@@ -1243,8 +1229,8 @@ fn a_repair_found_after_the_load_reaches_the_document_wide_view() {
 #[test]
 fn a_repair_this_crates_own_reads_make_reaches_the_view_too() {
     // Not all late damage is the parser's. Generating a widget's missing
-    // appearance is something *this* crate's render path asks for, through a
-    // sink that used to be dropped on return.
+    // appearance is something *this* crate's render path asks for, and it
+    // reaches the document-wide diagnostic view.
     let doc = Document::open(FORM).expect("open");
     let _ = doc
         .page(0)

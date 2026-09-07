@@ -7,8 +7,8 @@
 //! backends disagree about odd-length arrays: AGG lets the dasher cycle while
 //! Skia doubles the array. Since the normalization is a pure function of the
 //! array and the device scale, it belongs one layer up, where both backends
-//! consume the same answer (design brief D6). We take the AGG behaviour,
-//! because that is what the oracle renders.
+//! consume the same answer. We take the AGG behaviour, because that is what
+//! the oracle renders.
 //!
 //! The ladder, in order:
 //!

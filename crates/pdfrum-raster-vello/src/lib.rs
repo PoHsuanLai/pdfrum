@@ -1,8 +1,4 @@
 #![doc = include_str!("../README.md")]
-// The crate names follow vello's own: upstream's `vello` is the GPU renderer on
-// `wgpu`, so the bare name belongs here and the CPU wrapper is
-// `pdfrum-raster-vello-cpu`.
-//
 // This is the fourth backend and the only one that is not pure Rust all the way
 // down: `wgpu` reaches the platform's graphics drivers. That exemption exists
 // for exactly one reason — pdfrum's most likely consumer is a Rust GUI frontend
@@ -634,14 +630,13 @@ impl RasterBackend for VelloBackend<'_> {
 
     fn new_target(&self, w: u32, h: u32, clear: peniko::Color) -> Self::Device {
         // Clamped to the *device's* ceiling, not only the trait's. The trait's
-        // is 65535 and this adapter's is typically 8192 or 16384, so a request
-        // between the two used to produce a target `rasterize` then had to
-        // refuse — and refusing meant a blank pixmap of the requested size,
-        // which at 65535 square is seventeen gibibytes of zeros allocated on
-        // the way to reporting failure. Clamping here makes that branch
-        // unreachable and bounds the worst allocation at what an accepted
-        // target would have cost anyway. A caller who would rather be told
-        // than clamped uses [`VelloBackend::try_new_target`].
+        // is 65535 and this adapter's is typically 8192 or 16384. Refusing a
+        // request between the two would mean a blank pixmap of the requested
+        // size, which at 65535 square is seventeen gibibytes of zeros
+        // allocated on the way to reporting failure. Clamping here makes that
+        // branch unreachable and bounds the worst allocation at what an
+        // accepted target would have cost anyway. A caller who would rather
+        // be told than clamped uses [`VelloBackend::try_new_target`].
         let ceiling = self.ceiling();
         let (w, h) = (w.min(ceiling), h.min(ceiling));
         // A transparent clear needs no backdrop draw at all, which is the
@@ -781,11 +776,9 @@ mod tests {
 
     #[test]
     fn a_target_past_the_limit_is_refused_and_the_clamp_agrees_with_it() {
-        // `Error::TargetTooLarge` used to be documented and never constructed,
-        // and the branch that should have built it allocated `w * h * 4` zeros
-        // first. Both halves of the fix are decided by `Limits` alone, so they
-        // are checked here rather than on hardware: the refusal carries the
-        // request and the bound, and the clamp the infallible constructor
+        // Both the refusal and the clamp are decided by `Limits` alone, so
+        // they are checked here rather than on hardware: the refusal carries
+        // the request and the bound, and the clamp the infallible constructor
         // applies lands on something the same bound accepts.
         let limits = Limits {
             max_dimension: 8192,
@@ -796,8 +789,9 @@ mod tests {
 
         let ceiling = limits.max_dimension.min(MAX_TARGET_DIMENSION);
         assert_eq!(ceiling, 8192, "the adapter binds well below the trait's");
-        // The worst case the reviewer priced: a 65535-square request used to
-        // reach `Pixmap::new` at seventeen gibibytes on the way to failing.
+        // A 65535-square request is the worst case: without the clamp it
+        // would reach `Pixmap::new` at seventeen gibibytes on the way to
+        // failing.
         assert!(
             !refused(
                 MAX_TARGET_DIMENSION.min(ceiling),

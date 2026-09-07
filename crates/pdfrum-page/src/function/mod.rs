@@ -17,9 +17,8 @@
 //! recursion is bounded only by a cycle set and, in practice, by the native
 //! stack. A `Vec` sized from untrusted data is a denial-of-service vector
 //! Rust must not accept, so [`FunctionCache::load`] enforces
-//! [`MAX_DEPTH`] and [`MAX_OUTPUTS`] (design brief D11). Exceeding either
-//! fails the load, which is the same observable outcome as the C++'s stack
-//! overflow but survivable.
+//! [`MAX_DEPTH`] and [`MAX_OUTPUTS`]. Exceeding either fails the load, which
+//! is the same observable outcome as the C++'s stack overflow but survivable.
 
 mod exponential;
 mod postscript;

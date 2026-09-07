@@ -36,10 +36,9 @@ fn request(name: &str) -> FontRequest {
 /// `cfx_fontmapper_unittest.cpp`'s
 /// `FindSubstFaceForRegularStandardFontWithBoldWeight`.
 ///
-/// Audit item **A51**. The upstream test expects **700** and carries its own
+/// The upstream test expects **700** and carries its own
 /// `TODO(crbug.com/500640684): Should be 400`; under the oracle-bug rule we
-/// implement the 400 the TODO asks for, so this asserts 400 where it used to
-/// assert the reproduced 700.
+/// implement the 400 the TODO asks for, so this asserts 400.
 #[test]
 fn an_italic_alias_reaches_the_database_as_helvetica_oblique() {
     /// One `find_font` call, as weight, italic, charset, pitch bits and family.
@@ -100,7 +99,7 @@ fn an_italic_alias_reaches_the_database_as_helvetica_oblique() {
     assert!(query.1, "the Oblique index implies italic");
     assert_eq!(query.2, Charset::Ansi);
     assert_eq!(query.3, 0, "index 7 is neither fixed nor Roman");
-    // `[oracle-bug]` A51: `cfx_fontmapper.cpp:644`'s `nStyle ==
+    // `[oracle-bug]` `cfx_fontmapper.cpp:644`'s `nStyle ==
     // kFontStyleNormal` skips the reset for an italic face, keeping the
     // requested 700 where Annex D makes Helvetica-Oblique regular weight —
     // which is what crbug.com/500640684's own TODO says. We reset on "not
@@ -467,7 +466,7 @@ fn the_narrow_rewrite_uses_the_linux_family() {
 }
 
 // ---------------------------------------------------------------------------
-// The enumeration knob (D7 / OQ-6a).
+// The enumeration knob.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -546,7 +545,7 @@ fn skip_font_enumeration_changes_whether_the_weight_survives_branch_a() {
 
 #[test]
 fn the_default_matches_the_oracles_enumeration_build() {
-    // OQ-6(a): the oracle's Linux build drives `CFX_FolderFontInfo`, which
+    // The oracle's Linux build drives `CFX_FolderFontInfo`, which
     // enumerates, so the default is the enumeration behavior.
     assert!(!SubstitutionOptions::default().skip_font_enumeration);
 }
@@ -837,11 +836,11 @@ mod croscore_faces {
 
 /// Which of the three databases the options select, stated as behaviour.
 ///
-/// The regression these pin: `substitute` used to read *only* `font_dirs`, so
-/// a host that named no directory got the empty [`TestFontDb`] — the built-in
-/// Latin faces alone. That is right for a unit test and wrong for a reference
-/// run, which scans `/usr/share/fonts` and three siblings unless `--font-dir`
-/// replaces them. A CJK request then found no face claiming its charset, fell
+/// These pin that `substitute` with no `font_dirs` must not fall through to
+/// the empty [`TestFontDb`] — the built-in Latin faces alone. That is right
+/// for a unit test and wrong for a reference run, which scans `/usr/share/fonts`
+/// and three siblings unless `--font-dir` replaces them. A CJK request then
+/// found no face claiming its charset, fell
 /// through to the built-in Multiple-Master serif, and every CJK glyph box came
 /// back empty — which dropped the whole text object as zero-width and lost the
 /// character from `--txt`. See `fx/text/test_m.pdf`.

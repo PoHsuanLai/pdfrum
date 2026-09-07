@@ -224,7 +224,7 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
 ///    the mirrored, normalized text; a left-to-right one keeps whatever it
 ///    was constructed with. That is what carries the hyphen sentinel's
 ///    `0x0002` through while the text buffer receives `U+00AD`. The one
-///    exception is `[oracle-bug]` A40b's space normalization, which rewrites
+///    exception is `[oracle-bug]` space normalization, which rewrites
 ///    the record in either direction precisely so the two outputs *cannot*
 ///    disagree about a space.
 /// 3. Normalization multiplies one character record into several, all sharing
@@ -436,10 +436,9 @@ mod tests {
     #[test]
     fn the_hyphen_splits_the_two_outputs() {
         // What ProcessGenerateCharacter leaves behind: the record says 0x2,
-        // the staged text says U+00AD. The asymmetry is the point, and after
-        // audit A41's buffer half it is an asymmetry of our own making — the
-        // record keeps PDFium's 0x2, the buffer carries a real soft hyphen
-        // where PDFium writes the U+FFFE noncharacter.
+        // the staged text says U+00AD. The record keeps PDFium's 0x2; the
+        // buffer carries a real soft hyphen where PDFium writes the U+FFFE
+        // noncharacter.
         let mut line = Line::default();
         line.push(u32::from('a'), info(u32::from('a')));
         let mut hyphen = info(0x02);
@@ -452,8 +451,7 @@ mod tests {
         // The text keeps the soft hyphen; the character list keeps 0x2.
         assert_eq!(out.text, [u32::from('a'), 0x00AD, u32::from('s')]);
         assert_eq!(char_units(&out), [u32::from('a'), 0x02, u32::from('s')]);
-        // And what lands in the buffer is a real character, which is the
-        // whole of A41's buffer half.
+        // And what lands in the buffer is a real character, not a noncharacter.
         assert!(char::from_u32(0x00AD).is_some());
     }
 
@@ -468,12 +466,11 @@ mod tests {
         assert_eq!(out.chars[2].char_type, CharType::Piece);
     }
 
-    // Audit item **A40b**. This asserted `"a\u{00A0}b"`, reproducing
     // `cpdf_textpage.cpp:793-795`'s gate: `GetUnicodeNormalization` maps
     // `U+00A0` to `U+0020` but is consulted only inside a right-to-left run,
-    // so the same character came out two ways on the same page. pdf.js
+    // so the same character comes out two ways on the same page. pdf.js
     // NFKC-normalises every chunk, so the space is a space in either
-    // direction now.
+    // direction.
     #[test]
     fn a_no_break_space_normalizes_in_either_direction() {
         let mut out = Output::default();
@@ -487,8 +484,8 @@ mod tests {
         assert_eq!(out.chars[1].unicode, 0x0020);
     }
 
-    /// Audit item **A40b**, the other half: this is not PDFium's whole
-    /// normalization table, which is not NFKC and would strip the accent.
+    /// This is not PDFium's whole normalization table, which is not NFKC and
+    /// would strip the accent.
     #[test]
     fn an_accented_letter_is_not_normalized_left_to_right() {
         let mut out = Output::default();

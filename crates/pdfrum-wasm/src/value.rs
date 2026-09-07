@@ -1,9 +1,9 @@
 //! The structured values the binding returns.
 //!
 //! Every one is a `#[wasm_bindgen]` struct with `getter_with_clone`, not a
-//! `serde-wasm-bindgen` blob. The reason is the deliverable: a plain object
-//! reaches TypeScript as `any`, and these reach it as named classes with typed
-//! fields, so a caller's editor knows that a `Word` has a `text` and a `size`
+//! `serde-wasm-bindgen` blob. A plain object reaches TypeScript as `any`;
+//! these reach it as named classes with typed fields, so a caller's editor
+//! knows that a `Word` has a `text` and a `size`
 //! before the code has ever run. It costs one `pub` field per value and buys
 //! the `.d.ts` that asks for.
 //!

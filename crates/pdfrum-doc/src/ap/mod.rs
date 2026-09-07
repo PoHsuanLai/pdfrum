@@ -1887,9 +1887,9 @@ mod tests {
 
     #[test]
     fn the_form_faces_are_built_once_per_document_and_shared() {
-        // The regression this pins: `FormFonts::load` used to rebuild every
-        // `/DR` font, the fallback, and the synthesized second faces on every
-        // call, and the annotation overlay calls it once per page per render.
+        // `FormFonts::load` builds `/DR` fonts, the fallback, and the
+        // synthesized second faces once per document; the annotation overlay
+        // calls it once per page per render.
         let catalog = dict(&[("AcroForm", Object::Ref(pdfrum_object::ObjRef::new(7, 0)))]);
         let mut ctx = pdfrum_page::BuildContext::new();
         let first = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);

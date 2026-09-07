@@ -668,7 +668,7 @@ fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
         divergent_rate * 100.0
     );
     println!(
-        "  exact backend (reported)      {} files, worst edge divergence {:.4}%",
+        "  agg backend (reported)        {} files, worst edge divergence {:.4}%",
         agg_rates.len(),
         agg_worst * 100.0
     );
@@ -938,8 +938,7 @@ fn report_mutation_tally(tally: &mutation::MutationTally, files: usize) {
         pct(tally.agreement_rate())
     );
     // A file the two renderers already disagreed on is counted apart, because
-    // the mutation did not cause the disagreement and fixing it is somebody
-    // else's milestone.
+    // the mutation did not cause the disagreement.
     println!(
         "  + already disagreed: {} — the two renderers differ on a plain save of it too",
         tally.baseline_explained

@@ -532,14 +532,13 @@ impl LcdBitmap {
         // subpixels fall off the end, which is exactly the window walking
         // left.
         //
-        // The zeros are what the old spelling's `if idx < row { return 0 }`
-        // produced. Only the first pixel of a row could ever reach left of
-        // it, and only by fewer than three subpixels — the C++ averages the
-        // surviving taps *over the same divisor of three*, which **darkens**
-        // that column rather than brightening it, and prepending zeros is
-        // that. Clamping the window to the row start instead would brighten
-        // it, and `the_first_column_darkens_at_a_shifted_phase` is the test
-        // that says which.
+        // Prepending zeros is an out-of-range tap. Only the first pixel of a
+        // row can ever reach left of it, and only by fewer than three
+        // subpixels — the C++ averages the surviving taps *over the same
+        // divisor of three*, which **darkens** that column rather than
+        // brightening it. Clamping the window to the row start instead would
+        // brighten it, and `the_first_column_darkens_at_a_shifted_phase` is
+        // the test that says which.
         //
         // The row's last `shift` subpixels are then the tail of no complete
         // window, and `chunks_exact` drops them — which is right, because
@@ -969,12 +968,10 @@ fn recolour_ref_into(
     //
     // The coverage buffer is exactly `height * width` bytes — `render_lcd`
     // sizes it and `gray_coverage_into` refills it to that — so zipping the
-    // two row-wise is the index arithmetic and the bounds check the old
-    // spelling paid per pixel (`coverage.get(y * stride + x)`), done once per
-    // row by the iterator instead. A shorter coverage buffer simply yields
-    // fewer rows here, where the old `get` would have painted the missing
-    // ones transparent; the two are produced together and cannot differ, and
-    // `reshape_keeping_pixels` has already sized `out` to this glyph.
+    // two row-wise does the index arithmetic and the bounds check once per
+    // row. A shorter coverage buffer simply yields fewer rows; the two are
+    // produced together and cannot differ, and `reshape_keeping_pixels` has
+    // already sized `out` to this glyph.
     //
     // **A coverage-to-pixel lookup table was tried here and is not this.** It
     // is the obvious hoist — 256 entries derived once per occurrence turn the
@@ -1388,9 +1385,8 @@ mod tests {
     ///
     /// The shapes are chosen for the two things the hoist trades on: the
     /// **row band**, so a one-row and a many-row glyph both appear, and the
-    /// **window's left edge**, which is the only index the old spelling's
-    /// bounds check could ever have caught — column zero at a non-zero phase.
-    /// A single-column glyph is in the list because for it *every* column is
+    /// **window's left edge** — column zero at a non-zero phase. A
+    /// single-column glyph is in the list because for it *every* column is
     /// column zero.
     #[test]
     fn the_sliced_coverage_walk_matches_the_per_subpixel_one() {
@@ -1422,9 +1418,9 @@ mod tests {
 
     /// Column zero at a non-zero phase reads fewer taps, and darkens.
     ///
-    /// The one index the old bounds check existed for, isolated: at phase two
-    /// the first pixel's window starts two subpixels before the row, so only
-    /// one of its three taps is real and the average is over three anyway.
+    /// At phase two the first pixel's window starts two subpixels before the
+    /// row, so only one of its three taps is real and the average is over
+    /// three anyway.
     /// A hoist that clamped the window to the row start instead — reading
     /// subpixels 0, 1, 2 rather than dropping the two missing taps — would
     /// *brighten* that column, which is the opposite of what the C++ does.
@@ -1505,10 +1501,9 @@ mod tests {
     /// A zero-width bitmap yields no coverage rather than panicking.
     ///
     /// The row walk chunks by `width` and by `width * 3`, and `chunks_exact`
-    /// panics on a chunk size of zero — so the degenerate bitmap the old
-    /// spelling's `0..0` column loop simply skipped needs saying out loud
-    /// here. `render_lcd` does not produce one, and this is the guard for a
-    /// caller that constructs an `LcdBitmap` some other way.
+    /// panics on a chunk size of zero — so a degenerate bitmap needs saying
+    /// out loud here. `render_lcd` does not produce one, and this is the
+    /// guard for a caller that constructs an `LcdBitmap` some other way.
     #[test]
     fn a_zero_width_bitmap_yields_no_coverage() {
         for (width, height) in [(0, 4), (0, 0), (4, 0)] {

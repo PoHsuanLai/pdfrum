@@ -10,7 +10,7 @@
 //! implementation of ISO 19005, it is the one archives actually run, and it
 //! disagreeing with us is information either way.
 //!
-//! The deliverable is therefore **the divergence list**, not agreement. The
+//! The result is therefore **the divergence list**, not agreement. The
 //! checker has not been tuned to agree — a checker that agrees with its
 //! oracle by construction proves nothing — and carries
 //! every disagreement adjudicated as ours right, theirs right, or not

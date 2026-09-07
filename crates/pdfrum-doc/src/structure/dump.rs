@@ -94,8 +94,7 @@ fn dump_element<R: Resolve>(
     // 7. Marked-content identifiers, through the *unfiltered* accessor: the
     // dump reports content on other pages too, which the page-filtered kid
     // list deliberately does not.
-    // No `/K` at all means no loop, which the old `-1`-as-a-count spelled as
-    // `0..-1` being empty after a cast.
+    // No `/K` at all means no loop.
     for index in 0..element::marked_content_id_count(&element.dict, r).unwrap_or(0) {
         if let Some(id) = element::marked_content_id_at(&element.dict, index, r) {
             let _ = writeln!(out, "{pad} MCID{index}: {id}");

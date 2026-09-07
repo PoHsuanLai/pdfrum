@@ -4,9 +4,7 @@
 //! extraction only (ported in `links.rs`). Every assertion that pins a
 //! *text-page heuristic* lives in the embedder test instead, so these are the
 //! only upstream numbers there are for reading order, generated spaces, line
-//! breaks, hyphenation, bidi and `/ActualText` — which is why the design brief
-//! transcribes those heuristics so literally and why these tests matter more
-//! than their count suggests.
+//! breaks, hyphenation, bidi and `/ActualText`.
 //!
 //! Roughly a third of the upstream file asserts C-ABI buffer semantics
 //! ("returns the required size when the buffer is too small without modifying
@@ -155,7 +153,7 @@ macro_rules! fixture {
 }
 
 // ---------------------------------------------------------------------------
-// The character model — the highest-value assertions, per the design brief
+// The character model
 
 /// `hello_world.pdf`, the fixture half the upstream file shares.
 const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
@@ -189,14 +187,13 @@ fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     // finding. The *character* at the break holds U+0002; the *text* at the
     // same place holds U+00AD. Both are read, by different callers.
     //
-    // `[oracle-bug]` **A41, buffer half.** This used to assert
-    // `"Verita\u{FFFE}serum"`, reproducing `cpdf_textpage.cpp:1360-1361`'s
-    // `AppendChar(0xfffe)`. `U+FFFE` is a permanent Unicode noncharacter
-    // (Unicode §23.7) and reached callers verbatim through `Display`. It is
-    // now the real soft hyphen the document contained and `IsHyphenCode`
+    // `[oracle-bug]` `cpdf_textpage.cpp:1360-1361`'s `AppendChar(0xfffe)`
+    // writes `U+FFFE`, a permanent Unicode noncharacter (Unicode §23.7),
+    // which reached callers verbatim through `Display`. The text holds the
+    // real soft hyphen the document contained and `IsHyphenCode`
     // (`:1149-1151`) recognised before discarding. The *record* still holds
-    // PDFium's `0x2` — A41's char-list half costs 12 golden rows and stays
-    // declined — so the two outputs now diverge in a new, deliberate way.
+    // PDFium's `0x2`; that char-list half costs 12 golden rows and stays
+    // declined, so the two outputs diverge deliberately.
     let page = fixture!("bug_781804.pdf");
     assert_eq!(page.chars[0].unicode, u32::from('V'));
     assert_ne!(page.chars[0].char_type, CharType::Hyphen);
@@ -307,31 +304,30 @@ fn an_unmappable_character_is_still_counted() {
     // non-zero), so it reaches the text buffer, and the buffer cannot write a
     // bare NUL there.
     //
-    // `[oracle-bug]` **A41, buffer half.** This used to assert `"\u{FFFE}"`,
-    // reproducing `cpdf_textpage.cpp:1462`'s `AppendChar(c ? c : 0xfffe)` —
-    // the same Unicode noncharacter as the hyphen path, in the same public
-    // channel, so the same ruling applies. `U+FFFD` is the sanctioned stand-in
-    // for an unrepresentable character and is already what this workspace
-    // answers for an unpaired surrogate (audit A54). The character *record*
-    // still holds `0`, so `--txt` is byte-identical.
+    // `[oracle-bug]` `cpdf_textpage.cpp:1462`'s `AppendChar(c ? c : 0xfffe)`
+    // writes the same Unicode noncharacter as the hyphen path, in the same
+    // public channel. `U+FFFD` is the sanctioned stand-in for an
+    // unrepresentable character and is already what this workspace answers
+    // for an unpaired surrogate. The character *record* still holds `0`, so
+    // `--txt` is byte-identical.
     assert_eq!(page.to_string(), "\u{FFFD}");
 }
 
-/// Audit items **A40 + A43**. `WhitespaceCharCount` asserts zero characters,
-/// reproducing the bug crbug.com/40643656 reports: the object gate at
-/// `cpdf_textpage.cpp:886` tests `GetRect().Width()`, built from the glyph
-/// bounding boxes, and a space's box is empty while its `w0` per §9.4.3 is
-/// not, so a spaces-only object vanishes.
+/// `WhitespaceCharCount` asserts zero characters, reproducing the bug
+/// crbug.com/40643656 reports: the object gate at `cpdf_textpage.cpp:886`
+/// tests `GetRect().Width()`, built from the glyph bounding boxes, and a
+/// space's box is empty while its `w0` per §9.4.3 is not, so a spaces-only
+/// object vanishes.
 ///
 /// `[oracle-bug]` We keep it, and this page yields the one character the bug
-/// asks for. narrowed *how* we keep it: the general advance gate that
-/// used to do so kept every spaces-only object on every page, which
-/// duplicated separators the inter-object rules already emit and was the
-/// "spurious generated space" defect. The rescue is now page-level —
+/// asks for. The rescue is page-level —
 /// `pipeline::Builder::keep_spaces_only`, which fires only when the page's
 /// single text object draws nothing but spaces, so there is no neighbour for
 /// `GenerateSpace` to span and PDFium's drop loses the page's only content.
-/// `hello_world_with_invisible_spaces.pdf` above is the contrasting case.
+/// Keeping every spaces-only object on every page would duplicate separators
+/// the inter-object rules already emit — the "spurious generated space"
+/// defect. `hello_world_with_invisible_spaces.pdf` above is the contrasting
+/// case.
 #[test]
 fn a_whitespace_only_page_yields_the_one_space_it_draws() {
     let page = fixture!("whitespace.pdf");
@@ -356,19 +352,17 @@ fn twenty_two_charcode_zeroes_precede_the_text() {
 fn a_hyphen_sentinel_can_land_mid_string() {
     // `Bug431824298`: eighteen characters with the sentinel at index 15.
     //
-    // The comment here used to call the zero result below "a pinned upstream
-    // bug (crbug.com/431824298)". Since A42 that reading is wrong, and the
-    // zero is now correct for a different reason: `find` drops the sentinel
-    // from its haystack, so the text it searches has no literal hyphen for
-    // this needle's leading and trailing `-` to match. The upstream bug — a
-    // word unfindable because it fell at a line break — is fixed, and pinned
-    // just below on this same fixture: the text is `-hello-\r\n-world<S>\u{501f}\u{6b3e}`,
+    // `find` drops the sentinel from its haystack, so the text it searches
+    // has no literal hyphen for this needle's leading and trailing `-` to
+    // match. The upstream bug — a word unfindable because it fell at a line
+    // break (crbug.com/431824298) — is fixed, and pinned just below on this
+    // same fixture: the text is `-hello-\r\n-world<S>\u{501f}\u{6b3e}`,
     // and the word the sentinel splits is now found joined.
     let page = fixture!("bug_431824298.pdf");
     assert_eq!(page.chars.len(), 18);
     assert_eq!(page.chars[15].unicode, 0x02);
     assert_eq!(page.find("-world-", FindOptions::default()).count(), 0);
-    // `[oracle-bug]` A42: the sentinel is dropped from the search corpus, so
+    // `[oracle-bug]` The sentinel is dropped from the search corpus, so
     // the halves it separates match as one word. Upstream finds nothing here
     // (`cpdf_textpagefind.cpp:262` searches the buffer with a plain `Find`),
     // while repairing the very same sentinel for links at
@@ -390,15 +384,13 @@ fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     }
     // The *text* holds the soft hyphen at the break; the *character stream*
     // holds `U+0002` at the same place. The upstream assertion is on the
-    // text, and the design brief's §5.2 quotes the character stream's value
-    // for it -- both are right, about different outputs.
+    // text; both are right, about different outputs.
     //
-    // `[oracle-bug]` **A41, buffer half.** This used to look for
-    // `"...it noti\u{FFFE}fi"`, the `U+FFFE` noncharacter
-    // `cpdf_textpage.cpp:1361` writes. It is now the real `U+00AD`; the
-    // char-list assertion below is unchanged and still pins PDFium's `0x02`.
-    // Pinned by content rather than by offset: A40+A43 restores characters
-    // ahead of this run, so an absolute index would pin the bug's arithmetic.
+    // `[oracle-bug]` `cpdf_textpage.cpp:1361` writes the `U+FFFE`
+    // noncharacter. The text holds the real `U+00AD`; the char-list
+    // assertion below still pins PDFium's `0x02`. Pinned
+    // by content rather than by offset, so the assertion does not depend on
+    // how many characters precede this run.
     let whole: String = text.iter().collect();
     assert!(
         whole.contains("METADATA table. When the split has committed, it noti\u{00AD}fi"),
@@ -443,8 +435,7 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
     assert_eq!(page.chars.len(), 13);
 }
 
-/// `Bug921`. Audit items **A40 + A43**, restored 2026-09-06 by user ruling
-/// after briefly gave them up.
+/// `Bug921`.
 ///
 /// PDFium's box gate drops five objects on this page that draw running
 /// Russian prose. Its `--txt` begins mid-sentence at "разве не выражает"
@@ -456,7 +447,7 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
 /// the defect, filed as `crbug.com/40643656` / `crbug.com/444176962` and
 /// drafted at `docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`.
 ///
-/// **The separating property, since a first pass got this wrong.** These
+/// **The separating property.** These
 /// objects were reported as indistinguishable from the C0 control runs the
 /// oracle *rightly* drops in `text_tcpdf_055.pdf` and `bug_651304.pdf`, on
 /// the grounds that both have empty boxes and no `ToUnicode` mapping. The
@@ -567,13 +558,11 @@ fn cropping_a_page_does_not_change_its_characters() {
     }
 }
 
-/// `GetTextShouldNotGetInvisibleSpaces`, and the oracle's own name for it is
-/// the right one after all.
+/// `GetTextShouldNotGetInvisibleSpaces`.
 ///
-/// Audit items **A40 + A43** changed this to `" \r\n \r\n {HELLO}"`, on the
-/// reasoning that the three space-only objects each draw a space glyph with
-/// a real advance and only the empty bounding box hid them. measured
-/// that reasoning and it does not hold **when the page has other objects**:
+/// The three space-only objects each draw a space glyph with a real advance
+/// and only the empty bounding box hid them. That reasoning does not hold
+/// **when the page has other objects**:
 /// the inter-object rules (`GenerateSpace`) already emit a separator from
 /// the gap such an object sits in, so keeping the object emits it twice.
 /// That duplication was the whole of the "spurious generated space" defect —
@@ -720,7 +709,7 @@ fn a_characters_origin_and_rect_count_are_exact() {
     // face moves them by a fraction of a unit without changing a single
     // extracted character. So the boxes are pinned structurally here and
     // byte-exactly by the conformance harness, which does supply that font
-    // directory (design brief Q6).
+    // directory.
     let page = fixture!("hello_world.pdf");
     let info = page.chars[4];
     assert!(near(info.origin.x, 40.664) && near(info.origin.y, 50.0));
@@ -922,9 +911,8 @@ fn extraction_never_panics_on_any_resource_fixture() {
 
 /// A hand-check that the character stream really is what the oracle dumps.
 ///
-/// The encoding itself moved to `pdfrum-tool` with `--txt` ; what this
-/// crate owes the dump is the *stream*, so that is what is checked: one entry
-/// per character, in order, decoding to the page's text.
+/// What this crate owes the dump is the *stream*, so that is what is
+/// checked: one entry per character, in order, decoding to the page's text.
 #[test]
 fn the_character_stream_is_what_the_harness_transcode_reads_back() {
     let page = fixture!("hello_world.pdf");

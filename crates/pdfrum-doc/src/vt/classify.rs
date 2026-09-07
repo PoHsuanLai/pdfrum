@@ -255,10 +255,10 @@ mod tests {
         is_open_style_punctuation, is_prefix_symbol, is_punctuation, is_space, need_division,
     };
 
-    /// Audit item **A55**. This pinned the oracle's `<= 0x0094` typo, which
-    /// made every code point from `0x80` through `0x94` punctuation. Under
-    /// the oracle-bug rule the Latin-1 arm now tests the equality set the
-    /// author wrote, so the C1 controls in that range are not punctuation.
+    /// The oracle's `<= 0x0094` typo made every code point from `0x80`
+    /// through `0x94` punctuation. Under the oracle-bug rule the Latin-1 arm
+    /// tests the equality set the author wrote, so the C1 controls in that
+    /// range are not punctuation.
     #[test]
     fn the_latin_one_arm_tests_the_cp1252_marks_and_not_the_c1_controls() {
         // The intended set: the cp1252 quotation and dash marks.

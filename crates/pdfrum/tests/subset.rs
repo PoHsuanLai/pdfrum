@@ -11,7 +11,7 @@
 //! rewrites `/CIDToGIDMap` and nothing else that names a glyph, so the same
 //! outlines land in the same places and no content stream is regenerated.
 //!
-//! **The oracle agrees, and it was asked** (2026-09-03). `pdfium_test --md5`
+//! **The oracle agrees.** `pdfium_test --md5`
 //! over the two files this fixture produces returns the same digest for each
 //! of the two pages — `ab72bc73…` and `1f931859…` — so PDFium's own
 //! rasterizer cannot tell a subsetted save from an unsubsetted one either.
@@ -183,7 +183,7 @@ fn the_embedded_program_is_smaller() {
     // The fixture draws most of Latin Extended, so the saving is real but not
     // dramatic. Recorded rather than bounded tightly: a `subsetter` upgrade
     // that keeps a different set of tables moves this number without being a
-    // regression (design brief D1 item 6).
+    // regression.
     assert_eq!((before, after), (35636, 20424));
 }
 

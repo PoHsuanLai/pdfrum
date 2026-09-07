@@ -231,10 +231,9 @@ mod tests {
     fn a_page_with_no_text_objects_comes_back_horizontal() {
         // With nothing scanned the vertical span is `0 - page_height`, a
         // large negative, and twice a zero line height is zero -- so the very
-        // first test fires and the answer is Horizontal. (The design brief
-        // §1.4 traces this to Unknown; the arithmetic says otherwise, and the
-        // consequence matters because a page whose text lives entirely inside
-        // form XObjects scans nothing and lands here.)
+        // first test fires and the answer is Horizontal. The arithmetic
+        // matters because a page whose text lives entirely inside form
+        // XObjects scans nothing and lands here.
         let page = Page::empty();
         assert_eq!(page_flow(&page, &[]), Orientation::Horizontal);
     }

@@ -8,9 +8,8 @@
 //! The three questions each fixture answers:
 //!
 //! 1. **Does it still need the password?** A saved file that opens with none
-//!    is a decrypted file, however well-formed. That is the failure this
-//!    milestone exists to prevent, and it is invisible to a round-trip check
-//!    that always supplies the password.
+//!    is a decrypted file, however well-formed. That failure is invisible to
+//!    a round-trip check that always supplies the password.
 //! 2. **Does the content survive?** Every string and stream is deciphered,
 //!    re-enciphered under a fresh vector, and deciphered again; the objects
 //!    reachable from the catalog must compare equal to the originals.
@@ -37,8 +36,8 @@ use pdfrum_parser::{Document, LoadOptions, load};
 
 /// One encrypted fixture: its file name and a password that opens it.
 ///
-/// The passwords are the ones the crypt brief records (§4.2's T5–T10),
-/// recovered from the oracle's own embedder tests. `encrypted.pdf` is AESV2;
+/// The passwords are recovered from the oracle's own embedder tests.
+/// `encrypted.pdf` is AESV2;
 /// the `hello_world` family walks `/R` 2, 3, 5 and 6; `bug_644.pdf` is a
 /// second `/R 5` shape whose `/P` masks to the same word for both roles.
 const FIXTURES: [(&str, &[u8]); 7] = [
@@ -163,8 +162,8 @@ fn contents(doc: &Document) -> Vec<(u32, Vec<Vec<u8>>, Vec<u8>)> {
         .collect()
 }
 
-// The milestone's headline: a saved encrypted document is still encrypted,
-// and the same password opens it.
+// A saved encrypted document is still encrypted, and the same password
+// opens it.
 #[test]
 fn every_revision_saves_encrypted_and_reopens_with_its_password() {
     for (name, password) in FIXTURES {

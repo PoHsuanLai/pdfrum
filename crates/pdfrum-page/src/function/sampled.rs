@@ -31,7 +31,7 @@
 //!
 //! `/Order` is never read: only linear sampling exists, and a cubic-spline
 //! request is silently downgraded — that one is **not** a bug, since
-//! `function.js:180-185` reads `/Order`, logs, and ignores it too (audit A5).
+//! `function.js:180-185` reads `/Order`, logs, and ignores it too.
 
 use super::{Common, interpolate};
 use crate::names;
@@ -404,9 +404,6 @@ mod tests {
         assert!((out[0] - 0.5).abs() < 0.01, "got {}", out[0]);
     }
 
-    /// Audit item **A3**, the largest behavioural change of the three, and
-    /// the one no test pinned.
-    ///
     /// The oracle seeds one base corner and adds one per-axis gradient term
     /// each, reading `m + 1` of the `2^m` corners: every **cross term** is
     /// dropped, and the result is the tangent plane at the base corner. It is
@@ -454,11 +451,11 @@ mod tests {
         assert!((out[0] - 0.5).abs() < 1e-6, "got {}", out[0]);
     }
 
-    /// Audit item **A2**. This asserted `1.0`, the *top* cell: the oracle
-    /// clamps the truncated integer index rather than the real value, and a
-    /// negative float cast to an unsigned index wraps to the top of the
-    /// range. §7.10.2's `e'ᵢ = min(max(eᵢ, 0), Sizeᵢ − 1)` clamps the **real**
-    /// value, so an `/Encode` entirely below zero lands on the bottom cell.
+    /// The oracle clamps the truncated integer index rather than the real
+    /// value, so a negative float cast to an unsigned index wraps to the top
+    /// of the range. §7.10.2's `e'ᵢ = min(max(eᵢ, 0), Sizeᵢ − 1)` clamps the
+    /// **real** value, so an `/Encode` entirely below zero lands on the
+    /// bottom cell.
     #[test]
     fn a_negative_encoded_input_clamps_to_the_bottom_cell() {
         // An `/Encode` that maps the whole domain below zero.
@@ -470,12 +467,12 @@ mod tests {
         assert!(out[0].abs() < 1e-6, "got {}", out[0]);
     }
 
-    /// Audit item **A4**. A `/Size 1` axis has one sample and nothing to
-    /// interpolate towards, so §7.10.2 gives it weight exactly 1 and the sole
-    /// sample is the answer everywhere on that axis. The oracle instead
-    /// assigns `encoded = encoded_input[j] * sample`, multiplying by the
-    /// encoded input **and discarding every axis already folded in**, so the
-    /// function reads as a ramp at the bottom of the domain.
+    /// A `/Size 1` axis has one sample and nothing to interpolate towards,
+    /// so §7.10.2 gives it weight exactly 1 and the sole sample is the answer
+    /// everywhere on that axis. The oracle instead assigns
+    /// `encoded = encoded_input[j] * sample`, multiplying by the encoded
+    /// input **and discarding every axis already folded in**, so the function
+    /// reads as a ramp at the bottom of the domain.
     #[test]
     fn a_single_sample_axis_weighs_one_rather_than_multiplying() {
         let sampled = Sampled {

@@ -95,8 +95,7 @@ pub struct SubstitutionOptions {
     /// The default is **`false`**, because that is the behaviour the
     /// conformance corpus was rendered under — an enumerating font info,
     /// where the weight reset applies. Set it to `true` for the modern
-    /// behaviour. This is the brief's OQ-6(a), resolved toward oracle
-    /// fidelity with the knob left public.
+    /// behaviour.
     pub skip_font_enumeration: bool,
     /// Directories to scan instead of the system's, for a hermetic run.
     pub font_dirs: Vec<PathBuf>,
@@ -266,17 +265,14 @@ impl ScanKey {
 /// The database for `key`, scanned at most once per process.
 ///
 /// Font directories do not change under a running process, and a scan reads
-/// every face they hold to describe it — 0.2 s on a host with 1 183 faces
-/// (2026-09-05), and on the oracle's hermetic `test_fonts` 33 MB of reads
-/// costing ~12 ms of kernel time (measured 2026-09-06).
-/// The host scan was already cached here; a `--font-dir` scan was not, and
-/// paid that again per substituted font.
+/// every face they hold to describe it — 0.2 s on a host with 1 183 faces,
+/// and on the oracle's hermetic `test_fonts` 33 MB of reads costing ~12 ms of
+/// kernel time.
 ///
 /// The measured corpus does not exercise the second scan — all 22 of the 44
 /// benchmark files that substitute at all substitute exactly once — so this
-/// is a correctness-of-cost fix rather than a win on that corpus: it bounds
-/// a per-font cost to per-process. Memoizing on [`ScanKey`] cannot change an
-/// answer, because the scan is a pure function of the key.
+/// bounds a per-font cost to per-process. Memoizing on [`ScanKey`] cannot
+/// change an answer, because the scan is a pure function of the key.
 fn scanned(key: ScanKey) -> Arc<SystemFontDb> {
     static SCANS: OnceLock<Mutex<HashMap<ScanKey, Arc<SystemFontDb>>>> = OnceLock::new();
     let scans = SCANS.get_or_init(|| Mutex::new(HashMap::new()));

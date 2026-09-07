@@ -87,7 +87,7 @@ fn cloning_a_resources_dictionary_with_indirect_xobject_streams() {
             "embedded_images.pdf's /XObject entries are indirect"
         );
 
-        // This is what used to panic.
+        // `clone_direct` must not panic on an indirect stream.
         let flattened = Object::Dict(resources).clone_direct(&doc);
 
         let xobject = flattened

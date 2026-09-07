@@ -123,8 +123,7 @@ pub fn transform_hard_clip(matrix: Affine, path: &BezPath) -> BezPath {
 pub fn nudge_degenerate_subpaths(path: &BezPath, user: &BezPath) -> BezPath {
     // The elements as (kind, point) pairs, in both spaces at once. Borrowed
     // rather than copied: `should_nudge` reads slices and `BezPath::elements`
-    // already is one, so the two `to_vec`s this used to take were two whole
-    // extra copies of the path on every stroked object.
+    // already is one.
     let els = path.elements();
     let user_els = user.elements();
     if els.len() != user_els.len() {
