@@ -386,13 +386,13 @@ impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::attachments(&self) -> alloc::vec::Vec<pdfrum::Attachment<'_>>
 pub fn pdfrum::Document::blank(f64, f64) -> pdfrum::Result<pdfrum::Document>
-pub fn pdfrum::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
+pub fn pdfrum::Document::bytes(&self) -> &[u8]
 pub fn pdfrum::Document::check_pdfa(&self, pdfrum_doc::pdfa::report::Level) -> pdfrum_doc::pdfa::report::Report
 pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::embedded_fonts(&self) -> alloc::vec::Vec<pdfrum::EmbeddedFontFile>
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
-pub fn pdfrum::Document::from_bytes(alloc::sync::Arc<[u8]>) -> pdfrum::Result<pdfrum::Document>
-pub fn pdfrum::Document::from_bytes_with(alloc::sync::Arc<[u8]>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
+pub fn pdfrum::Document::from_bytes(impl core::convert::Into<pdfrum_object::stream::ByteSpan>) -> pdfrum::Result<pdfrum::Document>
+pub fn pdfrum::Document::from_bytes_with(impl core::convert::Into<pdfrum_object::stream::ByteSpan>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::id(&self) -> core::option::Option<[alloc::vec::Vec<u8>; 2]>
 pub fn pdfrum::Document::is_encrypted(&self) -> bool
 pub fn pdfrum::Document::metadata(&self) -> pdfrum::Metadata

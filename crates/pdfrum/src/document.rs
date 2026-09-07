@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use pdfrum_common::{Diagnostics, Limits, PageIndex, PdfVersion};
 use pdfrum_crypt::Permissions;
-use pdfrum_object::{Dict, Name, ObjRef, Object, Resolve, names};
+use pdfrum_object::{ByteSpan, Dict, Name, ObjRef, Object, Resolve, names};
 
 #[cfg(feature = "forms")]
 use crate::form::Form;
@@ -189,16 +189,18 @@ impl Document {
     ///
     /// [`Error::Io`](crate::Error::Io) or [`Error::Open`](crate::Error::Open), as [`Document::open`].
     pub fn open_with(path: impl AsRef<Path>, options: &OpenOptions) -> Result<Document> {
+        // The vector goes straight in: `ByteSpan` adopts its allocation, so
+        // a file is read once and never copied.
         let bytes = std::fs::read(path.as_ref())?;
-        Document::from_bytes_with(Arc::from(bytes), options)
+        Document::from_bytes_with(bytes, options)
     }
 
     /// Opens a document already in memory.
     ///
-    /// Takes `Arc<[u8]>` rather than `Vec<u8>` because the document keeps the
-    /// bytes for as long as it lives — every object is parsed lazily out of
-    /// them — and an `Arc` lets a caller who already has the file share it
-    /// instead of copying.
+    /// Takes anything that can become a [`ByteSpan`] — a `Vec<u8>`, whose
+    /// allocation is adopted, or an `Arc<[u8]>`, which is shared. Either way
+    /// the bytes are not copied: the document keeps them for as long as it
+    /// lives, since every object is parsed lazily out of them.
     ///
     /// # Errors
     ///
@@ -212,7 +214,7 @@ impl Document {
     /// assert_eq!(doc.page_count(), 1);
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn from_bytes(bytes: Arc<[u8]>) -> Result<Document> {
+    pub fn from_bytes(bytes: impl Into<ByteSpan>) -> Result<Document> {
         Document::from_bytes_with(bytes, &OpenOptions::default())
     }
 
@@ -221,7 +223,7 @@ impl Document {
     /// # Errors
     ///
     /// [`Error::Open`](crate::Error::Open) when the bytes are not a recoverable PDF.
-    pub fn from_bytes_with(bytes: Arc<[u8]>, options: &OpenOptions) -> Result<Document> {
+    pub fn from_bytes_with(bytes: impl Into<ByteSpan>, options: &OpenOptions) -> Result<Document> {
         let load = pdfrum_parser::LoadOptions {
             password: options.password.clone(),
             limits: options.limits.clone(),
@@ -632,9 +634,9 @@ impl Document {
         self.inner.xref_was_rebuilt()
     }
 
-    /// The document's raw bytes, shared.
+    /// The document's raw bytes, from its header onwards.
     #[must_use]
-    pub fn bytes(&self) -> &Arc<[u8]> {
+    pub fn bytes(&self) -> &[u8] {
         self.inner.bytes()
     }
 
@@ -677,7 +679,7 @@ impl Document {
             "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF",
             objects.len() + 1
         );
-        Document::from_bytes(Arc::from(out.into_bytes()))
+        Document::from_bytes(out.into_bytes())
     }
 
     /// A stream's data with its filters applied — what the stream carries,

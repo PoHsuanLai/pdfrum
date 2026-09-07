@@ -124,7 +124,7 @@ fn oracle_md5(path: &Path) -> Result<String, String> {
 /// The first image page object on page 0 of `bytes`, as its dimensions,
 /// pixel kind, and whether it carries alpha.
 fn first_image(bytes: &[u8]) -> (u32, u32, String, bool) {
-    let doc = Document::from_bytes(bytes.to_vec().into()).expect("reopens");
+    let doc = Document::from_bytes(bytes.to_vec()).expect("reopens");
     let page = doc.page(0).expect("page");
     let objects = page.objects();
     for object in &objects.objects {
@@ -174,7 +174,7 @@ fn a_jpeg_is_stored_verbatim_under_dct_decode() {
         .expect("writes");
 
     // The dictionary the save produced, read back through the reader.
-    let saved = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let saved = Document::from_bytes(bytes.clone()).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(name_of(&dict, "Type").as_deref(), Some("XObject"));
     assert_eq!(name_of(&dict, "Subtype").as_deref(), Some("Image"));
@@ -205,7 +205,7 @@ fn a_jpeg_is_stored_verbatim_under_dct_decode() {
     );
 
     // The Mona Lisa is a dark picture on a blank page: the rectangle gains ink.
-    let after = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let after = Document::from_bytes(bytes.clone()).expect("reopens");
     let rendered = after
         .page(0)
         .expect("page")
@@ -242,7 +242,7 @@ fn a_jp2_codestream_is_stored_under_jpx_decode_with_no_colour_space() {
     edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())
         .expect("writes");
 
-    let saved = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let saved = Document::from_bytes(bytes.clone()).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(name_of(&dict, "Filter").as_deref(), Some("JPXDecode"));
     assert_eq!(int_of(&dict, "Width"), Some(4));
@@ -289,7 +289,7 @@ fn rgba_samples_round_trip_with_their_alpha_in_an_smask() {
     edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())
         .expect("writes");
 
-    let saved = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let saved = Document::from_bytes(bytes.clone()).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(name_of(&dict, "ColorSpace").as_deref(), Some("DeviceRGB"));
     assert_eq!(int_of(&dict, "BitsPerComponent"), Some(8));
@@ -350,7 +350,7 @@ fn gray_samples_round_trip_unchanged() {
     edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())
         .expect("writes");
 
-    let saved = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let saved = Document::from_bytes(bytes.clone()).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(name_of(&dict, "ColorSpace").as_deref(), Some("DeviceGray"));
     assert!(dict.raw(&Name::from("SMask")).is_none());
@@ -391,7 +391,7 @@ fn a_one_bit_mask_writes_an_image_mask_with_an_inverted_decode() {
     edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())
         .expect("writes");
 
-    let saved = Document::from_bytes(bytes.clone().into()).expect("reopens");
+    let saved = Document::from_bytes(bytes.clone()).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(
         dict.raw(&Name::from("ImageMask")),
@@ -447,7 +447,7 @@ fn a_cmyk_jpeg_carries_the_adobe_inversion_decode() {
     edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())
         .expect("writes");
 
-    let saved = Document::from_bytes(bytes.into()).expect("reopens");
+    let saved = Document::from_bytes(bytes).expect("reopens");
     let dict = fetch_dict(&saved, image.object());
     assert_eq!(name_of(&dict, "ColorSpace").as_deref(), Some("DeviceCMYK"));
     let Some(Object::Array(decode)) = dict.raw(&Name::from("Decode")) else {

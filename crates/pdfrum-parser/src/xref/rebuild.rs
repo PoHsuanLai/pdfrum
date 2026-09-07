@@ -25,10 +25,8 @@
 //! from wherever the parse ended, so a nested `N G obj` inside a damaged body
 //! is stepped over rather than mistaken for a real header.
 
-use std::sync::Arc;
-
 use pdfrum_common::{DiagKind, Diagnostics, LimitExceeded, Limits, Operation, Severity};
-use pdfrum_object::{Object, Resolve, names};
+use pdfrum_object::{ByteSpan, Object, Resolve, names};
 
 use crate::lexer::{Delim, Lexer, Token, atoui};
 use crate::syntax::{Context, Strictness, indirect};
@@ -60,7 +58,7 @@ const DEADLINE_STRIDE: u32 = 4096;
 /// [`LimitExceeded::Time`] when `limits.deadline` passes during the scan,
 /// which is the one long loop an open has: the whole file, token by token.
 pub(crate) fn rebuild<R: Resolve + ?Sized>(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     xref: &mut Xref,
     trailer: &mut Trailer,
     limits: &Limits,
@@ -176,7 +174,7 @@ fn word_start_of(lx: &Lexer<'_>, before: usize) -> usize {
 )]
 fn record_object<R: Resolve + ?Sized>(
     lx: &mut Lexer<'_>,
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     at: usize,
     obj_num: u32,
     generation: u16,
@@ -242,7 +240,7 @@ fn record_object<R: Resolve + ?Sized>(
 /// dictionary is what the reader wants either way.
 fn read_trailer_body<R: Resolve + ?Sized>(
     lx: &mut Lexer<'_>,
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     limits: &Limits,
     diags: &mut Diagnostics,
     store: &R,
@@ -265,12 +263,12 @@ mod tests {
     use super::rebuild;
     use crate::xref::{Entry, Trailer, Xref};
     use pdfrum_common::{Deadline, DiagKind, Diagnostics, LimitExceeded, Limits, Operation};
+    use pdfrum_object::ByteSpan;
     use pdfrum_object::{NoResolve, names};
-    use std::sync::Arc;
     use std::time::Duration;
 
     fn scan(bytes: &[u8]) -> Option<(Xref, Trailer, Diagnostics)> {
-        let file: Arc<[u8]> = Arc::from(bytes);
+        let file = ByteSpan::from(bytes.to_vec());
         let mut xref = Xref::new();
         let mut trailer = Trailer::default();
         let mut diags = Diagnostics::default();
@@ -293,7 +291,7 @@ mod tests {
         let mut file = b"%PDF-1.7\n".to_vec();
         file.extend(std::iter::repeat_n(b"0 ", 5000).flatten());
         file.extend_from_slice(b"1 0 obj << >> endobj trailer << /Root 1 0 R >>");
-        let file: Arc<[u8]> = Arc::from(file);
+        let file = ByteSpan::from(file);
         let limits = Limits {
             deadline: Some(Deadline::after(Duration::ZERO)),
             ..Limits::default()

@@ -14,6 +14,7 @@ categories = ["parser-implementations", "data-structures"]
 workspace = true
 
 [dependencies]
+bytes.workspace = true
 pdfrum-common.workspace = true
 ryu.workspace = true
 thiserror.workspace = true

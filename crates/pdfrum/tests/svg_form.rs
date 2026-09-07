@@ -115,7 +115,7 @@ fn saved(spelling: Spelling) -> Document {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("the document saves");
-    Document::from_bytes(bytes.into()).expect("what we wrote reopens")
+    Document::from_bytes(bytes).expect("what we wrote reopens")
 }
 
 /// The whole point of the item: the content is written **once**, however many
@@ -199,7 +199,7 @@ fn one_form_serves_two_different_fits() {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("the document saves");
-    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let saved = Document::from_bytes(bytes).expect("what we wrote reopens");
     assert_eq!(
         streams_carrying(&saved, MARKER),
         1,
