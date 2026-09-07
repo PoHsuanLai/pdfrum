@@ -5,9 +5,9 @@
 
 **A composable PDF library built in Rust.**
 
-Tested against [PDFium](https://pdfium.googlesource.com/pdfium/)'s own suite
-as a read-only oracle — not a binding, and equally capable on the files that
-suite covers.
+pdfrum is a modern, thread-safe PDF library — modular stages you compose,
+CPU or GPU backends, no `unsafe` — tested against PDFium. For your UI, RAG
+pipeline, or any app that has to open a PDF file.
 
 ```toml
 pdfrum = "0.1"
@@ -26,9 +26,9 @@ for page in doc.pages() {
 # Ok::<(), pdfrum::Error>(())
 ```
 
-## What you get
+## What you can do with pdfrum
 
-Open a file once. Ask it questions. Rendering is one of them.
+Open a file once. Ask it questions (Rendering is one of them).
 
 - **Pages** — boxes, rotation, the object graph a page paints
 - **Text** — reading order, search, selection, words with geometry
@@ -39,10 +39,9 @@ Open a file once. Ask it questions. Rendering is one of them.
 - **Pixels** — name a rasterizer; defaults to `vello-cpu`
 - **A new file** — edit, stamp, merge, flatten, save full or incremental
 
-A damaged file that can be opened *is* opened. What was repaired is
-`Document::diagnostics`, not an `Err`.
+A file a browser would open, we open, and tell you where its broken.
 
-![pdfrum CLI: preview, stamp, view, doctor, search](docs/assets/cli/pdfrum-cli.gif)
+## ![Pdfrum CLI](docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
 pdfrum preview gradients.pdf
@@ -63,10 +62,10 @@ cargo install pdfrum-cli
 
 | | |
 |---|---|
-| Safe | `unsafe` is forbidden in the library. The C ABI is the one exception, and only at `extern "C"`. |
+| Safe | `unsafe` is forbidden in the library. (The C ABI is the one exception, and only at `extern "C"`). |
 | Pure Rust | no C/C++ in a library build |
 | Thread-safe | every public type is `Send + Sync` |
-| JavaScript | off. The `javascript` feature runs the document's own scripts; nothing they call reaches a socket, a file, or a process. |
+| JavaScript | The `javascript` feature runs the document's own scripts via the [boa engine](https://crates.io/crates/boa_engine) |
 | Not a viewer | no window, caret, or widget chrome. No XFA. |
 
 Share a `Document` across threads; give each worker its own `RenderSession`.
@@ -92,53 +91,47 @@ C: [`pdfrum-capi`](crates/pdfrum-capi). WebAssembly:
 
 ## ISO 32000
 
-What a `cargo add pdfrum` build does, and which feature turns the rest on.
-`default-features = false` is a parser and extractor; a render always names
-its backend.
+An empty feature cell is always compiled in. `forms`, `edit` and `codecs-all`
+are on by default.
 
-| | ISO 32000-1 | default | feature |
+| | | support | feature |
 |---|:---:|:---:|---|
 | File structure, objects, xref, incremental updates | §7 | yes | |
-| Standard encryption, revisions 2–6 | §7.6 | yes | |
-| Flate, LZW, RunLength, ASCIIHex/85, JPEG | §7.4 | yes | |
-| CCITT, JBIG2, JPEG 2000 | §7.4 | yes | `codecs-all` |
+| Standard security handler, revisions 2–6 | §7.6 | yes | |
+| Public-key security handlers (`Adobe.PubSec`) | §7.6.4 | no | |
+| Flate, LZW, RunLength, ASCIIHex/85, DCT | §7.4 | yes | |
+| CCITT, JBIG2, JPX | §7.4 | yes | `codecs-all` |
 | Paths, colour spaces, functions, shadings 1–7, transparency | §8 | yes | |
-| Type 1 / TrueType / Type 0 / Type 3 / CID, encodings, ToUnicode | §9 | yes | |
-| Host font fallback | | yes | `system-fonts` (not on wasm32) |
+| Type 1, TrueType, Type 0, Type 3, CID; encodings, ToUnicode | §9 | yes | |
+| File attachments | §7.11 | yes | `edit` to write |
 | Annotations, outlines, destinations | §12 | yes | |
+| JavaScript actions | §12.6.4.4 | yes | `javascript` |
 | AcroForm | §12.7 | yes | `forms` |
 | Signatures, as written (unverified) | §12.8 | yes | |
-| Text extraction, search, selection | §14.8 | yes | |
-| Tagged structure tree | §14.8 | yes | |
-| Edit, save, subset, attachments | §7.5.8 | yes | `edit` |
-| PDF/A check | ISO 19005 | yes | |
-| PDF/A convert | ISO 19005 | yes | `edit` |
-| Document JavaScript | | off | `javascript` |
-| Markdown | | off | `markdown` |
-| SVG export | | off | `svg` |
-| Draw an SVG into a page | | off | `svg-ingest` |
-| Extra CPU rasterizers | | off | `tinyskia`, `agg` |
-| GPU rasterizer | | off | `vello-gpu` |
-| `Pixmap` → PNG | | off | `png` |
-| XFA | | no | |
-| Public-key encryption (`Adobe.PubSec`) | | no | |
+| Tagged PDF, structure tree | §14.7 | yes | |
+| Text extraction | §14.8 | yes | |
+| PDF/A | ISO 19005 | yes | convert needs `edit` |
+
+## Beyond the spec
+
+| | support | feature |
+|---|:---:|---|
+| Host font fallback | yes | `system-fonts` (not on wasm32) |
+| Markdown | yes | `markdown` |
+| SVG export | yes | `svg` |
+| Draw an SVG into a page | yes | `svg-ingest` |
+| Extra CPU rasterizers | yes | `tinyskia`, `agg` |
+| GPU rasterizer | yes | `vello-gpu` |
+| `Pixmap` → PNG | yes | `png` |
+| XFA | no | |
+| Viewer (window, caret, chrome) | no | |
+
+`default-features = false` is a parser and extractor. A render always names
+its backend.
 
 ```toml
 pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all"] }
 ```
-
-## Against PDFium
-
-Correctness is agreement with PDFium on its test files. Live board:
-`conformance/scoreboard.json` (2026-09-06).
-
-| | |
-|---|---:|
-| Files passing every tier | **1675 / 1759 (95.2%)** |
-| Load without crashing | 100% |
-| Page counts agree | 1757 / 1759 |
-| Text pages byte-exact | 2020 / 2067 (97.7%) |
-| Render SSIM ≥ 0.99 | 1632 / 1668 (97.8%) |
 
 ## Docs
 
@@ -154,7 +147,8 @@ Correctness is agreement with PDFium on its test files. Live board:
 Apache-2.0 or MIT, at your option. Contributions are dual-licensed the same
 way.
 
-No PDFium source is in the tree. Upstream **data** that does travel with the
-repo sits beside a `PROVENANCE.md`: Foxit fallback fonts
+No PDFium source is in the tree. Tested against its suite as an oracle —
+**99% SSIM**. Upstream **data** that does travel with the repo
+sits beside a `PROVENANCE.md`: Foxit fallback fonts
 (`crates/pdfrum-font/fontdata/`, BSD-3-Clause), CJK CMaps and Unicode tables,
 and a handful of test PDFs (BSD-3-Clause).
