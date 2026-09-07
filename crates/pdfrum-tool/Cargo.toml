@@ -45,8 +45,7 @@ pdfrum-text.workspace = true
 kurbo.workspace = true
 peniko.workspace = true
 
-# Tool ring only (DEPS.md "Tools & tests only"; STYLE.md §3 allows `anyhow`
-# here and in the conformance harness, nowhere else). The oracle's command
+# Tool ring only. The oracle's command
 # line is hand-parsed rather than declared with clap: `pdfium_test` accepts
 # `--pages=3-5` with `std::stringstream` semantics and rejects unknown flags
 # with one specific message on stderr, and Tier A compares that behaviour.

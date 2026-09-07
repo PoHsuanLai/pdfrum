@@ -85,7 +85,7 @@ pub fn check_oracle(paths: &OraclePaths) -> Result<()> {
     if !paths.font_dir.is_dir() {
         bail!(
             "hermetic font directory not found at {}\n\
-             The determinism recipe (PLAN.md §4) needs third_party/test_fonts \
+             The determinism recipe needs third_party/test_fonts \
              from the oracle checkout; pass --font-dir to override.",
             paths.font_dir.display()
         );

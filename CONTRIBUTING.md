@@ -1,138 +1,95 @@
 # Contributing
 
-## Building
+## Build
 
-Stable Rust, no external toolchain, no system libraries.
+Stable Rust. No system libraries.
 
 ```bash
 cargo build --workspace
-cargo nextest run                    # the test runner this project uses
-cargo test --doc --workspace         # nextest silently SKIPS doctests
+cargo nextest run
+cargo test --doc --workspace   # nextest skips doctests
+./scripts/ci.nu                # what CI runs
 ```
 
-The scripts are nushell, and a few of the gate's steps want tools that are not
-part of a Rust install:
+Scripts are nushell (`cargo binstall nu`, ≥ 0.110). The gate also wants:
 
 ```bash
-cargo binstall nu                        # required: the scripts are nushell
-cargo binstall cargo-nextest             # required by the gate
-cargo install cargo-public-api --locked  # required by the API snapshot gate
-rustup toolchain install nightly         # rustdoc JSON is nightly-only
-cargo binstall cargo-deny                # optional; the gate skips it if absent
-cargo install cbindgen --locked          # optional; for the C header check
-cargo binstall wasm-bindgen-cli          # optional; for the WebAssembly tests
-rustup target add wasm32-unknown-unknown # optional; for the WebAssembly tests
+cargo binstall cargo-nextest
+cargo install cargo-public-api --locked
+rustup toolchain install nightly
 ```
 
-`binstall` fetches a prebuilt binary where the project publishes one and falls
-back to a source build where it does not; `cargo-public-api` and `cbindgen`
-publish none, which is why those two still say `cargo install`. Both spellings
-work for every tool here -- `cargo install <tool> --locked` is always correct
-and always slower.
+Optional — the gate notes and continues if they are missing: `cargo-deny`,
+`cbindgen`, `wasm-bindgen-cli`, the `wasm32-unknown-unknown` target.
 
-Each optional tool the gate cannot find becomes a printed note and the run
-continues. A contributor who never touches the C ABI should not need `cbindgen`
-to send a patch.
+## CI
 
-## The gate
+`./scripts/ci.nu` runs fmt, clippy `-D warnings`, nextest (with `javascript`
+on the CLI and the tool), doctests, rustdoc, the API snapshot, `cargo deny`,
+the no-`-sys` check, the C header and C test, WASM tests, the wgpu/boa leak
+checks, and `cargo check` of `fuzz/`.
 
-```bash
-./scripts/ci.nu
-```
+CI does not run the conformance board or the bench ratchet.
 
-That is the definition of done for every change. It runs, in order: `cargo fmt
---check`; `cargo clippy --workspace --all-targets` with warnings denied;
-`cargo nextest run` with the tool's and the CLI's `javascript` features, which
-are `cfg`'d off otherwise and would be silently skipped; `cargo test --doc`,
-because nextest cannot run doctests and does not say it skipped them; `cargo
-doc --no-deps` with warnings denied, which is the only gate that catches a
-broken intra-doc link; the public-API snapshot check; `cargo deny check`; the
-pure-Rust dependency-tree check; the C header and C test; the WebAssembly
-tests; the checks that `wgpu` and `boa` have not leaked into a default build;
-and a `cargo check` of the `fuzz/` workspace, which is a separate workspace
-nothing else reaches.
+## Conformance
 
-CI runs the same script. Two things it cannot run are described below.
-
-## The conformance harness
-
-pdfrum is a rewrite of PDFium, and PDFium is kept alongside as a differential
-test oracle: a read-only source checkout and a built `pdfium_test` binary, both
-outside this repository. The harness runs both engines over about 1750 files
-and compares them on four tiers — extracted text byte for byte, structural
-dumps byte for byte, rendered pixels by SSIM against a 0.99 floor, and
-JavaScript transcripts. The result is recorded in
+PDFium is a read-only oracle outside this repo. The harness diffs ~1750
+files on text, structure, pixels (SSIM ≥ 0.99), and JS transcripts into
 `conformance/scoreboard.json`.
 
-**Every change is measured against it.** That is the point of the project. The
-folklore this engine exists to preserve — what to do when the cross-reference
-table lies, which of a damaged page tree's contradictions to believe — is not
-written down anywhere except in PDFium's behaviour, so a change that "looks
-right" and moves twelve board rows is a regression whether or not any test in
-`cargo nextest` noticed. A change that moves rows is not forbidden; a change
-that moves rows silently is.
+Name any board rows a change moves. Silent movement is a regression.
+Divergences from PDFium are documented next to the code; where PDFium is
+wrong we keep the correct behaviour and mark the row unachievable.
 
-Where we deliberately differ from PDFium, the divergence is stated in the
-crate's own documentation next to the code, with the reason. Where PDFium is
-simply wrong, we implement the correct behaviour, cite both, and record the
-board row as not achievable rather than pretending it passes.
-
-Building the oracle is a multi-hour Chromium-style build, so CI does not run
-the board and neither does a first-time contributor. Open a pull request
-without it and say so; a maintainer runs it before landing.
+The board needs a multi-hour PDFium build, so a first patch can skip it.
+A maintainer runs it before landing.
 
 ## Performance
 
-`benches/baseline.json` holds medians taken on one reference machine, and
-`ratchet check` compares against them. A shared CI runner's numbers mean
-nothing against those, so this is local too. If a baseline genuinely moved, use
-`ratchet update` — never hand-edit the file — and say in the pull request by
-how much and on which machine.
-
-`docs/benchmarks/` publishes the comparative numbers against other engines, and
-`docs/benchmarks/losses-explained.md` explains every row where pdfrum loses.
-Losses are not omitted from those tables. If your change makes something
-slower, the honest thing is to measure it and write it down.
+`ratchet check` against `benches/baseline.json` is local. Do not hand-edit
+the file; `ratchet update` and say by how much. Comparative numbers:
+[`docs/benchmarks/`](docs/benchmarks/).
 
 ## Style
 
-`STYLE.md` is binding, and a violation blocks review even when the tests pass.
-It is not a formatting document — `cargo fmt` handles that — but a set of
-design rules: plain data types transformed by functions, enums over class
-hierarchies, no global state, a closed list of three trait seams, and new code
-written so an impossible state does not compile.
+`cargo fmt` for formatting. Review also expects:
 
-`SPEC.md` holds the concrete per-crate type contracts and the protocol for
-changing one. `DEPS.md` is the closed dependency set: adding a crate is a
-decision, with the rationale and the rejected alternatives written down.
+- Plain data and functions. Enums, exhaustive `match`. No global state.
+  PDF cross-refs are ids (`ObjRef`), not `Rc<RefCell>`.
+- Three trait seams: `RenderDevice` / `RasterBackend`, `Resolve`, `Cascade`.
+  A fourth needs review.
+- New code: impossible states do not compile.
+- No panics in library crates. Damage goes to `Diagnostics`; `Err` means stop.
+- `unsafe_code = "forbid"` except `pdfrum-capi` (see that crate's rustdoc).
+- No `-sys`, no C in a library build. Write thirty lines instead of a helper
+  crate. GPU is the one exemption: `pdfrum-raster-vello`, checked by
+  `scripts/check-no-wgpu.nu`.
+- Port PDFium behaviour, not C++ shape.
 
-`docs/design/cli-style.md` governs every byte a command prints. There is one
-output style, four layout forms and a fixed palette, and printing happens
-through the helpers in `crates/pdfrum-cli/src/out.rs` and nothing else.
+Rustdoc is for callers: first sentence, invariant, `# Errors`, one example.
+History belongs in `//`.
 
-## The public API
+CLI: stdout is data, stderr is commentary, `--json` is the twin. Print
+through `crates/pdfrum-cli/src/out.rs`.
 
-`cargo add pdfrum` sees a snapshot committed to this repository. A drift in it
-is a change to the library's public surface and is never incidental: make it
-its own commit, produced by `./scripts/api-snapshot.nu update`, so a reviewer
-sees exactly what moved.
+## Public API
 
-## Sending a change
+`docs/api-baseline/` is the surface `cargo add pdfrum` sees. A drift is its
+own commit, from `./scripts/api-snapshot.nu update`.
 
-Branch, commit, open a pull request against `main`. The pull request template
-asks for the gate, the board and the ratchet; fill in what applies and say
-plainly what does not.
+## Paths
 
-Small, well-measured changes land quickly. A change with a number attached
-lands faster than one with an argument attached.
+| variable | default |
+|---|---|
+| `PDFRUM_ORACLE_CHECKOUT` | `<repo>/../pdfium-c++` |
+| `PDFRUM_ORACLE_BIN` | `<checkout>/out/Release/pdfium_test` |
+| `PDFRUM_GOLDENS` | `<repo>/conformance/goldens` |
 
-## Open work
+Tests that need the oracle skip if the binary is missing.
 
-`docs/issues-to-file.md` is the open work list: every known gap written as an
-issue, with the measurement that shows it and what would count as done. Several
-entries say "not determined" and name the experiment that would determine them.
-Those are good places to start.
+`scripts/clean-targets.nu` removes unused `$PDFRUM_TARGET_ROOT` trees
+(default `<repo>/../cargo-target`).
 
 ## Licence
 
-Contributions are dual-licensed under Apache-2.0 and MIT, matching the project.
+Apache-2.0 OR MIT.

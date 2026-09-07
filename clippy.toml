@@ -1,4 +1,4 @@
-# unwrap/expect/panic are denied workspace-wide (STYLE.md §3) for library
+# unwrap/expect/panic are denied workspace-wide for library
 # code; tests may use them.
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true

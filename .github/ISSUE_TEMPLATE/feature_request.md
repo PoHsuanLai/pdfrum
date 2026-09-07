@@ -8,20 +8,15 @@ assignees: ''
 
 ## What you want to do
 
-The task, not the API. What are you trying to get done with a PDF?
+The task, not the API.
 
 ## What is in the way today
 
-The closest thing pdfrum offers now, and where it stops short.
-
 ## What PDFium does
 
-pdfrum is a rewrite of PDFium, and a feature PDFium already has is a much
-easier case to make than one it does not — the behaviour is already pinned by
-an oracle. If you know the corresponding PDFium API or `pdfium_test` flag, name
-it. If this is something PDFium cannot do either, say so; that is not a
-rejection, it just means the design is open.
+Name the PDFium API or `pdfium_test` flag if there is one. If PDFium cannot
+do it either, say so.
 
-## What the specification says
+## Spec
 
-A section reference from ISO 32000-1 or 32000-2, if there is one.
+ISO 32000 section, if any.

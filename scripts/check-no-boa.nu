@@ -76,7 +76,7 @@ def check-clean [crate: string, label: string]: nothing -> bool {
     print --stderr $"error: ($label) reaches the JavaScript engine:"
     $found | each {|d| print --stderr $"  ($d)" } | ignore
     print --stderr "       M15's isolation rule: no crate's DEFAULT features may"
-    print --stderr "       depend on boa. See PLAN.md §M15 and DEPS.md."
+    print --stderr "       depend on boa. See CONTRIBUTING.md."
     false
 }
 

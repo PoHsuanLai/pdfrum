@@ -53,7 +53,7 @@
 #![warn(clippy::indexing_slicing)]
 
 // Every module is private and the crate root is the whole surface
-// (STYLE.md §4): a caller of `pdfrum-text` needs the types below, and the
+//: a caller of `pdfrum-text` needs the types below, and the
 // bidi resolver, the Unicode tables, the link scanners and the segment
 // builder are how this crate reaches them, not what it offers.
 mod bidi;

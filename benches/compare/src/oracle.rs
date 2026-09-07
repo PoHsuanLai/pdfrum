@@ -42,7 +42,7 @@ pub fn content_hash(bytes: &[u8]) -> u64 {
 }
 
 impl Oracle {
-    /// The determinism arguments every invocation carries (PLAN.md §4).
+    /// The determinism arguments every invocation carries.
     fn determinism_args(&self) -> [String; 3] {
         [
             "--time=1399672130".to_owned(),

@@ -669,7 +669,7 @@ impl ScriptCascade {
     /// returns and sweeps then; no caller does yet.
     #[expect(
         dead_code,
-        reason = "missed wire, registered in docs/issues-to-file.md"
+        reason = "missed wire: calculateNow is not yet driven from the host"
     )]
     pub(crate) fn take_calculate_request(&mut self) -> bool {
         std::mem::take(&mut self.host.borrow_mut().calculate_requested)

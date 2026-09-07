@@ -1,4 +1,4 @@
-//! `decode_jbig2` — the JBIG2 entry point SPEC.md §12 pins.
+//! `decode_jbig2` — the JBIG2 entry point.
 //!
 //! Fuzzed here rather than through the image ladder so the codec sees
 //! arbitrary bytes directly, and fuzzed regardless of which implementation

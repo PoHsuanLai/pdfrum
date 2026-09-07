@@ -4,8 +4,7 @@
 //! # Why this needs two binaries
 //!
 //! `pdfium_test` has no save flag — the oracle cannot write a document at
-//! all, so there is no like-for-like invocation to diff (SPEC.md §11's ruling
-//! E7). The check is therefore a sequence rather than a comparison:
+//! all, so there is no like-for-like invocation to diff. The check is therefore a sequence rather than a comparison:
 //!
 //! 1. **pdfrum saves** every corpus file (`pdfrum-tool --save`).
 //! 2. **The oracle reopens** what pdfrum wrote and renders it. A load failure
@@ -51,7 +50,7 @@
 //!
 //! The passwords are not discoverable from the files, so they live in
 //! [`PASSWORDS`] — recovered from the oracle's own embedder tests and recorded
-//! in `docs/design/pdfrum-crypt.md` §4.2.
+//! in §4.2.
 
 use std::path::Path;
 use std::process::Command;

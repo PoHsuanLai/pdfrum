@@ -1,7 +1,7 @@
 //! `parse_content` — the content-stream tokenizer and operand ring over
 //! arbitrary bytes.
 //!
-//! The entry point is **infallible by contract** (SPEC.md §7): every bad
+//! The entry point is **infallible by contract**: every bad
 //! operator becomes a diagnostic and is skipped. So there is no error to
 //! check — the property is simply that it returns, and that the operator
 //! list it returns is stable under a second parse of the same bytes.

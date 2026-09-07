@@ -40,7 +40,7 @@ fn document() -> Document {
 const INSIDE: Point = Point::new(100.0, 55.0);
 
 /// The oracle's hermetic font set: `third_party/test_fonts`, which carries
-/// Arimo, Tinos and Cousine in place of Arial, Times and Courier. PLAN.md §4
+/// Arimo, Tinos and Cousine in place of Arial, Times and Courier.
 /// names it as half of the determinism recipe, alongside
 /// `--croscore-font-names`.
 ///

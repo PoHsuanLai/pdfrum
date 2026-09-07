@@ -1,4 +1,4 @@
-//! Saving an encrypted document as encrypted (PLAN.md M10).
+//! Saving an encrypted document as encrypted.
 //!
 //! The unit tests in `pdfrum-crypt` say the cipher is its own inverse. These
 //! say the *file* is: an encrypted document saved by this crate is a document
@@ -53,10 +53,10 @@ const FIXTURES: [(&str, &[u8]); 7] = [
 
 /// The read-only C++ PDFium checkout, resolved the one way every script and
 /// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
-/// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+/// sibling `../pdfium-c++` directory README.md and name.
 /// `scripts/env.nu` holds the nushell spelling of the same rule.
 ///
-/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, and an integration test in one crate
 /// cannot reach another crate's test code anyway.
 fn oracle_checkout() -> PathBuf {

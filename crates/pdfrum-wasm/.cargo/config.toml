@@ -13,7 +13,6 @@
 # repository, with a different target.
 #
 # The runner binary comes from `cargo install wasm-bindgen-cli --locked`, whose
-# version must match the `wasm-bindgen` dependency in Cargo.toml (DEPS.md, "The
-# web binding's tools").
+# version must match the `wasm-bindgen` dependency in Cargo.toml.
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"

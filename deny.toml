@@ -1,4 +1,4 @@
-# cargo-deny configuration — mechanical enforcement of DEPS.md's pure-Rust
+# cargo-deny configuration — mechanical enforcement of the pure-Rust
 # guarantee and license policy. `scripts/ci.nu` additionally rejects any
 # `*-sys` crate in the normal dependency tree via `cargo tree`.
 
@@ -28,7 +28,7 @@ confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "warn"
-# Pure-Rust guarantee (DEPS.md): no C/C++ build machinery may ever appear in
+# Pure-Rust guarantee: no C/C++ build machinery may ever appear in
 # the workspace graph. A transitive dep growing a C build script fails CI.
 deny = [
     # M22 phase 4 scopes the second exception, and `wrappers` is its whole
@@ -43,14 +43,14 @@ deny = [
     # normal,build`. It is reachable only through `-e dev`. So nothing that
     # ships — no library, no `libpdfrum`, and not the `.wasm` module a browser
     # downloads — has a C compiler anywhere in its tree; the pure-Rust
-    # guarantee, which DEPS.md states as being about what the library compiles
+    # guarantee, which states as being about what the library compiles
     # and links, is untouched.
     #
     # `minicov` is a coverage-instrumentation helper that `wasm-bindgen-test`
     # depends on unconditionally: there is no feature that turns it off in
     # 0.3.78, which was checked before this line was written. The alternative
     # to the exception is having no test harness for the WebAssembly binding at
-    # all, and an untested binding is the worse trade. DEPS.md, "The web
+    # all, and an untested binding is the worse trade. "The web
     # binding's tools", records it beside the `libfuzzer-sys` footnote it
     # rhymes with.
     { crate = "cc", wrappers = ["minicov"], reason = "pure-Rust guarantee: no C compiled into any build. M22.4: reachable only as a build-dep of minicov, itself dev-only via wasm-bindgen-test; absent from every normal+build tree" },
@@ -59,7 +59,7 @@ deny = [
     # M12c scopes ONE exception, and this is its whole extent. `pkg-config`
     # stays banned everywhere except as a build-dependency of the two crates
     # named below, both of which reach the tree only through
-    # `pdfrum-raster-vello` — the crate PLAN.md §M12c grants the exemption
+    # `pdfrum-raster-vello` — the crate The workspace grants the exemption
     # to, and which nothing in the core ring depends on
     # (scripts/check-no-wgpu.nu asserts that separately).
     #

@@ -12,7 +12,7 @@
 //!
 //! The deliverable is therefore **the divergence list**, not agreement. The
 //! checker has not been tuned to agree — a checker that agrees with its
-//! oracle by construction proves nothing — and `docs/design/pdfa.md` carries
+//! oracle by construction proves nothing — and carries
 //! every disagreement adjudicated as ours right, theirs right, or not
 //! determined.
 //!
@@ -20,7 +20,7 @@
 //!
 //! veraPDF is a **Java** tool and is not installed by any of this
 //! repository's scripts. `$PDFRUM_VERAPDF` names the `verapdf` launcher;
-//! DEPS.md's tools table says how to install it and why it is the only
+//! the tools table says how to install it and why it is the only
 //! dependency in this workspace that needs a JVM.
 //!
 //! Absence is handled as a missing *input*, the way `$PDFRUM_GOLDENS` is in
@@ -43,7 +43,7 @@ use pdfrum_corpus::CORPUS;
 /// The veraPDF launcher, when one is configured and present.
 ///
 /// `$PDFRUM_VERAPDF` only. There is no in-repo default the way there is for
-/// the goldens, because veraPDF installs outside the tree by design (DEPS.md)
+/// the goldens, because veraPDF installs outside the tree by design
 /// and guessing at `~/verapdf/verapdf` would make one developer's layout a
 /// silent requirement for everyone else.
 fn verapdf() -> Option<PathBuf> {
@@ -56,7 +56,7 @@ fn verapdf() -> Option<PathBuf> {
 /// The full report is a large JSON document, and the only field this
 /// comparison needs is the set of `"clause"` values on the rules that failed.
 /// Scanning for them costs no dependency; a JSON crate to read one string
-/// field would be exactly the case STYLE.md §5 says to write instead.
+/// field would be exactly the case says to write instead.
 ///
 /// [`Verdict::Unparsable`] is veraPDF declining the file, and `None` is
 /// veraPDF producing nothing at all — a broken oracle. The two are separate
@@ -66,7 +66,7 @@ enum Verdict {
     Clauses(BTreeSet<String>),
     /// veraPDF could not parse the file, so it has no opinion to compare
     /// against. Our parser opens all three such corpus files; see
-    /// `docs/design/pdfa.md` §6.
+    /// §6.
     Unparsable,
 }
 
@@ -246,7 +246,7 @@ fn a1_is_stricter_than_a2_where_they_differ() {
 /// divergence table.
 ///
 /// This does **not** assert agreement. The checker is deliberately a subset
-/// of ISO 19005 (`docs/design/pdfa.md` lists what it does not cover), so
+/// of ISO 19005, so
 /// veraPDF legitimately reports clauses we do not, and asserting equality
 /// would either be false or would force the checker to claim coverage it does
 /// not have.
@@ -263,7 +263,7 @@ fn scored_against_verapdf() {
             "\nNOTE: $PDFRUM_VERAPDF is unset or names no file, so the oracle \
              half did not run. The other two tests in this file still checked \
              all {} corpus files at both levels. veraPDF is a Java tool; \
-             DEPS.md says how to install it.",
+             says how to install it.",
             CORPUS.len()
         );
         return;
@@ -354,7 +354,7 @@ fn scored_against_verapdf() {
     );
 
     // The one direction that is a defect, minus the cases adjudicated in
-    // `docs/design/pdfa.md` §6. Everything else on our side alone still fails,
+    // §6. Everything else on our side alone still fails,
     // and the adjudicated total is pinned so it cannot grow silently.
     //
     // - **6.3.4 / 6.2.11.4.1, font embedding** — *theirs right*. Both parts
@@ -382,7 +382,7 @@ fn scored_against_verapdf() {
     assert_eq!(
         known.len(),
         8,
-        "the adjudicated divergences are the eight `docs/design/pdfa.md` §6 \
+        "the adjudicated divergences are the eight §6 \
          records; the set changed: {known:#?}"
     );
 }

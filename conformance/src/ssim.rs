@@ -1,7 +1,7 @@
 //! Tier B pixel comparison: grayscale SSIM plus the cheap exact-match and
 //! max-channel-diff signals.
 //!
-//! Hand-rolled on purpose (DEPS.md): SSIM is the ratchet metric, and a
+//! Hand-rolled on purpose: SSIM is the ratchet metric, and a
 //! threshold recorded in `thresholds.toml` must mean the same thing next year
 //! as it does today. A dependency bump must never silently move a score.
 //!

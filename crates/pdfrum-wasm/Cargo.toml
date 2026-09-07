@@ -1,7 +1,6 @@
 # `pdfrum` for the web — the WebAssembly binding over the facade.
-# PLAN.md §M22.4, docs/design/wasm.md.
 #
-# The same shape as `pdfrum-capi` (docs/design/capi.md) in JavaScript terms:
+# The same shape as `pdfrum-capi` in JavaScript terms:
 # opaque handles, an explicit `free()`, a code on every error. It holds no
 # logic — every export is a handle plus one call into `pdfrum`.
 [package]
@@ -33,7 +32,7 @@ crate-type = ["cdylib", "rlib"]
 # - `markdown` — `Page::markdown`, cheap to carry and the one text shape a web
 #   page actually wants to paste.
 #
-# Off, and PLAN.md §M22.4 says why:
+# Off, and says why:
 #
 # - `system-fonts` — there is no host font directory in a browser. The bundled
 #   Foxit base-14 faces carry text, which is what the facade's own wasm32
@@ -55,7 +54,7 @@ pdfrum = { path = "../pdfrum", version = "=0.1.0", default-features = false, fea
     "markdown",
 ] }
 # The binding itself: the `#[wasm_bindgen]` attribute, `JsValue`, and the
-# `.d.ts` generator. DEPS.md, "The web binding's crates".
+# `.d.ts` generator. "The web binding's crates".
 wasm-bindgen = "0.2.128"
 # `Uint8Array`, `Uint8ClampedArray` and `Error` — the three JavaScript types
 # this crate names. `js-sys` is `wasm-bindgen`'s own companion and adds

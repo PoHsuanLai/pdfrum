@@ -45,7 +45,7 @@ use crate::deadline::{Deadline, Operation};
 /// assert_eq!(limits.max_object_nesting, 64);
 /// assert_eq!(limits.max_object_number, 25_165_824);
 /// ```
-// Deliberately *not* `#[non_exhaustive]`: STYLE.md §4 makes struct-update
+// Deliberately *not* `#[non_exhaustive]`: makes struct-update
 // syntax over `Default` the way callers configure options, and the attribute
 // forbids exactly that outside this crate. New fields are additive here.
 //

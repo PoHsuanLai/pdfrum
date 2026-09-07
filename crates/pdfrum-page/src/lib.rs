@@ -334,7 +334,7 @@ pub(crate) mod names {
 
 #[cfg(test)]
 mod send_sync {
-    // Rendering pages in parallel with rayon must Just Work (STYLE.md §4).
+    // Rendering pages in parallel with rayon must Just Work.
     const fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]

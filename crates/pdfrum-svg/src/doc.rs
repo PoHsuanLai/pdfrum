@@ -309,7 +309,7 @@ impl Svg {
     ///
     /// A `pop` with nothing open is ignored rather than a panic: the engine
     /// balances its own pushes, and a library that aborts on a malformed
-    /// document is the behaviour STYLE.md §3 forbids.
+    /// document is the behaviour forbids.
     pub fn pop(&mut self) {
         if self.stack.pop().is_some() {
             let indent = self.indent();

@@ -1,6 +1,6 @@
 //! G2: what the GPU backend's divergence from a CPU backend actually is.
 //!
-//! PLAN.md §M12c settles the terms before any measurement, and this binary
+//! settles the terms before any measurement, and this binary
 //! implements exactly those terms:
 //!
 //! - GPU rasterization is **not bit-reproducible across vendors and drivers**,

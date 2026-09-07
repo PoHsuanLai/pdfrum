@@ -75,7 +75,7 @@ pub struct CharBox {
 /// Two characters share a text object exactly when their indices are equal.
 /// Objects inside form `XObject`s are numbered in the order the walk reaches
 /// them, so the index is unique across the whole page.
-// An index rather than a pointer, per STYLE.md §2: the cross-reference from
+// An index rather than a pointer, per the style rules: the cross-reference from
 // a character back to the object that drew it is data, not a back-edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectIndex(pub u32);

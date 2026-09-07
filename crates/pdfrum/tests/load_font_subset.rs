@@ -82,7 +82,7 @@ fn extracted(bytes: &[u8]) -> String {
 /// resolves the same two variables with the same defaults for the nushell
 /// side, and `conformance` for the CLI.
 ///
-/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, an integration test cannot reach another
 /// crate's test code, and the one sibling that wants this
 /// (`load_font_subset.rs`) carries the same six lines with the same comment.

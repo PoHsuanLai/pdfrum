@@ -7,7 +7,7 @@ terminal rung of its font-substitution ladder: when a document names a font
 that neither the embedded stream nor the system can supply, one of these two is
 what draws it, instantiated at whatever weight and width the substitution
 decided on. They are the single reason `pdfrum-type1` must implement Multiple
-Master at all (`docs/design/pdfrum-font.md` §1.13, §3.6).
+Master at all.
 
 **Where they come from.** The read-only C++ oracle checkout, as C++ array
 initializers:
@@ -31,7 +31,7 @@ test suite runs without the oracle checkout.
 
 **License.** PDFium, BSD 3-clause (`LICENSE` in the oracle checkout). Original
 code copyright 2014 Foxit Software Inc.; the PFB blobs themselves are
-`ChromeSansMM` / `ChromeSerifMM` 001.000, dated 2006. PLAN.md §3 records these
+`ChromeSansMM` / `ChromeSerifMM` 001.000, dated 2006. records these
 as redistributable with the project.
 
 **What they contain.** Both are PFB (`80 01 …`), `/FontType 1`,

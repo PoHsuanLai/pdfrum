@@ -2,7 +2,7 @@
 //!
 //! One list, shared by the five per-crate criterion suites, the `profile`
 //! binary, the ratchet checker and `scripts/bench-oracle.nu`, so that every
-//! number in `docs/status/M12.md` describes the same 44 files. The files
+//! number in describes the same 44 files. The files
 //! themselves are in `benches/corpus/`, copied unmodified from the oracle
 //! checkout — see its `PROVENANCE.md` for where each one came from and why it
 //! is here.
@@ -19,7 +19,7 @@
 //! # Why a class per document
 //!
 //! The M12 ratchet's noise band and its pass/fail rule are both per *class*,
-//! not per file: DEPS.md's performance ring admits a dependency on ">= 10% on
+//! not per file: the performance ring admits a dependency on ">= 10% on
 //! at least one bench class or >= 5% on the geomean", so the class has to be a
 //! thing the harness knows rather than something a reader infers from a file
 //! name. A document belongs to exactly one class — the cost that dominates it
@@ -30,7 +30,7 @@
 
 /// What a document is in the corpus to measure.
 ///
-/// The six classes PLAN.md §M12 names, one per document. `Mixed` is not a
+/// The six classes names, one per document. `Mixed` is not a
 /// leftover bin: it is the class for documents where no single cost dominates,
 /// which is the shape a real-world page usually has and the one the other five
 /// classes deliberately do not have.

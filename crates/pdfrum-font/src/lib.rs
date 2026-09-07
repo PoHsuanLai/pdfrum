@@ -57,8 +57,8 @@
     clippy::cast_possible_wrap
 )]
 
-// Every module is private and the `pub use` block below is the whole surface
-// (STYLE.md §4). A type a sibling crate names is re-exported here; a function
+// Every module is private and the `pub use` block below is the whole surface.
+// A type a sibling crate names is re-exported here; a function
 // only this crate uses is not.
 mod cid;
 mod descriptor;

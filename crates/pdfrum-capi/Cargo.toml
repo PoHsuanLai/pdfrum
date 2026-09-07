@@ -1,8 +1,8 @@
-# `libpdfrum` — the C ABI over the facade. PLAN.md §M22.2, docs/design/capi.md.
+# `libpdfrum` — the C ABI over the facade.
 #
 # This crate holds no logic: every function is a handle plus one call into
 # `pdfrum`. It is the one place in the workspace where `unsafe` is allowed,
-# and the rule that bounds it is written in docs/design/capi.md.
+# and the rule that bounds it is in the crate rustdoc.
 [package]
 name = "pdfrum-capi"
 version.workspace = true
@@ -35,7 +35,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 # The only dependency, and deliberately the only one: this crate is a
 # translation layer and every question it answers is one the facade already
-# answers. DEPS.md's external set is untouched.
+# answers. the external set is untouched.
 pdfrum.workspace = true
 
 [features]
@@ -50,10 +50,10 @@ capi = []
 markdown = ["pdfrum/markdown"]
 
 [lints.rust]
-# The single workspace exception (PLAN.md §M22.2). `unsafe_code = "forbid"` on
+# The single workspace exception. `unsafe_code = "forbid"` on
 # the workspace makes an `#[unsafe(no_mangle)] extern "C"` function
 # impossible, so this crate — and only this crate — allows it. The rule that
-# replaces the lint is in docs/design/capi.md: unsafe appears only in an
+# replaces the lint is in the crate rustdoc: unsafe appears only in an
 # `extern "C"` boundary function, every one of those carries a `# Safety`
 # section, and nothing unsafe reaches below the facade.
 unsafe_code = "allow"

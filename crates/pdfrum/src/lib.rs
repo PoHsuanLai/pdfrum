@@ -82,7 +82,7 @@ mod owned_page;
 mod page;
 /// PDF/A conversion. Behind `edit` because it writes a file, which is what
 /// that feature gates; the *checker* needs no feature and is in the default
-/// set (`docs/design/pdfa.md` §2).
+/// set.
 #[cfg(feature = "edit")]
 mod pdfa;
 mod profile;
@@ -127,7 +127,7 @@ pub use form_session::{
 };
 // The viewer chrome a host draws for itself: an open combo dropdown and a
 // scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
-// and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
+// and 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
 #[cfg(feature = "forms")]

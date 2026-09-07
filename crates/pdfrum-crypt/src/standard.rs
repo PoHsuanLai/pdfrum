@@ -1246,7 +1246,7 @@ mod tests {
     // A password 130 bytes long opens a file keyed on its first 127 — the
     // truncation applies to every candidate, because it lives in the
     // revision-5-and-up check rather than in the preparation. This is what
-    // supersedes SPEC.md §3's original "not capped at ISO's 127 bytes".
+    // supersedes 's original "not capped at ISO's 127 bytes".
     #[test]
     fn a_password_past_one_hundred_twenty_seven_bytes_is_cut_for_every_candidate() {
         let dict = test_fixtures::saslprep_r6_dict();

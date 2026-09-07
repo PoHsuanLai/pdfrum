@@ -1,5 +1,5 @@
 //! `conformance/scoreboard.json` — the fitness function every burn-down loop
-//! optimizes (PLAN.md §5).
+//! optimizes.
 //!
 //! Two properties matter more than anything else here:
 //!
@@ -40,7 +40,7 @@ impl Status {
     }
 }
 
-/// Failure tags, the clustering key `triage` groups by (PLAN.md §5.3).
+/// Failure tags, the clustering key `triage` groups by.
 pub mod tag {
     /// The `pdfrum-tool` binary is missing, or lacks the subcommand asked of
     /// it. The whole-corpus M0 baseline.
@@ -83,7 +83,7 @@ pub mod tag {
 ///
 /// So both are recorded: `pages` over every golden, and `substantive` over
 /// the goldens that actually hold text. The second is the one an exit
-/// criterion should read (SPEC.md §9).
+/// criterion should read.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TextScore {
     /// Text goldens this file has.
@@ -237,7 +237,7 @@ impl Scoreboard {
         totals
     }
 
-    /// Files that passed before and fail now — the monotone rule of PLAN.md §7.
+    /// Files that passed before and fail now — the monotone rule of
     ///
     /// A file that vanished from the new run is *not* a regression: the corpus
     /// or the suppression list may legitimately shrink.
@@ -315,7 +315,7 @@ impl Scoreboard {
 ///
 /// Both rates are written out even though they are derivable, because this
 /// file is read by humans and by burn-down loops that should not have to
-/// divide: `nonempty_rate` is the number PLAN.md §6's M2 criterion means.
+/// divide: `nonempty_rate` is the number M2 criterion means.
 fn text_totals_json(totals: &Totals) -> Json {
     let rate = |value: Option<f64>| value.map_or(Json::Null, Json::Num);
     Json::Obj(vec![

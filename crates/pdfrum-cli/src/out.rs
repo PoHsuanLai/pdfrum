@@ -1,5 +1,11 @@
 //! Opening the document and shaping output: the two things every command
 //! shares.
+//!
+//! stdout is the answer, stderr is commentary. `--json` replaces the human
+//! form with one document of the same facts. Human output is one of four
+//! layouts — record, table, section, summary — painted through [`Term`] and
+//! never by writing an escape. A command prints through this module and
+//! nothing else.
 
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -443,7 +449,7 @@ macro_rules! out {
 }
 pub(crate) use {out, outln};
 
-// ---- the four forms of docs/design/cli-style.md §3 -------------------------
+// ---- the four human-output forms ------------------------------------
 
 /// A record: keys padded to the longest, in `Key`; values plain. A `None`
 /// value prints as `none`.

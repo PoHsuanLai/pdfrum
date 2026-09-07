@@ -10,7 +10,9 @@
 //! transforms, `viewBox` fitting, gradient coordinate systems — and `usvg`
 //! already does all of it in pure Rust, handing back a tree of paths, groups
 //! and images with every transform and every reference already resolved.
-//! Writing a second incomplete SVG parser is declined here in writing.
+//! Writing a second incomplete SVG parser is declined here in writing. The
+//! mapping, and every construct the walk cannot carry into PDF, is this
+//! module and [`Unsupported`].
 //!
 //! # What the caller gets back
 //!
@@ -19,8 +21,6 @@
 //! the element's id. **Nothing is dropped silently**: that is the property
 //! this module exists to guarantee, the same one `RasterReport` guarantees on
 //! the export side.
-//!
-//! `docs/design/svg-ingest.md` records the mapping table and its limits.
 
 use std::collections::BTreeMap;
 
@@ -32,7 +32,7 @@ use crate::canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, St
 
 /// A construct in the source SVG that PDF drawing cannot carry.
 ///
-/// An enum rather than a message string (STYLE.md §2): a caller that wants to
+/// An enum rather than a message string: a caller that wants to
 /// refuse a filter but tolerate a dropped `<text>` matches on the variant, and
 /// adding a case makes every such match fail to compile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -54,8 +54,7 @@ pub enum Unsupported {
     /// A `<text>` element.
     ///
     /// `usvg` is taken with `--no-default-features`, which drops its text
-    /// stack entirely — see the module note in `docs/design/svg-ingest.md`
-    /// §6. Text elements therefore never reach the tree at all, so this is
+    /// stack entirely. Text elements therefore never reach the tree at all, so this is
     /// raised from the *source XML* rather than from the walk, and it is the
     /// one variant that carries no element id.
     Text,
@@ -268,7 +267,7 @@ impl SvgFit {
 /// relative `<image href>` resolves.
 ///
 /// With `svg-text` off, `session` is not read at all: there is no text stack
-/// to give faces to, and the parameter would be the dead option STYLE.md §4
+/// to give faces to, and the parameter would be the dead option the style rules
 /// forbids — so with the feature off the function does not take one.
 fn parse_options(
     resources_dir: Option<std::path::PathBuf>,
@@ -299,8 +298,8 @@ fn parse_options(
 /// dropped.
 ///
 /// Without a text stack — the `svg-text` feature off, or on with no face
-/// registered — a `<text>` element leaves **no node** in the resolved tree
-/// (`docs/design/svg-ingest.md` §6). There is nothing for the walk to notice,
+/// registered — a `<text>` element leaves **no node** in the resolved tree.
+/// There is nothing for the walk to notice,
 /// so reporting it has to happen before the parse, against the bytes.
 ///
 /// A substring scan rather than a second XML parse: the question is only
@@ -646,14 +645,12 @@ impl Walk<'_, '_, '_> {
     /// `text-anchor` and `textLength` and any `textPath` — and
     /// [`flattened`](usvg::Text::flattened) hands back the result as an
     /// ordinary group of filled paths. So the mapping is: walk that group
-    /// like any other. Nothing about §2's table changes, because glyph
-    /// outlines *are* paths.
+    /// like any other. Glyph outlines *are* paths.
     ///
     /// **Outlines rather than embedded text** is the deliberate default and
     /// the roadmap's own: the page needs no font embedded and no encoding to
     /// get right, and it renders identically in every viewer. What it costs
-    /// is selectable text, which `docs/design/svg-ingest.md` §6 records
-    /// alongside what embedding would need.
+    /// is selectable text, alongside what embedding would need.
     ///
     /// An empty flattened group means `usvg` resolved no face for the
     /// element's family — the caller registered none, or none that matches —
@@ -893,7 +890,7 @@ fn with_alpha(color: Color, opacity: f64) -> Color {
 /// PDF spelling would be to convert the stroke to its outline and shade that,
 /// which needs a stroke expander this crate does not have. Averaging the
 /// stops keeps the shape visible and roughly the right colour, and it is
-/// recorded in `docs/design/svg-ingest.md` §4 as the one approximation the
+/// the one approximation the
 /// walk makes without a report item — because unlike the reported cases, the
 /// shape is still there and still stroked.
 fn average_stop(stops: &[usvg::Stop]) -> Color {
@@ -1001,8 +998,7 @@ fn to_bez_path(path: &usvg::tiny_skia_path::Path) -> BezPath {
 /// the clip to the *union* of one path's subpaths — so concatenating the
 /// children's outlines under the nonzero rule is the faithful mapping for the
 /// common case. A `clipPath` with its own nested `clip-path`, which SVG
-/// intersects, is not expressible this way; `docs/design/svg-ingest.md` §4
-/// records it.
+/// intersects, is not expressible this way.
 fn clip_outline(clip: &usvg::ClipPath) -> (BezPath, Fill) {
     let mut out = BezPath::new();
     let mut rule = Fill::NonZero;

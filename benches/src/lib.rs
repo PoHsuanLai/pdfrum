@@ -23,7 +23,7 @@
 //! one process, which is not any single crate's business.
 //!
 //! [`corpus`] is what keeps all of that describing the same work: one list of
-//! documents with one class each, so a table row in `docs/status/M12.md` means
+//! documents with one class each, so a table row in means
 //! the same thing in every column.
 
 #![forbid(unsafe_code)]

@@ -115,7 +115,7 @@ impl<'a, B> SvgBackend<'a, B> {
 ///
 /// An enum rather than an `is_root` flag, because the root owns a document
 /// and an offscreen owns a fingerprint and neither has any use for the
-/// other's field (STYLE.md §2). Private: it names a state a caller can
+/// other's field. Private: it names a state a caller can
 /// neither create nor act on.
 #[derive(Debug)]
 enum Role {

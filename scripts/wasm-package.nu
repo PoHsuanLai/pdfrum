@@ -24,8 +24,7 @@
 # this script plus the Rust that feeds it.
 #
 # Requires `wasm-bindgen` and `wasm-opt` on PATH, and the `wasm32-unknown-unknown`
-# target. All three are tools, not dependencies (DEPS.md, "The web binding's
-# tools"):
+# target. All three are tools, not dependencies:
 #
 #   cargo install wasm-bindgen-cli --locked   # version must match Cargo.toml
 #   cargo install wasm-opt --locked

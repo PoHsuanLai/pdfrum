@@ -1,7 +1,7 @@
 #!/bin/sh
 # Compile and run the C test against the built libpdfrum.
 #
-# A C compiler is a *test-time* tool here, not a build dependency: DEPS.md's
+# A C compiler is a *test-time* tool here, not a build dependency: the
 # pure-Rust guarantee is about what the library ships, and this program is a
 # consumer of the shipped library rather than part of it. Nothing in
 # `crates/pdfrum-capi`'s own build touches `cc`.

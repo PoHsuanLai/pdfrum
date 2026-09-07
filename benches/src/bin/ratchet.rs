@@ -16,7 +16,7 @@
 //! # The machine
 //!
 //! **Run all three on `himmel`.** `baseline.json` has been a `himmel` artefact
-//! since 2026-09-06 (`docs/status/M13-perf-baseline.md` §25): 32 idle CPUs,
+//! since 2026-09-06: 32 idle CPUs,
 //! nothing else on the box. A check on the shared development machine is not
 //! evidence — at load 30–40 its scatter is several times the ±3–8% bands
 //! below, which is how §23 and §24 each spent a day telling false regressions
@@ -55,7 +55,7 @@
 //! commit changed what the render path costs (the two outlier fixes), so a
 //! carried-over number would have shown a large improvement in a file whose
 //! purpose is to make improvements visible one at a time. Re-initializing
-//! records the new floor honestly; `docs/status/M12.md` §10 carries the
+//! records the new floor honestly; §10 carries the
 //! before/after comparison the ratchet would otherwise have printed.
 //!
 //! # The rule
@@ -88,7 +88,7 @@
 //! Per group, from `baseline.json`'s `bands` map, because the groups do not
 //! have the same repeatability: `open` is microseconds and jitters several
 //! percent between runs on an idle machine, where a render is milliseconds and
-//! sits inside two. `docs/status/M12.md` §"The noise band" has the measured
+//! sits inside two. §"The noise band" has the measured
 //! distribution each number comes from — they are empirical, not chosen to be
 //! round. They describe an idle box and were not widened when the baseline
 //! moved to `himmel`: moving to a quieter machine is a reason to trust the
@@ -102,7 +102,7 @@
 //! sharing only 13 rows, with the warm cluster moving bodily between
 //! rasterizer backends — which no code change can do. The harness now orders
 //! those documents last, and the bands want re-deriving from runs taken after
-//! that change; `docs/issues-to-file.md` carries it. A threshold below the
+//! that change; carries it. A threshold below the
 //! harness's reproducibility does not detect regressions, it manufactures a
 //! fresh set each run.
 //!
@@ -522,7 +522,7 @@ fn read_criterion(dir: &Path) -> std::io::Result<BTreeMap<String, f64>> {
 /// Pull `median.point_estimate` out of a criterion `estimates.json`.
 ///
 /// Hand-parsed rather than pulled through a JSON crate, for the reason
-/// `conformance/src/json.rs` gives about the scoreboard and DEPS.md gives about
+/// `conformance/src/json.rs` gives about the scoreboard and gives about
 /// SSIM: this file is the project's performance fitness function, and its
 /// numbers must not shift under a dependency update. The schema is criterion's
 /// and it is two levels deep, so a scan for the key and then for the next
@@ -663,7 +663,7 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, Entry>, bands: &BTreeM
 
 /// The bands used when the baseline names none.
 ///
-/// These are the measured ones — see `docs/status/M12.md` §"The noise band" for
+/// These are the measured ones — see §"The noise band" for
 /// the runs behind each number. They are written into the file on `init` so
 /// that the committed baseline is self-describing rather than depending on this
 /// binary's defaults.

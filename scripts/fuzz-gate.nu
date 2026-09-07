@@ -1,5 +1,5 @@
 #!/usr/bin/env nu
-# The M1 fuzz gate (PLAN.md §6): "parser fuzzers running clean for 24h".
+# The M1 fuzz gate: "parser fuzzers running clean for 24h".
 #
 # Runs every parser-facing fuzz target for a share of a total time budget and
 # fails on the first crash. Not part of scripts/ci.nu — that gate *compiles*

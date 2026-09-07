@@ -64,8 +64,7 @@ these was encrypted:
 |---|---:|---|
 | `encrypted.pdf` | 10564 B | A one-page linearized 1.6 document under the standard handler at revision 4 (`/V 4`, `/CFM /AESV2`), `/P -3392`, opening with the user password `1234` or the owner password `5678` and refusing everything else. `/P` grants exactly one of ISO 32000-1 table 22's eight named bits — bit 10, accessibility extraction — so it is also the only fixture where [`Document::permissions`] is not `Permissions::ALL`, and the only one where the owner's view and the user's differ. |
 
-One arrived with `SaveOptions::subset_new_fonts` being wired
-(`docs/design/pdfrum-edit.md` §1.7). The option only ever fires on fonts a
+One arrived with `SaveOptions::subset_new_fonts` being wired. The option only ever fires on fonts a
 save writes as **new**, so its test imports a page carrying an embedded CID
 TrueType font into `hello_world.pdf`; nothing already in this directory has
 one:

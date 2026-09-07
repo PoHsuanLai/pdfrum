@@ -152,7 +152,7 @@ impl Pass {
     }
 }
 
-/// The fixed determinism arguments from PLAN.md §4: frozen clock, hermetic
+/// The fixed determinism arguments frozen clock, hermetic
 /// fonts, Croscore names. Every invocation carries these.
 pub fn determinism_args(font_dir: &Path) -> Vec<String> {
     vec![

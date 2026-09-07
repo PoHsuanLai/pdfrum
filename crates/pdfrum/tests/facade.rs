@@ -690,7 +690,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
 
 #[test]
 fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
-    // The documented boundary (SPEC.md §10, ruling E1): appearance
+    // The documented boundary: appearance
     // generation builds a widget's *chrome* — background, border, and the
     // check and radio glyphs — and deliberately does not lay out a text
     // field's body, which upstream does in a second layout engine this
@@ -1063,7 +1063,7 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
 
 #[test]
 fn one_image_drawn_at_two_sizes_is_right_at_both() {
-    // The correctness half of the decode target (SPEC.md §7). The page draws
+    // The correctness half of the decode target. The page draws
     // one 1269x1643 JPEG 2000 `XObject` twice: nearly full-page, and as a
     // 40x50 thumbnail. Rendering the page at 1/16 scale asks for a reduced
     // decode; rendering it at full scale asks for a much larger one. If

@@ -23,7 +23,7 @@ edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
 
-# The workspace lints, minus the three STYLE.md §3 denies, for the reason
+# The workspace lints, minus the three denies, for the reason
 # benches/Cargo.toml gives: a harness that cannot find its oracle should stop
 # and say so. `unsafe_code = "forbid"` is kept — the C engines are reached
 # through their safe wrappers only, which is the point of measuring them.
@@ -63,16 +63,15 @@ c-engines = ["pdfium-render", "mupdf"]
 # The subject. Default features, no more and no less than `cargo add pdfrum`.
 pdfrum = { path = "../../crates/pdfrum" }
 
-# Harness plumbing — the same pins the root workspace uses (DEPS.md "Tools &
-# tests only"), so the lock here agrees with the one there.
+# Harness plumbing — the same pins the root workspace uses, so the lock here agrees with the one there.
 anyhow = "=1.0.104"
 clap = { version = "=4.6.6", features = ["derive", "env"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 png = "=0.18.1"
 
-# Peers — DEPS.md "Benchmark peers" records each with its licence and
-# whether C is in its build. Versions are the ones PLAN.md §M21 names.
+# Peers — "Benchmark peers" records each with its licence and
+# whether C is in its build. Versions are the ones names.
 hayro = { version = "=0.7.1", optional = true }
 hayro-interpret = { version = "=0.7.0", optional = true }
 # hayro's geometry vocabulary, needed to read a glyph's position out of its

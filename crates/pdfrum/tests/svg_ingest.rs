@@ -16,7 +16,7 @@
 //! eight bits per channel and a gradient becomes a sampled shading function.
 //! The floors below are **the numbers this pipeline achieves**, recorded
 //! after the fact rather than chosen and then cleared, and
-//! `docs/design/svg-ingest.md` §5 carries them with the run that produced
+//! §5 carries them with the run that produced
 //! them.
 //!
 //! # The fixture store, and why a missing one is not a pass
@@ -107,7 +107,7 @@ enum Class {
 /// The floor each class clears against `resvg`'s own render of the same file.
 ///
 /// **Published, not negotiated.** Each is set just below the worst file in
-/// its class on the run recorded in `docs/design/svg-ingest.md` §5, so the
+/// its class on the run recorded in §5, so the
 /// number says what this pipeline achieves rather than what would be
 /// comfortable to clear. The worst file of each class is named in its arm.
 fn floor(class: Class) -> f64 {
@@ -138,7 +138,7 @@ const GRADIENT_FLOOR: f64 = 0.99;
 /// genuinely different number. Worst — and the only file in the class:
 /// `opacity_groups`, 0.9669. It is the one place the mapping is an
 /// approximation rather than a translation, and
-/// `docs/design/svg-ingest.md` §4 says so.
+/// §4 says so.
 const ALPHA_FLOOR: f64 = 0.95;
 /// An embedded raster, resampled from 16x16 to 160x160 by each engine's own
 /// filter — ours through the PDF image pipeline, `resvg`'s through
@@ -441,7 +441,7 @@ fn every_fixture_ingests_and_clears_its_floor() {
 /// above already checks each declined fixture names its own construct; this
 /// checks the stronger property behind it — that every variant of
 /// [`Unsupported`] the corpus can reach is in fact reachable, so the enum is
-/// not carrying a case nothing ever raises (STYLE.md §4).
+/// not carrying a case nothing ever raises.
 #[test]
 fn every_reported_construct_has_a_fixture_that_raises_it() {
     let mut seen = Vec::new();
@@ -546,7 +546,7 @@ fn a_compiled_form_draws_what_the_inline_path_draws() {
 /// entire budget. Measured, like the others, and the measurement was
 /// stronger than the bar: **all twelve** carried fixtures score a flat 1.0000
 /// against the inline render, gradients and the embedded raster included, on
-/// the run in `docs/design/svg-ingest.md` §8. The floor is left just below
+/// the run in §8. The floor is left just below
 /// rather than at 1.0 so that a future rasterizer's antialiasing change is a
 /// review rather than a red build.
 const FORM_MATCHES_INLINE: f64 = 0.999;
@@ -715,7 +715,6 @@ fn ingested_text_is_outlines_rather_than_an_embedded_font() {
     assert_eq!(
         after, before,
         "ingesting text as outlines adds no text-showing operator at all: \
-         that is the trade the outline default makes, and \
-         `docs/design/svg-ingest.md` §6 records it"
+         that is the trade the outline default makes, and \ §6 records it"
     );
 }

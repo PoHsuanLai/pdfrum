@@ -140,7 +140,7 @@ pub fn render_once<B: RasterBackend>(subject: &Subject, backend: &B) -> Option<P
 /// The timed region includes everything `RasterBackend::finish` does, which on
 /// the GPU column is the texture allocation, the dispatch, the
 /// `copy_texture_to_buffer` and the host stall waiting for the readback. That
-/// is deliberate and is what PLAN.md §M12c means by "include upload and
+/// is deliberate and is what means by "include upload and
 /// readback": an embedder rendering a page to a texture pays them, and a
 /// number that excluded them would be marketing.
 pub fn time<B: RasterBackend>(

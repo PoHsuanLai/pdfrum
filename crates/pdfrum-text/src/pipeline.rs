@@ -990,7 +990,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
         // the staging buffer is empty, so a crafted file can arrive here with
         // `temp_char_list_` empty and take `back()` on it. That is a `CHECK`
         // failure in debug and undefined behaviour in release. No reading of
-        // §9.10 asks a text extractor to crash, and STYLE.md §3 forbids the
+        // §9.10 asks a text extractor to crash, and forbids the
         // equivalent outright. pdf.js keeps no sentinel and no staging list of
         // this shape — its soft hyphen is normalised to `-`
         // (`unicode.js:57-58`) and rejoined at query time

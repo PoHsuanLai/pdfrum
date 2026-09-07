@@ -136,7 +136,7 @@ fn section(tag: [u8; 4]) -> &'static [u8] {
 // cumulative-length arithmetic — on the path of every character of every
 // page, which on a CJK document is millions of probes. The two tables are
 // immutable, code-point-indexed and read constantly: this is exactly the
-// lazy cache STYLE.md §2 sanctions.
+// lazy cache sanctions.
 struct RleTable {
     payload: &'static [u8],
     expanded: std::sync::OnceLock<Box<[u16]>>,

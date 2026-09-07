@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn a_thumbnail_is_never_handed_to_a_request_it_cannot_cover() {
-        // The correctness bug PLAN.md §M12b names: a page that draws one image
+        // The correctness bug names: a page that draws one image
         // small and then large must not get the small decode back for the
         // large draw. Two axes, tested separately, because a mask that checked
         // only one would pass the symmetric case and fail every real one.

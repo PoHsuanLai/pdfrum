@@ -2,7 +2,7 @@
 //! sized to this crate's own closed schemas (the scoreboard).
 //!
 //! Rolled by hand rather than taken as a dependency for the same reason SSIM
-//! is (DEPS.md): the scoreboard is the project's fitness function, and its
+//! is: the scoreboard is the project's fitness function, and its
 //! byte-level shape — key order, float formatting — must never shift under a
 //! dependency update. Object keys keep insertion order, so a scoreboard
 //! written twice from equal data is byte-identical and diffs cleanly.

@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
 # M12c's isolation check: a headless build of pdfrum resolves with zero `wgpu`.
 #
-# PLAN.md §M12c grants the GPU backend an exemption from DEPS.md's pure-Rust
+# The workspace grants the GPU backend an exemption from the pure-Rust
 # guarantee, and bounds it with two rules. This script is the mechanical half
 # of the first one — "prove this with a committed check, not an assertion" —
 # and it is deliberately a separate file from scripts/ci.nu so that a reader
@@ -59,7 +59,7 @@ def check-clean [crate: string, label: string]: nothing -> bool {
     print --stderr $"error: ($label) reaches the GPU stack:"
     $found | each {|d| print --stderr $"  ($d)" } | ignore
     print --stderr "       M12c's isolation rule: nothing in the core ring may depend"
-    print --stderr $"       on ($GPU_CRATE). See PLAN.md §M12c and DEPS.md."
+    print --stderr $"       on ($GPU_CRATE). See CONTRIBUTING.md."
     false
 }
 

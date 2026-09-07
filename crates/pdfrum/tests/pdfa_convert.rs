@@ -40,7 +40,7 @@ use pdfrum_corpus::CORPUS;
 
 /// How many corpus files veraPDF passes at A-2b after conversion.
 ///
-/// Measured, not chosen: the run in `docs/design/pdfa.md` §9 — 10 when the
+/// Measured, not chosen: the run in §9 — 10 when the
 /// conversion landed, 11 once the CMYK output intent joined it. The floor exists
 /// so the number cannot quietly regress — a change that converts fewer files
 /// fails here rather than being noticed a milestone later.
@@ -84,8 +84,7 @@ fn compliant_count(tool: &Path, dir: &Path, flavour: &str) -> Option<usize> {
     }
     // `"compliant" : true` appears once per validated file, and only in a
     // validation result. Counting the literal costs no JSON dependency, which
-    // is the same call `pdfa_oracle.rs` makes for the same reason (STYLE.md
-    // §5) — and a file veraPDF declines produces no such key at all, so it
+    // is the same call `pdfa_oracle.rs` makes for the same reason — and a file veraPDF declines produces no such key at all, so it
     // counts as not passing, which is the honest reading.
     Some(text.matches("\"compliant\" : true").count())
 }

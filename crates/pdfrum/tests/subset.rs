@@ -1,4 +1,4 @@
-//! `SaveOptions::subset_new_fonts`, end to end (ISO 32000-1 §9.9, SPEC.md §11).
+//! `SaveOptions::subset_new_fonts`, end to end (ISO 32000-1 §9.9, ).
 //!
 //! The option only ever fires on fonts a save writes as **new**, so every
 //! test here imports a page carrying an embedded CID TrueType font into a
@@ -314,7 +314,7 @@ fn exactly_five_objects_change_or_appear() {
     // `TrueType` (`cpdf_fontsubsetter_embeddertest.cpp:398-428`) asserts six
     // overrides. Ours are five and they are not the same five: `/W` is not
     // rewritten, and the `/CIDToGIDMap` is minted. See
-    // `docs/design/pdfrum-edit.md` §3.7.
+    // §3.7.
     let off = objects(&import_and_save(false));
     let on = objects(&import_and_save(true));
 

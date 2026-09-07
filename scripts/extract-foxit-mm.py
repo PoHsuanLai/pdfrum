@@ -38,7 +38,7 @@ def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
 
     One place, three inputs, in order: an explicit argument, then
     `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
-    directory README.md and PLAN.md §4 already say it lives in. The nushell
+    directory README.md already says it lives in. The nushell
     side resolves the same variable with the same default in `scripts/env.nu`;
     this is that rule spelled in Python, six lines rather than a shared module
     the one-shot generators would have to import across directories.

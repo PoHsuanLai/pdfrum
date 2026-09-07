@@ -11,7 +11,7 @@
 //! `stroke-width` under a pixel is inked, and about how an `<image>` is
 //! resampled. The floors below are **the numbers this pipeline achieves**,
 //! recorded after the fact rather than chosen and then cleared, and
-//! `docs/design/svg.md` §5 carries them with the run that produced them.
+//! §5 carries them with the run that produced them.
 //!
 //! # Running it
 //!
@@ -43,7 +43,7 @@ mod ssim;
 /// The floor each file class clears against the **oracle's** PNG.
 ///
 /// **Published, not negotiated.** Each is set just below the *worst* file in
-/// its class on the run recorded in `docs/design/svg.md` §5, so the number
+/// its class on the run recorded in §5, so the number
 /// says what this pipeline achieves rather than what would be comfortable to
 /// clear. The worst file in each class is named in the arm.
 fn oracle_floor(class: Class) -> f64 {

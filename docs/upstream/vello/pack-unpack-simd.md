@@ -22,7 +22,7 @@ the rule is the issue text; nothing above it is meant to be posted.
   entries are lazy task dispatch and the coarse-rasterizer rewrite, not
   `pack`/`unpack`.
 
-So this is **not** "upgrade to vello_cpu X" in `DEPS.md`'s terms — there is no
+So this is **not** "upgrade to vello_cpu X" in's terms — there is no
 X. It is a genuine upstream report, and the version bump only becomes the
 answer once a fix lands.
 
@@ -39,7 +39,7 @@ shape they intend.
 backend to `RenderMode::OptimizeSpeed` (the `U8Kernel`, which sidesteps this
 cost rather than fixing it) is deterministic and buys 1.9x-3.4x marginal `Ir`
 per render, but it moves 14 conformance rows below our SSIM floor, so we have
-not taken it. Full numbers in `docs/design/mupdf-comparison.md` section 8.
+not taken it. Full numbers in section 8.
 That measurement is *why* we care about the f32 path specifically: it is the
 path we are staying on.
 
@@ -77,7 +77,7 @@ and `pack` does not move. The 4.7x is an AVX2 number and we do not run AVX2.
 
 ### Downstream marginal `Ir`, our three pages
 
-Method is section 0 of `docs/design/mupdf-comparison.md`: `--warm 4` minus
+Method is section 0 of: `--warm 4` minus
 `--warm 0`, divided by 4, anchored on `benches/compare/src/engines/mod.rs:run`
 inclusive. Both sides are the *same fork* (so `fearless_simd` is 0.7.0 in
 both) and differ only by the one commit.
@@ -137,7 +137,7 @@ reasoning, and both now corrected in the patch and its commit message:
   someone else's rasterizer.
 - The 2.5x mupdf gap is *not* closed by this. The study's a1 was the top item
   on the strength of a 3x-4x assumption that does not survive contact with our
-  pinned SSE2. `docs/design/mupdf-comparison.md` section 6 should be re-ranked.
+  pinned SSE2. section 6 should be re-ranked.
 - The real question this raises for us is **whether pinning `Level::baseline()`
   is still the right trade**. It costs us every SIMD improvement in vello, not
   just this one. That is a user decision, not one to make in passing.

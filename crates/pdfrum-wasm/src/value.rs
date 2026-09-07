@@ -5,7 +5,7 @@
 //! reaches TypeScript as `any`, and these reach it as named classes with typed
 //! fields, so a caller's editor knows that a `Word` has a `text` and a `size`
 //! before the code has ever run. It costs one `pub` field per value and buys
-//! the `.d.ts` that PLAN.md §M22.4 asks for.
+//! the `.d.ts` that asks for.
 //!
 //! They are values, not handles: a caller never frees one. wasm-bindgen still
 //! gives each a `free()`, because every exported struct gets one, and the
