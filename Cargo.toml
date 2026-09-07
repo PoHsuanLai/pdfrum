@@ -140,7 +140,7 @@ unicode-bidi = "=0.3.18"
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
 unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
-smallvec = "=1.15.2"
+smallvec = "=1.16.0"
 # Shared byte buffers. Owner and data pointer are decoupled, so a `Vec` can be
 # adopted without copying it — see `pdfrum_object::ByteSpan`. Zero transitive
 # dependencies, MIT, pure Rust.
@@ -175,13 +175,13 @@ png = "=0.18.1"
 #
 # Defaults dropped (`text`, `system-fonts`, `memmap-fonts`) because every
 # glyph is already a filled outline. `raster-images` kept for `<image>`.
-resvg = { version = "=0.47.0", default-features = false, features = ["raster-images"] }
+resvg = { version = "=0.48.1", default-features = false, features = ["raster-images"] }
 # SVG ingestion: the resolved tree `Canvas::draw_svg` compiles into page
 # operators. Default-off behind `pdfrum/svg-ingest`.
 #
 # Defaults dropped so SVG text maps through `pdfrum-font`, not a second font
 # stack. Without `text`, `usvg` drops `<text>` from the tree.
-usvg = { version = "=0.47.0", default-features = false }
+usvg = { version = "=0.48.1", default-features = false }
 # Criterion, for the five per-crate bench targets and `pdfrum-bench`. Declared
 # here rather than repeated in six manifests so the pin and its reason live in
 # one place.
@@ -193,7 +193,7 @@ usvg = { version = "=0.47.0", default-features = false }
 # gate. There is no feature flag that avoids it (`alloca` is not optional). 0.5
 # predates that dependency and is pure Rust; nothing in any bench uses an API
 # newer than it. It appears in no library crate's normal dependency tree.
-criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "=0.8.2", default-features = false, features = ["cargo_bench_support"] }
 
 # Line tables so `scripts/profile.nu` names functions. `debug = 1` is
 # line-tables-plus-frame-info, not full DWARF locals.
