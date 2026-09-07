@@ -96,8 +96,8 @@ pub enum Backend {
 impl Backend {
     /// The backend a name selects, or `None` when it names none of them.
     ///
-    /// `"agg"` is [`Agg`], `"tiny-skia"` / `"tinyskia"` is [`TinySkia`],
-    /// `"vello-cpu"` / `"vello_cpu"` / `"vello"` is [`VelloCpu`].
+    /// `"agg"` is [`Self::Agg`], `"tiny-skia"` / `"tinyskia"` is [`Self::TinySkia`],
+    /// `"vello-cpu"` / `"vello_cpu"` / `"vello"` is [`Self::VelloCpu`].
     /// [`Backend::resolve`] falls back to the default rather than erroring, so
     /// an unrecognised name is a silent switch.
     #[must_use]
