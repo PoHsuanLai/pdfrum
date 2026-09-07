@@ -1,18 +1,14 @@
 {
   "_": [
-    "The M12 performance ratchet. Medians in nanoseconds, taken",
-    "from criterion's own estimates.json. Regenerate on `himmel`,",
-    "the idle bench box these numbers describe -- a run on the",
-    "shared machine is noise against the bands below:",
+    "Performance ratchet. Medians in nanoseconds, taken from",
+    "criterion's estimates.json. Regenerate on the idle bench",
+    "box these numbers describe -- a run on a shared machine is",
+    "noise against the bands below:",
     "",
     "  cargo bench --workspace",
     "  cargo run --release -p pdfrum-bench --bin ratchet -- update",
     "",
-    "Edit a number by hand only to record a deliberate trade, and",
-    "say so in docs/status/M13-perf-baseline.md in the same",
-    "commit -- its last section is the current record. The bands",
-    "below are measured, not chosen; see that document's section",
-    "on the noise band before widening one."
+    "Edit a number by hand only to record a deliberate trade."
   ],
   "bands": {
     "build": 0.04,

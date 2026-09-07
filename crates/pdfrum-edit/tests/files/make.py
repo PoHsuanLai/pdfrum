@@ -1,22 +1,12 @@
 #!/usr/bin/env python3
-"""Generate `tiny.ttf`, the subsettable fixture `pdfrum-edit`'s tests use.
+"""Generate `tiny.ttf` next to this file.
 
-Every byte is synthesized. It reuses `make-tt-fixtures.py`'s table builders —
-the same skeleton `pdfrum-font`'s cmap fixtures are built from — and differs in
-one way that matters here: **every glyph carries real outlines**, so the
-`subsetter` crate has something to drop. A font whose `glyf` entries are all
-empty subsets to the same size and proves nothing.
+Same SFNT skeleton as `crates/pdfrum-font/tests/fixtures/make.py`, but every
+glyph carries real outlines so the subsetter has something to drop.
 
-Eight glyphs, six of them filled. That is enough for a subset of two glyphs to
-be visibly smaller than the whole, and few enough that the file stays under a
-kilobyte.
+Usage:
 
-Usage (from the workspace root):
-
-    python3 scripts/make-subset-fixture.py [OUT_DIR]
-
-with OUT_DIR defaulting to `crates/pdfrum-edit/tests/files`. Output is
-deterministic: re-running reproduces the committed bytes exactly.
+    python3 crates/pdfrum-edit/tests/files/make.py [OUT_DIR]
 """
 
 from __future__ import annotations
@@ -26,7 +16,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_OUT_DIR = HERE.parent / "crates" / "pdfrum-edit" / "tests" / "files"
+DEFAULT_OUT_DIR = HERE
+FONT_MAKE = HERE.parents[2] / "pdfrum-font" / "tests" / "fixtures" / "make.py"
 
 NUM_GLYPHS = 8
 # Glyph 0 is `.notdef` and stays empty, as every font's does; the rest carry
@@ -35,8 +26,7 @@ FILLED = {1, 2, 3, 4, 5, 6}
 
 
 def load_builders():
-    """Import make-tt-fixtures.py, whose filename is not a legal module name."""
-    path = HERE / "make-tt-fixtures.py"
+    path = FONT_MAKE
     spec = importlib.util.spec_from_file_location("tt_fixtures", path)
     if spec is None or spec.loader is None:
         raise SystemExit(f"cannot load {path}")

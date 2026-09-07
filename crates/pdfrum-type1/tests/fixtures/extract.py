@@ -6,11 +6,11 @@ the terminal-rung fallback fonts as C++ `std::array<uint8_t, N>` initializers.
 This script turns them back into the PFB byte streams `pdfrum-type1`'s tests
 consume.
 
-Usage:
-    uv run scripts/extract-foxit-mm.py [ORACLE_ROOT]
+Writes `FoxitSansMM.pfb` and `FoxitSerifMM.pfb` next to this file.
 
-Writes `crates/pdfrum-type1/tests/fixtures/{FoxitSansMM,FoxitSerifMM}.pfb`.
-Both files are PDFium-BSD licensed (see the fixtures' PROVENANCE.md).
+Usage:
+
+    uv run crates/pdfrum-type1/tests/fixtures/extract.py [ORACLE_ROOT]
 """
 
 import os
@@ -37,24 +37,18 @@ def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
     """The read-only C++ PDFium checkout.
 
     One place, three inputs, in order: an explicit argument, then
-    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
-    directory README.md already says it lives in. The nushell
-    side resolves the same variable with the same default in `scripts/env.nu`;
-    this is that rule spelled in Python, six lines rather than a shared module
-    the one-shot generators would have to import across directories.
+    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++`.
     """
     if len(sys.argv) > argv_index:
         return pathlib.Path(sys.argv[argv_index])
-    repo = pathlib.Path(__file__).resolve().parent.parent
+    repo = pathlib.Path(__file__).resolve().parents[4]
     return pathlib.Path(os.environ.get("PDFRUM_ORACLE_CHECKOUT", repo.parent / "pdfium-c++"))
 
 
 def main() -> int:
     oracle = oracle_checkout()
     src = oracle / "core/fxge/fontdata/chromefontdata"
-    out = pathlib.Path(__file__).resolve().parent.parent / (
-        "crates/pdfrum-type1/tests/fixtures"
-    )
+    out = pathlib.Path(__file__).resolve().parent
     out.mkdir(parents=True, exist_ok=True)
     for cpp, (symbol, name, expected_len) in FONTS.items():
         blob = extract((src / cpp).read_bytes(), symbol)

@@ -347,7 +347,7 @@ impl RenderDevice for TinySkiaDevice {
             debug_assert_eq!(
                 (m.width(), m.height()),
                 (self.width, self.height),
-                "an AlphaMask must be device-sized and device-aligned (SPEC §8)"
+                "an AlphaMask must be device-sized and device-aligned"
             );
             (m.width() == self.width && m.height() == self.height)
                 .then(|| {
@@ -441,7 +441,7 @@ impl RasterBackend for TinySkiaBackend {
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
         debug_assert!(
             d.layers.is_empty(),
-            "snapshot requires every layer popped (SPEC §8)"
+            "snapshot requires every layer popped"
         );
         d.snapshot_pixels()
     }

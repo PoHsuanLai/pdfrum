@@ -61,7 +61,7 @@ pub fn page_label<R: Resolve>(
     // The number tree's keys are `/Nums` integers, so the comparison and the
     // `/St` arithmetic below happen in `i64`. That widening is private: a page
     // index cannot be negative, which is why the old `page_index < 0` guard is
-    // gone rather than rewritten (WP1 step 5).
+    // gone rather than rewritten (step 5).
     let page_index = i64::from(page.get());
     let labels = catalog.dict(names::PAGE_LABELS, r)?;
     let (key, value) = number_tree::lower_bound(&labels, page_index, r, limits, diags)?;

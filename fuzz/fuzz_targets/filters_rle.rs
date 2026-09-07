@@ -1,8 +1,7 @@
 //! `decode_run_length` — `/RunLengthDecode`.
 //!
-//! Property: never panics; the consumed count stays inside the input and the
-//! output stays under the filter's own 20 MiB cap, which is behaviourally
-//! load-bearing (PDFium truncates there) rather than a fuzz convenience.
+//! Property: never panics; consumed stays inside the input; output stays
+//! under the filter's own 20 MiB cap (PDFium truncates there).
 
 #![no_main]
 

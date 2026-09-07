@@ -613,7 +613,7 @@ impl RenderDevice for VelloDevice {
             debug_assert_eq!(
                 (m.width(), m.height()),
                 (self.width, self.height),
-                "an AlphaMask must be device-sized and device-aligned (SPEC §8)"
+                "an AlphaMask must be device-sized and device-aligned"
             );
             if m.width() != self.width || m.height() != self.height {
                 // Failing *closed* would be to drop the layer; both CPU
@@ -713,7 +713,7 @@ impl RasterBackend for VelloBackend<'_> {
         // §4.3 calls this the backend's structural cost.
         debug_assert!(
             d.frames.is_empty(),
-            "snapshot requires every layer and clip popped (SPEC §8)"
+            "snapshot requires every layer and clip popped"
         );
         self.rasterize(d)
     }
@@ -853,7 +853,7 @@ mod tests {
 
     #[test]
     fn a_mask_of_the_wrong_size_is_ignored_not_applied() {
-        // SPEC §8 makes a device-sized mask an invariant, and the CPU backends
+        // makes a device-sized mask an invariant, and the CPU backends
         // both fail *open* on a violation — matching them keeps a Tier C
         // difference from being about error handling rather than rasterizing.
         // The `debug_assert` fires first in a debug build, which is the same

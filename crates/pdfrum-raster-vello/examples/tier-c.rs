@@ -1,7 +1,6 @@
-//! G2: what the GPU backend's divergence from a CPU backend actually is.
+//! What the GPU backend's divergence from a CPU backend actually is.
 //!
-//! settles the terms before any measurement, and this binary
-//! implements exactly those terms:
+//! Terms:
 //!
 //! - GPU rasterization is **not bit-reproducible across vendors and drivers**,
 //!   so this backend cannot join the conformance scoreboard and must never
@@ -14,10 +13,8 @@
 //!
 //! The reference column is `pdfrum-raster-agg`, deliberately. It is the
 //! conformance default and the backend whose edge quantisation is closest to
-//! the oracle's own (SPEC §8 item 7), so a divergence measured against it is
-//! the most meaningful available. `vello_cpu` would have been the other
-//! candidate; §7 of the status doc records why it is reported second rather
-//! than gated on.
+//! the oracle's own, so a divergence measured against it is the most
+//! meaningful available. `vello_cpu` is reported second rather than gated on.
 //!
 //! # The metric is the harness's, not a new one
 //!

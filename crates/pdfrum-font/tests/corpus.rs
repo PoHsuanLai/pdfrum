@@ -22,8 +22,7 @@ use std::sync::Arc;
 
 /// The read-only C++ PDFium checkout, resolved the one way every script and
 /// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
-/// sibling `../pdfium-c++` directory README.md and name.
-/// `scripts/env.nu` holds the nushell spelling of the same rule.
+/// sibling `../pdfium-c++` directory README.md names.
 ///
 /// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, and an integration test in one crate

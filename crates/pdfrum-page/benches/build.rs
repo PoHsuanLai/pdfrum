@@ -1,35 +1,8 @@
-//! What building a page graph costs, before anything is drawn.
+//! Page-graph cost, before anything is drawn. Ids `<class>/<stem>`.
 //!
-//! One criterion group, `build`, over the 44 documents in `benches/corpus`, ids
-//! spelt `<class>/<stem>` so `benches/src/bin/ratchet.rs` can aggregate by
-//! class. New in the M12 per-crate split, and it is the group that split was
-//! most worth doing for.
-//!
-//! # What it isolates, and why that matters
-//!
-//! the internal working notes measured that the *engine* half of a render — the
-//! content-stream walk and its interpretation, which is this crate — is 54–85%
-//! of the elapsed time, and §3's whole P1 pass then optimized the rasterizer
-//! half. That was not a mistake at the time (the rasterizer is where the
-//! profile could name a function on a machine without `perf`), but it left the
-//! larger half with no benchmark of its own: a `build` regression could only be
-//! seen through a render number that also contains a rasterizer.
-//!
-//! This group is that benchmark. It runs the content stream through the lexer,
-//! the operator interpreter and the graphics-state machine, resolves the
-//! resource dictionary's fonts and colour spaces and decodes its images, and
-//! produces the `PageObject` list — and then stops, without rasterizing a
-//! pixel. the internal working notes's outstanding `bumpalo` question is a question
-//! about this number.
-//!
-//! # Fresh caches per iteration, deliberately
-//!
-//! `Page::objects` builds with a fresh `BuildContext`, which is the cold
-//! convention `render-cold` uses and for the same reason: a build with a warm
-//! font and image cache is measuring the cache, and the interesting quantity
-//! here is what the walk costs. Unlike the render groups this one has no oracle
-//! column to be comparable with — `pdfium_test` has no mode that builds a page
-//! and stops — so there is no warm variant and no target, only a ratchet.
+//! Lexer, interpreter, graphics state, fonts, colour spaces, images — then
+//! stop. Fresh `BuildContext` per iteration. No oracle column: `pdfium_test`
+//! has no "build and stop" mode.
 
 use std::hint::black_box;
 use std::time::Duration;
@@ -38,13 +11,7 @@ use criterion::{Criterion, criterion_main};
 use pdfrum::Document;
 use pdfrum_corpus::{CORPUS, bytes};
 
-/// How many samples one document's build is worth.
-///
-/// The same shape as the render groups' override and for the same reason —
-/// criterion's floor is `sample_size` iterations regardless of the window — but
-/// a shorter list, because a build without a rasterizer is cheaper than a render
-/// on every document except the ones whose cost *is* the image decode. Those
-/// three are exactly the ones named here.
+/// Fewer samples on the three pathological image documents.
 fn samples_for(stem: &str) -> usize {
     match stem {
         "image_bug_718762" | "image_bug_583804" | "image_bug_898443" => 10,
@@ -80,7 +47,6 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

@@ -70,25 +70,6 @@ wasm-bindgen-test = "0.3.78"
 [lints]
 workspace = true
 
-# The release profile this crate is built under lives at the workspace root as
-# `[profile.wasm]`, because cargo ignores a `[profile.*]` table in a member.
-# `scripts/wasm-package.nu` builds under it; the settings and the measurement
-# behind them are in the root manifest and the internal working notes.
-
-# **The build is `scripts/wasm-package.nu`, not `wasm-pack`.** wasm-pack was
-# tried first and cannot drive this crate: it runs `wasm-opt` itself with a
-# hardcoded `-O` and no feature flags, which **fails on this module** — Rust's
-# `wasm32-unknown-unknown` emits bulk-memory (`memory.copy`, `memory.fill`) and
-# non-trapping float-to-int, and `wasm-opt`'s validator rejects both unless
-# told they are allowed. The flags cannot be supplied: wasm-pack reads
-# `[package.metadata.wasm-pack.profile.<name>]` only for the three profiles it
-# knows (`dev`, `release`, `profiling`), and this crate builds under the
-# workspace's own `wasm` profile, which has no such slot; under a custom
-# profile it consults no metadata at all. Both `wasm-opt = false` and a full
-# flag list were tried under both `.wasm` and `.release` and neither is read.
-#
-# So the script calls `cargo build`, `wasm-bindgen` and `wasm-opt` in turn —
-# three commands wasm-pack would have wrapped — which also lets it record the
-# size before and after the optimizer and check it against the budget. The
-# `.d.ts` is wasm-bindgen's own output either way; wasm-pack never generated
-# it.
+# Profile lives at the workspace root: cargo ignores `[profile.*]` in a member.
+# Build with `scripts/wasm-package.nu`, not wasm-pack — wasm-pack's wasm-opt
+# does not accept the bulk-memory / non-trapping-float flags this module needs.

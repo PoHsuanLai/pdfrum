@@ -1,17 +1,7 @@
 //! Whole-file text extraction: bytes → document → page graph → `TextPage`.
 //!
-//! This crate consumes no untrusted bytes directly — it consumes a `Page`,
-//! which is already the product of fuzzed parsing. What it *does* consume is
-//! untrusted **geometry**: matrices that may be singular or non-finite, font
-//! sizes that may be zero or negative, rectangles with their corners the
-//! wrong way round, and character counts in the millions. Every threshold in
-//! the extraction heuristics is arithmetic over those numbers, and several of
-//! them divide.
-//!
-//! Property: never panics and always terminates, and the query half — search,
-//! link extraction, the selection helpers — is exercised on whatever came
-//! out, because its index arithmetic bridges two index spaces that
-//! deliberately disagree.
+//! Property: never panics. Search, links, and selection run on whatever came
+//! out.
 
 #![no_main]
 

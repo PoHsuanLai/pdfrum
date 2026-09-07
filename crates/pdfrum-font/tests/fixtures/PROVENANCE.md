@@ -45,7 +45,7 @@ entirely, which is the only way to reach the code path guarded by
 **How to regenerate them.** From the workspace root:
 
 ```
-python3 scripts/make-tt-fixtures.py [OUT_DIR]
+python3 crates/pdfrum-font/tests/fixtures/make.py [OUT_DIR]
 ```
 
 `OUT_DIR` defaults to this directory. The script is pure standard library and

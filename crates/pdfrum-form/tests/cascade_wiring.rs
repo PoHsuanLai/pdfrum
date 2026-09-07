@@ -3,7 +3,7 @@
 //!
 //! # Why this file exists
 //!
-//! M14 landed the seam and its script-free implementation, and every test it
+//! landed the seam and its script-free implementation, and every test it
 //! shipped passed — including the ones that ran the cascade. None of them
 //! could have caught that `commit::run` was called by nothing but its own
 //! unit tests, that `route::Context` had no cascade to consult, and that
@@ -533,7 +533,7 @@ fn tabbing_away_from_a_refused_field_does_not_move_focus() {
     assert_eq!(text_of(&session, 0).as_deref(), Some("old"));
 }
 
-// ---- the two WP12 defects, closed ----
+// ---- the two defects, closed ----
 
 /// **A format script's output reaches the appearance.**
 ///

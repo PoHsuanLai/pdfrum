@@ -2324,7 +2324,7 @@ pub(crate) fn draw_shading_into<B: RasterBackend>(
             // alpha is applied exactly once, at the blit below.
             let mut scratch = backend.new_target(w, h, peniko::Color::TRANSPARENT);
             // The mesh half of the shading phase. It was outside every bucket
-            // until M12b P3, which is why `shading_axial_radial`'s engine
+            // until , which is why `shading_axial_radial`'s engine
             // residue looked like unattributed `pattern.rs` overhead: the
             // document draws 28368 patches through `fill_path` and none of the
             // engine-side work that decides them was counted anywhere. Like

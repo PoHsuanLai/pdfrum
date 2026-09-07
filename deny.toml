@@ -1,6 +1,5 @@
-# cargo-deny configuration — mechanical enforcement of the pure-Rust
-# guarantee and license policy. `scripts/ci.nu` additionally rejects any
-# `*-sys` crate in the normal dependency tree via `cargo tree`.
+# cargo-deny: license allow-list and the pure-Rust ban.
+# `scripts/ci.nu` also rejects `*-sys` crates via `cargo tree`.
 
 [graph]
 all-features = false
@@ -15,12 +14,9 @@ allow = [
     "Zlib",
     "Unicode-DFS-2016",
     "Unicode-3.0",
-    # M12c, both reached only through `pdfrum-raster-vello`. Neither is a
-    # loosening of the policy's intent — both are permissive and
-    # OSI/FSF-recognised — they were simply absent from a tree that had not
-    # needed them before.
-    #   CC0-1.0: hexf-parse <- naga <- wgpu-core (a hex-float literal parser)
-    #   ISC:     libloading <- ash <- gpu-allocator <- wgpu-hal
+    # GPU tree only (`pdfrum-raster-vello`)
+    # CC0-1.0: hexf-parse <- naga <- wgpu-core
+    # ISC: libloading <- ash <- gpu-allocator <- wgpu-hal
     "CC0-1.0",
     "ISC",
 ]
@@ -28,56 +24,15 @@ confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "warn"
-# Pure-Rust guarantee: no C/C++ build machinery may ever appear in
-# the workspace graph. A transitive dep growing a C build script fails CI.
+# No C/C++ build machinery in the workspace graph.
 deny = [
-    # M22 phase 4 scopes the second exception, and `wrappers` is its whole
-    # extent: `cc` stays banned everywhere except as a build-dependency of
-    # `minicov`, which reaches the graph only as a dependency of
-    # `wasm-bindgen-test` — `crates/pdfrum-wasm`'s **dev**-dependency, the Node
-    # test harness.
-    #
-    # Measured rather than asserted, 2026-09-05: `cargo tree --workspace
-    # --target all -e normal,build` finds no `cc` at all, and neither does
-    # `cargo tree -p pdfrum-wasm --target wasm32-unknown-unknown -e
-    # normal,build`. It is reachable only through `-e dev`. So nothing that
-    # ships — no library, no `libpdfrum`, and not the `.wasm` module a browser
-    # downloads — has a C compiler anywhere in its tree; the pure-Rust
-    # guarantee, which states as being about what the library compiles
-    # and links, is untouched.
-    #
-    # `minicov` is a coverage-instrumentation helper that `wasm-bindgen-test`
-    # depends on unconditionally: there is no feature that turns it off in
-    # 0.3.78, which was checked before this line was written. The alternative
-    # to the exception is having no test harness for the WebAssembly binding at
-    # all, and an untested binding is the worse trade. "The web
-    # binding's tools", records it beside the `libfuzzer-sys` footnote it
-    # rhymes with.
-    { crate = "cc", wrappers = ["minicov"], reason = "pure-Rust guarantee: no C compiled into any build. M22.4: reachable only as a build-dep of minicov, itself dev-only via wasm-bindgen-test; absent from every normal+build tree" },
-    { crate = "cmake", reason = "pure-Rust guarantee: no native build systems" },
-    { crate = "bindgen", reason = "pure-Rust guarantee: no C bindings" },
-    # M12c scopes ONE exception, and this is its whole extent. `pkg-config`
-    # stays banned everywhere except as a build-dependency of the two crates
-    # named below, both of which reach the tree only through
-    # `pdfrum-raster-vello` — the crate The workspace grants the exemption
-    # to, and which nothing in the core ring depends on
-    # (scripts/check-no-wgpu.nu asserts that separately).
-    #
-    # The exception is narrow because the *reason* it is safe is narrow. In
-    # both cases `wgpu-hal` selects a feature that turns the probe off, so
-    # `pkg-config` sits in the graph and does nothing in it:
-    #
-    #   wayland-sys  built with `dlopen` — build.rs returns before probing
-    #   khronos-egl  built with `dynamic`, not `static` — the whole probe is
-    #                `#[cfg(feature = "static")]` and is not even compiled
-    #
-    # That is a property of the feature resolution rather than of the crates,
-    # which is a weaker guarantee than "it is not there" — so `wrappers` pins
-    # the two parents that were actually verified rather than allowing
-    # `pkg-config` at large. A third crate reaching for it fails the build,
-    # which is the point. the internal working notes has the measurement, including
-    # the claim it withdrew.
-    { crate = "pkg-config", wrappers = ["wayland-sys", "khronos-egl"], reason = "pure-Rust guarantee: no external C library linkage. M12c: both wrappers select a feature that disables the probe (wayland-sys `dlopen`, khronos-egl `dynamic`), so nothing is located or linked" },
+    # `minicov` is wasm-bindgen-test's coverage helper. Reachable only as a
+    # build-dep through pdfrum-wasm's **dev** tree; never in anything that ships.
+    { crate = "cc", wrappers = ["minicov"], reason = "pure-Rust: no C compiled into any build; minicov is wasm-bindgen-test's coverage helper, dev-only" },
+    { crate = "cmake", reason = "pure-Rust: no native build systems" },
+    { crate = "bindgen", reason = "pure-Rust: no C bindings" },
+    # Both wrappers disable the probe: wayland-sys `dlopen`, khronos-egl `dynamic`.
+    { crate = "pkg-config", wrappers = ["wayland-sys", "khronos-egl"], reason = "pure-Rust: no external C library linkage; both wrappers disable the pkg-config probe" },
 ]
 
 [advisories]

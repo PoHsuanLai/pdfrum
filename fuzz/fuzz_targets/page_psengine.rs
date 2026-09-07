@@ -1,15 +1,6 @@
-//! The type 4 PostScript calculator: parsing a program and running it.
+//! Type 4 PostScript calculator: parse a program and run it.
 //!
-//! Every error path in this engine is silent by design — push overflow drops
-//! the value, pop underflow yields zero, a malformed `if` aborts its own
-//! procedure and no more — so there is no error channel to assert on. The
-//! property is that a program the parser accepted always evaluates, however
-//! hostile its stack discipline.
-//!
-//! Property: never panics, always terminates. Nesting is capped at 128
-//! comparing with `>`, so a deeply nested program must fail to *parse*
-//! rather than blowing the stack, and execution recursion is bounded by that
-//! same parse depth.
+//! Property: never panics. Nesting past 128 fails to parse, not blow the stack.
 
 #![no_main]
 

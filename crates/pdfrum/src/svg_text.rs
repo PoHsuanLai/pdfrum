@@ -1,6 +1,6 @@
 //! The faces an ingested SVG's `<text>` is set in.
 //!
-//! M25's roadmap item 3, and the reason it is a feature of its own. An SVG
+//! roadmap item 3, and the reason it is a feature of its own. An SVG
 //! names fonts by *family* — `font-family: Inter, sans-serif` — and a PDF
 //! carries font *programs*. Nothing bridges those two without a font
 //! database, so the caller supplies one: [`SvgFonts`] is a set of face

@@ -81,7 +81,7 @@ pub fn scan_into<'a>(
 ) -> &'a [ZeroArea] {
     // The timer lives inside the function rather than around the call, because
     // the result borrows `scratch` and a wrapping closure would have to run the
-    // scan twice or hand the borrow back out of it. See M12b-P3.md §3.
+    // scan twice or hand the borrow back out of it. See -P3.md §3.
     let started = crate::walkprofile::phase_start();
     let out = scan_into_inner(scratch, path, transform, adjust);
     started.end(crate::walkprofile::Phase::ZeroScan);

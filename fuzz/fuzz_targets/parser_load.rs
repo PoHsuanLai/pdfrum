@@ -1,14 +1,7 @@
-//! `load` — a whole document, from header search through xref, object
-//! streams, incremental updates and the page tree.
+//! `load` — a whole document.
 //!
-//! The M1 exit criterion is "100% of corpus+resources load without crash",
-//! and this is the target that criterion is really about: it reaches every
-//! other crate in the ring through the paths a real file takes. It is seeded
-//! with the oracle's own `testing/resources` PDFs.
-//!
-//! Property: never panics. A file this reader cannot open must come back as
-//! `LoadError`, and a `Document` that loaded must answer every question its
-//! API exposes without panicking either.
+//! Property: never panics. Unopenable files are `LoadError`; a `Document`
+//! that loaded answers its API without panicking.
 
 #![no_main]
 
@@ -28,7 +21,6 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
 
-    // Everything the facade will ask a freshly loaded document.
     let _ = doc.version();
     let _ = doc.header_offset();
     let _ = doc.xref_was_rebuilt();
@@ -54,6 +46,5 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    // Reading past the last page must be an error, never a panic.
     assert!(doc.page(doc.page_count()).is_err());
 });

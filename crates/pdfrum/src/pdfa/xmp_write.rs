@@ -25,7 +25,7 @@
 //! Writing is the easy direction. A generator controls its own output, so it
 //! needs no parser, no namespace resolution and no RDF container handling —
 //! it needs correct escaping of five strings, which is the twenty lines below.
-//! the style rules, the same rule the checker's reader cites.
+//! , the same rule the checker's reader cites.
 
 use crate::PdfaLevel;
 

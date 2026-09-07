@@ -302,7 +302,7 @@ pub fn composite_premultiplied(
     // The coverage fold is the same truncating product the oracle folds a
     // clip mask in with.
     //
-    // # The opaque-destination fast path (M12)
+    // # The opaque-destination fast path
     //
     // The general route below is four divides and two multiplies per channel:
     // it un-premultiplies both pixels, blends them straight, and
@@ -331,7 +331,7 @@ pub fn composite_premultiplied(
     // It is worth a fast path because it is not a corner case: a PDF page
     // renders onto an opaque white backdrop by default, so *every* pixel of
     // *every* ordinary fill, stroke, glyph blit and image draw on a page with
-    // no transparency group takes exactly this branch. Measured on the M12
+    // no transparency group takes exactly this branch. Measured on the
     // corpus, it is 60% of `render-exact`'s `text` class and 78% of its
     // `shading` class.
     let (Some(&sr), Some(&sg), Some(&sb), Some(&sa)) =
@@ -760,7 +760,7 @@ mod tests {
         // And the premultiplied entry point cannot reach it: 221 is not one
         // of the 101 straight reds a premultiplied byte at alpha 100 can hold,
         // so storing it quantises down to 219 and the merge lands at 240.
-        // That one count, over 2482 px, is M14 OWED item 3.
+        // That one count, over 2482 px.
         let stored = crate::pixmap::premultiply(peniko::Color::from_rgba8(0xDD, 0xE4, 0xFF, 100));
         assert_eq!(
             composite_premultiplied(white, stored, 255, BlendMode::Normal),

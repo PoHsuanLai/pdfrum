@@ -1,25 +1,9 @@
-//! `read_xref` — cross-reference tables, cross-reference streams, the
-//! `/Prev` chain across incremental updates, and the full-file rebuild that
-//! takes over when none of that works.
+//! `read_xref` — tables, streams, `/Prev` chains, and the full-file rebuild.
 //!
-//! This is the damage-tolerance entry point: almost every input is a broken
-//! file, and almost every input must still come back with *something*. The
-//! rebuild scanner in particular walks the whole input looking for `obj`
-//! keywords, so it sees every byte the fuzzer can produce.
-//!
-//! Property: never panics, and every entry the table reports names an object
-//! number the table itself calls legal.
-//!
-//! Two things are deliberately *not* asserted, because in both cases the
-//! looser behaviour is the damage tolerance rather than a bug:
-//!
-//! - that an `Entry::Offset` points inside the file. A classic table stores
-//!   the offset the file wrote, however wrong; `ObjectStore` is where a bad
-//!   one stops mattering, and `parser_load` is the target that covers that.
-//! - that the archive of an `InObjStream` entry is still flagged an object
-//!   stream. A later incremental section may free that object number, and
-//!   freeing drops the flag — so the two can disagree in a file that says
-//!   contradictory things about the same object.
+//! Property: never panics; every reported object number is one the table
+//! calls legal. Not asserted: that an offset is inside the file, or that an
+//! `InObjStream` archive is still flagged an object stream — both are damage
+//! a later section can write.
 
 #![no_main]
 

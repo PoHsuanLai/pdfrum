@@ -9,7 +9,7 @@
 //!   flag, max channel difference, and grayscale SSIM against the floor from
 //!   `thresholds.toml`. The worst page decides the file.
 //!
-//! At M0 `pdfrum-tool` is a stub, so every file lands on `unsupported-tool`
+//! At `pdfrum-tool` is a stub, so every file lands on `unsupported-tool`
 //! and the scoreboard is a complete, all-failing baseline. That is the point:
 //! the fitness function exists before anything can score on it.
 
@@ -1401,8 +1401,8 @@ mod tests {
 
     #[test]
     fn the_javascript_deferral_is_retired() {
-        // M14 deferred four JavaScript `.evt` fixtures to M15 by name, so the
-        // row would be retired rather than forgotten. M15 landed the
+        // deferred four JavaScript `.evt` fixtures to by name, so the
+        // row would be retired rather than forgotten. landed the
         // `js-transcript` cluster; the deferral is gone, and these four score
         // a `#form-events` row like every other `.evt` fixture. This test is
         // what stops it coming back by accident.

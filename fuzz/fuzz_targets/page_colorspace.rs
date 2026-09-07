@@ -1,12 +1,7 @@
-//! Colorspace loading and conversion over an arbitrary object graph.
+//! `load_colorspace` over a parsed object.
 //!
-//! The object is parsed from the input with the file grammar, then handed to
-//! the colorspace loader — so the fuzzer explores the family dispatch, the
-//! cycle guards, the depth cap, and every family's own validation.
-//!
-//! Property: loading never panics, and neither does converting whatever
-//! loaded — including on component vectors of the wrong length and on NaN
-//! and infinity, which several families' unguarded arithmetic produces.
+//! Property: loading never panics; converting whatever loaded never panics
+//! (wrong-length vectors, NaN, infinity).
 
 #![no_main]
 

@@ -144,7 +144,7 @@ impl Target {
         let Some((x0, x1, row)) = self.span_range(x, len, y) else {
             return;
         };
-        // M12: the span's clip bytes are taken once, as a slice, instead of
+        // the span's clip bytes are taken once, as a slice, instead of
         // `clip_at` re-deciding per pixel whether there is a clip at all and
         // recomputing `row * width + col` from scratch each time. Both are
         // loop-invariant; leaving them inside meant the optimizer could not
@@ -949,7 +949,7 @@ mod tests {
 
     #[test]
     fn clip_span_reproduces_clip_at_exactly() {
-        // The M12 hoist replaced a per-pixel `clip_at` with a per-span slice.
+        // The hoist replaced a per-pixel `clip_at` with a per-span slice.
         // That is only sound if the slice carries the same bytes the calls
         // would have returned, at every position — including the positions
         // where `clip_at` returns its out-of-range zero. Rather than reason
@@ -991,7 +991,7 @@ mod tests {
         // refuses the slice in that case and answers all-zero — outside the
         // clip is not painted.
         //
-        // This is a latent bug the M12 restructuring removes rather than a
+        // This is a latent bug the restructuring removes rather than a
         // behaviour change with a visible effect: the engine sizes every clip
         // mask to the device (`a_layer_mask_must_be_device_sized` enforces it
         // on the layer path), so no mask reaching a real render is narrower

@@ -1,18 +1,13 @@
 [package]
 name = "pdfrum-bench"
-description = "Criterion benchmarks for pdfrum, and the oracle side-by-side"
+description = "Ratchet, profile and scaling binaries; corpus for the per-crate benches"
 publish = false
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# The workspace lints, minus the three denies. Those govern
-# *library* code, and clippy.toml already exempts tests; a benchmark is the
-# same category — a missing fixture or an unopenable document is a broken
-# harness, and the useful behaviour is to stop and say so rather than to
-# quietly measure nothing. Nothing here ships: `publish = false`, no library
-# target. `unsafe_code = "forbid"` and the rest are kept.
+# Harness, not library: a missing fixture should stop, not measure nothing.
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
@@ -22,32 +17,17 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 
-# `profiling` forwards to `pdfrum-render`'s feature of the same name, which
-# turns on the per-phase timers and per-site allocation counters inside the
-# walk. It is **off by default and must stay that way**: cargo unifies features
-# across a workspace build, so a default-on forward here would put the
-# instrument inside every criterion group in `pdfrum-render`'s own bench and
-# make the committed numbers measure the instrument. `scripts/profile.nu --walk`
-# builds this one binary with it and nothing else.
+# Off by default: cargo unifies features, so a default-on here would put
+# the instrument inside every criterion group. `scripts/profile.nu --walk`
+# turns it on for this binary only.
 [features]
 default = []
 profiling = ["pdfrum-render/profiling", "pdfrum/profiling"]
 
 [dependencies]
 pdfrum.workspace = true
-# The corpus list, which since the M12 per-crate bench split lives in its own
-# leaf crate so the five library benches can share it without depending on the
-# facade. This crate re-exports it as `pdfrum_bench::corpus` so the profile,
-# scaling and ratchet binaries keep the path they had.
 pdfrum-corpus.workspace = true
-# The `profile` binary wraps a `RasterBackend` in a decorator that clocks every
-# device call, which is how docs/status/M12.md attributes a render's time to
-# the engine half or the raster half on a machine where `perf` is unavailable.
-# That needs the traits themselves, and the facade re-exports pixels and
-# options rather than the engine/rasterizer seam — deliberately, it is not
-# public API. These are the same crates `pdfrum` already depends on, so this
-# adds nothing to any tree; `publish = false` keeps it out of every published
-# one regardless.
+# Profile clocks the rasterizer seam; the facade does not re-export it.
 pdfrum-render.workspace = true
 pdfrum-page.workspace = true
 pdfrum-raster-agg.workspace = true
@@ -55,19 +35,6 @@ pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello-cpu.workspace = true
 pdfrum-common.workspace = true
 kurbo.workspace = true
-# The `scaling` binary measures the facade's rayon multi-page path, which is
-# the one place admits rayon at all ("lib (facade only)").
 rayon.workspace = true
 peniko.workspace = true
-
-# No `[[bench]]` and no criterion.
-#
-# Before the M12 per-crate split this crate owned `benches/engine.rs`, all six
-# groups over all 44 documents. The groups now live with the crate whose code
-# they measure — `pdfrum-parser` owns `open`, `pdfrum-render` owns the six
-# render groups, and so on — so that `cargo bench -p pdfrum-render` is a thing
-# somebody can run. What stays here is the part that is *about the suite* rather
-# than about one crate: the corpus files themselves, the committed baseline, the
-# ratchet that judges a run against it, and the two whole-engine binaries
-# (`profile`, `scaling`) that need the facade and the rasterizer seam at once.
-# See `README.md` for the layout and §1.8 for why.
+# No `[[bench]]`. Groups live with the crate they measure. See `README.md`.

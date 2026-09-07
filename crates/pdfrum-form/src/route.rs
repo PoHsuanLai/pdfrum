@@ -1885,7 +1885,7 @@ pub fn choose<R: Resolve>(
     // `CommitData`, which only `KillFocusForAnnot` calls — so choosing a row
     // changes the selection and the scripts run when the field is left.
     // The parameter is on the signature because this is one of the three
-    // entry points that *can* reach a commit (PLAN §M15's E1 ruling), and a
+    // entry points that *can* reach a commit , and a
     // caller must not have to discover later that it needs one.
     let _ = &cascade;
     let Some(widget) = ctx.widget(annot) else {

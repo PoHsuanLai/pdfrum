@@ -461,7 +461,7 @@ mod tests {
         }
     }
 
-    // ---- M10: the encrypt direction ----
+    // ---- : the encrypt direction ----
 
     // The length law, which is what the writer's `/Length` depends on: a
     // vector plus a PKCS#7 pad that is *always* added.

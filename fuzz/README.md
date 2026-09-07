@@ -1,8 +1,7 @@
 # Fuzz ring
 
-Twenty `cargo-fuzz` targets over every byte-consuming entry point.
-`fuzz/` is its own workspace: `libfuzzer-sys` links C++, which the root
-`cargo tree` check forbids.
+31 `cargo-fuzz` targets. Own workspace: `libfuzzer-sys` links C++, which the
+root `cargo tree` check forbids.
 
 ```sh
 rustup toolchain install nightly
@@ -13,8 +12,12 @@ cargo +nightly fuzz list
 cargo +nightly fuzz run parser_load corpus/parser_load -- -max_total_time=60
 ```
 
-A reproducing crash is a library bug. Fix it with a regression test and keep
-the input under `fuzz/seeds/<target>/`.
+A crash is a library bug. Fix it with a regression test and keep the input
+under `fuzz/seeds/<target>/`.
+
+CI typechecks (`cargo check --manifest-path fuzz/Cargo.toml`); it does not
+run. `scripts/fuzz-gate.nu` runs the parser-facing 18. `page_*`, `text_*`,
+`edit_*` are extra — `cargo +nightly fuzz run` them, or pass `--targets`.
 
 ```sh
 scripts/fuzz-gate.nu                 # 10 min smoke
@@ -22,19 +25,35 @@ scripts/fuzz-gate.nu 3600
 scripts/fuzz-gate.nu 86400 parallel  # 24 h, one process per target
 ```
 
-CI compiles the targets (`cargo check --manifest-path fuzz/Cargo.toml`);
-it does not run them.
-
-| Target | Entry |
-|---|---|
-| `object_decode_text` | `decode_text` |
-| `object_name_decode` | `name_decode` / `name_encode` |
-| `crypt_encrypt_dict` | `SecurityHandler::from_encrypt_dict` |
-| `crypt_decrypt` | `SecurityHandler::decrypt` |
-| `filters_flate` / `_lzw` / `_a85` / `_ahx` / `_rle` / `_predictor` / `_chain` | the named decoder |
-| `cmap_embedded` / `_predefined` | CMap parse / lookup |
-| `parser_lexer` / `_object` / `_xref` / `_load` / `_load_password` | lexer, object, xref, `load` |
-| `text_extract` / `_links` | extract / link scan |
-
 Every target runs under `Limits` with `max_decoded_stream_len` = 1 MiB
-(production default is 1 GiB). Seeds: [`seeds/PROVENANCE.md`](seeds/PROVENANCE.md).
+(production is 1 GiB).
+
+## Targets
+
+| Target | Entry | Gate | Seeds |
+|---|---|---|---|
+| `object_decode_text` | `decode_text` | yes | committed |
+| `object_name_decode` | `name_decode` / `name_encode` | yes | committed |
+| `crypt_encrypt_dict` | `SecurityHandler::from_encrypt_dict` | yes | committed |
+| `crypt_decrypt` | `SecurityHandler::decrypt` | yes | committed |
+| `filters_flate` / `_lzw` / `_a85` / `_ahx` / `_rle` / `_predictor` / `_chain` | the named decoder | yes | committed |
+| `cmap_embedded` / `_predefined` | CMap parse / lookup | yes | committed |
+| `parser_lexer` / `_object` / `_xref` / `_load` / `_load_password` | lexer, object, xref, `load` | yes | committed; whole-file also take oracle PDFs |
+| `page_parse_content` | `parse_content` | | |
+| `page_inline_image` | `BI … ID … EI` | | |
+| `page_colorspace` | `load_colorspace` | | |
+| `page_psengine` | type 4 PostScript calculator | | |
+| `page_mesh_stream` | mesh shading types 4–7 | | |
+| `page_decode_image` | `decode_image` | | |
+| `page_jbig2` | `decode_jbig2` | | |
+| `page_jpx` | `decode_jpx` | | |
+| `text_extract` | `extract` | | |
+| `text_links` | web / mail link scan | | |
+| `edit_save_roundtrip` | `save` then `load` | | oracle PDFs |
+| `edit_subset` | `subset` | | committed (`tiny.ttf`) |
+| `edit_import` | `import_pages` / `n_page_to_one` | | oracle PDFs |
+
+`seeds/` is committed. `corpus/` is gitignored working state that
+`fuzz/seed-corpus.sh` rebuilds from those plus, when present, the oracle's
+`testing/resources` and `testing/corpus` PDFs. Provenance:
+[`seeds/PROVENANCE.md`](seeds/PROVENANCE.md).

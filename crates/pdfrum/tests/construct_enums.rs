@@ -1,7 +1,7 @@
 //! Every public enum variant reachable from `pdfrum::*` is constructible
 //! with only `pdfrum::` paths.
 //!
-//! This is the gate WP13 adds on top of [`reexports`]: WP7 proved a type in a
+//! This is the gate adds on top of [`reexports`]: proved a type in a
 //! signature can be *named*; this proves a variant can be *written*, payload
 //! and all. `ColorMode::Forced` was the first known hole — `ColorScheme` was
 //! re-exported, `Argb` was not, and there was no expression a
@@ -12,14 +12,14 @@
 //!
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
 //! 2. Look those names up as `pub enum` in the member-crate snapshots
-//!    (renames from WP7's error payloads: `OpenError` is `LoadError`,
+//! (renames from 's error payloads: `OpenError` is `LoadError`,
 //!    `Rotation` is `pdfrum_page::Rotation`, and so on).
 //! 3. Take every `pub Enum::Variant` / `pub Enum::Variant(payload)` line
 //!    (struct-variant fields are `Enum::Variant::field` and are skipped).
 //!
 //! `snapshot_variant_count` re-parses those files at
 //! runtime and asserts the construction count. A new variant updates the
-//! snapshot (the other WP13 gate) and then fails this test until a
+//! snapshot (the other gate) and then fails this test until a
 //! construction line is added.
 //!
 //! Script-only enums (`ScriptStop`, `TranscriptLine`) are the `pub use`
@@ -57,7 +57,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ),
     ("pdfrum-common.txt", "pdfrum_common::Operation", "Operation"),
     ("pdfrum-common.txt", "pdfrum_common::Severity", "Severity"),
-    // M26's PDF/A checker. The three enums live in `pdfrum-doc` and are
+    // PDF/A checker. The three enums live in `pdfrum-doc` and are
     // re-exported from the facade under `Pdfa*` names, so the snapshot path is
     // the owning crate's and the construction below is the facade's.
     ("pdfrum-doc.txt", "pdfrum_doc::pdfa::Level", "PdfaLevel"),
@@ -554,7 +554,7 @@ fn construct_default_feature_variants() -> usize {
 
     // Object — 10 variants. Four payloads (`Name`, `PdfString`, `Array`,
     // `Stream`) are pdfrum-object types this crate does not re-export; they
-    // are the object-store escape hatch (WP7). The six nameable variants are
+    // are the object-store escape hatch . The six nameable variants are
     // constructed; an exhaustive match names every variant so a new one
     // fails to compile.
     let objects: &[Object] = &[
@@ -835,7 +835,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
     // 324 -> 357. The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
-    // the facade; M26's `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
+    // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.

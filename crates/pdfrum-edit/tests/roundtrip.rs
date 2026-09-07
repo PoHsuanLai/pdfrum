@@ -774,7 +774,7 @@ fn an_unrecognised_trailer_key_survives() {
     );
 }
 
-// v1 writes plaintext (SPEC §11's ruling E3). Objects are already decrypted
+// v1 writes plaintext . Objects are already decrypted
 // in memory, so a save that kept `/Encrypt` would declare a cipher over
 // content that has none — a file nothing could open. The refusal is what
 // stops that being produced silently.
@@ -905,7 +905,7 @@ fn every_damaged_shape_that_opens_saves_to_something_that_opens() {
 }
 
 // ---------------------------------------------------------------------------
-// R1–R11 over a *mutated* save (M11)
+// R1–R11 over a *mutated* save
 // ---------------------------------------------------------------------------
 
 /// Every fixture with page 0 regenerated, so the properties above can be

@@ -316,7 +316,7 @@ mod tests {
         );
     }
 
-    // The writer's half (SPEC §4, added with pdfrum-edit): whatever the
+    // The writer's half : whatever the
     // compressor chooses, decode_flate must read it back exactly.
     #[test]
     fn encode_round_trips_through_decode() {

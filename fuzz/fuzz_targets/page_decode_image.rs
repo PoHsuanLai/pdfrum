@@ -1,15 +1,7 @@
-//! `decode_image` — the whole image ladder, from a dictionary the fuzzer
-//! writes to pixels.
+//! `decode_image` — dictionary plus remaining bytes as stream data.
 //!
-//! The dictionary is parsed from the input with the file grammar and the
-//! remaining bytes become the stream's data, so one input exercises the
-//! dimension and bit-depth validation, the filter-driven coercions, the
-//! colorspace resolution, the `/Decode` mapping, the codec dispatch and the
-//! mask ladder together.
-//!
-//! Property: never panics. An error is a fine outcome and the common one;
-//! what must not happen is an allocation sized from an unchecked product, or
-//! a read past a scanline.
+//! Property: never panics. An error is fine; an allocation from an unchecked
+//! product is not.
 
 #![no_main]
 

@@ -290,7 +290,7 @@ fn only_a_cmyk_document_is_given_a_cmyk_output_intent() {
 /// The strict policy refuses rather than silently dropping a forbidden
 /// feature.
 ///
-/// This is the property M26's fourth item is about, and it is asserted as a
+/// This is the property fourth item is about, and it is asserted as a
 /// *difference between two policies over the same file*: the corpus files that
 /// carry JavaScript or a widget `/AA` convert under `lossy` and refuse under
 /// `strict`. A conversion that ignored the policy would pass a test that only

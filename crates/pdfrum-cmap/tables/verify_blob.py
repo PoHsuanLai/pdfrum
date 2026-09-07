@@ -25,9 +25,7 @@ from pathlib import Path
 BLOB_PATH = Path(__file__).parent / "cmaps.bin"
 # `crates/pdfrum-cmap/tables/` -> the repository root.
 REPO_ROOT = Path(__file__).resolve().parents[3]
-# One place, three inputs: an explicit argument, then `$PDFRUM_ORACLE_CHECKOUT`,
-# then the sibling directory README.md says the checkout lives in.
-# `scripts/env.nu` resolves the same variable with the same default.
+# Explicit argument, then `$PDFRUM_ORACLE_CHECKOUT`, then `../pdfium-c++`.
 DEFAULT_ORACLE = os.environ.get("PDFRUM_ORACLE_CHECKOUT", REPO_ROOT.parent / "pdfium-c++")
 
 # (directory, index .inc, index symbol, CID2Unicode .inc, CID2Unicode symbol)

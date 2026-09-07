@@ -3,7 +3,7 @@
 //!
 //! # Why this file exists
 //!
-//! `bug_736695_3.in#form-events` was recorded in the internal working notes as a
+//! `bug_736695_3.
 //! **false pass**: 0.997003, above the 0.99 floor, on an image where the
 //! oracle had selected `Spain` and pdfrum had selected nothing and dropped
 //! focus. The whole disagreement was a 150×15 box, which SSIM over a

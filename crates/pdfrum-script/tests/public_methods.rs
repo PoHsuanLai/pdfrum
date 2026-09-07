@@ -27,7 +27,7 @@
 //!
 //! A handful of the oracle's answers are wrong, and this crate gives the right
 //! one instead. Those assertions are marked `ORACLE BUG` below with the correct
-//! answer and the reason; the internal working notes carries the full list. They are
+//! They are
 //! asserted here too — against the *correct* answer, so a regression is still
 //! caught.
 

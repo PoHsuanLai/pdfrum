@@ -20,9 +20,9 @@ criterion column and the `pdfium_test` column describe the same work.
 
 ## Why this corpus replaces the seven in `../fixtures`
 
-`../fixtures` holds the M8 set and is kept: it is what's
+`../fixtures` holds the set and is kept: it is what's
 tables measured, and deleting it would strand those numbers. But it has a
-stated weakness that M12 exists partly to fix — quoting M8.md: *"PDFium's
+stated weakness that exists partly to fix — quoting .md: *"PDFium's
 `testing/resources` are unit-test inputs: the largest is 85 KB, and only two
 files exceed two pages. Nothing here resembles a 300-page report."*
 
@@ -43,7 +43,7 @@ recording because they contradict the obvious heuristic:
   fast to render, which is exactly backwards. Selection is on measured
   milliseconds.
 - **The corpus tops out at sixteen pages.** No file in either directory has
-  more, so the rayon scaling curve in M12.md is bounded by a sixteen-page
+more, so the rayon scaling curve in .md is bounded by a sixteen-page
   document and says so rather than extrapolating.
 
 Two classes are thinner than the rest and this is a limitation, not an

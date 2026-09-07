@@ -1,8 +1,6 @@
-//! `name_decode` — `#xx` escape decoding inside a PDF name, and its inverse.
+//! `name_decode` / `name_encode`.
 //!
-//! Property: never panics, never grows the input, and re-encoding a decoded
-//! name round-trips back to the same bytes (`name_encode` escapes exactly the
-//! bytes the decoder would have consumed).
+//! Property: never panics, never grows; re-encoding a decoded name round-trips.
 
 #![no_main]
 

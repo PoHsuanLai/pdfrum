@@ -1,4 +1,4 @@
-//! The M11 exit check: does a page we *rewrote* draw what another
+//! The exit check: does a page we *rewrote* draw what another
 //! implementation says it draws?
 //!
 //! # Why this needs the oracle rather than a golden
@@ -541,7 +541,7 @@ impl MutationTally {
     }
 
     /// The fraction that either held the floor or fell short only on a page
-    /// the two implementations already disagreed about. This is M11's number.
+    /// the two implementations already disagreed about. This is number.
     #[must_use]
     pub fn no_loss_rate(&self) -> Option<f64> {
         rate(

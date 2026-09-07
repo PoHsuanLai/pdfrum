@@ -1,9 +1,6 @@
-//! `decode_text` — PDF text-string bytes (UTF-16BE/LE with BOM, UTF-8 with
-//! BOM, else `PDFDocEncoding`) to a Rust string.
+//! `decode_text` — PDF text-string bytes to a Rust string.
 //!
-//! Property: never panics, and every returned `char` is valid by
-//! construction. The interesting inputs are truncated surrogate pairs, odd
-//! byte counts after a BOM, and language-code escapes.
+//! Property: never panics; every returned `char` is valid.
 
 #![no_main]
 

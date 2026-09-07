@@ -53,8 +53,7 @@ const FIXTURES: [(&str, &[u8]); 7] = [
 
 /// The read-only C++ PDFium checkout, resolved the one way every script and
 /// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
-/// sibling `../pdfium-c++` directory README.md and name.
-/// `scripts/env.nu` holds the nushell spelling of the same rule.
+/// sibling `../pdfium-c++` directory README.md names.
 ///
 /// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, and an integration test in one crate
@@ -296,7 +295,7 @@ fn permissions_survive_the_save() {
     }
 }
 
-// The interlock from M7, unchanged: an incremental save of an encrypted
+// The interlock from , unchanged: an incremental save of an encrypted
 // document appends freshly-keyed objects behind the original ciphertext,
 // which is sound only because the key did not change. The original bytes must
 // therefore be a prefix of the output.
@@ -398,7 +397,7 @@ fn the_saved_body_is_not_the_plaintext() {
     }
 }
 
-// M11 x M10: a page edited *and* saved goes through the cipher like anything
+// x : a page edited *and* saved goes through the cipher like anything
 // else, because the regenerated stream is written the same way as the rest of
 // the body. The failure this guards against is specific and silent — a
 // regenerated stream added to the overlay after the encryptor was set up, and

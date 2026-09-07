@@ -1,49 +1,93 @@
-# Comparative benchmarks
+# Compare
 
-pdfrum vs pdfium-render, mupdf, hayro, pdf-rs, pdf-extract. Correctness
-beside speed. Subject is `cargo add pdfrum` (facade, default features).
-Tables are `compare report` of JSON under `data/`.
+pdfrum (`cargo add pdfrum`, default features) against other Rust PDF
+crates, on the same 44 files, scored against `pdfium_test`.
+
+Not the ratchet. The ratchet asks “did this commit get slower?” Compare
+asks “where do we stand?” Harness: [`benches/compare/`](../../benches/compare/).
+
+## Engines
+
+| engine | C in the build | ops |
+|---|---|---|
+| **pdfrum** | no | open, render, text |
+| hayro | no | open, render |
+| hayro-interpret | no | text (harness-assembled from `draw_glyph`) |
+| pdf (`pdf-rs`) | no | open |
+| pdf_oxide | no | open, render, text |
+| pdf-extract | no | open, text |
+| lopdf | no | open, text |
+| pdfium-render | yes (`libpdfium.so`) | open, render, text |
+| mupdf | yes (vendored C) | open, render, text |
+
+Pure-Rust peers are the default feature set. C engines need
+`--features c-engines`.
+
+## Operations
+
+| op | call | correctness |
+|---|---|---|
+| `open` | parse + page tree | opened |
+| `render` | page 1, RGBA, 150 DPI | pixels vs `pdfium_test --png` |
+| `text` | page 1 text API | characters vs `pdfium_test --txt` |
+
+`--parity` turns off path AA, image interpolation, and annotations on
+engines that have those knobs. Text AA stays on: no peer offers a knob.
+
+## Tables
+
+`compare report <json>` prints all of these from one run:
+
+| table | reads |
+|---|---|
+| Engines | who ran, version, C, ops |
+| Work matrix | path AA, text AA, image interp, annotations, form fields |
+| Correctness — render | SSIM buckets vs oracle PNG (`>= 0.99` is the conformance floor) |
+| Correctness — text | exact / whitespace-normalized / token F1 vs oracle text |
+| Robustness — open | opened / error / panic / crash / timeout |
+| Speed | warm median ms per file, then median and p95 across files |
+| Memory | peak child RSS (VmHWM minus process floor) |
+| Losses | files where a peer is closer to the oracle than pdfrum |
+| Coverage | one corpus file per feature |
+
+Other commands, other JSON:
+
+| command | JSON suffix | table |
+|---|---|---|
+| `compare run` | `corpus44`, `pdfium-sample` | the tables above |
+| `compare adoption` | `adoption` | crates, C, build time, stripped size, `unsafe`, licence |
+| `compare throughput` | `throughput` | pages/s, 1 and N threads |
+
+Raw files: [`data/`](data/). Latest: `2026-09-07-258e24cc72e3-*`.
+
+## Method
+
+Oracle: `pdfium_test` at PDFium `a043bed4a0d7`, scratch copy,
+`--time=1399672130 --croscore-font-names --font-dir=<checkout>/third_party/test_fonts`.
+pdfrum gets the same font dir via `SubstitutionOptions`. Peers do not.
+
+Pixels: composite over white, grayscale SSIM (same as
+`conformance/src/ssim.rs`). Text: exact, whitespace-normalized, token F1.
+
+Each (engine, file, op) is a child process, 10 s deadline, 1 cold + up to 3
+warm. Time is wall. `RAYON_NUM_THREADS=1` except throughput.
+
+## Run
 
 ```sh
 cd benches/compare
 cargo build --release                       # pdfrum + pure-Rust peers
 cargo build --release --features c-engines  # + pdfium-render, mupdf
-compare run --label corpus44 --corpus ../../benches/corpus \
+cargo run --release -- run --label corpus44 --corpus ../../benches/corpus \
     --checkout /path/to/pdfium-c++ --pdfium-lib /path/to/libpdfium.so \
     --out ../../docs/benchmarks/data/<date>-<commit>-corpus44.json
-compare report <json>
-compare report <json> --losses
+cargo run --release -- report <json>
+cargo run --release -- report <json> --losses
 ```
 
-`--parity` turns off `smooth_paths`, `interpolate_images`, `annotations`.
-Losses: [`losses-explained.md`](losses-explained.md).
-
-## Method
-
-| op | call | correctness |
-|---|---|---|
-| `open` | parse + page tree | opened |
-| `render` | page 1, RGBA, 150 DPI, annotations on | pixels vs oracle PNG |
-| `text` | page 1 text API | characters vs oracle text |
-
-Oracle: `pdfium_test` at PDFium `a043bed4a0d7`, scratch copy, `--time=1399672130
---croscore-font-names --font-dir=<checkout>/third_party/test_fonts`. pdfrum
-gets the same font dir via `SubstitutionOptions`. Peers do not — none expose
-one.
-
-Pixels: composite over white, then grayscale SSIM (same as
-`conformance/src/ssim.rs`), exact match, max channel diff. Text: exact,
-whitespace-normalized, token F1.
-
-Each (engine, file, op) is a child process, 10 s deadline, 1 cold + up to 3
-warm. Time is wall. Memory is child `VmHWM` minus process floor.
-`RAYON_NUM_THREADS=1`.
-
-## Current numbers — run 5
+## Current
 
 `258e24cc72e3`, idle box, 2026-09-07.
-`data/2026-09-07-258e24cc72e3-*.json`. Unchanged peers reproduce run 3 to
-within 2.5%; pdfrum movements are code.
 
 | metric | run 3 | run 5 |
 |---|---|---|
@@ -54,10 +98,3 @@ within 2.5%; pdfrum movements are code.
 | render RSS median | 51.5 MiB | **31.3 MiB** |
 | peak (`image_bug_583804`) | 1539 MiB | **934 MiB** |
 | throughput 1 / 8 threads | 27.8 / 34.7 pp/s | **36.0 / 48.4** |
-
-Render warm ALL: 11.46 → **9.80 ms** (−14.4%). Open warm ALL: −19.3%.
-Text cold ALL: −46.8%. Two corpus-44 losses remain (JPX numerics; F1 0.999
-on `image_ccitt_3bigpreview`).
-
-Older runs (1–4) are in `data/` and git. Do not quote their speed columns;
-runs 1–2 were on a loaded box.

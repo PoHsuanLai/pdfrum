@@ -267,7 +267,7 @@ impl SvgFit {
 /// relative `<image href>` resolves.
 ///
 /// With `svg-text` off, `session` is not read at all: there is no text stack
-/// to give faces to, and the parameter would be the dead option the style rules
+/// to give faces to, and the parameter would be the dead option
 /// forbids — so with the feature off the function does not take one.
 fn parse_options(
     resources_dir: Option<std::path::PathBuf>,
@@ -638,7 +638,7 @@ impl Walk<'_, '_, '_> {
 
     /// Draw one `<text>` element, as outlines.
     ///
-    /// M25's roadmap item 3. `usvg` has already done the hard half — resolved
+    /// roadmap item 3. `usvg` has already done the hard half — resolved
     /// the family against the faces
     /// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) registered,
     /// run the bidi and the shaping, positioned every glyph, applied

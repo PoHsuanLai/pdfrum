@@ -1,21 +1,13 @@
-//! One operation, one file, in a loop, with nothing else in the process.
+//! One operation, one file, in a loop. `scripts/profile.nu` drives this.
 //!
-//! This is the binary `scripts/profile.nu` records. It exists because a
-//! criterion run is the wrong thing to profile: criterion interleaves its own
-//! statistics, resampling and outlier analysis between iterations, so a
-//! symbol's share of a `perf report` taken over `cargo bench` is its share of
-//! *criterion plus the engine* rather than its share of the operation. Here
-//! the process does the operation and returns.
-//!
-//! The code paths are the same ones `benches/engine.rs` measures, deliberately:
-//! a profile that attributes cost to a function the benchmark never calls is
-//! worse than no profile. Where the two differ the benchmark is the authority
-//! and this binary is wrong.
+//! Criterion interleaves its own statistics between iterations, so a
+//! `perf` of `cargo bench` is criterion plus the engine. This process does
+//! the operation and returns.
 //!
 //! ```text
-//! profile --op render --file benches/fixtures/foxittext.pdf --iterations 50
-//! profile --op render --backend vello --file … --iterations 20
-//! profile --op text --file … --sample     # the built-in sampler
+//! profile --op render --file benches/corpus/text_foxittext.pdf --iterations 50
+//! profile --op render --backend vello-cpu --file … --iterations 20
+//! profile --op text --file … --sample
 //! ```
 
 use std::hint::black_box;
@@ -29,10 +21,7 @@ use pdfrum_raster_tinyskia::TinySkiaBackend;
 
 /// Which rasterizer `--backend` names.
 ///
-/// This tool's own enum, not the facade's: the facade stopped owning one on
-/// 2026-09-02 when `Page::render_on` took the backend as an argument. A CLI
-/// still has to turn a *string* into a choice, and a three-arm match at the
-/// one call site is what that costs — the seam below it is the trait.
+/// CLI choice. The seam below is the `RasterBackend` trait.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Backend {
     /// The analytic AGG-parity rasterizer.
@@ -213,61 +202,15 @@ fn main() {
 
 /// How many alternating rounds `--op forms` takes per arm.
 ///
-/// Five, which is `scripts/bench-oracle.nu`'s round count, chosen the same way:
-/// enough that one descheduled round cannot be the minimum, few enough that a
+/// Enough that one descheduled round cannot be the minimum, few enough that a
 /// 68 ms document still finishes.
 const ROUNDS: u32 = 5;
 
-/// What the annotation/widget appearance overlay costs, isolated by an A/B in
-/// one process.
+/// Appearance overlay cost: warm render with annotations on vs off.
 ///
-/// # Why this is the `forms` operation and not something in `pdfrum-form`
-///
-/// §11 names `forms` at 3.35x warm as the milestone's
-/// largest residue, and that figure is a **render** ratio: the `render-warm-*`
-/// criterion groups over `benches/corpus/forms_*.pdf` against
-/// `pdfium_test --render-repeats` on the same files. Neither side of it runs a
-/// single interaction event. `pdfrum-form`'s session, its event cascade and its
-/// commit path are not on that path at all — `pdfium_test` never types into a
-/// field — so a loop over `pdfrum_form::apply` would profile a code path that
-/// contributes nothing to the number this op exists to explain, which is
-/// exactly the failure the module docs above forbid ("a profile that attributes
-/// cost to a function the benchmark never calls is worse than no profile").
-///
-/// What *is* on that path, and what makes a forms document different from any
-/// other document, is one thing: the appearance overlay. `pdfium_test --png`
-/// seeds `FPDF_ANNOT` and then calls `FPDF_FFLDraw` after every bitmap render
-/// (`pdfium_test.cc`), so a widget's appearance stream is generated, placed by
-/// `CFX_Matrix::MatchRect` and drawn on every pass. We do the same in
-/// `pdfrum_doc::annot_render::overlay`, called from the facade's `paint`
-/// (`crates/pdfrum/src/page.rs`) under `RenderOptions::annotations`. That is
-/// the whole of what the `forms` class measures over the `vector` class.
-///
-/// # The A/B, and why it is a difference rather than a direct timing
-///
-/// `overlay` is `pdfrum-doc`'s and the facade does not expose it; wiring a
-/// benchmark straight into it would mean widening a published signature for a
-/// profiler's convenience, and it would also measure the overlay *without* the
-/// page graph it appends into, which is not what a render pays.
-///
-/// So this op times the same warm render twice — `annotations: true` and
-/// `annotations: false` — **interleaved, in one process, on one document**, and
-/// reports the difference. Both arms run identical code up to one `if`. The
-/// difference is the overlay, measured rather than estimated, and it is
-/// reported as a share of the whole render so that a reader can see at once
-/// whether the forms class's gap lives in the overlay or in the page under it.
-///
-/// Interleaved and best-of-N rather than one run each: the machine these are
-/// taken on is shared (M12.md §0), and two consecutive blocks would let a
-/// scheduling event land entirely inside one arm. Alternating rounds and taking
-/// each arm's minimum is what `scripts/bench-oracle.nu` does, for the same
-/// reason and with the same justification — a timing sample is bounded below by
-/// the real cost and unbounded above.
-///
-/// Warm on both arms, because the number it explains is a warm one: one
-/// `RenderSession` per arm, hoisted out of the loop and primed with one untimed
-/// render, exactly as `crates/pdfrum-render/benches/render.rs`'s `warm` group
-/// does it.
+/// Not `pdfrum-form`: the forms class vs vector is the overlay
+/// (`RenderOptions::annotations`), not the interaction path. Interleaved
+/// A/B in one process so a scheduling event cannot land in one arm.
 fn forms_split(args: &Args, bytes: &Arc<[u8]>) {
     let Ok(doc) = Document::from_bytes(Arc::clone(bytes)) else {
         eprintln!("cannot open the document");
@@ -393,7 +336,7 @@ fn draw_one(
 /// the same: same page graph, same caches, same options — the `page_graph`
 /// figure below is the part the facade does before it hands the graph over,
 /// and it is measured rather than assumed so that "engine" here means the same
-/// thing it means in M12.md.
+/// thing it means in .md.
 fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     let Ok(doc) = Document::from_bytes(Arc::clone(bytes)) else {
         eprintln!("cannot open the document");
@@ -739,7 +682,7 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
         // subtract raster time from the interpretation residue and make the
         // residue negative on a path-heavy document, so it is reported and
         // excluded from the sum, with the note below saying so. The three
-        // phases M12b P3 added inside it — the rect test, the zero-area scan
+        // phases added inside it — the rect test, the zero-area scan
         // and the geometry build — nest in `PathPrep` for the same reason and
         // are excluded on the same grounds; `Cull` is disjoint from every
         // other phase and does count.
@@ -807,9 +750,8 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
          allocations — every field of both is Copy. Their byte column is the\n\
          value's size and is there for scale, not for allocator traffic; the\n\
          count is what those two rows mean; every other row is real allocator\n\
-         traffic. `draw_path BezPath` and `rect-test Vec<Point>` were added by\n\
-         M12b P3 and are in `paint.rs`/`path.rs` rather than in `walk.rs`,\n\
-         which is why P2's site list did not have them."
+         traffic. `draw_path BezPath` and `rect-test Vec<Point>` are in\n\
+         `paint.rs`/`path.rs` rather than in `walk.rs`."
     );
 }
 
@@ -924,14 +866,14 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
 /// unwinds DWARF; it is strictly better and this fallback does not pretend
 /// otherwise. But on a machine where `perf` is unavailable — no binary, or
 /// `kernel.perf_event_paranoid > 1`, which is the common case in a container
-/// and is the case on the machine docs/status/M12.md's numbers were taken on —
+/// and is the case on the machine 's numbers were taken on
 /// the alternatives are all bad: a backtrace sampler needs `unsafe`
 /// (`unsafe_code = "forbid"` workspace-wide) or an unwinder crate, and a sampler that only reports elapsed time tells you nothing you
 /// did not already know.
 ///
 /// So this measures something real instead. It wraps the chosen
 /// [`RasterBackend`](pdfrum_render::RasterBackend) in a decorator that clocks every `RenderDevice` call and
-/// counts it, which splits a page render into the two halves the M12 P1 items
+/// counts it, which splits a page render into the two halves the items
 /// are actually about:
 ///
 /// - **raster** — the sum of the device calls, i.e. everything below the seam:
@@ -948,7 +890,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
 ///
 /// Its honest limitation: an `Instant::now()` pair around a call that costs a
 /// microsecond is a few percent of that call, and the decorator itself is
-/// counted in the engine half. Both are stated in M12.md beside the numbers,
+/// counted in the engine half. Both are stated in .md beside the numbers,
 /// and neither moves a conclusion that a 20% attribution difference rests on.
 mod timed {
     use std::cell::RefCell;

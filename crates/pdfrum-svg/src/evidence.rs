@@ -1,7 +1,7 @@
 //! How a pixel region's cause is worked out without a cause channel.
 //!
-//! `RenderDevice` hands a device a pixmap and a transform; M24 keeps the
-//! trait unchanged, so the cause has to come from somewhere else. It comes
+//! `RenderDevice` hands a device a pixmap and a transform, and the trait
+//! stays unchanged, so the cause has to come from somewhere else. It comes
 //! from the engine's *own* behaviour, which
 //! [`RasterBackend`](pdfrum_render::RasterBackend) makes visible for free:
 //! the engine renders every composited subtree into an offscreen target and

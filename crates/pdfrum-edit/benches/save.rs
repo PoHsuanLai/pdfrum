@@ -1,22 +1,7 @@
-//! What writing a document back out costs.
+//! Full rewrite to memory. Ids `<class>/<stem>`.
 //!
-//! One criterion group, `save`, over the 44 documents in `benches/corpus`, ids
-//! spelt `<class>/<stem>` so `benches/src/bin/ratchet.rs` can aggregate by
-//! class. A full rewrite — every object serialized, the cross-reference table
-//! rebuilt, every stream re-encoded — which is this crate's writer end to end.
-//!
-//! # To memory, not to a file
-//!
-//! Deliberately: a save benchmark that writes to disk measures the page cache on
-//! the second iteration and the disk on the first, and neither is the writer.
-//! What is measured here is object serialization, the cross-reference table and
-//! the stream re-encoding.
-//!
-//! This is the most allocation-dominated group in the suite — hence its 5% band
-//! against the render groups' 3–4%, which the internal working notes measured
-//! rather than chose. It has no oracle column: `pdfium_test` has no
-//! full-rewrite mode to compare against, so `save` is a ratchet-only group with
-//! no M12 target on it.
+//! Disk would measure the page cache. No oracle column: `pdfium_test` has
+//! no full-rewrite mode.
 
 use std::hint::black_box;
 use std::time::Duration;
@@ -53,7 +38,6 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

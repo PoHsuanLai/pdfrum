@@ -12,7 +12,7 @@ categories = ["parser-implementations", "data-structures"]
 [lints]
 workspace = true
 
-# : this crate owns only Diagnostics/Limits and the kurbo re-export.
+# This crate owns only Diagnostics/Limits and the kurbo re-export.
 # It has no fallible operation, hence no `Error` enum and no `thiserror`: the
 # one error value it defines, `LimitExceeded`, is produced by the crates that
 # hit a limit and carries a hand-written `Display`.

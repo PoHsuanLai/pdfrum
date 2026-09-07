@@ -1,23 +1,13 @@
-//! `subset` — arbitrary bytes offered to the font subsetter as a font.
+//! `subset` — arbitrary bytes offered as a font.
 //!
-//! Property: never panics, and never returns a glyph map naming a glyph it
-//! did not produce.
-//!
-//! The `subsetter` crate forbids `unsafe` and is well-tested, but it is young
-//! and it is the only dependency in this crate's ring that *parses* a
-//! structured format on our behalf. What it hands back also becomes the
-//! `/W` and `/ToUnicode` keys of a font a reader will trust, so a map that
-//! disagrees with the bytes is a correctness bug in our output rather than
-//! only a crash in theirs.
+//! Property: never panics; the glyph map names no glyph it did not produce.
 
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_edit::subset;
 
-/// How many glyphs to ask for, at most. A real subset asks for the glyphs one
-/// document uses; a fuzzer asking for tens of thousands only measures
-/// allocation.
+/// A fuzzer asking for tens of thousands of glyphs only measures allocation.
 const MAX_GIDS: usize = 64;
 
 fuzz_target!(|data: &[u8]| {

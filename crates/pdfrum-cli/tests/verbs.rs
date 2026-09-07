@@ -1,4 +1,4 @@
-//! The M20 phase-5 verbs — `metadata set`, `pages delete`, `pages rotate`,
+//! The verbs — `metadata set`, `pages delete`, `pages rotate`,
 //! `attach add|remove`, `stamp text|image` — each run on a fixture into a
 //! scratch directory and read back with our own commands, and each checked
 //! once through the oracle's `pdfium_test` when the checkout is on this

@@ -115,9 +115,8 @@ fn dark_pixels(data: &[u8]) -> usize {
 ///
 /// One place, two inputs: `$PDFRUM_ORACLE_BIN`, else
 /// `$PDFRUM_ORACLE_CHECKOUT/out/Release/pdfium_test`, whose own default is the
-/// sibling `../pdfium-c++` directory README.md names. `scripts/env.nu`
-/// resolves the same two variables with the same defaults for the nushell
-/// side, and `conformance` for the CLI.
+/// sibling `../pdfium-c++` directory README.md names. Same defaults as
+/// the conformance harness.
 ///
 /// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, an integration test cannot reach another

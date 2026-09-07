@@ -1,4 +1,4 @@
-//! Shared plumbing for the two M12c harness binaries.
+//! Shared plumbing for the two harness binaries.
 //!
 //! Both `gpu-tier-c` and `gpu-bench` need the same thing: a corpus document
 //! opened, page 0 built into a page graph, and that **one** graph rendered
@@ -20,13 +20,12 @@
 //!
 //! These harnesses compare two of our own backends against each other, and the
 //! facade cannot express that — `pdfrum::Backend` is a closed enum, and adding
-//! a GPU arm to it would put `wgpu` in the facade's dependency tree, which is
-//! the one thing M12c's isolation rule forbids. So both columns enter at
+//! a GPU arm to it would put `wgpu` in the facade's dependency tree. So both
+//! columns enter at
 //! `render_page`, which is generic over the backend, with the same
 //! page, the same options and the same fresh caches. The comparison is
 //! *symmetric*, which is the property that matters here. It is deliberately
-//! **not** comparable to the oracle's column, and §7–§8 of the status doc
-//! never compare it to one.
+//! **not** comparable to the oracle's column.
 //!
 //! One consequence worth stating: annotation appearances are not overlaid
 //! here, because that is the facade's step and it is private. So the `forms`
@@ -97,7 +96,7 @@ pub fn subject(path: &Path, stem: &str) -> Option<Subject> {
         pdfrum::Rotation::None | pdfrum::Rotation::Half => (crop.width(), crop.height()),
     };
     // One pixel per PDF point, which is the convention every other measurement
-    // in this project uses (M12 §0). Clamped into range before the conversion
+    // in this project uses (§0). Clamped into range before the conversion
     // rather than cast and hoped for: a `/MediaBox` is untrusted input and can
     // be negative, enormous, or NaN, and `as` would silently saturate.
     let (w, h) = (device_axis(pw)?, device_axis(ph)?);
@@ -106,7 +105,7 @@ pub fn subject(path: &Path, stem: &str) -> Option<Subject> {
     // and builds with a default `BuildContext`. It therefore does *not* set
     // the per-page decode target the facade's own render path sets, so an
     // image here is decoded at full resolution rather than at its device
-    // footprint. That is deliberate on two counts: the decode target is M12b
+    // footprint. That is deliberate on two counts: the decode target is
     // P1's live work and this milestone stays out of it, and — the reason it
     // is sound — **both columns render the identical graph**, so whatever the
     // decode did, it is not a difference between them. It does mean the

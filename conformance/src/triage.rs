@@ -26,7 +26,7 @@ pub struct Cluster {
 /// Clusters a scoreboard's failures, largest first.
 ///
 /// A `tierA-mismatch` is split by *which* dump differed, because the tag
-/// alone is not a unit of work: at M1 it covered every file in the corpus
+/// alone is not a unit of work: at it covered every file in the corpus
 /// while the metadata and pageinfo dumps were already byte-exact everywhere
 /// and the mismatches were entirely the text and annot dumps no crate
 /// produces yet. One cluster per dump makes that visible, and makes a

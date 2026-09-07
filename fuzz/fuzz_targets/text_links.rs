@@ -1,15 +1,6 @@
 //! Web and mail link recognition over arbitrary text.
 //!
-//! Split out from `text_extract` because these two are pure string functions
-//! with the trickiest index arithmetic in the crate, and reaching them
-//! through a whole PDF wastes almost every input on the parser. Feeding them
-//! text directly puts the fuzzer's whole budget on the scanning loops:
-//! backwards trims that walk to an inclusive bound, an IPv6 bracket scan with
-//! an optional port, a local-part walk that rebases the string mid-loop, and
-//! a domain walk whose C++ original underflows a `size_t`.
-//!
-//! Property: never panics, always terminates, and any reported offsets
-//! address the candidate they came from.
+//! Property: never panics; reported offsets address the candidate they came from.
 
 #![no_main]
 
