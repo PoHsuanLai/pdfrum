@@ -14,16 +14,36 @@ Build the tool with its own feature: `cargo build -p pdfrum-tool --release
 --features javascript`. `--features pdfrum/javascript` compiles and silently
 drops JS-transcript rows.
 
+Point the harness at the binary `cargo` reports rather than at a path:
+
+```
+PDFRUM_TOOL=$(cargo build -p pdfrum-tool --release --features javascript \
+  --message-format=json | jq -r 'select(.executable != null) | .executable')
+```
+
+`CARGO_TARGET_DIR` moves cargo's output tree, so the `<repo>/target/...`
+default below holds either nothing or an artifact from before the redirect.
+An absent binary is caught — `run` resolves and probes it before the walk and
+refuses to start — but a *stale* one answers the probe and scores the corpus
+against code nobody is reading. Every run prints the resolved path and its
+mtime, and records both under `tool` in `scoreboard.json`, so a board can be
+dated; check that stamp before trusting a pass rate.
+
 | variable | flag | default |
 |---|---|---|
 | `PDFRUM_ORACLE_CHECKOUT` | `--checkout` | `<repo>/../pdfium-c++` |
 | `PDFRUM_ORACLE_BIN` | `--oracle` | `<checkout>/out/Release/pdfium_test` |
 | `PDFRUM_GOLDENS` | `--goldens` | `<repo>/conformance/goldens` |
-| `PDFRUM_TOOL` | `--tool` | `<repo>/target/release/pdfrum-tool` |
+| `PDFRUM_TOOL` | `--tool` | `<repo>/target/release/pdfrum-tool` (see above) |
 
 Flags win over variables. `conformance/goldens/` is gitignored. A run with
 no goldens reports `missing-golden` and still exits 0 — write trials to
 `--out`. `--out` is a file path.
+
+`run` refuses to write a board that measured nothing — no rows at all, or
+effectively every row `unsupported-tool` — and exits non-zero leaving `--out`
+untouched, so a regeneration script cannot commit a zeroed scoreboard. It also
+warns when the row count drifts far from the reference board's 1759.
 
 The checkout is read-only: commands refuse if any tracked file is dirty
 (`--allow-dirty-oracle` to override). `pdfium_test` writes beside its
