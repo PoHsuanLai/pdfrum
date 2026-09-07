@@ -1,54 +1,64 @@
 # CLI showcase
 
-The GIF in the READMEs is a VHS recording of `pdfrum`, not a live capture.
+The README embed is a screen capture of a real Kitty window: Kitty's
+graphics protocol for `preview` / `view`, not half-blocks. MP4 is the
+recording; the GIF is a 720px, 12 fps derivative for GitHub.
 
 ```bash
 ./scripts/record-cli.nu
 ```
 
-That builds `pdfrum-cli` in release, stages three in-tree fixtures under
-friendly names in `/tmp/pdfrum-cli-demo`, and runs `docs/assets/cli/pdfrum-cli.tape`.
+That builds `pdfrum-cli` in release, stages fixtures under friendly names
+in `/tmp/pdfrum-cli-demo`, drives Kitty over remote control on Xvfb, and
+captures the framebuffer with ffmpeg.
 
 | Typed as | Source |
 |---|---|
 | `report.pdf` | `crates/pdfrum-cli/tests/fixtures/bookmarks.pdf` |
 | `damaged.pdf` | `crates/pdfrum-cli/tests/fixtures/parser_rebuildxref_correct.pdf` |
 | `paper.pdf` | `benches/fixtures/foxittext.pdf` |
+| `gradients.pdf` | `benches/corpus/shading_tcpdf_030.pdf` |
 
 Do not commit copies. Provenance stays with those fixtures.
 
 ## Tools
 
-Pinned by what produced the committed GIF:
+Pinned by what produced the committed files:
 
 | | |
 |---|---|
-| vhs | 0.11.0 |
-| ttyd | 1.7.x |
-| ffmpeg | 4.x or later |
-| font | DejaVu Sans Mono, 16px |
-| PTY picture | 960 × 540, 20px padding, 12 fps |
-| host | `xvfb-run -a` when `DISPLAY` is unset |
+| kitty | 0.48.x (graphics protocol) |
+| Xvfb | framebuffer `:93`, 960×1280 |
+| ffmpeg | x11grab → H.264, then a 720px GIF |
+| font | DejaVu Sans Mono, 13px (`kitty.conf`) |
+| outputs | `pdfrum-cli.mp4` (canonical), `pdfrum-cli.gif` (README) |
 
 Theme tokens match `branding/final/README.md`. Cerise (`#f06a9b`) is the
 cursor and magenta; errors stay `#e01b24`, not cerise.
 
 ## Beats
 
-`info`, `doctor`, `extract toc`, `search ISO`. The last frame holds the
-whole tour.
+`preview`, `stamp … DRAFT`, `preview stamped.pdf`, `view` (page 1, `j` to
+page 2, `q`), `doctor`, `doctor --json`, `search ISO`, `extract markdown`.
+Ctrl+L between the text commands. Stamp and its preview stay before `view`:
+after the pager, a later Kitty image does not show up in the X11 grab.
 
-`preview --graphics halfblock` was tried and dropped: at a README size a
-letter-size page is a noisy postage stamp. Mention `preview` / `view` in
-the caption instead. Kitty and iTerm2 picture protocols will not survive
-a GIF.
+`preview` / `view` are typed with no flags. Inside Kitty they pick the
+graphics protocol. `gradients.pdf` is TCPDF example 030 (two pages of
+shadings) so the pager has somewhere to go.
 
-`view`, `serve`, password prompts, and compile/install stay out.
+Software GL (`LIBGL_ALWAYS_SOFTWARE=1`, llvmpipe) is used on a headless
+host. A machine with a real Kitty window can run the same script with
+`DISPLAY` already set by dropping Xvfb — the send-key sequence is the
+script.
+
+`serve`, password prompts, and compile/install stay out.
 
 ## Budget
 
-Keep `pdfrum-cli.gif` under 2 MB. The recorder warns above that. Tighten
-`Sleep`, `Framerate`, or drop a beat — do not re-encode with a third tool.
+Keep `pdfrum-cli.gif` under 8 MB and `pdfrum-cli.mp4` under 15 MB. The
+recorder warns above those. The GIF is scaled from the MP4 for GitHub;
+do not hand-edit either file.
 
 Not part of `scripts/ci.nu`. Re-run when the CLI's human output changes,
 the same way `./scripts/api-snapshot.nu update` is a deliberate commit.
