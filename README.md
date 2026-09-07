@@ -5,9 +5,14 @@
 
 **A composable PDF library built in Rust.**
 
+[![crates.io](https://img.shields.io/crates/v/pdfrum.svg)](https://crates.io/crates/pdfrum)
+[![docs.rs](https://docs.rs/pdfrum/badge.svg)](https://docs.rs/pdfrum)
+[![CI](https://github.com/PoHsuanLai/pdfrum/actions/workflows/ci.yml/badge.svg)](https://github.com/PoHsuanLai/pdfrum/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
+
 pdfrum is a modern, thread-safe PDF library — modular stages you compose,
-CPU or GPU backends, no `unsafe` — tested against PDFium. For your UI, RAG
-pipeline, or any app that has to open a PDF file.
+CPU or GPU backends, no `unsafe` — 99% agreement with PDFium on its suite.
+For your UI, RAG pipeline, or any app that has to open a PDF file.
 
 ```toml
 pdfrum = "0.1"
@@ -36,7 +41,7 @@ Open a file once. Ask it questions (Rendering is one of them).
   is useful
 - **Forms** — read values, fill them, run a live session
 - **Outline, links, annotations, tagged structure**
-- **Pixels** — name a rasterizer; defaults to `vello-cpu`
+- **Pixels** — name a rasterizer; defaults to [`vello_cpu`](https://crates.io/crates/vello_cpu)
 - **A new file** — edit, stamp, merge, flatten, save full or incremental
 
 A file a browser would open, we open, and tell you where its broken.
@@ -116,13 +121,13 @@ are on by default.
 
 | | support | feature |
 |---|:---:|---|
-| Host font fallback | yes | `system-fonts` (not on wasm32) |
+| Host font fallback | yes | `system-fonts` ([`fontdb`](https://crates.io/crates/fontdb); not on wasm32) |
 | Markdown | yes | `markdown` |
 | SVG export | yes | `svg` |
-| Draw an SVG into a page | yes | `svg-ingest` |
-| Extra CPU rasterizers | yes | `tinyskia`, `agg` |
-| GPU rasterizer | yes | `vello-gpu` |
-| `Pixmap` → PNG | yes | `png` |
+| Draw an SVG into a page | yes | `svg-ingest` ([`usvg`](https://crates.io/crates/usvg)) |
+| Extra CPU rasterizers | yes | `tinyskia` ([`tiny-skia`](https://crates.io/crates/tiny-skia)), `agg` |
+| GPU rasterizer | yes | `vello-gpu` ([`vello`](https://crates.io/crates/vello)) |
+| `Pixmap` → PNG | yes | [`png`](https://crates.io/crates/png) |
 | XFA | no | |
 | Viewer (window, caret, chrome) | no | |
 
@@ -133,22 +138,7 @@ its backend.
 pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all"] }
 ```
 
-## Docs
-
-| | |
-|---|---|
-| [docs.rs/pdfrum](https://docs.rs/pdfrum) | crate API |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | build, gate, board |
-| [CHANGELOG.md](CHANGELOG.md) | what changed |
-| [SECURITY.md](SECURITY.md) | vulnerability reports |
-
 ## Licence
 
 Apache-2.0 or MIT, at your option. Contributions are dual-licensed the same
 way.
-
-No PDFium source is in the tree. Tested against its suite as an oracle —
-**99% SSIM**. Upstream **data** that does travel with the repo
-sits beside a `PROVENANCE.md`: Foxit fallback fonts
-(`crates/pdfrum-font/fontdata/`, BSD-3-Clause), CJK CMaps and Unicode tables,
-and a handful of test PDFs (BSD-3-Clause).

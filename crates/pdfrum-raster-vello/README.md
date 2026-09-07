@@ -1,6 +1,6 @@
 # pdfrum-raster-vello
 
-GPU [`vello`](https://crates.io/crates/vello) on a caller-supplied `wgpu`
+GPU [`vello`](https://crates.io/crates/vello) on a caller-supplied [`wgpu`](https://crates.io/crates/wgpu)
 device. The only crate that is not pure Rust to the syscall layer. Nothing
 in the core ring depends on it.
 

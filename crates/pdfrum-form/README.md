@@ -9,7 +9,7 @@ crop-box origin. A focused field draws from live editor state; an unfocused
 one falls back to a generated appearance. `FieldId` is page-local;
 `FieldRef::index` is the document-wide name a script uses.
 
-JavaScript is the default-off `javascript` feature ([boa](https://boajs.dev/)).
+JavaScript is the default-off `javascript` feature ([boa](https://crates.io/crates/boa_engine)).
 Off, scripts are data.
 
 ```rust

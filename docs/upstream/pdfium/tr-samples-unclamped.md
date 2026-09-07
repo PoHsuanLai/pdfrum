@@ -1,6 +1,6 @@
 # `/TR` transfer samples are stored unclamped, so a negative output wraps to the top of the byte range
 
-**Filed** as crbug.com/pdfium/555967331 on 2026-09-02.
+**Filed** as crbug.com/555967331 on 2026-09-02.
 
 **Fixed upstream** in `8794e9c27` (2026-09-03), "Clamp transfer function sample values to [0, 255]", `Fixed: 555967331`; seen at checkout `a043bed4a` on 2026-09-05.
 

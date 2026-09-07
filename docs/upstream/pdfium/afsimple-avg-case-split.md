@@ -1,6 +1,6 @@
 # `AFSimple("avg", a, b)` returns the sum: the function name is accepted case-insensitively but the average divide is case-sensitive
 
-**Filed** as crbug.com/pdfium/555848530 on 2026-09-02.
+**Filed** as crbug.com/555848530 on 2026-09-02.
 
 **Still open** at checkout `a043bed4a` (2026-09-05): `fxjs/cjs_publicmethods.cpp` is untouched since `6f2272e1f`.
 
