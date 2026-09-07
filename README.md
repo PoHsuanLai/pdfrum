@@ -1,4 +1,7 @@
-# pdfrum
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+  <img src="docs/assets/banner-light.svg" alt="pdfrum" width="100%">
+</picture>
 
 **A pure-Rust PDF engine: parse, render, extract text, edit.**
 
