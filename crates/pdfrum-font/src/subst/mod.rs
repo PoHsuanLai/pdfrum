@@ -839,13 +839,13 @@ pub fn builtin_generic(serif: bool) -> (GlyphSource, &'static str) {
     let (cell, bytes, family) = if serif {
         (
             &SERIF,
-            &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb")[..],
+            &include_bytes!("../../fontdata/FoxitSerifMM.pfb")[..],
             "Chrome Serif",
         )
     } else {
         (
             &SANS,
-            &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSansMM.pfb")[..],
+            &include_bytes!("../../fontdata/FoxitSansMM.pfb")[..],
             "Chrome Sans",
         )
     };

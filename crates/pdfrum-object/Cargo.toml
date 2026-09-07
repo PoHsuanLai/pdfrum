@@ -20,4 +20,4 @@ ryu.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-pdfrum-parser.workspace = true
+pdfrum-parser = { path = "../pdfrum-parser" }
