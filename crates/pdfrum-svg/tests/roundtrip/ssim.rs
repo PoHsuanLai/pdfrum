@@ -79,11 +79,13 @@ pub fn compare(a: &Image, b: &Image) -> Option<f64> {
 fn to_gray(image: &Image) -> Vec<f64> {
     image
         .rgba
-        .chunks_exact(4)
-        .map(|px| {
-            let alpha = f64::from(px[3]) / 255.0;
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&[r, g, b, a]| {
+            let alpha = f64::from(a) / 255.0;
             let over_white = |c: u8| f64::from(c) * alpha + 255.0 * (1.0 - alpha);
-            0.299 * over_white(px[0]) + 0.587 * over_white(px[1]) + 0.114 * over_white(px[2])
+            0.299 * over_white(r) + 0.587 * over_white(g) + 0.114 * over_white(b)
         })
         .collect()
 }

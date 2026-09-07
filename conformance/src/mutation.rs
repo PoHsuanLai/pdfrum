@@ -366,8 +366,10 @@ fn baseline(both: &Both<'_>, input: &Path, password: Option<&str>, scratch: &Pat
         }
         let count = a
             .rgba
-            .chunks_exact(4)
-            .zip(b.rgba.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.rgba.as_chunks::<4>().0)
             .filter(|(x, y)| x != y)
             .count();
         differing = differing.saturating_add(u64::try_from(count).unwrap_or(u64::MAX));

@@ -1,7 +1,7 @@
 # pdfrum-filters
 
 Stream `/Filter` values (ISO 32000-1 §7.4) as functions over bytes: Flate
-with its PNG and TIFF predictors, LZW, RunLength, ASCIIHex, ASCII85 and
+with its PNG and TIFF predictors, LZW, RunLength, `ASCIIHex`, ASCII85 and
 CCITT Group 3/4. DCT, JPX and JBIG2 are *classified* here and decoded in
 `pdfrum-page`, because they produce an image rather than bytes.
 
