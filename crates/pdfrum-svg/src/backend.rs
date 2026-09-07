@@ -10,8 +10,7 @@
 //! and a note of every offscreen target's shape so a pixel region blitted
 //! onto the root can say why it is pixels.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use kurbo::{Affine, BezPath, Rect, Stroke};
 use pdfrum_page::BlendMode;
@@ -27,12 +26,16 @@ use crate::report::{RasterRegion, RasterReport};
 /// The document and the pending evidence, shared between the backend and the
 /// devices it makes.
 ///
-/// A `RefCell` because `RasterBackend::new_target` takes `&self` and
+/// An `Arc<Mutex<_>>` because `RasterBackend::new_target` takes `&self` and
 /// `finish` consumes a device without seeing the root — the two halves of the
 /// recording live on opposite sides of the trait, and the trait is not
-/// changing. Borrows are taken for the length of one statement and never
-/// nest, so the cell cannot be re-entered. `pdfrum-raster-vello` holds its
-/// renderer the same way and for the same reason.
+/// changing. A `Mutex` rather than a cell so that the backend and its devices
+/// stay `Send + Sync`, which is the workspace-wide property every public type
+/// holds; `pdfrum-raster-vello` holds its renderer the same way and for the
+/// same reason. The lock is held for one statement and never nests: the
+/// closure `SvgDevice::record` hands off receives the document alone and can
+/// reach nothing that would re-enter, and `draw_image` encodes its PNG before
+/// locking, so the expensive half is outside.
 #[derive(Debug)]
 struct Shared {
     /// `None` until the engine asks for its first target, which is the page.
@@ -41,6 +44,19 @@ struct Shared {
     report: RasterReport,
     /// Offscreen targets that have closed since the last root draw.
     pending: Vec<Witness>,
+}
+
+/// The shared state, locked.
+///
+/// A poisoned mutex means a previous holder panicked mid-record: the recovered
+/// guard still names a usable `Shared`, and the recording it holds is worth
+/// more than the panic recovering it would cost. The workspace lints forbid
+/// the `unwrap` that would be the idiomatic spelling here.
+fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
+    match shared.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
 
 /// A [`RasterBackend`] that records the page as SVG while `inner` rasterizes
@@ -63,7 +79,7 @@ struct Shared {
 #[derive(Debug)]
 pub struct SvgBackend<'a, B> {
     inner: &'a B,
-    shared: Rc<RefCell<Shared>>,
+    shared: Arc<Mutex<Shared>>,
 }
 
 impl<'a, B> SvgBackend<'a, B> {
@@ -81,7 +97,7 @@ impl<'a, B> SvgBackend<'a, B> {
     pub fn new(inner: &'a B) -> Self {
         Self {
             inner,
-            shared: Rc::new(RefCell::new(Shared {
+            shared: Arc::new(Mutex::new(Shared {
                 svg: None,
                 report: RasterReport::default(),
                 pending: Vec::new(),
@@ -104,7 +120,7 @@ impl<'a, B> SvgBackend<'a, B> {
     /// ```
     #[must_use]
     pub fn into_svg(self) -> (String, RasterReport) {
-        let mut shared = self.shared.borrow_mut();
+        let mut shared = lock(&self.shared);
         let report = core::mem::take(&mut shared.report);
         let svg = shared.svg.take().map(Svg::finish).unwrap_or_default();
         (svg, report)
@@ -139,16 +155,18 @@ pub struct SvgDevice<D> {
     /// Whether this is the page or an offscreen buffer.
     role: Role,
     /// The shared document, report and pending-witness list.
-    shared: Rc<RefCell<Shared>>,
+    shared: Arc<Mutex<Shared>>,
 }
 
 impl<D> SvgDevice<D> {
     /// Run `f` on the document when this is the root, and do nothing
     /// otherwise.
     fn record(&mut self, f: impl FnOnce(&mut Svg)) {
-        if matches!(self.role, Role::Root)
-            && let Some(svg) = self.shared.borrow_mut().svg.as_mut()
-        {
+        if !matches!(self.role, Role::Root) {
+            return;
+        }
+        let mut shared = lock(&self.shared);
+        if let Some(svg) = shared.svg.as_mut() {
             f(svg);
         }
     }
@@ -215,18 +233,18 @@ impl<D: RenderDevice> RenderDevice for SvgDevice<D> {
         if !matches!(self.role, Role::Root) {
             return;
         }
-        // The encoding is done before the borrow, because it is the expensive
-        // part and holding the cell across it would serialise nothing useful.
+        // The encoding is done before the lock, because it is the expensive
+        // part and holding the mutex across it would serialise nothing useful.
         // A failure means the pixmap will not encode: the region is *still*
         // reported, because a region silently lost is exactly what the report
         // exists to prevent — it just has no element.
         //
         let png = img.encode_png().ok();
 
-        // Classification and recording happen under one borrow: the pending
+        // Classification and recording happen under one lock: the pending
         // witnesses are this draw's evidence and are consumed by it, so the
         // next root draw starts from nothing.
-        let mut shared = self.shared.borrow_mut();
+        let mut shared = lock(&self.shared);
         let cause = classify(&core::mem::take(&mut shared.pending));
         shared.report.push(RasterRegion {
             bounds: image_bounds(img, t),
@@ -285,7 +303,7 @@ impl<B: RasterBackend> RasterBackend for SvgBackend<'_, B> {
         // allocates the root target and only then walks the objects — so the
         // first target is the root and every later one is offscreen.
         let role = {
-            let mut shared = self.shared.borrow_mut();
+            let mut shared = lock(&self.shared);
             if shared.svg.is_none() {
                 shared.svg = Some(Svg::new(w, h));
                 Role::Root
@@ -296,7 +314,7 @@ impl<B: RasterBackend> RasterBackend for SvgBackend<'_, B> {
         SvgDevice {
             inner,
             role,
-            shared: Rc::clone(&self.shared),
+            shared: Arc::clone(&self.shared),
         }
     }
 
@@ -309,7 +327,7 @@ impl<B: RasterBackend> RasterBackend for SvgBackend<'_, B> {
                 seed: Seed::Backdrop,
                 ..Fingerprint::default()
             }),
-            shared: Rc::clone(&self.shared),
+            shared: Arc::clone(&self.shared),
         }
     }
 
@@ -319,7 +337,7 @@ impl<B: RasterBackend> RasterBackend for SvgBackend<'_, B> {
 
     fn finish(&self, d: Self::Device) -> Pixmap {
         if let Role::Offscreen(seen) = d.role {
-            d.shared.borrow_mut().pending.push(seen);
+            lock(&d.shared).pending.push(seen);
         }
         self.inner.finish(d.inner)
     }
@@ -339,6 +357,17 @@ mod tests {
         p.line_to((0.0, size));
         p.close_path();
         p
+    }
+
+    /// The wrapper must not be the crate that costs the workspace its
+    /// `Send + Sync` surface. Both types share one `Arc<Mutex<Shared>>`, and
+    /// the assertion is what stops a cheaper cell being substituted for it.
+    #[test]
+    fn the_recorder_and_its_devices_are_send_and_sync() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<SvgBackend<'static, TinySkiaBackend>>();
+        send_sync::<SvgDevice<<TinySkiaBackend as RasterBackend>::Device>>();
+        send_sync::<Shared>();
     }
 
     #[test]
