@@ -42,18 +42,18 @@ Open a file once. Ask it questions. Rendering is one of them.
 A damaged file that can be opened *is* opened. What was repaired is
 `Document::diagnostics`, not an `Err`.
 
-![pdfrum CLI: info, doctor, extract, search](docs/assets/cli/pdfrum-cli.gif)
+![pdfrum CLI: preview, stamp, view, doctor, search](docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
-pdfrum info report.pdf
-pdfrum doctor damaged.pdf
-pdfrum extract toc report.pdf
+pdfrum preview gradients.pdf
+pdfrum stamp text gradients.pdf DRAFT --angle 30 --opacity 0.4 --size 72 -o stamped.pdf
+pdfrum preview stamped.pdf
+pdfrum view stamped.pdf
 pdfrum search ISO paper.pdf
 ```
 
-Pages also draw in the terminal (`preview`, `view`). The rest of the catalog
-— `pages`, `forms`, `stamp`, `render`, `serve --stdio` / `--mcp` — is
-[`pdfrum-cli`](crates/pdfrum-cli/README.md).
+The rest of the catalog — `info`, `pages`, `forms`, `render`,
+`serve --stdio` / `--mcp` — is [`pdfrum-cli`](crates/pdfrum-cli/README.md).
 
 ```sh
 cargo install pdfrum-cli
