@@ -69,7 +69,7 @@ cargo install pdfrum-cli
 |---|---|
 | Safe | `unsafe` is forbidden in the library. (The C ABI is the one exception, and only at `extern "C"`). |
 | Pure Rust | no C/C++ in a library build |
-| Thread-safe | every public type is `Send + Sync` |
+| Thread-safe | documents, pages and text are `Send + Sync`; a render target travels to the thread that rasterizes it |
 | JavaScript | The `javascript` feature runs the document's own scripts via the [boa engine](https://crates.io/crates/boa_engine) |
 | Not a viewer | no window, caret, or widget chrome. No XFA. |
 
