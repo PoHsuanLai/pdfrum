@@ -31,6 +31,7 @@ Re-checked 2026-09-05 at `a043bed4a`.
 | [Shading ramp skew / radial truncation](pdfium/shading-ramp-and-radial-truncation.md) | PDFium |
 | [`IsPunctuation` range typo](pdfium/ispunctuation-range-typo.md) | PDFium |
 | [`EnableStdConversion` never reaches a pixel](pdfium/std-conversion-never-reaches-a-pixel.md) | PDFium |
+| [Bilinear complement darkens transformed images by two levels](pdfium/image-transformer-off-by-one-complement.md) | PDFium |
 | [`F32Kernel::pack`/`unpack` are scalar](vello/pack-unpack-simd.md) | [`vello_cpu`](https://crates.io/crates/vello_cpu) |
 | [JBIG2 segment bodies read at declared length](hayro/jbig2-segment-lengths.md) | [`hayro-jbig2`](https://crates.io/crates/hayro-jbig2) |
 | [`scale_denom` inside the IDCT](zune/scaled-decode.md) | [`zune-jpeg`](https://crates.io/crates/zune-jpeg) (#434 already open) |
