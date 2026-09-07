@@ -2,16 +2,54 @@
 
 ## Build
 
-Stable Rust. No system libraries.
+Stable Rust. No system libraries. The manifest's `rust-version` field
+(`[workspace.package]` in the root `Cargo.toml`) is the minimum; there is no
+`rust-toolchain.toml`, so a current stable toolchain is what to use.
+
+Three commands are enough for a first patch:
 
 ```bash
 cargo build --workspace
 cargo nextest run
 cargo test --doc --workspace   # nextest skips doctests
-./scripts/ci.nu                # what CI runs
 ```
 
-Scripts are nushell (`cargo binstall nu`, ≥ 0.110). The gate also wants:
+`cargo nextest run` needs `cargo binstall cargo-nextest`. Plain `cargo test`
+runs the same tests, slower and one process for all of them; nextest gives
+each test its own process, which is why a hang or a leak is legible. Neither
+tool covers both halves: nextest cannot run doctests at all, so the third
+line stands on its own.
+
+`just` wraps these — `cargo install just --locked`, then `just --list`.
+`just check` is the three commands above; the recipes are thin, and the ones
+that need nushell say so.
+
+## CI
+
+`./scripts/ci.nu` is the full gate. On top of the three commands it runs
+fmt, clippy `-D warnings`, the pdfrum feature combination matrix
+(`--no-default-features`, each default-off flag, `--all-features`), nextest
+with the CLI's and the tool's `javascript` features, rustdoc (workspace
+defaults, then pdfrum `--all-features`) and its coverage floor, the API
+snapshot, `cargo deny`, the no-`-sys` check, the C header and C test, WASM
+tests, and `cargo check` of `fuzz/`.
+
+CI does not run the conformance board or the bench ratchet.
+
+The gate is long and its tools are several. A maintainer runs it before
+landing, so a first patch can skip it. Run it yourself once a change touches
+features, the C API, WASM, or dependencies — the parts the three commands do
+not see. `cargo fmt --all` and `cargo clippy --workspace --all-targets --
+-D warnings` are worth running either way; they are what the gate fails on
+first.
+
+The scripts are nushell:
+
+```bash
+cargo binstall nu        # >= 0.110
+```
+
+The gate also wants:
 
 ```bash
 cargo binstall cargo-nextest
@@ -21,17 +59,6 @@ rustup toolchain install nightly
 
 Optional — the gate notes and continues if they are missing: `cargo-deny`,
 `cbindgen`, `wasm-bindgen-cli`, the `wasm32-unknown-unknown` target.
-
-## CI
-
-`./scripts/ci.nu` runs fmt, clippy `-D warnings`, the pdfrum feature
-combination matrix (`--no-default-features`, each default-off flag,
-`--all-features`), nextest (with `javascript` on the CLI and the tool),
-doctests, rustdoc (workspace defaults, then pdfrum `--all-features`), the
-API snapshot, `cargo deny`, the no-`-sys` check, the C header and C test,
-WASM tests, and `cargo check` of `fuzz/`.
-
-CI does not run the conformance board or the bench ratchet.
 
 ## Conformance
 
@@ -76,7 +103,10 @@ through `crates/pdfrum-cli/src/out.rs`.
 ## Public API
 
 `docs/api-baseline/` is the surface `cargo add pdfrum` sees. A drift is its
-own commit, from `./scripts/api-snapshot.nu update`.
+own commit, from `./scripts/api-snapshot.nu update` (`just api-update`).
+That one is not skippable: an API change without a matching baseline fails
+the gate. It needs nushell, `cargo-public-api` and nightly — the install
+lines are under CI.
 
 ## Paths
 
