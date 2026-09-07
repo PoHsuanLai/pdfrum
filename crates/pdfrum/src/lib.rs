@@ -414,6 +414,47 @@ mod tests {
         send::<RenderSession>();
     }
 
+    /// The rasterizers, held the way a parallel caller holds them: one backend
+    /// behind an `&` shared across workers. Each is asserted under its own
+    /// feature, because a backend a build does not compile is a backend it
+    /// cannot promise anything about.
+    #[test]
+    fn the_backends_are_send_and_sync() {
+        fn send_sync<T: Send + Sync>() {}
+        fn send<T: Send>() {}
+        #[cfg(feature = "vello-cpu")]
+        send_sync::<VelloCpuBackend>();
+        #[cfg(feature = "tinyskia")]
+        send_sync::<TinySkiaBackend>();
+        #[cfg(feature = "agg")]
+        send_sync::<AggBackend>();
+        // The GPU backend shares one `Renderer` behind a mutex; `vello`
+        // declares that renderer `Send`, which is all a mutex needs.
+        #[cfg(feature = "vello-gpu")]
+        send_sync::<VelloGpuBackend<'static>>();
+        // The SVG recorder is a wrapper, so it is only as shareable as the
+        // rasterizer it wraps: the backend shares its document through an
+        // `Arc<Mutex<_>>` and is `Send + Sync` over any backend that is. A
+        // *device* additionally carries the wrapped rasterizer's own target,
+        // and `vello_cpu`'s holds thread-local dispatch and lazily-filled
+        // gradient tables, so it is `Send` alone — which is what the engine
+        // asks of it, since a target is rendered by the one thread that made
+        // it.
+        #[cfg(all(feature = "svg", feature = "vello-cpu"))]
+        {
+            use pdfrum_render::RasterBackend;
+            send_sync::<svg::SvgBackend<'static, VelloCpuBackend>>();
+            send::<svg::SvgDevice<<VelloCpuBackend as RasterBackend>::Device>>();
+        }
+        // Over a rasterizer whose own target is shareable, so is the
+        // recording device wrapping it.
+        #[cfg(all(feature = "svg", feature = "tinyskia"))]
+        {
+            use pdfrum_render::RasterBackend;
+            send_sync::<svg::SvgDevice<<TinySkiaBackend as RasterBackend>::Device>>();
+        }
+    }
+
     #[test]
     fn the_borrowing_types_are_send_and_sync_too() {
         fn send_sync<T: Send + Sync>() {}
