@@ -345,6 +345,21 @@ fn scratch(name: &str) -> std::io::Result<std::path::PathBuf> {
     Ok(dir)
 }
 
+/// The trailer's `/ID` array, which a seeded save pins even when the
+/// encryption key does not come from the seed.
+fn file_id(bytes: &[u8]) -> Vec<u8> {
+    let at = bytes
+        .windows(4)
+        .rposition(|w| w == b"/ID[")
+        .expect("an encrypted save writes a trailer /ID");
+    let tail = &bytes[at..];
+    let end = tail
+        .iter()
+        .position(|&b| b == b']')
+        .expect("the /ID array closes");
+    tail[..=end].to_vec()
+}
+
 fn pages_of(path: &Path) -> Result<serde_json::Value, String> {
     let path = path.to_str().ok_or("non-utf8 path")?;
     Ok(json(&["info", path, "--json"])?["page_boxes"].clone())
@@ -1001,12 +1016,18 @@ fn encrypt_locks_the_file_with_the_permissions_asked_for() {
         !bytes.windows(5).any(|w| w == b"Hello"),
         "plaintext must not be in the file"
     );
+    // `--deterministic` pins what a seed can pin. The file key and the
+    // vectors come from the operating system on every save, so two
+    // encryptions of one input share their `/ID` and differ everywhere the
+    // key reaches: a seed that fixed them would make the key derivable.
     let again = encrypt_hello(&dir, "again.pdf").unwrap();
+    let second = std::fs::read(&again).unwrap();
     assert_eq!(
-        std::fs::read(&again).unwrap(),
-        bytes,
-        "--deterministic is byte-identical"
+        file_id(&bytes),
+        file_id(&second),
+        "--deterministic pins the trailer /ID"
     );
+    assert_ne!(second, bytes, "the key is fresh, so the ciphertext moves");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
