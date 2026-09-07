@@ -25,7 +25,7 @@
 //! unembedded but unused font. Everywhere else the absence of an interpreter
 //! makes this checker report *fewer* violations than veraPDF, never more.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, Resolve, names};
@@ -58,6 +58,7 @@ pub fn check<R: Resolve>(
     let mut ctx = Ctx {
         level,
         report: &mut report,
+        limits,
     };
 
     check_encryption(&mut ctx, trailer);
@@ -69,12 +70,14 @@ pub fn check<R: Resolve>(
     report
 }
 
-/// The state every check shares: which level is being checked, and where the
-/// findings go. A struct rather than two parameters threaded everywhere,
-/// because every check needs both and neither is ever passed separately.
+/// The state every check shares: which level is being checked, where the
+/// findings go, and the ceilings the recursive walks stop at. A struct rather
+/// than three parameters threaded everywhere, because every check needs them
+/// and none is ever passed separately.
 struct Ctx<'a> {
     level: Level,
     report: &'a mut Report,
+    limits: &'a Limits,
 }
 
 impl Ctx<'_> {
@@ -395,14 +398,26 @@ fn check_pages<R: Resolve>(ctx: &mut Ctx<'_>, catalog: &Dict, has_output_intent:
     };
     let mut index = 0u32;
     let mut visited = HashSet::new();
-    walk(ctx, &root, &mut index, &mut visited, has_output_intent, r);
+    walk(
+        ctx,
+        &root,
+        &mut index,
+        &mut visited,
+        has_output_intent,
+        r,
+        0,
+    );
 }
 
 /// One node of the page tree.
 ///
-/// `visited` guards against a `/Kids` cycle, which a malformed file can carry
-/// and which would otherwise be an infinite walk in a library that must never
-/// hang on untrusted input.
+/// `visited` guards against a `/Kids` cycle built from indirect references,
+/// which a malformed file can carry and which would otherwise be an infinite
+/// walk in a library that must never hang on untrusted input. A `/Kids` entry
+/// may also be a direct dictionary — ISO 32000-1 §7.7.3.2 requires no
+/// indirection — and such a node carries no object number for `visited` to
+/// remember, so `depth` against [`Limits::max_page_tree_depth`] is what
+/// bounds it: the same ceiling the loader applies to the same tree.
 fn walk<R: Resolve>(
     ctx: &mut Ctx<'_>,
     node: &Dict,
@@ -410,12 +425,16 @@ fn walk<R: Resolve>(
     visited: &mut HashSet<ObjRef>,
     has_output_intent: bool,
     r: &R,
+    depth: u32,
 ) {
     let Some(kids) = node.array(names::KIDS, r) else {
         check_page(ctx, node, *index, has_output_intent, r);
         *index += 1;
         return;
     };
+    if depth >= ctx.limits.max_page_tree_depth {
+        return;
+    }
     for i in 0..kids.len() {
         if let Some(Object::Ref(reference)) = kids.raw_at(i)
             && !visited.insert(*reference)
@@ -423,7 +442,7 @@ fn walk<R: Resolve>(
             continue;
         }
         if let Some(kid) = array_dict(&kids, i, r) {
-            walk(ctx, &kid, index, visited, has_output_intent, r);
+            walk(ctx, &kid, index, visited, has_output_intent, r, depth + 1);
         }
     }
 }
@@ -444,7 +463,15 @@ fn check_page<R: Resolve>(
         }
     }
     if let Some(resources) = page.dict(names::RESOURCES, r) {
-        check_resources(ctx, &resources, index, has_output_intent, r);
+        check_resources(
+            ctx,
+            &resources,
+            index,
+            has_output_intent,
+            r,
+            &mut BTreeSet::new(),
+            0,
+        );
     }
 }
 
@@ -520,14 +547,27 @@ fn check_annotation<R: Resolve>(ctx: &mut Ctx<'_>, annot: &Dict, subject: &Subje
     }
 }
 
+/// How deep the resource walk follows a form `XObject`'s own `/Resources`.
+///
+/// A form `XObject` carries resources, and one of those can be another form
+/// (ISO 32000-1 §8.10.1), so the walk has to recurse. The depth and the
+/// visited set are the two guards a recursive object-graph walk needs against
+/// a document that points a form at itself.
+const MAX_RESOURCE_DEPTH: u32 = 16;
+
 /// A page's resource dictionary: the fonts, the graphics states, the colour
 /// spaces and the `XObject`s it names.
+///
+/// `seen` holds the object number of every form `XObject` already descended
+/// into, and `depth` counts how far the descent has gone.
 fn check_resources<R: Resolve>(
     ctx: &mut Ctx<'_>,
     resources: &Dict,
     page: u32,
     has_output_intent: bool,
     r: &R,
+    seen: &mut BTreeSet<u32>,
+    depth: u32,
 ) {
     if let Some(fonts) = resources.dict(names::FONT, r) {
         for (name, _) in fonts.iter() {
@@ -602,9 +642,18 @@ fn check_resources<R: Resolve>(
             check_filters(ctx, dict, &subject);
 
             // A form XObject carries its own resources, and a page's fonts
-            // are routinely reached only through one.
-            if let Some(nested) = dict.dict(names::RESOURCES, r) {
-                check_resources(ctx, &nested, page, has_output_intent, r);
+            // are routinely reached only through one. `seen` admits each form
+            // once, so a form whose `/Resources` names itself is walked once
+            // rather than for ever; `depth` bounds the chains that are merely
+            // long rather than circular.
+            if depth + 1 < MAX_RESOURCE_DEPTH
+                && let Some(nested) = dict.dict(names::RESOURCES, r)
+                && xobjects
+                    .raw(name)
+                    .and_then(Object::as_ref_id)
+                    .is_none_or(|reference| seen.insert(reference.num))
+            {
+                check_resources(ctx, &nested, page, has_output_intent, r, seen, depth + 1);
             }
         }
     }
