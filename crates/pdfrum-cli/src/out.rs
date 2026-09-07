@@ -110,12 +110,8 @@ pub fn open_with(file: &Path, password: Option<&str>, limits: &Limits) -> Result
     }
     if verbose() {
         for d in doc.diagnostics().entries() {
-            let severity = match d.severity {
-                pdfrum::Severity::Recovered => "recovered",
-                pdfrum::Severity::Suspicious => "suspicious",
-            };
             let at = d.at.map_or(String::new(), |o| format!(" at byte {o}"));
-            notice(file, &format!("{severity}{at}: {:?}", d.what));
+            notice(file, &format!("{}{at}: {}", d.severity, d.what));
         }
         return Ok(doc);
     }

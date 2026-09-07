@@ -2233,7 +2233,7 @@ fn quiet_drops_the_notices_and_verbose_lists_every_diagnostic() {
         "{err}"
     );
     assert!(
-        err.contains("recovered at byte 471: KeywordResync"),
+        err.contains("recovered at byte 471: missing endstream/endobj keyword; reader resynced"),
         "{err}"
     );
     assert!(

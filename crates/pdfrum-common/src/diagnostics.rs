@@ -266,16 +266,6 @@ pub enum DiagKind {
     /// Character code zero appeared, which emits a NUL into the character
     /// stream and nothing into the text.
     TextCharcodeZero,
-    /// `[oracle-bug]` **Never recorded.** Characters in one text object
-    /// repeated a character already drawn at effectively the same place and
-    /// were suppressed; carries how many. Coincident glyphs are composited
-    /// rather than dropped, so nothing is suppressed and nothing is counted.
-    /// Kept as a public enum member, and as what a future opt-in to the
-    /// oracle's rule would need.
-    // [oracle-bug] cpdf_textpage.cpp:1437-1458 deletes real characters
-    // (crbug.com/42270780), so the suppression was retired and coincident
-    // glyphs are composited instead.
-    TextCharsDeduplicated(u32),
     /// A marked-content `/ActualText` held no printable character, so the
     /// object it covered emitted nothing at all.
     TextActualTextUnprintable,
@@ -357,6 +347,160 @@ pub enum DiagKind {
     /// render that fails on the deadline still carries the interpreter's
     /// record of where the build stopped.
     TimeLimitReached,
+}
+
+impl core::fmt::Display for Severity {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Recovered => "recovered",
+            Self::Suspicious => "suspicious",
+        })
+    }
+}
+
+impl DiagKind {
+    /// One lower-case clause naming what was repaired, for a human reading a
+    /// report.
+    ///
+    /// The `Debug` spelling is the variant identifier and is what `--json`
+    /// carries, because a machine consumer wants a token that survives
+    /// rewording; this is the other half, and the two are deliberately not
+    /// interchangeable.
+    ///
+    /// The match is exhaustive with no wildcard arm: `#[non_exhaustive]`
+    /// binds downstream crates, not this one, so a variant added without a
+    /// clause here fails to compile. That is the point — it is the same gate
+    /// the enum's own doc comment asks for, applied to the wording.
+    ///
+    /// ```
+    /// use pdfrum_common::DiagKind;
+    ///
+    /// assert_eq!(
+    ///     DiagKind::XrefRebuilt.message(),
+    ///     "cross-reference table rebuilt by scanning the file",
+    /// );
+    /// ```
+    #[must_use]
+    // One arm per variant: the length is the enum's, not the function's.
+    #[allow(clippy::too_many_lines)]
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::HeaderOffset => "%PDF- header was not at the start of the file",
+            Self::BadStartXref => "startxref was missing or did not name a cross-reference section",
+            Self::XrefRebuilt => "cross-reference table rebuilt by scanning the file",
+            Self::XrefPrevLoop => "cross-reference /Prev chain looped back on itself",
+            Self::XrefEntriesShifted => "cross-reference entries disagreed with the objects found",
+            Self::XrefStreamEntryDropped => "cross-reference stream entry dropped",
+            Self::RootRecovered => "trailer /Root was unusable; catalog found another way",
+            Self::LengthMismatch => "stream /Length did not match the bytes before endstream",
+            Self::KeywordResync => "missing endstream/endobj keyword; reader resynced",
+            Self::MalformedDict => "malformed dictionary body",
+            Self::MalformedArray => "malformed array element; array kept partially",
+            Self::StreamInCompositeDropped => "stream inside a dictionary or array dropped",
+            Self::ObjNumMismatch => "object number did not match the cross-reference table",
+            Self::ObjStmEntryDropped => "object-stream entry skipped",
+            Self::UndecodableStream => "stream filter chain was invalid; raw bytes used",
+            Self::PageTreeRepaired => "page tree repaired",
+            Self::PageTreeDepthExceeded => "page tree deeper than the depth cap; walk stopped",
+            Self::PasswordReencoded => "password accepted only after re-encoding",
+            Self::CMapNameUnknown => "/Encoding named no built-in CMap; fell back to two-byte codes",
+            Self::CMapTableMissing => "no built-in CMap table carries that exact name",
+            Self::CMapUsecmapUnknown => "usecmap named a CMap that is not built in",
+            Self::CMapUsecmapDepth => "/UseCMap chain ran past its depth cap",
+            Self::CMapCodespaceDropped => "codespace range bounds discarded",
+            Self::CMapTruncatedCodespace => "codespace bound had no closing >",
+            Self::CMapReversedRange => "begincidrange start code was above its end code",
+            Self::CMapWideMappingsDropped => "character mappings too wide for the coding scheme dropped",
+            Self::CMapRangeLimit => "CMap declared more ranges than the limit allows",
+            Self::CMapOperandOverflow => "too many operands for one CMap construct",
+            Self::Type1PfbTruncated => "PFB segment chain ended early",
+            Self::Type1HexTruncated => "PFA hexadecimal private section ended early",
+            Self::Type1EncodingGlyphMissing => "Type 1 /Encoding named an undefined glyph",
+            Self::Type1CharstringAborted => "Type 1 charstring could not be interpreted to completion",
+            Self::Type1BlendInconsistent => "Multiple-Master blend arrays disagreed; treated as non-variable",
+            Self::ToUnicodeBlockRejected => "/ToUnicode block rejected; its mappings were discarded",
+            Self::FontProgramUnreadable => "embedded font program unreadable; substituted instead",
+            Self::CidToGidStreamShort => "/CIDToGIDMap stream was shorter than the CIDs indexing it",
+            Self::FontWidthsTruncated => "font widths array was malformed; parsing stopped early",
+            Self::GsubUnreadable => "OpenType GSUB table unreadable; upright forms drawn",
+            Self::FontSubstitutionFailed => "no face found and the built-in fallback failed to parse",
+            Self::UnknownOperator => "content-stream keyword named no operator",
+            Self::OperandsDropped => "more than sixteen operands accumulated; oldest evicted",
+            Self::OperandCountMismatch => "operator did not get its exact operand count",
+            Self::UnbalancedRestore => "Q with no matching q",
+            Self::UnbalancedMarkedContent => "EMC with no matching BMC/BDC",
+            Self::FormRecursionRefused => "form XObject refused as re-entrant",
+            Self::InlineImageAbandoned => "BI was not followed by ID; inline image abandoned",
+            Self::InlineImageResync => "inline image EI scan ran past the inferred sample data",
+            Self::InlineImageUnsupported => "inline image filter length cannot be inferred",
+            Self::BadTextRenderMode => "Tr operand outside 0..=7 ignored",
+            Self::DashPatternDropped => "dash pattern abandoned for a solid line",
+            Self::DashElementClamped => "dash element below the threshold replaced by 0.1",
+            Self::ColorSpaceUnsupported => "colorspace could not be built",
+            Self::IccAlternateUsed => "ICC profile unusable; /Alternate space used",
+            Self::IccStockFallback => "ICC profile unusable; stock device space used",
+            Self::IccAlternateMismatch => "ICC /Alternate component count disagreed with /N",
+            Self::IndexedHivalClamped => "/Indexed /hival outside 0..=255 was clamped",
+            Self::TintTransformDropped => "Separation tint transform dropped",
+            Self::FunctionUnsupported => "function could not be built",
+            Self::PostScriptStackAbuse => "PostScript calculator over- or under-ran its stack",
+            Self::PostScriptMalformedProc => "PostScript if/ifelse lacked its procedures",
+            Self::ShadingUnsupported => "shading failed validation and paints nothing",
+            Self::MeshDecodeMalformed => "mesh shading /Decode array had the wrong length",
+            Self::MeshTruncated => "mesh stream ran out mid-record",
+            Self::TilingStepInvalid => "tiling pattern /XStep or /YStep was zero or not finite",
+            Self::TilingRangeOverflow => "tiling pattern tile indices did not fit an i32",
+            Self::ImageBadBitDepth => "image /BitsPerComponent was not 1, 2, 4, 8 or 16",
+            Self::ImageBadDimensions => "image /Width or /Height was zero, negative, or too large",
+            Self::ImageDimensionsFromCodec => "codec dimensions differed from the dictionary's",
+            Self::JpxColorSpaceOverride => "JPEG 2000 codestream colour space replaced the dictionary's",
+            Self::ImageDecodeFailed => "codec refused an embedded image",
+            Self::MaskDropped => "image mask could not be loaded; base image kept unmasked",
+            Self::ImageStreamTruncated => "image data ended early; remainder zero-filled",
+            Self::ColorKeyArrayShort => "colour-key /Mask array was short; missing ranges default to zero",
+            Self::MediaBoxDefaulted => "page /MediaBox was missing or empty; US Letter used",
+            Self::OptionalContentPolicyUnknown => "optional-content /P policy is not one of the four defined",
+            Self::TextObjectDegenerate => "text object had no width and was dropped",
+            Self::TextObjectDropped => "text object dropped because the one before it showed no glyphs",
+            Self::TextObjectDuplicate => "text object was a redraw of a recent one and was dropped",
+            Self::TextCharcodesUnmapped(_) => "character codes had no Unicode mapping",
+            Self::TextCharcodeZero => "character code zero emitted a NUL",
+            Self::TextActualTextUnprintable => "/ActualText held no printable character",
+            Self::TextActualTextCharDropped => "/ActualText character at or above U+FFFD skipped",
+            Self::TextHyphenNoPrevChar => "soft hyphen had no preceding character to attach to",
+            Self::NavigationCycle => "navigation walk revisited a node it had already seen",
+            Self::TreeDepthExceeded => "tree exceeded its depth cap; lookup answered not-found",
+            Self::NameTreeLimitsRepaired => "name-tree /Limits array was short or reversed",
+            Self::NameTreeMalformed => "name-tree /Names array had an odd length",
+            Self::LegacyNamedDest => "named destination resolved through the pre-1.2 /Dests dictionary",
+            Self::DestPageUnresolved => "destination page could not be turned into an index",
+            Self::AnnotSubtypeUnknown => "annotation /Subtype matched no known spelling",
+            Self::AppearanceGenerated => "appearance stream generated for an annotation that had none",
+            Self::QuadPointsTruncated => "/QuadPoints length was not a multiple of eight",
+            Self::InkPathDropped => "/InkList sub-array was too short or had an odd length",
+            Self::DefaultAppearanceMalformed => "/DA string held no Tf operator",
+            Self::FormResourcesInvalid => "/DR /Font is not a dictionary of font dictionaries",
+            Self::FieldSkippedNoType => "form field carries no /FT",
+            Self::FieldSkippedNoName => "form field's qualified name came out empty",
+            Self::StructElementDropped => "structure element dropped",
+            Self::PageLabelStyleUnknown => "page label /S names no known numbering style",
+            Self::ScriptLimitReached => "script exhausted a limit and was stopped",
+            Self::ScriptFailed => "script threw or would not parse and was abandoned",
+            Self::TimeLimitReached => "time limit passed; the result is partial",
+        }
+    }
+}
+
+impl core::fmt::Display for DiagKind {
+    /// The [`message`](DiagKind::message) clause, with any count the variant
+    /// carries appended: `character codes had no Unicode mapping (3)`.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.message())?;
+        match self {
+            Self::TextCharcodesUnmapped(n) => write!(f, " ({n})"),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// One recorded recovery.
