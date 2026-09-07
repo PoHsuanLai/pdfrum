@@ -149,8 +149,9 @@ impl PlacedGlyph {
 ///
 /// Three spaces compose. Outlines arrive scaled to **1000 units per em**, so
 /// the font size divides by a thousand to reach text space. `pen` is the
-/// glyph's origin in that same text space, where the pen advances left to
-/// right and y grows *upward*. And `text_to_device` — which is
+/// glyph's origin in that same text space, where y grows *upward* and the
+/// pen advances along whichever axis the writing mode names. And
+/// `text_to_device` — which is
 /// `pdfrum-page`'s `TextObject::matrix`, already carrying the CTM, the text
 /// matrix and the horizontal scale, composed with the page-to-device
 /// transform — takes it the rest of the way.
@@ -617,6 +618,12 @@ pub fn place_glyphs_into(
         return;
     }
     let mut pen = object.matrix.inverse() * object.position;
+    // Writing mode 1 walks the advance down the *y* axis rather than along x
+    // (ISO 32000-1 §9.4.4). `item.width` already carries `w1` from `/W2` and
+    // `/DW2` rather than the horizontal width, so the two modes differ only in
+    // which coordinate the pen accumulates into and in the position vector
+    // each glyph is displaced by below.
+    let vertical = font.is_vertical();
     let subst_weight = font.subst().map_or(0, pdfrum_font::SubstFont::raw_weight);
     let subst_italic = font.subst().map_or(0, |s| s.italic_angle);
     let widths_drive_the_design = width_drives_the_design_space(font);
@@ -660,6 +667,18 @@ pub fn place_glyphs_into(
                     // they apply to this glyph's origin and matrix and the pen
                     // walks on as if neither were there.
                     let japan1 = japan1_adjust(font, &item, *size);
+                    // The position vector `v` carries the glyph from its
+                    // horizontal origin to its vertical one, so it is
+                    // *subtracted* to place the outline against the vertical
+                    // pen (ISO 32000-1 §9.7.4.3). It moves the glyph alone:
+                    // the pen has already taken `w1` and walks on regardless.
+                    let vert_origin = if vertical {
+                        let (vx, vy) = font.vert_origin(item.code).unwrap_or((0.0, 880.0));
+                        let scale = f64::from(*size) / 1000.0;
+                        Vec2::new(-f64::from(vx) * scale, -f64::from(vy) * scale)
+                    } else {
+                        Vec2::ZERO
+                    };
                     let space = if spacing {
                         #[expect(
                             clippy::cast_possible_truncation,
@@ -680,7 +699,7 @@ pub fn place_glyphs_into(
                         outline,
                         matrix: glyph_matrix(
                             *size,
-                            pen + japan1.origin + space.origin,
+                            pen + japan1.origin + space.origin + vert_origin,
                             text_to_device,
                         ) * japan1.matrix
                             * space.matrix,
@@ -689,7 +708,11 @@ pub fn place_glyphs_into(
                     });
                 }
             }
-            pen.x += advance + word;
+            if vertical {
+                pen.y += advance + word;
+            } else {
+                pen.x += advance + word;
+            }
         }
         // `TextSegment::kerning` is the adjustment that **follows** its
         // string, and a leading one is carried separately as the object's
@@ -698,7 +721,12 @@ pub fn place_glyphs_into(
         // leading adjustment and dropped the last one, which put every kerned
         // run one adjustment out of place. It is negated: a positive `TJ`
         // number moves text *left*.
-        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
+        let kern = f64::from(segment.kerning) / 1000.0 * f64::from(*size);
+        if vertical {
+            pen.y -= kern;
+        } else {
+            pen.x -= kern;
+        }
     }
     if snaps_origins(opts, kinds, *size, text_to_device) {
         snap_run(out, opts.text_aa);
