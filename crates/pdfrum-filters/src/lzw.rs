@@ -55,7 +55,9 @@ const CHUNK: usize = 64 * 1024;
 /// # Errors
 ///
 /// [`Error::LzwMalformed`] for the two rejections above, and
-/// [`Error::OutputTooLarge`] past `limits.max_decoded_stream_len`.
+/// [`Error::OutputTooLarge`] when the stream has more to say than
+/// `limits.max_decoded_stream_len` bytes. The buffer never grows past that
+/// bound, so the error costs no more memory than the bound allows.
 pub fn decode_lzw(
     input: &[u8],
     early_change: bool,
@@ -78,12 +80,17 @@ pub fn decode_lzw(
     let mut rejected = false;
 
     loop {
-        if written > limits.max_decoded_stream_len {
+        // The budget is a ceiling on the buffer, not just on the result:
+        // growing past it and truncating afterwards would let a bomb allocate
+        // the very memory the limit exists to deny. Room of zero means the
+        // previous round filled the buffer exactly and the stream wants more.
+        let room = limits.max_decoded_stream_len.saturating_sub(written);
+        if room == 0 {
             return Err(Error::OutputTooLarge {
                 limit: limits.max_decoded_stream_len,
             });
         }
-        out.resize(written.saturating_add(CHUNK), 0);
+        out.resize(written.saturating_add(CHUNK.min(room)), 0);
         // Unreachable `else`: the resize above just made this range exist.
         let Some(tail) = out.get_mut(written..) else {
             break;
@@ -121,11 +128,6 @@ pub fn decode_lzw(
     }
     if out.is_empty() {
         return Err(Error::LzwMalformed("the stream decodes to no bytes"));
-    }
-    if out.len() > limits.max_decoded_stream_len {
-        return Err(Error::OutputTooLarge {
-            limit: limits.max_decoded_stream_len,
-        });
     }
     if !complete {
         diags.record(

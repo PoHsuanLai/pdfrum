@@ -105,6 +105,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "filters_ccitt"
+path = "fuzz_targets/filters_ccitt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "filters_chain"
 path = "fuzz_targets/filters_chain.rs"
 test = false
