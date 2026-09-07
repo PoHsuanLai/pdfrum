@@ -83,8 +83,8 @@ jobs:
           cargo install cbindgen --locked
 
       - name: The gate
-        # Runs fmt, clippy, nextest, doctests, rustdoc, the public-API
-        # snapshot, cargo-deny, the pure-Rust dependency-tree check, the C
-        # header and C test, the WebAssembly tests, and a cargo check of
-        # the fuzz workspace.
+        # Runs fmt, clippy, pdfrum feature combinations, nextest, doctests,
+        # rustdoc, the public-API snapshot, cargo-deny, the pure-Rust
+        # dependency-tree check, the C header and C test, the WebAssembly
+        # tests, and a cargo check of the fuzz workspace.
         run: ./scripts/ci.nu

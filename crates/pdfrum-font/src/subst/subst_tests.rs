@@ -895,20 +895,23 @@ mod database_selection {
         }
     }
 
-    /// The flag reaches the scan rather than being inert: with it set and no
-    /// directories named, the database is the system's, so it holds whatever
-    /// is installed — which is *not* the empty set this crate's tests
-    /// otherwise see. Asserted as "a scan happened", not as a family name,
-    /// because which faces exist is the machine's business and a machine with
-    /// no fonts at all must still pass.
+    /// The scan enumerates a directory we populate, not the host's font path,
+    /// so the answer does not depend on which fonts the machine has installed.
+    /// The cmap-only `tt_*.ttf` fixtures in this crate are too stripped for
+    /// `fontdb` to accept; a real face from the facade's fixtures is.
     #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     #[test]
-    fn the_system_flag_reaches_the_scan() {
-        let scanned = SystemFontDb::scan(&[]);
-        let hermetic =
-            SystemFontDb::scan(&[std::env::temp_dir().join("pdfrum-subst-empty-font-dir")]);
-        // The hermetic directory was created empty above; the system's is a
-        // superset of it, and on any machine that has fonts, a strict one.
-        assert!(scanned.faces().len() >= hermetic.faces().len());
+    fn a_named_directory_of_fonts_is_what_gets_scanned() {
+        let empty = std::env::temp_dir().join("pdfrum-subst-empty-font-dir");
+        std::fs::create_dir_all(&empty).expect("empty dir");
+        let populated = std::env::temp_dir().join("pdfrum-subst-populated-font-dir");
+        std::fs::create_dir_all(&populated).expect("populated dir");
+        let src =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pdfrum/tests/fixtures/roboto.ttf");
+        std::fs::copy(&src, populated.join("roboto.ttf")).expect("copy roboto");
+        let scanned = SystemFontDb::scan(&[populated]);
+        let hermetic = SystemFontDb::scan(&[empty]);
+        assert!(hermetic.faces().is_empty());
+        assert!(!scanned.faces().is_empty());
     }
 }
