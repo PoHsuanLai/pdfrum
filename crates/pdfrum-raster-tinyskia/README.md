@@ -1,7 +1,8 @@
 # pdfrum-raster-tinyskia
 
 [`tiny-skia`](https://crates.io/crates/tiny-skia) backend. Cross-check against
-`vello_cpu`. Layers and clips are emulated here (tiny-skia has neither).
+[`vello_cpu`](https://crates.io/crates/vello_cpu). Layers and clips are emulated
+here (tiny-skia has neither).
 
 ```rust
 use pdfrum_raster_tinyskia::TinySkiaBackend;

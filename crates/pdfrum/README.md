@@ -82,5 +82,5 @@ its backend.
 
 ## License
 
-MIT OR Apache-2.0. Crate map and conformance numbers:
+MIT OR Apache-2.0. Crate map, changelog, and conformance numbers:
 [github.com/PoHsuanLai/pdfrum](https://github.com/PoHsuanLai/pdfrum).

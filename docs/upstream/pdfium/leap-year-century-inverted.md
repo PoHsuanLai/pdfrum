@@ -1,6 +1,6 @@
 # `IsLeapYear` has its century exception inverted: 2000 is not a leap year, 1900 is
 
-**Filed** as crbug.com/pdfium/555821585 on 2026-09-02.
+**Filed** as crbug.com/555821585 on 2026-09-02.
 
 **Fixed upstream** in `c60c84f5b` (2026-09-03), "Fix leap year calculation in fx_date_helpers", `Fixed: 555821585`; seen at checkout `a043bed4a` on 2026-09-05.
 

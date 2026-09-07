@@ -1,6 +1,6 @@
 # `util.printd` prints every weekday as Sunday (`dddd` / `ddd`)
 
-**Filed** as crbug.com/pdfium/555848529 on 2026-09-02.
+**Filed** as crbug.com/555848529 on 2026-09-02.
 
 **Fixed upstream** in `b39aa638b` (2026-09-03), "Fix weekday formatting in CJS_Util::printd()", `Fixed: 555848529`; seen at checkout `a043bed4a` on 2026-09-05.
 
