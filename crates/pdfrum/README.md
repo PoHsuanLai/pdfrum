@@ -1,6 +1,11 @@
 # pdfrum
 
-**A pure-Rust PDF engine: parse, render, extract text, edit.**
+**A composable PDF library built in Rust.**
+
+Tested against [PDFium](https://pdfium.googlesource.com/pdfium/)'s suite as a
+read-only oracle — not a binding. No C/C++ in the library build; `unsafe` is
+forbidden. No XFA, no viewer. JavaScript is off by default (`javascript`
+feature, [boa](https://boajs.dev/)). Every public type is `Send + Sync`.
 
 ```toml
 pdfrum = "0.1"
@@ -22,10 +27,6 @@ for page in doc.pages() {
 # Ok::<(), pdfrum::Error>(())
 ```
 
-A rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/), not a binding.
-No C/C++ in the library build; `unsafe` is forbidden. No XFA, no viewer.
-JavaScript is off by default (`javascript` feature, [boa](https://boajs.dev/)).
-
 ## A PDF file
 
 A PDF is a random-access file of objects (ISO 32000-1). `%PDF-m.n` names the
@@ -46,10 +47,9 @@ A render interprets the operators into a page-object graph, then a
 rasterizes. Damage the file survives is [`Document::diagnostics`], not an
 `Err`.
 
-This crate is the facade — [`Document`], [`Page`], [`TextPage`], [`Form`].
-The rest of the workspace is public; [`Document::parser`], [`Page::objects`],
-[`PageEdit::graph`] and [`Annotation::dict`] are the escape hatches. Every
-public type is `Send + Sync`.
+This crate is the API — [`Document`], [`Page`], [`TextPage`], [`Form`]. The
+rest of the workspace is public; [`Document::parser`], [`Page::objects`],
+[`PageEdit::graph`] and [`Annotation::dict`] reach it.
 
 ## Where to start
 

@@ -3,15 +3,15 @@
   <img src="docs/assets/banner-light.svg" alt="pdfrum" width="100%">
 </picture>
 
-**A pure-Rust PDF engine: parse, render, extract text, edit.**
+**A composable PDF library built in Rust.**
+
+Tested against [PDFium](https://pdfium.googlesource.com/pdfium/)'s own suite
+as a read-only oracle — not a binding, and equally capable on the files that
+suite covers.
 
 ```toml
 pdfrum = "0.1"
 ```
-
-A rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/) — Chrome's PDF
-engine — not a binding. PDFium stays alongside as a differential test oracle,
-so recovery behaviour survives even where the code shares nothing.
 
 ```rust
 use pdfrum::{Document, RenderOptions, VelloCpuBackend};
@@ -20,138 +20,56 @@ let doc = Document::open("report.pdf")?;
 for page in doc.pages() {
     let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::scaled(2.0))?;
     let text = page.text().to_string();
-    println!("page {}: {}x{}, {} chars",
+    println!("page {}: {}×{}, {} chars",
         page.index(), pixmap.width(), pixmap.height(), text.len());
 }
 # Ok::<(), pdfrum::Error>(())
 ```
 
-The PDF spec describes files that are *correct*. Almost none are. Two decades
-of a browser opening whatever the web threw at it left PDFium with undocumented
-recovery folklore — how to find objects when the xref table lies, what to do
-with a stream whose `/Length` is wrong. That folklore is ported. Everything
-else is designed for Rust: enums, ownership, `Result`, an explicit diagnostics
-channel.
+## What you get
 
-No C or C++ is compiled into any library build (`cargo-deny` bans `cc`).
-`unsafe_code = "forbid"` in every crate except the C ABI. GPU `*-sys` shims
-live only in `pdfrum-raster-vello`, never in a default tree.
+Open a file once. Ask it questions. Rendering is one of them.
 
-Out of scope, permanently: XFA, and any viewer (no window, caret, or widget
-chrome). This turns pages into pixels and text into strings.
+- **Pages** — boxes, rotation, the object graph a page paints
+- **Text** — reading order, search, selection, words with geometry
+- **Images, fonts, attachments, signatures** — as stored, decoded when that
+  is useful
+- **Forms** — read values, fill them, run a live session
+- **Outline, links, annotations, tagged structure**
+- **Pixels** — name a rasterizer; defaults to `vello-cpu`
+- **A new file** — edit, stamp, merge, flatten, save full or incremental
 
-## Features
+A damaged file that can be opened *is* opened. What was repaired is
+`Document::diagnostics`, not an `Err`.
 
-| feature | default | adds |
-|---|:---:|---|
-| `vello-cpu` | on | default rasterizer, `VelloCpuBackend` |
-| `tinyskia`, `agg` | off | `TinySkiaBackend`, `AggBackend` |
-| `vello-gpu` | off | GPU rasterizer over `wgpu`; never in a default tree |
-| `edit` | on | save, edit, attachments, flatten, font subsetting |
-| `forms` | on | form reader and interactive session |
-| `javascript` | off | run the document's own scripts (implies `forms`) |
-| `codecs-all` = `jpx` + `jbig2` + `ccitt` | on | JPEG 2000, JBIG2, CCITT; Flate and JPEG are always in |
-| `system-fonts` | on | substitute a missing font from the host (never on wasm32) |
-| `markdown` | off | `Page::markdown` |
-| `svg` | off | SVG export |
-| `svg-ingest` | off | draw an SVG into a page |
-| `png` | off | `Pixmap::encode_png` / `save_png` |
-| `profiling` | off | stage timers for `scripts/profile.nu` |
+![pdfrum CLI: info, doctor, extract, search](docs/assets/cli/pdfrum-cli.gif)
 
-`default-features = false` is a parser, text extractor, outline and signature
-reader. A render always names its backend.
-
-```toml
-pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all", "system-fonts"] }
+```sh
+pdfrum info report.pdf
+pdfrum doctor damaged.pdf
+pdfrum extract toc report.pdf
+pdfrum search ISO paper.pdf
 ```
 
-## JavaScript is off by default
+Pages also draw in the terminal (`preview`, `view`). The rest of the catalog
+— `pages`, `forms`, `stamp`, `render`, `serve --stdio` / `--mcp` — is
+[`pdfrum-cli`](crates/pdfrum-cli/README.md).
 
-Default features read scripts as data and never run them. The
-`javascript` feature turns them on behind [boa](https://boajs.dev/).
-`app.alert`, `Doc.submitForm` and `app.launchURL` come back as values for
-the host; no socket, file or process is reachable from a script.
-
-```toml
-pdfrum = { version = "0.1", features = ["javascript"] }
+```sh
+cargo install pdfrum-cli
 ```
 
-## Crate map
-
-The facade is the API. Everything under it is a public library; reach past
-`pdfrum` when you need to. Dependencies flow leaf-to-root: nothing below
-`pdfrum-page` depends on rendering.
-
-| Crate | Replaces (C++) | Contents |
-|---|---|---|
-| **`pdfrum`** | `fpdfsdk/` public API | Facade: `Document`, `Page`, `TextPage`, `Form`. Composition only. |
-| `pdfrum-common` | `fxcrt` residue | `Diagnostics`, `Limits`; re-exports `kurbo`. |
-| `pdfrum-object` | parser objects | `Object`, `Dict`/`Array`/`Stream`, `ObjRef`, `Resolve`. |
-| `pdfrum-crypt` | `fdrm` | RC4, AES-CBC, standard security handler rev 2–6. |
-| `pdfrum-filters` | `fxcodec` (basic) | Flate, LZW, RunLength, ASCIIHex/85, CCITT, predictors. |
-| `pdfrum-parser` | `fpdfapi/parser` | Lexer, xref, object streams, encryption, **damaged-file recovery**. |
-| `pdfrum-cmap` | `fpdfapi/cmaps` | CJK CMap tables. |
-| `pdfrum-type1` | FreeType Type1 | PFA/PFB and charstrings. |
-| `pdfrum-font` | `fpdfapi/font` + `fxge` | Encodings, ToUnicode, outlines (`skrifa`), substitution (`fontdb`). |
-| `pdfrum-page` | `fpdfapi/page` | Content interpreter, colorspaces, functions, shadings 1–7, transparency. |
-| `pdfrum-render` | `fpdfapi/render` + `fxge` | `RenderDevice` / `RasterBackend`, compositor, resampling. |
-| `pdfrum-raster-vello-cpu` | Skia | Default rasterizer. |
-| `pdfrum-raster-tinyskia` | AGG | Cross-check rasterizer. |
-| `pdfrum-text` | `fpdftext` | Extraction, search, selection, links. |
-| `pdfrum-doc` | `fpdfdoc` | Bookmarks, dests, annots, AcroForm, structure tree. |
-| `pdfrum-form` | `fpdfsdk` forms | Widget events, `FormSession`. `javascript` is default-off. |
-| `pdfrum-script` | `AF*` / `util.*` | Pure helpers; boa stays behind `javascript`. |
-| `pdfrum-edit` | `fpdfapi/edit` | Serializer, incremental update, page import, subsetting. |
-| `pdfrum-raster-agg` | AGG | Analytic scanline rasterizer. |
-| `pdfrum-raster-vello` | GPU Skia | `vello`/`wgpu`. `publish` crate, never a default dep. |
-| `pdfrum-tool` | `pdfium_test` | Oracle-flag CLI for the harness. Not on crates.io. |
-| `pdfrum-markdown` | — | Markdown from a page. Facade feature `markdown`. |
-| `pdfrum-cli` | — | Human CLI: `info`, `doctor`, `render`, `extract …`. |
-| `pdfrum-capi` | C ABI | [`libpdfrum`](crates/pdfrum-capi/README.md) |
-| `pdfrum-wasm` | — | [JavaScript binding](crates/pdfrum-wasm/README.md) |
-| `pdfrum-svg` | — | SVG export. Facade feature `svg`. |
-| `conformance/` | `testing/tools` | Differential harness. Not published. |
-
-## Conformance
-
-Correctness is agreement with PDFium. Live numbers:
-`conformance/scoreboard.json` (2026-09-06).
-
-- **Tier A — byte-exact.** Text, metadata, pageinfo, structure, annot dumps,
-  decoded image bytes, page counts.
-- **Tier B — perceptual.** Rendered pages vs golden PNGs, SSIM. A passing
-  test's threshold is never loosened (`conformance/thresholds.toml`).
-- **Tier C — cross-backend.** `vello_cpu` vs `tiny-skia` on our engine.
+## Attributes
 
 | | |
-|---|---:|
-| Files passing every tier | **1675 / 1759 (95.2%)** |
-| Load without crashing | 100% |
-| Page counts agree | 1757 / 1759 |
-| Text pages byte-exact | 2020 / 2067 (97.7%) |
-| Render SSIM ≥ 0.99 | 1632 / 1668 (97.8%) |
+|---|---|
+| Safe | `unsafe` is forbidden in the library. The C ABI is the one exception, and only at `extern "C"`. |
+| Pure Rust | no C/C++ in a library build |
+| Thread-safe | every public type is `Send + Sync` |
+| JavaScript | off. The `javascript` feature runs the document's own scripts; nothing they call reaches a socket, a file, or a process. |
+| Not a viewer | no window, caret, or widget chrome. No XFA. |
 
-## Building
-
-```bash
-cargo build --workspace
-cargo nextest run
-cargo test --doc --workspace
-./scripts/ci.nu
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for tools, the oracle, and
-`conformance/scoreboard.json`.
-
-```bash
-cargo run --example render-to-png -- input.pdf out/ 2.0
-cargo run --example extract-text -- input.pdf
-cargo run -p conformance -- run
-```
-
-## Parallelism
-
-Every public type is `Send + Sync`. One `RenderSession` per worker:
+Share a `Document` across threads; give each worker its own `RenderSession`.
 
 ```rust
 use rayon::prelude::*;
@@ -160,7 +78,6 @@ use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 let doc = Document::open("big.pdf")?;
 let pages: Vec<_> = doc.pages().collect();
 let backend = VelloCpuBackend::new();
-
 let pixmaps: Vec<_> = pages
     .par_iter()
     .map_init(RenderSession::new, |session, page| {
@@ -170,26 +87,74 @@ let pixmaps: Vec<_> = pages
 # Ok::<(), pdfrum::Error>(())
 ```
 
+C: [`pdfrum-capi`](crates/pdfrum-capi). WebAssembly:
+[`pdfrum-wasm`](crates/pdfrum-wasm).
+
+## ISO 32000
+
+What a `cargo add pdfrum` build does, and which feature turns the rest on.
+`default-features = false` is a parser and extractor; a render always names
+its backend.
+
+| | ISO 32000-1 | default | feature |
+|---|:---:|:---:|---|
+| File structure, objects, xref, incremental updates | §7 | yes | |
+| Standard encryption, revisions 2–6 | §7.6 | yes | |
+| Flate, LZW, RunLength, ASCIIHex/85, JPEG | §7.4 | yes | |
+| CCITT, JBIG2, JPEG 2000 | §7.4 | yes | `codecs-all` |
+| Paths, colour spaces, functions, shadings 1–7, transparency | §8 | yes | |
+| Type 1 / TrueType / Type 0 / Type 3 / CID, encodings, ToUnicode | §9 | yes | |
+| Host font fallback | | yes | `system-fonts` (not on wasm32) |
+| Annotations, outlines, destinations | §12 | yes | |
+| AcroForm | §12.7 | yes | `forms` |
+| Signatures, as written (unverified) | §12.8 | yes | |
+| Text extraction, search, selection | §14.8 | yes | |
+| Tagged structure tree | §14.8 | yes | |
+| Edit, save, subset, attachments | §7.5.8 | yes | `edit` |
+| PDF/A check | ISO 19005 | yes | |
+| PDF/A convert | ISO 19005 | yes | `edit` |
+| Document JavaScript | | off | `javascript` |
+| Markdown | | off | `markdown` |
+| SVG export | | off | `svg` |
+| Draw an SVG into a page | | off | `svg-ingest` |
+| Extra CPU rasterizers | | off | `tinyskia`, `agg` |
+| GPU rasterizer | | off | `vello-gpu` |
+| `Pixmap` → PNG | | off | `png` |
+| XFA | | no | |
+| Public-key encryption (`Adobe.PubSec`) | | no | |
+
+```toml
+pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all"] }
+```
+
+## Against PDFium
+
+Correctness is agreement with PDFium on its test files. Live board:
+`conformance/scoreboard.json` (2026-09-06).
+
+| | |
+|---|---:|
+| Files passing every tier | **1675 / 1759 (95.2%)** |
+| Load without crashing | 100% |
+| Page counts agree | 1757 / 1759 |
+| Text pages byte-exact | 2020 / 2067 (97.7%) |
+| Render SSIM ≥ 0.99 | 1632 / 1668 (97.8%) |
+
 ## Docs
 
 | | |
 |---|---|
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Build, gate, board, style |
-| [CHANGELOG.md](CHANGELOG.md) | What changed |
-| [SECURITY.md](SECURITY.md) | Vulnerability reports |
-| [docs/roadmap.md](docs/roadmap.md) | What's next |
-| [docs/](docs/README.md) | Benchmarks, API snapshots, upstream bugs |
+| [docs.rs/pdfrum](https://docs.rs/pdfrum) | crate API |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | build, gate, board |
+| [CHANGELOG.md](CHANGELOG.md) | what changed |
+| [SECURITY.md](SECURITY.md) | vulnerability reports |
 
 ## Licence
 
 Apache-2.0 or MIT, at your option. Contributions are dual-licensed the same
 way.
 
-This is an independent reimplementation: no PDFium *source* is in the tree.
-PDFium is an external test oracle only. Upstream **data** that does travel
-with the repo sits beside a `PROVENANCE.md`:
-
-- Foxit fallback fonts in `crates/pdfrum-font/fontdata/` (BSD-3-Clause)
-- CJK CMaps in `crates/pdfrum-cmap/tables/` and Unicode tables in
-  `crates/pdfrum-text/tables/`
-- a handful of test PDFs copied from `testing/resources` (BSD-3-Clause)
+No PDFium source is in the tree. Upstream **data** that does travel with the
+repo sits beside a `PROVENANCE.md`: Foxit fallback fonts
+(`crates/pdfrum-font/fontdata/`, BSD-3-Clause), CJK CMaps and Unicode tables,
+and a handful of test PDFs (BSD-3-Clause).

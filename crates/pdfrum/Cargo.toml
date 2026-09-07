@@ -1,6 +1,6 @@
 [package]
 name = "pdfrum"
-description = "Pure-Rust PDF engine: parse, render, extract text, edit"
+description = "A composable PDF library built in Rust"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
