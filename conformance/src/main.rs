@@ -56,6 +56,16 @@ use scoreboard::{FileResult, Scoreboard};
 /// `--oracle` / `$PDFRUM_ORACLE_BIN` override it outright.
 const DEFAULT_ORACLE: &str = "out/Release/pdfium_test";
 
+/// Fallback path to the tool under test, relative to the repository root.
+///
+/// A guess, not a contract: `CARGO_TARGET_DIR` moves cargo's output tree, and
+/// where it is set this path holds either nothing or an artifact from before
+/// the redirect — a stale binary that answers every probe and scores a
+/// scoreboard against code nobody is reading. `--tool` / `PDFRUM_TOOL` with
+/// the path `cargo` itself reports is the reliable spelling; every run prints
+/// the resolved path and its mtime so a board can be dated either way.
+const DEFAULT_TOOL: &str = "target/release/pdfrum-tool";
+
 /// The environment spelling of `--allow-dirty-oracle`.
 ///
 /// Any non-empty value other than `0` enables the override, so both `=1` and
@@ -454,17 +464,29 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         binary: args
             .tool
             .clone()
-            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+            .unwrap_or_else(|| repo_root().join(DEFAULT_TOOL)),
         font_dir: args
             .font_dir
             .clone()
             .unwrap_or_else(|| checkout.join("third_party/test_fonts")),
     };
-    let state = run::probe_tool(&tool);
-    if let ToolState::Unsupported(reason) = &state {
-        eprintln!("conformance: {reason}");
-        eprintln!("conformance: every file will be tagged `unsupported-tool`.");
+    // Resolve and verify the binary *before* the walk. A tool that cannot
+    // answer the probe cannot answer for the corpus either, so the walk —
+    // minutes of work whose every row would read `unsupported-tool` — is not
+    // worth starting.
+    let provenance = run::ToolProvenance::of(&tool.binary);
+    if let ToolState::Unsupported(reason) = run::probe_tool(&tool) {
+        bail!(
+            "{reason}\n\
+             Build it with `cargo build -p pdfrum-tool --release --features javascript` \
+             and pass the path `cargo` reports, since CARGO_TARGET_DIR may move it \
+             out of <repo>/target."
+        );
     }
+    // On the record before anything is measured: a binary that answers the
+    // probe can still be months old, and a scoreboard whose provenance is
+    // printed is one a reviewer can date.
+    eprintln!("conformance: {}", provenance.summary());
 
     let suppressed = load_suppressions(&checkout)?;
     let listing = corpus::list(&Roots::under(&checkout), &suppressed)
@@ -473,6 +495,10 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
     if let Some(limit) = args.corpus.limit {
         entries.truncate(limit);
     }
+    // What the corpus listing yielded, kept so the row count can be checked
+    // against it once the walk is done. `--limit` makes a short walk the
+    // point, so the check only applies to a full one.
+    let walked = args.corpus.limit.is_none().then_some(entries.len());
 
     let thresholds = load_thresholds()?;
 
@@ -483,7 +509,7 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
     let per_file = score_entries(
         entries,
         &tool,
-        &state,
+        &ToolState::Ready,
         &store,
         &thresholds,
         &fixup,
@@ -502,17 +528,26 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         // mean the row can be deleted — so say so rather than leave it to rot.
         println!("divergence for {path} is inert; the file agrees with the oracle");
     }
-    let board = Scoreboard::new(now_utc(), per_file);
+    let board = Scoreboard::new(now_utc(), per_file).with_tool(provenance);
     let out = args
         .out
         .clone()
         .unwrap_or_else(|| conformance_dir().join("scoreboard.json"));
+
+    // Refuse before writing, never after: the scoreboard is the project's
+    // headline claim, and overwriting a real one with a board that measured
+    // nothing is the failure this guards.
+    let totals = board.totals();
+    if let Err(invalid) = totals.validity() {
+        bail!("refusing to write {}: {invalid}", out.display());
+    }
+    check_corpus_size(totals.files, walked);
+
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent).ok();
     }
     std::fs::write(&out, board.to_text()).with_context(|| format!("writing {}", out.display()))?;
 
-    let totals = board.totals();
     // Three numbers, always. `files` is the denominator the rate is taken
     // over, and `diverged` sits outside it rather than inside `pass`, so a
     // reader can never mistake an excused row for a matched one.
@@ -591,6 +626,43 @@ fn inert_divergences(
         .filter(|path| !diverged.contains(path.as_str()))
         .cloned()
         .collect()
+}
+
+/// The corpus size a healthy run walks.
+///
+/// Derived from the committed scoreboard rather than hardcoded independently:
+/// that board is the reference measurement, and a run that walks materially
+/// fewer files than it did is looking at a different corpus — a partial
+/// checkout, a suppression list that grew, a `--checkout` pointing somewhere
+/// unexpected.
+const EXPECTED_ROWS: u64 = 1759;
+
+/// How far the row count may drift before it is worth saying so.
+///
+/// The corpus moves with the oracle checkout, so an exact match is the wrong
+/// test; a tenth is loose enough that a routine upstream roll is quiet and
+/// tight enough that the 5% shortfall of a broken walk is not.
+const ROW_DRIFT: f64 = 0.1;
+
+/// Warns when a full run's row count is far from the reference board's.
+///
+/// A warning rather than a refusal: unlike an all-unsupported board, a
+/// different count is genuinely ambiguous — the corpus legitimately changes —
+/// so this reports the discrepancy and leaves the judgement to the reader.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a corpus file count is far inside f64's exact integer range"
+)]
+fn check_corpus_size(rows: u64, walked: Option<usize>) {
+    let Some(walked) = walked else { return };
+    let drift = (rows as f64 - EXPECTED_ROWS as f64).abs() / EXPECTED_ROWS as f64;
+    if drift > ROW_DRIFT {
+        eprintln!(
+            "conformance: warning: {rows} scoreboard rows from {walked} corpus files, \
+             against {EXPECTED_ROWS} rows in the reference board. Check that \
+             --checkout / PDFRUM_ORACLE_CHECKOUT names the full pdfium C++ checkout."
+        );
+    }
 }
 
 /// Scores every listing entry, plus a `#form-events` row when a sibling
@@ -688,7 +760,7 @@ fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
         binary: args
             .tool
             .clone()
-            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+            .unwrap_or_else(|| repo_root().join(DEFAULT_TOOL)),
         font_dir: args
             .font_dir
             .clone()
@@ -823,7 +895,7 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
         binary: args
             .tool
             .clone()
-            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+            .unwrap_or_else(|| repo_root().join(DEFAULT_TOOL)),
         font_dir: font_dir.clone(),
     };
     let oracle = OraclePaths {
@@ -908,7 +980,7 @@ fn mutate_round_trip(args: &MutateArgs) -> Result<ExitCode> {
         binary: args
             .tool
             .clone()
-            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+            .unwrap_or_else(|| repo_root().join(DEFAULT_TOOL)),
         font_dir: font_dir.clone(),
     };
     let oracle = OraclePaths {
@@ -1059,6 +1131,14 @@ fn now_utc() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
+    stamp_utc(secs)
+}
+
+/// Renders seconds-since-epoch in the same shape [`now_utc`] uses.
+///
+/// Shared with the tool provenance stamp so a scoreboard's `generated_at` and
+/// the recorded binary mtime read in one format.
+pub fn stamp_utc(secs: u64) -> String {
     let (days, rem) = (secs / 86_400, secs % 86_400);
     let (hour, minute, second) = (rem / 3600, (rem % 3600) / 60, rem % 60);
     let (year, month, day) = civil_from_days(i64::try_from(days).unwrap_or(0));
@@ -1239,5 +1319,33 @@ mod tests {
         assert_eq!(civil_from_days(19_723), (2024, 1, 1));
         assert_eq!(civil_from_days(19_782), (2024, 2, 29)); // a leap day
         assert_eq!(civil_from_days(20_694), (2026, 8, 29));
+    }
+
+    #[test]
+    fn the_reference_row_count_matches_the_committed_scoreboard() {
+        // The constant is only a useful tell while it agrees with the board it
+        // was derived from.
+        let text = std::fs::read_to_string(conformance_dir().join("scoreboard.json")).unwrap();
+        let board = Scoreboard::from_text(&text).unwrap();
+        assert_eq!(board.totals().files, EXPECTED_ROWS);
+    }
+
+    #[test]
+    fn the_default_tool_path_is_the_documented_one() {
+        assert_eq!(DEFAULT_TOOL, "target/release/pdfrum-tool");
+    }
+
+    #[test]
+    fn the_row_drift_budget_accepts_the_reference_count_and_rejects_a_broken_walk() {
+        let drift = |rows: u64| {
+            #[expect(clippy::cast_precision_loss, reason = "small counts")]
+            let value = (rows as f64 - EXPECTED_ROWS as f64).abs() / EXPECTED_ROWS as f64;
+            value
+        };
+        assert!(drift(EXPECTED_ROWS) <= ROW_DRIFT);
+        // A routine upstream corpus roll stays quiet.
+        assert!(drift(1_800) <= ROW_DRIFT);
+        // A walk that lost a third of the corpus does not.
+        assert!(drift(1_100) > ROW_DRIFT);
     }
 }
