@@ -44,7 +44,7 @@ fn extract(content: &str) -> TextPage {
 
 fn extract_with(content: &str, font: &str) -> TextPage {
     let pdf = build_pdf(content, font);
-    let doc = pdfrum_parser::load(pdf.into(), &pdfrum_parser::LoadOptions::default())
+    let doc = pdfrum_parser::load(pdf, &pdfrum_parser::LoadOptions::default())
         .expect("the synthesized document loads");
     let page = doc.page(0).expect("one page");
     let limits = Limits::default();

@@ -281,7 +281,6 @@ pub fn pdfrum_object::ByteSpan::empty() -> Self
 pub fn pdfrum_object::ByteSpan::is_empty(&self) -> bool
 pub fn pdfrum_object::ByteSpan::len(&self) -> usize
 pub fn pdfrum_object::ByteSpan::new(alloc::sync::Arc<[u8]>, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
-pub fn pdfrum_object::ByteSpan::range(&self) -> core::ops::range::Range<usize>
 pub fn pdfrum_object::ByteSpan::subspan(&self, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
 pub fn pdfrum_object::ByteSpan::whole(alloc::sync::Arc<[u8]>) -> Self
 impl core::cmp::Eq for pdfrum_object::ByteSpan
@@ -289,6 +288,8 @@ impl core::cmp::PartialEq for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::eq(&self, &Self) -> bool
 impl core::convert::AsRef<[u8]> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::as_ref(&self) -> &[u8]
+impl core::convert::From<alloc::sync::Arc<[u8]>> for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::from(alloc::sync::Arc<[u8]>) -> Self
 impl core::convert::From<alloc::vec::Vec<u8>> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::from(alloc::vec::Vec<u8>) -> Self
 impl core::fmt::Debug for pdfrum_object::ByteSpan

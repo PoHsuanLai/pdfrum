@@ -303,7 +303,7 @@ fn ingest_and_render(svg: &str) -> (ssim::Image, Vec<Unsupported>) {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("the document saves");
-    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let saved = Document::from_bytes(bytes).expect("what we wrote reopens");
     let page = saved.page(0).expect("the page survives the save");
     let pixmap = pdfrum_render::render_page(
         &page.objects(),
@@ -591,7 +591,7 @@ fn compile_and_render(svg: &str) -> ssim::Image {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("the document saves");
-    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let saved = Document::from_bytes(bytes).expect("what we wrote reopens");
     let page = saved.page(0).expect("the page survives the save");
     let pixmap = pdfrum_render::render_page(
         &page.objects(),
@@ -703,7 +703,7 @@ fn ingested_text_is_outlines_rather_than_an_embedded_font() {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("the document saves");
-    let saved = Document::from_bytes(bytes.into()).expect("what we wrote reopens");
+    let saved = Document::from_bytes(bytes).expect("what we wrote reopens");
     let page = saved.page(0).expect("the page survives the save");
 
     let after = page.text().to_string();

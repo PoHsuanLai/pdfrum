@@ -25,8 +25,6 @@
 //! reference to an object whose own parse needs this stream, which the
 //! store's cycle guard turns into a missing length rather than a hang.
 
-use std::sync::Arc;
-
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, name_decode, names,
@@ -61,7 +59,7 @@ pub struct Context<'r, R: Resolve + ?Sized> {
     /// Where repairs are recorded.
     pub diags: &'r mut Diagnostics,
     /// The whole file, for cutting stream payloads out of without copying.
-    pub file: Option<&'r Arc<[u8]>>,
+    pub file: Option<&'r ByteSpan>,
     /// The object store, used only to resolve an indirect `/Length`.
     pub store: Option<&'r R>,
 }
@@ -467,7 +465,11 @@ pub(crate) fn read_stream<R: Resolve + ?Sized>(
 
     let data_end = data_start.saturating_add(length).min(file_len);
     let data = match ctx.file {
-        Some(file) => ByteSpan::new(Arc::clone(file), data_start..data_end)
+        // A window into the file the caller already holds: a refcount bump,
+        // never an allocation. The bounds are still checked — `data_start`
+        // and `data_end` derive from an untrusted `/Length`.
+        Some(file) => file
+            .subspan(data_start..data_end)
             .unwrap_or_else(|_| ByteSpan::empty()),
         // Parsing out of a detached buffer (an object stream's decoded
         // bytes) — copy, since there is no shared file to point into.
@@ -643,6 +645,7 @@ mod tests {
     use crate::error::Error;
     use crate::lexer::Lexer;
     use pdfrum_common::{DiagKind, Diagnostics, Limits};
+    use pdfrum_object::ByteSpan;
     use pdfrum_object::{NoResolve, ObjRef, Object, Resolve, names};
     use std::sync::Arc;
 
@@ -687,7 +690,7 @@ mod tests {
         store: &R,
         diags: &mut Diagnostics,
     ) -> Result<Object, Error> {
-        let file: Arc<[u8]> = Arc::from(input);
+        let file = ByteSpan::from(input.to_vec());
         let limits = Limits::default();
         let mut ctx = Context {
             limits: &limits,
@@ -1056,7 +1059,7 @@ mod tests {
 
     #[test]
     fn indirect_frames_need_their_header() {
-        let file: Arc<[u8]> = Arc::from(&b"7 0 obj << /A 1 >> endobj"[..]);
+        let file = ByteSpan::from(b"7 0 obj << /A 1 >> endobj".to_vec());
         let limits = Limits::default();
         let mut diags = Diagnostics::default();
         let mut ctx = Context {

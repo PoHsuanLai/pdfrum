@@ -79,7 +79,7 @@ fn resources() -> Option<PathBuf> {
 fn page_text(name: &str, index: u32) -> Option<TextPage> {
     let path = resources()?.join(name);
     let bytes = std::fs::read(path).ok()?;
-    let doc = pdfrum_parser::load(bytes.into(), &pdfrum_parser::LoadOptions::default()).ok()?;
+    let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default()).ok()?;
     let page = doc.page(index).ok()?;
     let limits = Limits::default();
     let mut diags = Diagnostics::default();

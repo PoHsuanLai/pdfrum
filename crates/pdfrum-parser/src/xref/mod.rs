@@ -25,10 +25,8 @@ mod classic;
 mod rebuild;
 mod stream;
 
-use std::sync::Arc;
-
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_object::{Dict, Name, Object, names};
+use pdfrum_object::{ByteSpan, Dict, Name, Object, names};
 
 pub(crate) use chain::XrefShape;
 pub(crate) use rebuild::rebuild;
@@ -551,16 +549,16 @@ pub fn read_xref(
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Dict), crate::Error> {
     // This entry point takes a plain slice, so it is the one place that has
-    // to pay for the reference count. Every reader inside the crate arrives
-    // through `read_xref_full` with the `Arc` it already holds.
-    let (xref, trailer, _) = read_xref_full(&Arc::from(file), limits, diags)?;
+    // to pay for the copy. Every reader inside the crate arrives through
+    // `read_xref_full` with the span it already holds.
+    let (xref, trailer, _) = read_xref_full(&ByteSpan::from(file.to_vec()), limits, diags)?;
     Ok((xref, trailer.dict))
 }
 
 /// Read cross-reference information, reporting the shape it turned out to
 /// have — see [`XrefShape`].
 pub(crate) fn read_xref_full(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Trailer, XrefShape), crate::Error> {

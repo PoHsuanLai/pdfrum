@@ -25,10 +25,8 @@
 //! *revised* — a `/Pages` node with a new `/MediaBox`, say — reaches a modern
 //! reader through the `/XRefStm` alone.
 
-use std::sync::Arc;
-
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_object::{NoResolve, Object, names};
+use pdfrum_object::{ByteSpan, NoResolve, Object, names};
 
 use crate::error::Error;
 use crate::lexer::{Lexer, Token, atoi64};
@@ -54,7 +52,7 @@ struct Section {
 /// returned flag says which happened, because a rebuilt table means the file
 /// cannot be incrementally saved.
 pub(crate) fn load(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<(Xref, Trailer, XrefShape), Error> {
@@ -65,7 +63,7 @@ pub(crate) fn load(
     // `memcpy` inside `open`, invisible to an instruction count — an AVX
     // copy moves 32 bytes per instruction — and plainly visible in wall
     // clock, where it also evicts every cache line the parse wanted.
-    let shared = Arc::clone(file);
+    let shared = file.clone();
     let start = start_xref(file, limits, diags);
 
     let mut xref = Xref::new();
@@ -128,7 +126,7 @@ impl XrefShape {
 }
 
 /// Does a classic `xref` table live at `pos`?
-fn probe_is_table(file: &Arc<[u8]>, pos: usize, limits: &Limits, diags: &mut Diagnostics) -> bool {
+fn probe_is_table(file: &ByteSpan, pos: usize, limits: &Limits, diags: &mut Diagnostics) -> bool {
     let mut probe = Xref::new();
     classic::parse_table(file, pos, true, &mut probe, limits, diags).is_some()
 }
@@ -171,7 +169,7 @@ pub(crate) fn start_xref(file: &[u8], limits: &Limits, diags: &mut Diagnostics) 
 /// to the rebuild. Everything read so far is left in `xref`, because the
 /// rebuild overlays rather than replaces.
 pub(crate) fn read_chain(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     pos: usize,
     xref: &mut Xref,
     trailer: &mut Trailer,
@@ -252,7 +250,7 @@ pub(crate) fn read_chain(
 /// `/Prev` is inside the stream, so there is no way to learn where to go next
 /// without reading it. Classic sections only have their offsets recorded.
 fn walk(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     main: usize,
     main_is_table: bool,
     xref: &mut Xref,
@@ -375,7 +373,7 @@ fn walk(
 
 /// Parse the cross-reference stream at `pos` and read its entries.
 fn read_stream_section(
-    file: &Arc<[u8]>,
+    file: &ByteSpan,
     pos: usize,
     is_main: bool,
     xref: &mut Xref,
@@ -422,7 +420,7 @@ fn apply_size(xref: &mut Xref, trailer: &Trailer, limits: &Limits) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use pdfrum_object::ByteSpan;
 
     use super::{load, start_xref};
     use crate::xref::Entry;
@@ -442,9 +440,13 @@ mod tests {
         Diagnostics,
     )> {
         let mut diags = Diagnostics::default();
-        load(&Arc::from(file), &Limits::default(), &mut diags)
-            .ok()
-            .map(|(x, t, s)| (x, t, s, diags))
+        load(
+            &ByteSpan::from(file.to_vec()),
+            &Limits::default(),
+            &mut diags,
+        )
+        .ok()
+        .map(|(x, t, s)| (x, t, s, diags))
     }
 
     #[test]

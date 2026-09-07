@@ -61,7 +61,7 @@ pub pdfrum_parser::WordBoundary::WhitespaceOrDelimiter
 pub struct pdfrum_parser::Document
 pub pdfrum_parser::Document::diags: pdfrum_common::diagnostics::Diagnostics
 impl pdfrum_parser::Document
-pub fn pdfrum_parser::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
+pub fn pdfrum_parser::Document::bytes(&self) -> &[u8]
 pub fn pdfrum_parser::Document::catalog(&self) -> core::result::Result<pdfrum_object::dict::Dict, pdfrum_parser::Error>
 pub fn pdfrum_parser::Document::encrypt_dict(&self) -> core::option::Option<(&pdfrum_object::dict::Dict, bool)>
 pub fn pdfrum_parser::Document::header_offset(&self) -> u64
@@ -150,7 +150,7 @@ pub fn pdfrum_parser::is_line_ending(u8) -> bool
 pub fn pdfrum_parser::is_numeric(u8) -> bool
 pub fn pdfrum_parser::is_whitespace(u8) -> bool
 pub fn pdfrum_parser::is_whole_word(&[u8], usize, usize, pdfrum_parser::WordBoundary) -> bool
-pub fn pdfrum_parser::load(alloc::sync::Arc<[u8]>, &pdfrum_parser::LoadOptions) -> core::result::Result<pdfrum_parser::Document, pdfrum_parser::LoadError>
+pub fn pdfrum_parser::load(impl core::convert::Into<pdfrum_object::stream::ByteSpan>, &pdfrum_parser::LoadOptions) -> core::result::Result<pdfrum_parser::Document, pdfrum_parser::LoadError>
 pub fn pdfrum_parser::parse_indirect_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_parser::Indirect, pdfrum_parser::Error>
 pub fn pdfrum_parser::parse_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_object::object::Object, pdfrum_parser::Error>
 pub fn pdfrum_parser::read_xref(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_parser::Xref, pdfrum_object::dict::Dict), pdfrum_parser::Error>

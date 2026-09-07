@@ -190,8 +190,9 @@ pub fn open_bytes_with(
     password: Option<&str>,
     limits: &Limits,
 ) -> Result<Document> {
+    // Straight in, no `.into()`: the vector's allocation is adopted.
     Ok(Document::from_bytes_with(
-        bytes.into(),
+        bytes,
         &options(password, limits),
     )?)
 }

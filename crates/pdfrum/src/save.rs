@@ -584,7 +584,7 @@ impl DocEdit<'_> {
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
     ///
-    /// let saved = Document::from_bytes(bytes.into())?;
+    /// let saved = Document::from_bytes(bytes)?;
     /// assert_eq!(saved.metadata().title.as_deref(), Some("Hello"));
     /// assert!(saved.metadata().modification_date.is_some(), "stamped by the save");
     /// # Ok::<(), pdfrum::Error>(())
