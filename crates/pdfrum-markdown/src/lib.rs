@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Markdown and layout-preserving text from a PDF page.
 //!
 //! Two tiers, one output. A tagged document (ISO 32000-1 §14.8) says what

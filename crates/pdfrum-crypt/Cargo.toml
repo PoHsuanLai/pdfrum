@@ -3,6 +3,7 @@ name = "pdfrum-crypt"
 description = "PDF standard security handler: RC4/AES, revisions 2-6"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

@@ -4,6 +4,7 @@ description = "Ratchet, profile and scaling binaries; corpus for the per-crate b
 publish = false
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 

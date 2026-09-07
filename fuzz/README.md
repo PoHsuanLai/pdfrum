@@ -25,8 +25,8 @@ scripts/fuzz-gate.nu 3600
 scripts/fuzz-gate.nu 86400 parallel  # 24 h, one process per target
 ```
 
-Every target runs under `Limits` with `max_decoded_stream_len` = 1 MiB
-(production is 1 GiB).
+Stream-decoding targets run under `Limits` with `max_decoded_stream_len` =
+1 MiB (production is 1 GiB). The rest are panic-only.
 
 ## Targets
 
@@ -38,7 +38,8 @@ Every target runs under `Limits` with `max_decoded_stream_len` = 1 MiB
 | `crypt_decrypt` | `SecurityHandler::decrypt` | yes | committed |
 | `filters_flate` / `_lzw` / `_a85` / `_ahx` / `_rle` / `_predictor` / `_chain` | the named decoder | yes | committed |
 | `cmap_embedded` / `_predefined` | CMap parse / lookup | yes | committed |
-| `parser_lexer` / `_object` / `_xref` / `_load` / `_load_password` | lexer, object, xref, `load` | yes | committed; whole-file also take oracle PDFs |
+| `parser_lexer` / `_xref` / `_load` / `_load_password` | lexer, xref, `load` | yes | committed; also take oracle PDFs |
+| `parser_object` | object grammar | yes | committed |
 | `page_parse_content` | `parse_content` | | |
 | `page_inline_image` | `BI … ID … EI` | | |
 | `page_colorspace` | `load_colorspace` | | |

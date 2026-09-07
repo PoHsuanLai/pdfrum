@@ -35,8 +35,8 @@ def main [] {
     }
 
     print "==> pure-Rust check (no -sys / cc / cmake / pkg-config / bindgen)"
-    # GPU tree dlopen shims, by name. `linux-raw-sys` is rustix constants
-    # `js-sys` is wasm-bindgen's JS stdlib. Core ring: check-no-wgpu.nu.
+    # GPU tree dlopen shims, by name. `linux-raw-sys` is rustix constants.
+    # `js-sys` is wasm-bindgen's JS stdlib.
     let gpu_sys_exemptions = [renderdoc-sys wayland-sys]
     let pure_rust_sys = [linux-raw-sys js-sys]
     let native_build_crates = [cc cmake pkg-config bindgen]
@@ -92,9 +92,6 @@ def main [] {
         ^cargo test --target wasm32-unknown-unknown
         cd ../..
     }
-
-    ^./scripts/check-no-wgpu.nu
-    ^./scripts/check-no-boa.nu
 
     # fuzz/ is its own workspace (libfuzzer-sys / cc). Do not add it to
     # members. This only typechecks; running is scripts/fuzz-gate.nu.

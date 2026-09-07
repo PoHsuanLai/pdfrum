@@ -4,7 +4,7 @@
   "commit": "8a02d57b1fa7",
   "label": "corpus44",
   "machine": {
-    "hostname": "himmel",
+    "hostname": "host",
     "cpus": 32,
     "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
     "uptime_before": "02:35:48 up 21:54,  2 users,  load average: 0.21, 1.70, 1.69",
@@ -13,13 +13,13 @@
     "loadavg_after": "1.00 1.45 1.59 1/1586 61630"
   },
   "corpus": {
-    "root": "/home/r13921098/pdfrum/benches/corpus",
+    "root": "/path/to/pdfrum/benches/corpus",
     "rule": "every .pdf of the recursive listing",
     "files": 44
   },
   "oracle": {
-    "binary": "/home/r13921098/pdfium-c++/out/Release/pdfium_test",
-    "font_dir": "/home/r13921098/pdfium-c++/third_party/test_fonts",
+    "binary": "/path/to/pdfium-c++/out/Release/pdfium_test",
+    "font_dir": "/path/to/pdfium-c++/third_party/test_fonts",
     "checkout_commit": "a043bed4a0d7"
   },
   "dpi": 150.0,
@@ -285,7 +285,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (58736) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (58736) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -673,7 +673,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (58806) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (58806) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -1061,7 +1061,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (58915) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding GBK-EUC-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (58915) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding GBK-EUC-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -1430,7 +1430,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (58981) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (58981) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -1818,7 +1818,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (59046) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (59046) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -2200,7 +2200,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (59111) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (59111) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding UniGB-UCS2-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -3384,7 +3384,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (59312) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:1806:51:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (59312) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:1806:51:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -4170,7 +4170,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (59443) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding 90pv-RKSJ-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (59443) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:986:21:\nunsupported encoding 90pv-RKSJ-H\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -4552,7 +4552,7 @@
       "engine": "pdf-extract",
       "op": "text",
       "status": "panic",
-      "detail": "\nthread 'main' (59508) panicked at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:1806:51:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+      "detail": "\nthread 'main' (59508) panicked at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-extract-0.12.0/src/lib.rs:1806:51:\nindex out of bounds: the len is 1 but the index is 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
       "warm_samples": 0
     },
     {
@@ -5792,7 +5792,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Shared, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field contents of struct Option < Content >, caused by\n  Shared, caused by\n  Expected primitive Stream, found primitive Array instead.",
+      "detail": "pdf: Shared, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field contents of struct Option < Content >, caused by\n  Shared, caused by\n  Expected primitive Stream, found primitive Array instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -7357,7 +7357,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -7754,7 +7754,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -8151,7 +8151,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -8920,7 +8920,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Error parsing from string, caused by\n  invalid digit found in string",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Error parsing from string, caused by\n  invalid digit found in string",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -9259,7 +9259,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Error parsing from string, caused by\n  invalid digit found in string",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Error parsing from string, caused by\n  invalid digit found in string",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -9624,7 +9624,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -10021,7 +10021,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -10418,7 +10418,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -11200,7 +11200,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_object.rs:51:15:, caused by\n  Expected primitive Stream, found primitive Dictionary instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:175:31:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/backend.rs:62:40:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_xref.rs:69:23:, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/parser/parse_object.rs:51:15:, caused by\n  Expected primitive Stream, found primitive Dictionary instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -12393,7 +12393,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Shared, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field resources of struct Option < MaybeRef < Resources > >, caused by\n  Can't parse field graphics_states of struct HashMap < Name, GraphicsStateParameters >, caused by\n  Tried to dereference free object nr 44.",
+      "detail": "pdf: Shared, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field resources of struct Option < MaybeRef < Resources > >, caused by\n  Can't parse field graphics_states of struct HashMap < Name, GraphicsStateParameters >, caused by\n  Tried to dereference free object nr 44.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -12790,7 +12790,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Shared, caused by\n  Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field resources of struct Option < MaybeRef < Resources > >, caused by\n  Can't parse field graphics_states of struct HashMap < Name, GraphicsStateParameters >, caused by\n  Tried to dereference free object nr 32.",
+      "detail": "pdf: Shared, caused by\n  Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/object/types/pagesnode.rs:15:42:, caused by\n  Can't parse field resources of struct Option < MaybeRef < Resources > >, caused by\n  Can't parse field graphics_states of struct HashMap < Name, GraphicsStateParameters >, caused by\n  Tried to dereference free object nr 32.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -14381,7 +14381,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -14778,7 +14778,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,
@@ -17165,7 +17165,7 @@
       "engine": "pdf",
       "op": "open",
       "status": "error",
-      "detail": "pdf: Try at /home/r13921098/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
+      "detail": "pdf: Try at /home/user/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pdf-0.10.0/src/file.rs:801:23:, caused by\n  Can't parse field root of struct RcRef < Catalog >, caused by\n  Shared, caused by\n  Can't parse field open_action of struct Option < Either < Action, Dest > >, caused by\n  Could not parse as pdf::object::types::Action because of Expected primitive Dictionary, found primitive Array instead., or as pdf::object::types::dest::Dest because of Expected primitive Number, found primitive Null instead.",
       "cold_ms": 0.0,
       "warm_ms": 0.0,
       "warm_samples": 0,

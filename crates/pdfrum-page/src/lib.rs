@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Page content semantics (ISO 32000 §8): content-stream operators parsed to
 //! a typed `Op` list, the interpreter folding ops into a typed page-object
 //! graph, graphics state, colorspaces (device/ICC/Indexed/Separation/Lab),

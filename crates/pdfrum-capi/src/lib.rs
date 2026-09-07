@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! `libpdfrum` — the C ABI over the [`pdfrum`] facade.
 //!
 //! This crate is a translation layer and nothing else: every exported

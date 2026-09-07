@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Type 1 font programs — PFA/PFB containers, `eexec`-encrypted private
 //! dictionaries, charstrings, Multiple Master interpolation. The one outline
 //! format Fontations does not read; CFF and TrueType are `skrifa`'s.

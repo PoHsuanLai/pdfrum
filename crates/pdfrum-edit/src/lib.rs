@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Editing and saving (ISO 32000 §7.5.8 incremental updates and full
 //! rewrite): the deterministic object serializer, full and incremental save,
 //! page import and N-up, content-stream generation, and CID font subsetting.

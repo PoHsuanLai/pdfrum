@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! CMaps: how a PDF string becomes character codes, and how those codes
 //! become CIDs (ISO 32000-1 §9.7.5).
 //!

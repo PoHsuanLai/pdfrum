@@ -1,8 +1,8 @@
 //! `--js-transcript`: run the document's own JavaScript and print what it
 //! asked the host to do.
 //!
-//! Behind the default-off `script` feature, because the engine is
-//! (`scripts/check-no-boa.nu`). The output is `ScriptCascade::transcript_text`
+//! Behind the default-off `javascript` feature. The output is
+//! `ScriptCascade::transcript_text`
 //! verbatim on stdout and nothing else — no page count, no MD5 line — because
 //! the harness compares the whole of the oracle's stdout against
 //! `<fixture>_expected.txt` and any extra line is a diff.

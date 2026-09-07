@@ -386,7 +386,7 @@ fn a_focus_answer_is_matchable() {
 }
 
 /// Every type [`FormSession::with_cascade`] names is reachable **with the
-/// `script` feature off**, which is the whole point of it not being gated.
+/// `javascript` feature off**, which is the whole point of it not being gated.
 ///
 /// A host writing its own commit gate — a validator, an audit log, a policy
 /// that refuses a keystroke — needs `Cascade` and the four payload types, and

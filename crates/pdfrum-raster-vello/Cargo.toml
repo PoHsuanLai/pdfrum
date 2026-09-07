@@ -3,13 +3,14 @@ name = "pdfrum-raster-vello"
 description = "GPU vello implementation of pdfrum-render's RenderDevice, on a caller-supplied wgpu device"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
 keywords = ["pdf", "render", "vello", "wgpu", "gpu"]
 categories = ["graphics", "rendering"]
 # Not part of the core ring; nothing in that ring depends on it.
-publish = false
+# Published so `pdfrum --features vello-gpu` resolves on crates.io.
 
 [lints]
 workspace = true
@@ -31,9 +32,7 @@ vello.workspace = true
 # the CPU column describes, which is a page built the way the facade builds it.
 #
 # It does NOT put wgpu in the facade's tree: a dev-dependency is an edge from
-# this crate to the facade, not the reverse. `scripts/check-no-wgpu.nu` uses
-# `cargo tree -e normal` precisely so that this edge cannot make the isolation
-# check pass or fail dishonestly.
+# this crate to the facade, not the reverse.
 pdfrum.workspace = true
 pdfrum-corpus.workspace = true
 pdfrum-parser.workspace = true

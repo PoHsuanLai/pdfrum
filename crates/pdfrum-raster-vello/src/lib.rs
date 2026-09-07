@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! GPU `vello` backend for `pdfrum-render`, on a caller-supplied `wgpu` device.
 //!
 //! [`VelloBackend::new`] borrows the caller's `Device` and `Queue`; nothing is

@@ -20,7 +20,7 @@ that serves as this project's conformance oracle:
 | `bug_650.pdf` | 1 | 85296 B | The heaviest single page here — a dense embedded-font text page. Dominates the render and text columns, and is the closest thing in this set to a real document's page. |
 | `cropped_text.pdf` | 4 | 1855 B | Four pages, each with a `/CropBox` strictly inside its `/MediaBox`. Exercises the crop path four times over, and is the longest document in the set. |
 | `embedded_images.pdf` | 1 | 34279 B | Image decoding, and a **deliberately invalid cross-reference table** — the oracle prints `Document has invalid cross reference table` on it. The one fixture whose `open` number is recovery rather than parsing. |
-| `foxittext.pdf` | 1 | 62961 B | A dense page of ordinary body text: **2891 glyph occurrences drawn from 82 distinct glyphs.** The one fixture where the glyph *cache* is what is being measured rather than the glyph *rasterizer*, and the shape a real document's page has. Added in burn-down wave 7b, because the six fixtures above between them draw at most a few hundred glyphs and none of them reuses one enough to tell a cache from a miss. |
+| `foxittext.pdf` | 1 | 62961 B | A dense page of ordinary body text: **2891 glyph occurrences drawn from 82 distinct glyphs.** The one fixture where the glyph *cache* is what is being measured rather than the glyph *rasterizer*, and the shape a real document's page has. The six fixtures above draw at most a few hundred glyphs and none of them reuses one enough to tell a cache from a miss. |
 | `latin_extended.pdf` | 1 | 19213 B | A page of accented Latin text through a non-trivial encoding, so glyph lookup rather than glyph count is what costs. It is also the **worst case** for a glyph cache and kept partly for that: 256 glyphs, every one distinct, so every draw is a miss. |
 | `many_rectangles.pdf` | 1 | 45529 B | Thousands of filled paths and no text at all. The path-rasterizer column, and the one fixture where the glyph cache is provably irrelevant. |
 
@@ -29,9 +29,9 @@ that serves as this project's conformance oracle:
 The set is chosen to *separate* costs rather than to average them: one
 fixture where text dominates, one where paths do, one where image decoding
 does, one where cross-reference recovery does, two that are multi-page so
-per-document cache reuse has something to reuse, and — since wave 7b — one
-whose glyph repertoire is small against its glyph count, which is the only
-shape in which a glyph cache's hit rate is visible at all. A benchmark whose
+per-document cache reuse has something to reuse, and one whose glyph
+repertoire is small against its glyph count, which is the only shape in
+which a glyph cache's hit rate is visible at all. A benchmark whose
 fixtures all look alike reports one number seven times.
 
 Its honest limitation is size. PDFium's `testing/resources` are unit-test

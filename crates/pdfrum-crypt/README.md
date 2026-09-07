@@ -1,8 +1,9 @@
 # pdfrum-crypt
 
-Standard security handler, revisions 2–6 (RC4 / AES). Decrypts; does not
-encrypt. Graph walks (`/Contents` of a signature, `/EncryptMetadata`) stay
-in the caller.
+Standard security handler, revisions 2–6 (RC4 / AES). Decrypts any of them.
+Re-encrypts under an existing handler. New `/Encrypt` dictionaries: revision
+6 only (`standard_r6`). Graph walks (`/Contents` of a signature,
+`/EncryptMetadata`) stay in the caller.
 
 ```rust
 use pdfrum_crypt::{CryptClass, SecurityHandler};

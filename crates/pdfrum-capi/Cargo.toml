@@ -7,6 +7,7 @@
 name = "pdfrum-capi"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "The C ABI for pdfrum: libpdfrum.so, libpdfrum.a and pdfrum.h"

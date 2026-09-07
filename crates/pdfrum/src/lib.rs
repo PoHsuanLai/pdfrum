@@ -1,55 +1,4 @@
-//! A pure-Rust PDF engine: open a file, render its pages, read its text,
-//! fill its forms, write it back out.
-//!
-//! ```
-//! use pdfrum::{Document, RenderOptions, VelloCpuBackend};
-//!
-//! let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-//! for page in doc.pages() {
-//!     let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::default())?;
-//!     let text = page.text().to_string();
-//!     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
-//!     assert!(text.contains("Hello, world!"));
-//! }
-//! # Ok::<(), pdfrum::Error>(())
-//! ```
-//!
-//! A rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/) — Chrome's
-//! PDF engine — with PDFium kept alongside as a differential test oracle. No
-//! C or C++ is compiled in and `unsafe` is forbidden. Deliberately absent,
-//! permanently: XFA, and any viewer behaviour — this turns pages into pixels
-//! and text into strings. Everything under this facade is a public crate in
-//! its own right; [`Document::parser`], [`Page::objects`], [`PageEdit::graph`]
-//! and [`Annotation::dict`] are the documented escape hatches.
-//!
-//! # Where to start
-//!
-//! - [`Document`] — open a file; pages, metadata, outline, form, attachments,
-//!   [diagnostics](Document::diagnostics).
-//! - [`Page`] — [render](Page::render), [text](Page::text), annotations, links,
-//!   boxes.
-//! - [`TextPage`] — search, select, and web links.
-//! - [`Form`] — enumerate, read, fill; [`FormSession`] for live events.
-//! - [`Document::save`] — write back; [`Document::edit`] embeds fonts for
-//!   [`TextBuilder`].
-//!
-//! # JavaScript is off by default
-//!
-//! A PDF may carry scripts. With default features they are read as data and
-//! never run. The `javascript` feature turns them on behind a pure-Rust engine
-//! (boa), with the `Doc`/`Field` object model, the `/AA` event path and
-//! timers; what a script asks the host for comes back as a value to decide
-//! about, never an action taken.
-//!
-//! # Damage is not an error
-//!
-//! Recovery is a channel, not a failure. Opening a file whose cross-reference
-//! table had to be rebuilt succeeds and says so through
-//! [`Document::diagnostics`]; [`Error`] is reserved for "no answer can be
-//! produced". Reading is lazy, so [`Document::all_diagnostics`] is the running
-//! total — read it *after* the work. Every type here is `Send + Sync`; for a
-//! long document give each rayon worker its own [`RenderSession`].
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 // The crate docs link to `Form`, `PageEdit`, `Document::save` and their
 // kin, which only exist with `forms` and `edit` on. A headless build
@@ -166,7 +115,7 @@ pub mod svg {
 }
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
-/// — behind the default-off `script` feature.
+/// — behind the default-off `javascript` feature.
 ///
 /// [`ScriptCascade`] is [`Cascade`]'s second implementation; let
 /// [`FormSession::with_scripts`] build it *and* install the document's own

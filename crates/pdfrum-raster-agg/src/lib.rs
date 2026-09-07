@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! An analytic scanline rasterizer implementing `pdfrum-render`'s
 //! `RenderDevice` and `RasterBackend` traits.
 //!

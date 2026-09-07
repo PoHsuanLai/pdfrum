@@ -1,6 +1,6 @@
 # pdfrum-cmap
 
-CJK CMaps: 32 predefined tables plus `parse_embedded`.
+CJK CMaps: 59 named tables (32 decoder stems) plus `parse_embedded`.
 
 ```rust
 use pdfrum_cmap::from_encoding_name;

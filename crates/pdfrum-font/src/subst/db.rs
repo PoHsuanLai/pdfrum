@@ -666,8 +666,12 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fontdata"),
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benches/fixtures"),
         ];
-        // A machine path, not a repository one: skipped silently elsewhere.
-        let oracle = PathBuf::from("/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts");
+        let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++")
+            });
+        let oracle = checkout.join("third_party/test_fonts");
         if oracle.is_dir() {
             roots.push(oracle);
         }

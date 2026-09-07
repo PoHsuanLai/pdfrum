@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! `tiny-skia` implementation of `pdfrum-render`'s `RenderDevice` and
 //! `RasterBackend` traits — the cross-check rasterizer and determinism
 //! baseline that conformance diffs against `vello_cpu`.

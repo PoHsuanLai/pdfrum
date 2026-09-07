@@ -7,10 +7,20 @@ Paths, clips, layers, glyph outlines become SVG. Pixel-domain compositing
 PNG, each listed in `RasterReport`.
 
 ```rust
-use pdfrum_svg::page_to_svg;
+use pdfrum_common::Diagnostics;
+use pdfrum_page::Page;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
+use pdfrum_render::RenderOptions;
+use pdfrum_svg::page_to_svg;
 
-let converted = page_to_svg(&page, &opts, &TinySkiaBackend::new(), &mut diags)?;
+let converted = page_to_svg(
+    &Page::empty(),
+    &RenderOptions::default(),
+    &TinySkiaBackend::new(),
+    &mut Diagnostics::default(),
+)?;
+assert!(converted.svg.contains("<svg"));
+# Ok::<(), pdfrum_render::Error>(())
 ```
 
 From the facade: `Page::to_svg`, feature `svg`.

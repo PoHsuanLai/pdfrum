@@ -1,9 +1,8 @@
-//! The `script` feature's seam, end to end: a document's own `/AA` script
+//! The `javascript` feature's seam, end to end: a document's own `/AA` script
 //! runs on an event the facade sent, and what it produced comes back.
 //!
 //! **The whole file is behind `#[cfg(feature = "javascript")]`** — with the
-//! feature off there is no engine at all, which `scripts/check-no-boa.nu`
-//! asserts in both directions.
+//! feature off there is no engine.
 //!
 //! # Why an integration test and not a doctest
 //!

@@ -48,7 +48,7 @@ that is precisely the shape the decode target has to be tested against:
 | `annots_action_handling.pdf` | 2.5 KB | Two widgets followed by four `/Link` annotations, the first carrying `/A << /S /URI /URI (https://cs.chromium.org/) >>`. It is the fixture for actions arriving as **requests** rather than as callbacks, and for the rule that the focus ring admits links only when a caller asks it to. |
 | `substituted_da_font.pdf` | 812 B | `testing/resources/pixel/form_textfield_focused_ltr.in` expanded by `testing/tools/fixup_pdf_template.py`, byte for byte. One `/Tx` widget on a 200x100 page, `/Rect [50 40 150 70]`, `/DA (/Arial 12 Tf 0 0 0 rg)` over a `/DR` declaring `/Arial` as a bare `/Type /Font /Subtype /TrueType /BaseFont /Arial` — **nothing embedded**, so which face lays the field out is entirely the substitution's choice. That is what makes it the fixture for the question `FormSession::with_context` exists to answer: under the hermetic `test_fonts` set `/Arial` becomes Arimo (905/−211, a 13.392-unit caret at 12pt) and under a default context it falls through to the built-in base-14 Helvetica (718/−219, 11.244). It is also the fixture for the second face, since its Ansi `/DA` font cannot write a single Hebrew code point. |
 
-One arrived with the `script` feature . It is the only fixture here that
+One arrived with the `javascript` feature. It is the only fixture here that
 is not read by a default build: `tests/form_scripts.rs` is behind
 `#[cfg(feature = "javascript")]`, so a `cargo test -p pdfrum` never opens it.
 

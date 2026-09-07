@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Acrobat's `AF*` field helpers and `util.*` formatters, as pure functions.
 //!
 //! These are the routines a PDF's own form scripts call to format a number,

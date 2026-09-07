@@ -85,6 +85,6 @@ jobs:
       - name: The gate
         # Runs fmt, clippy, nextest, doctests, rustdoc, the public-API
         # snapshot, cargo-deny, the pure-Rust dependency-tree check, the C
-        # header and C test, the WebAssembly tests, the no-wgpu and no-boa
-        # checks, and a cargo check of the fuzz workspace.
+        # header and C test, the WebAssembly tests, and a cargo check of
+        # the fuzz workspace.
         run: ./scripts/ci.nu

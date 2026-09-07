@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! SVG export for pdfrum: a [`RenderDevice`](pdfrum_render::RenderDevice)
 //! that accumulates vectors while an ordinary rasterizer does the pixels.
 //!

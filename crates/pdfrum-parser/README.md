@@ -7,8 +7,10 @@ lazy `Resolve` store.
 use std::sync::Arc;
 use pdfrum_parser::{LoadOptions, load};
 
-let doc = load(Arc::from(&include_bytes!("minimal.pdf")[..]), &LoadOptions::default())?;
+let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/files/minimal.pdf"))?;
+let doc = load(Arc::from(bytes), &LoadOptions::default())?;
 assert_eq!(doc.page_count(), 1);
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 A malformed file PDFium would open is not an error here. Repairs go to

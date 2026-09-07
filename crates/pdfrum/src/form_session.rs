@@ -15,7 +15,7 @@ pub use pdfrum_form::{AppearanceUpdate, UpdateKind};
 
 /// The four points where a field's `/AA` scripts can intervene.
 ///
-/// [`Cascade`] and [`NoScripts`] exist whether or not the `script` feature is
+/// [`Cascade`] and [`NoScripts`] exist whether or not the `javascript` feature is
 /// on; only `ScriptCascade` is behind it.
 pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 
@@ -374,7 +374,7 @@ impl<'a> FormSession<'a> {
     ///
     /// [`FormSession::new`] uses [`NoScripts`], whose behaviour *is* a
     /// JavaScript-off viewer's rather than a stub of one. For the document's
-    /// own scripts use `FormSession::with_scripts` (the `script` feature),
+    /// own scripts use `FormSession::with_scripts` (the `javascript` feature),
     /// which builds a cascade *and* installs the `/AA` entries into it; a bare
     /// `ScriptCascade` passed here runs nothing, because nothing has told it
     /// what any field's scripts are.
@@ -1306,7 +1306,7 @@ impl<'a> FormSession<'a> {
     /// script string and no PDF; the price is that its caller reads `/AA` and
     /// hands it over, and this is that caller.
     ///
-    /// Compiled away entirely without the `script` feature: with no scripted
+    /// Compiled away entirely without the `javascript` feature: with no scripted
     /// variant to match, there is nothing to install.
     #[cfg(feature = "javascript")]
     fn install_page_scripts(&mut self, page: PageIndex) {
@@ -1387,7 +1387,7 @@ impl<'a> FormSession<'a> {
         }
     }
 
-    /// Without the `script` feature there is no cascade that can be installed
+    /// Without the `javascript` feature there is no cascade that can be installed
     /// into, so this is the whole of it.
     #[cfg(not(feature = "javascript"))]
     #[expect(

@@ -22,9 +22,9 @@ the rule is the issue text; nothing above it is meant to be posted.
   entries are lazy task dispatch and the coarse-rasterizer rewrite, not
   `pack`/`unpack`.
 
-So this is **not** "upgrade to vello_cpu X" in's terms — there is no
-X. It is a genuine upstream report, and the version bump only becomes the
-answer once a fix lands.
+So this is **not** "upgrade to vello_cpu X" — there is no X. It is a
+genuine upstream report, and the version bump only becomes the answer once
+a fix lands.
 
 **Why it is not fixed locally.** `F32Kernel` is `vello_cpu`'s own fine-kernel
 implementation, selected inside the dispatcher
@@ -39,7 +39,7 @@ shape they intend.
 backend to `RenderMode::OptimizeSpeed` (the `U8Kernel`, which sidesteps this
 cost rather than fixing it) is deterministic and buys 1.9x-3.4x marginal `Ir`
 per render, but it moves 14 conformance rows below our SSIM floor, so we have
-not taken it. Full numbers in section 8.
+not taken it.
 That measurement is *why* we care about the f32 path specifically: it is the
 path we are staying on.
 

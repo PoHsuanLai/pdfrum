@@ -1,0 +1,433 @@
+pub mod pdfrum_script
+pub mod pdfrum_script::af
+pub enum pdfrum_script::af::AfOutcome
+pub pdfrum_script::af::AfOutcome::Formatted(alloc::string::String)
+pub pdfrum_script::af::AfOutcome::Rejected
+pub pdfrum_script::af::AfOutcome::Unchanged
+pub enum pdfrum_script::af::AlertMessage
+pub pdfrum_script::af::AlertMessage::InvalidInput
+pub pdfrum_script::af::AlertMessage::ParseDate
+pub pdfrum_script::af::AlertMessage::ParseDate::format: alloc::string::String
+pub pdfrum_script::af::AlertMessage::RangeBetween
+pub pdfrum_script::af::AlertMessage::RangeBetween::max: alloc::string::String
+pub pdfrum_script::af::AlertMessage::RangeBetween::min: alloc::string::String
+pub pdfrum_script::af::AlertMessage::RangeGreater
+pub pdfrum_script::af::AlertMessage::RangeGreater::min: alloc::string::String
+pub pdfrum_script::af::AlertMessage::RangeLess
+pub pdfrum_script::af::AlertMessage::RangeLess::max: alloc::string::String
+pub pdfrum_script::af::AlertMessage::TooLong
+impl core::fmt::Display for pdfrum_script::error::AlertMessage
+pub fn pdfrum_script::error::AlertMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_script::af::Error
+pub pdfrum_script::af::Error::BadObject
+pub pdfrum_script::af::Error::DateKeystrokeArity
+pub pdfrum_script::af::Error::InvalidDate
+pub pdfrum_script::af::Error::InvalidInput
+pub pdfrum_script::af::Error::NoEventHandler
+pub pdfrum_script::af::Error::NotADate
+pub pdfrum_script::af::Error::NotSupported
+pub pdfrum_script::af::Error::ParamCount
+pub pdfrum_script::af::Error::ParseDate
+pub pdfrum_script::af::Error::ParseDate::format: alloc::string::String
+pub pdfrum_script::af::Error::TooLong
+pub pdfrum_script::af::Error::Type
+pub pdfrum_script::af::Error::Value
+impl core::convert::From<pdfrum_script::error::Error> for pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::from(pdfrum_script::error::Error) -> Self
+pub enum pdfrum_script::af::KeystrokeOutcome
+pub pdfrum_script::af::KeystrokeOutcome::Accept
+pub pdfrum_script::af::KeystrokeOutcome::Accept::change: core::option::Option<alloc::string::String>
+pub pdfrum_script::af::KeystrokeOutcome::Accept::value: core::option::Option<alloc::string::String>
+pub pdfrum_script::af::KeystrokeOutcome::Reject
+pub enum pdfrum_script::af::SimpleOp
+pub pdfrum_script::af::SimpleOp::Avg
+pub pdfrum_script::af::SimpleOp::Max
+pub pdfrum_script::af::SimpleOp::Min
+pub pdfrum_script::af::SimpleOp::Prd
+pub pdfrum_script::af::SimpleOp::Sum
+impl pdfrum_script::SimpleOp
+pub fn pdfrum_script::SimpleOp::combine(self, f64, f64) -> f64
+pub fn pdfrum_script::SimpleOp::identity(self) -> f64
+pub fn pdfrum_script::SimpleOp::parse(&str) -> core::option::Option<Self>
+pub fn pdfrum_script::SimpleOp::seeds_from_first(self) -> bool
+pub struct pdfrum_script::af::AfAlert
+pub pdfrum_script::af::AfAlert::button: u8
+pub pdfrum_script::af::AfAlert::caller: &'static str
+pub pdfrum_script::af::AfAlert::icon: u8
+pub pdfrum_script::af::AfAlert::message: pdfrum_script::error::AlertMessage
+impl pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::new(&'static str, pdfrum_script::error::AlertMessage) -> Self
+impl core::fmt::Display for pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_script::af::AfColor
+pub pdfrum_script::af::AfColor::components: [f32; 4]
+pub pdfrum_script::af::AfColor::space: pdfrum_script::error::AfColorSpace
+impl pdfrum_script::error::AfColor
+pub const pdfrum_script::error::AfColor::BLACK: Self
+pub const pdfrum_script::error::AfColor::RED: Self
+pub struct pdfrum_script::af::AfEffects
+pub pdfrum_script::af::AfEffects::alerts: alloc::vec::Vec<pdfrum_script::error::AfAlert>
+pub pdfrum_script::af::AfEffects::text_color: core::option::Option<pdfrum_script::error::AfColor>
+impl pdfrum_script::error::AfEffects
+pub fn pdfrum_script::error::AfEffects::alert(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::error::AfEffects::color(pdfrum_script::error::AfColor) -> Self
+pub fn pdfrum_script::error::AfEffects::is_empty(&self) -> bool
+pub fn pdfrum_script::error::AfEffects::none() -> Self
+pub struct pdfrum_script::af::AfFormat
+pub pdfrum_script::af::AfFormat::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::af::AfFormat::outcome: pdfrum_script::af::AfOutcome
+impl pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af::AfFormat::alert(&self) -> core::option::Option<&pdfrum_script::error::AfAlert>
+pub fn pdfrum_script::af::AfFormat::formatted(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::AfFormat::rejected(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::AfFormat::unchanged() -> Self
+pub fn pdfrum_script::af::AfFormat::with_color(self, pdfrum_script::error::AfColor) -> Self
+pub struct pdfrum_script::af::AfValue
+pub pdfrum_script::af::AfValue::text: alloc::string::String
+impl pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<&str> for pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::from(alloc::string::String) -> Self
+pub struct pdfrum_script::af::Keystroke
+pub pdfrum_script::af::Keystroke::change: alloc::string::String
+pub pdfrum_script::af::Keystroke::field_full: bool
+pub pdfrum_script::af::Keystroke::sel_end: i32
+pub pdfrum_script::af::Keystroke::sel_start: i32
+pub pdfrum_script::af::Keystroke::value: alloc::string::String
+pub pdfrum_script::af::Keystroke::will_commit: bool
+impl pdfrum_script::af::Keystroke
+pub fn pdfrum_script::af::Keystroke::commit(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::Keystroke::insert(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, i32) -> Self
+pub fn pdfrum_script::af::Keystroke::merged(&self) -> alloc::string::String
+pub fn pdfrum_script::af::Keystroke::replace(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, i32, i32) -> Self
+pub struct pdfrum_script::af::KeystrokeResult
+pub pdfrum_script::af::KeystrokeResult::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::af::KeystrokeResult::outcome: pdfrum_script::af::KeystrokeOutcome
+impl pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::KeystrokeResult::accept() -> Self
+pub fn pdfrum_script::af::KeystrokeResult::accept_change(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::accept_value(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::alert(&self) -> core::option::Option<&pdfrum_script::error::AfAlert>
+pub fn pdfrum_script::af::KeystrokeResult::change(&self) -> core::option::Option<&str>
+pub fn pdfrum_script::af::KeystrokeResult::is_reject(&self) -> bool
+pub fn pdfrum_script::af::KeystrokeResult::reject() -> Self
+pub fn pdfrum_script::af::KeystrokeResult::reject_with(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::value(&self) -> core::option::Option<&str>
+pub struct pdfrum_script::af::Thrown
+pub pdfrum_script::af::Thrown::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::af::Thrown::error: pdfrum_script::error::Error
+impl pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::alerting(pdfrum_script::error::Error, &'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::Thrown::bare(pdfrum_script::error::Error) -> Self
+impl core::convert::From<pdfrum_script::error::Error> for pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::from(pdfrum_script::error::Error) -> Self
+pub const pdfrum_script::af::DATE_FORMATS: [&str; 14]
+pub const pdfrum_script::af::TIME_FORMATS: [&str; 4]
+pub fn pdfrum_script::af::af_date_format(&str, i32, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_date_format_ex(&str, &str, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_date_keystroke(&pdfrum_script::af::Keystroke, i32, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::af_date_keystroke_ex(&pdfrum_script::af::Keystroke, &str, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::af_extract_nums(&str) -> core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub fn pdfrum_script::af::af_make_number(&str) -> f64
+pub fn pdfrum_script::af::af_merge_change(&pdfrum_script::af::Keystroke) -> alloc::string::String
+pub fn pdfrum_script::af::af_number_format(&str, i32, i32, i32, &str, bool) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af::af_number_keystroke(&pdfrum_script::af::Keystroke, i32, i32) -> core::result::Result<pdfrum_script::af::KeystrokeResult, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_parse_date_ex(&str, &str, f64) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_percent_format(&str, i32, i32, bool) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_percent_keystroke(&pdfrum_script::af::Keystroke, i32, i32) -> core::result::Result<pdfrum_script::af::KeystrokeResult, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_range_validate(&str, bool, f64, &str, bool, f64, &str) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af::af_simple(&str, f64, f64) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_simple_calculate(&str, &[f64]) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_simple_calculate_texts(&str, &[&str]) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_special_format(&str, i32) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af::af_special_keystroke(&pdfrum_script::af::Keystroke, i32) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::af_special_keystroke_ex(&pdfrum_script::af::Keystroke, &str) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::af_split_field_list(&str) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_script::af::af_time_format(&str, i32, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_time_format_ex(&str, &str, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af::af_time_keystroke(&pdfrum_script::af::Keystroke, i32, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::af_time_keystroke_ex(&pdfrum_script::af::Keystroke, &str, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::is_reserved_mask_char(char) -> bool
+pub fn pdfrum_script::af::mask_satisfied(char, char) -> bool
+pub fn pdfrum_script::af::merge_change(&str, &str, i32, i32) -> alloc::string::String
+pub mod pdfrum_script::error
+pub enum pdfrum_script::error::AfColorSpace
+pub pdfrum_script::error::AfColorSpace::Cmyk
+pub pdfrum_script::error::AfColorSpace::Gray
+pub pdfrum_script::error::AfColorSpace::Rgb
+pub pdfrum_script::error::AfColorSpace::Transparent
+pub enum pdfrum_script::error::AlertMessage
+pub pdfrum_script::error::AlertMessage::InvalidInput
+pub pdfrum_script::error::AlertMessage::ParseDate
+pub pdfrum_script::error::AlertMessage::ParseDate::format: alloc::string::String
+pub pdfrum_script::error::AlertMessage::RangeBetween
+pub pdfrum_script::error::AlertMessage::RangeBetween::max: alloc::string::String
+pub pdfrum_script::error::AlertMessage::RangeBetween::min: alloc::string::String
+pub pdfrum_script::error::AlertMessage::RangeGreater
+pub pdfrum_script::error::AlertMessage::RangeGreater::min: alloc::string::String
+pub pdfrum_script::error::AlertMessage::RangeLess
+pub pdfrum_script::error::AlertMessage::RangeLess::max: alloc::string::String
+pub pdfrum_script::error::AlertMessage::TooLong
+impl core::fmt::Display for pdfrum_script::error::AlertMessage
+pub fn pdfrum_script::error::AlertMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_script::error::Error
+pub pdfrum_script::error::Error::BadObject
+pub pdfrum_script::error::Error::DateKeystrokeArity
+pub pdfrum_script::error::Error::InvalidDate
+pub pdfrum_script::error::Error::InvalidInput
+pub pdfrum_script::error::Error::NoEventHandler
+pub pdfrum_script::error::Error::NotADate
+pub pdfrum_script::error::Error::NotSupported
+pub pdfrum_script::error::Error::ParamCount
+pub pdfrum_script::error::Error::ParseDate
+pub pdfrum_script::error::Error::ParseDate::format: alloc::string::String
+pub pdfrum_script::error::Error::TooLong
+pub pdfrum_script::error::Error::Type
+pub pdfrum_script::error::Error::Value
+impl core::convert::From<pdfrum_script::error::Error> for pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::from(pdfrum_script::error::Error) -> Self
+pub struct pdfrum_script::error::AfAlert
+pub pdfrum_script::error::AfAlert::button: u8
+pub pdfrum_script::error::AfAlert::caller: &'static str
+pub pdfrum_script::error::AfAlert::icon: u8
+pub pdfrum_script::error::AfAlert::message: pdfrum_script::error::AlertMessage
+impl pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::new(&'static str, pdfrum_script::error::AlertMessage) -> Self
+impl core::fmt::Display for pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_script::error::AfColor
+pub pdfrum_script::error::AfColor::components: [f32; 4]
+pub pdfrum_script::error::AfColor::space: pdfrum_script::error::AfColorSpace
+impl pdfrum_script::error::AfColor
+pub const pdfrum_script::error::AfColor::BLACK: Self
+pub const pdfrum_script::error::AfColor::RED: Self
+pub struct pdfrum_script::error::AfEffects
+pub pdfrum_script::error::AfEffects::alerts: alloc::vec::Vec<pdfrum_script::error::AfAlert>
+pub pdfrum_script::error::AfEffects::text_color: core::option::Option<pdfrum_script::error::AfColor>
+impl pdfrum_script::error::AfEffects
+pub fn pdfrum_script::error::AfEffects::alert(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::error::AfEffects::color(pdfrum_script::error::AfColor) -> Self
+pub fn pdfrum_script::error::AfEffects::is_empty(&self) -> bool
+pub fn pdfrum_script::error::AfEffects::none() -> Self
+pub const pdfrum_script::error::ALERT_BUTTON_OK: u8
+pub const pdfrum_script::error::ALERT_ICON_STATUS: u8
+pub enum pdfrum_script::AfColorSpace
+pub pdfrum_script::AfColorSpace::Cmyk
+pub pdfrum_script::AfColorSpace::Gray
+pub pdfrum_script::AfColorSpace::Rgb
+pub pdfrum_script::AfColorSpace::Transparent
+pub enum pdfrum_script::AfOutcome
+pub pdfrum_script::AfOutcome::Formatted(alloc::string::String)
+pub pdfrum_script::AfOutcome::Rejected
+pub pdfrum_script::AfOutcome::Unchanged
+pub enum pdfrum_script::AlertMessage
+pub pdfrum_script::AlertMessage::InvalidInput
+pub pdfrum_script::AlertMessage::ParseDate
+pub pdfrum_script::AlertMessage::ParseDate::format: alloc::string::String
+pub pdfrum_script::AlertMessage::RangeBetween
+pub pdfrum_script::AlertMessage::RangeBetween::max: alloc::string::String
+pub pdfrum_script::AlertMessage::RangeBetween::min: alloc::string::String
+pub pdfrum_script::AlertMessage::RangeGreater
+pub pdfrum_script::AlertMessage::RangeGreater::min: alloc::string::String
+pub pdfrum_script::AlertMessage::RangeLess
+pub pdfrum_script::AlertMessage::RangeLess::max: alloc::string::String
+pub pdfrum_script::AlertMessage::TooLong
+impl core::fmt::Display for pdfrum_script::error::AlertMessage
+pub fn pdfrum_script::error::AlertMessage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum pdfrum_script::ConversionStatus
+pub pdfrum_script::ConversionStatus::BadDate
+pub pdfrum_script::ConversionStatus::BadFormat
+pub pdfrum_script::ConversionStatus::Success
+#[non_exhaustive] pub enum pdfrum_script::Error
+pub pdfrum_script::Error::BadObject
+pub pdfrum_script::Error::DateKeystrokeArity
+pub pdfrum_script::Error::InvalidDate
+pub pdfrum_script::Error::InvalidInput
+pub pdfrum_script::Error::NoEventHandler
+pub pdfrum_script::Error::NotADate
+pub pdfrum_script::Error::NotSupported
+pub pdfrum_script::Error::ParamCount
+pub pdfrum_script::Error::ParseDate
+pub pdfrum_script::Error::ParseDate::format: alloc::string::String
+pub pdfrum_script::Error::TooLong
+pub pdfrum_script::Error::Type
+pub pdfrum_script::Error::Value
+impl core::convert::From<pdfrum_script::error::Error> for pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::from(pdfrum_script::error::Error) -> Self
+pub enum pdfrum_script::KeystrokeOutcome
+pub pdfrum_script::KeystrokeOutcome::Accept
+pub pdfrum_script::KeystrokeOutcome::Accept::change: core::option::Option<alloc::string::String>
+pub pdfrum_script::KeystrokeOutcome::Accept::value: core::option::Option<alloc::string::String>
+pub pdfrum_script::KeystrokeOutcome::Reject
+pub enum pdfrum_script::PrintdStyle
+pub pdfrum_script::PrintdStyle::Dots
+pub pdfrum_script::PrintdStyle::Pdf
+pub pdfrum_script::PrintdStyle::Slashes
+pub enum pdfrum_script::PrintfArg
+pub pdfrum_script::PrintfArg::Double(f64)
+pub pdfrum_script::PrintfArg::Int(i32)
+pub pdfrum_script::PrintfArg::String(alloc::string::String)
+pub enum pdfrum_script::PrintfDataType
+pub pdfrum_script::PrintfDataType::Double
+pub pdfrum_script::PrintfDataType::Int
+pub pdfrum_script::PrintfDataType::Invalid
+pub pdfrum_script::PrintfDataType::String
+pub enum pdfrum_script::SimpleOp
+pub pdfrum_script::SimpleOp::Avg
+pub pdfrum_script::SimpleOp::Max
+pub pdfrum_script::SimpleOp::Min
+pub pdfrum_script::SimpleOp::Prd
+pub pdfrum_script::SimpleOp::Sum
+impl pdfrum_script::SimpleOp
+pub fn pdfrum_script::SimpleOp::combine(self, f64, f64) -> f64
+pub fn pdfrum_script::SimpleOp::identity(self) -> f64
+pub fn pdfrum_script::SimpleOp::parse(&str) -> core::option::Option<Self>
+pub fn pdfrum_script::SimpleOp::seeds_from_first(self) -> bool
+pub struct pdfrum_script::AfAlert
+pub pdfrum_script::AfAlert::button: u8
+pub pdfrum_script::AfAlert::caller: &'static str
+pub pdfrum_script::AfAlert::icon: u8
+pub pdfrum_script::AfAlert::message: pdfrum_script::error::AlertMessage
+impl pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::new(&'static str, pdfrum_script::error::AlertMessage) -> Self
+impl core::fmt::Display for pdfrum_script::error::AfAlert
+pub fn pdfrum_script::error::AfAlert::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_script::AfColor
+pub pdfrum_script::AfColor::components: [f32; 4]
+pub pdfrum_script::AfColor::space: pdfrum_script::error::AfColorSpace
+impl pdfrum_script::error::AfColor
+pub const pdfrum_script::error::AfColor::BLACK: Self
+pub const pdfrum_script::error::AfColor::RED: Self
+pub struct pdfrum_script::AfEffects
+pub pdfrum_script::AfEffects::alerts: alloc::vec::Vec<pdfrum_script::error::AfAlert>
+pub pdfrum_script::AfEffects::text_color: core::option::Option<pdfrum_script::error::AfColor>
+impl pdfrum_script::error::AfEffects
+pub fn pdfrum_script::error::AfEffects::alert(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::error::AfEffects::color(pdfrum_script::error::AfColor) -> Self
+pub fn pdfrum_script::error::AfEffects::is_empty(&self) -> bool
+pub fn pdfrum_script::error::AfEffects::none() -> Self
+pub struct pdfrum_script::AfFormat
+pub pdfrum_script::AfFormat::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::AfFormat::outcome: pdfrum_script::af::AfOutcome
+impl pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af::AfFormat::alert(&self) -> core::option::Option<&pdfrum_script::error::AfAlert>
+pub fn pdfrum_script::af::AfFormat::formatted(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::AfFormat::rejected(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::AfFormat::unchanged() -> Self
+pub fn pdfrum_script::af::AfFormat::with_color(self, pdfrum_script::error::AfColor) -> Self
+pub struct pdfrum_script::AfValue
+pub pdfrum_script::AfValue::text: alloc::string::String
+impl pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::new(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<&str> for pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for pdfrum_script::af::AfValue
+pub fn pdfrum_script::af::AfValue::from(alloc::string::String) -> Self
+pub struct pdfrum_script::Civil
+pub pdfrum_script::Civil::day: i32
+pub pdfrum_script::Civil::hour: i32
+pub pdfrum_script::Civil::minute: i32
+pub pdfrum_script::Civil::month: i32
+pub pdfrum_script::Civil::second: i32
+pub pdfrum_script::Civil::weekday: i32
+pub pdfrum_script::Civil::year: i32
+pub struct pdfrum_script::Keystroke
+pub pdfrum_script::Keystroke::change: alloc::string::String
+pub pdfrum_script::Keystroke::field_full: bool
+pub pdfrum_script::Keystroke::sel_end: i32
+pub pdfrum_script::Keystroke::sel_start: i32
+pub pdfrum_script::Keystroke::value: alloc::string::String
+pub pdfrum_script::Keystroke::will_commit: bool
+impl pdfrum_script::af::Keystroke
+pub fn pdfrum_script::af::Keystroke::commit(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::Keystroke::insert(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, i32) -> Self
+pub fn pdfrum_script::af::Keystroke::merged(&self) -> alloc::string::String
+pub fn pdfrum_script::af::Keystroke::replace(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, i32, i32) -> Self
+pub struct pdfrum_script::KeystrokeResult
+pub pdfrum_script::KeystrokeResult::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::KeystrokeResult::outcome: pdfrum_script::af::KeystrokeOutcome
+impl pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af::KeystrokeResult::accept() -> Self
+pub fn pdfrum_script::af::KeystrokeResult::accept_change(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::accept_value(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::alert(&self) -> core::option::Option<&pdfrum_script::error::AfAlert>
+pub fn pdfrum_script::af::KeystrokeResult::change(&self) -> core::option::Option<&str>
+pub fn pdfrum_script::af::KeystrokeResult::is_reject(&self) -> bool
+pub fn pdfrum_script::af::KeystrokeResult::reject() -> Self
+pub fn pdfrum_script::af::KeystrokeResult::reject_with(&'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::KeystrokeResult::value(&self) -> core::option::Option<&str>
+pub struct pdfrum_script::Thrown
+pub pdfrum_script::Thrown::effects: pdfrum_script::error::AfEffects
+pub pdfrum_script::Thrown::error: pdfrum_script::error::Error
+impl pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::alerting(pdfrum_script::error::Error, &'static str, pdfrum_script::error::AlertMessage) -> Self
+pub fn pdfrum_script::af::Thrown::bare(pdfrum_script::error::Error) -> Self
+impl core::convert::From<pdfrum_script::error::Error> for pdfrum_script::af::Thrown
+pub fn pdfrum_script::af::Thrown::from(pdfrum_script::error::Error) -> Self
+pub const pdfrum_script::ALERT_BUTTON_OK: u8
+pub const pdfrum_script::ALERT_ICON_STATUS: u8
+pub const pdfrum_script::DATE_FORMATS: [&str; 14]
+pub const pdfrum_script::FULL_MONTHS: [&str; 12]
+pub const pdfrum_script::MONTHS: [&str; 12]
+pub const pdfrum_script::TIME_FORMATS: [&str; 4]
+pub fn pdfrum_script::af_date_format(&str, i32, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_date_format_ex(&str, &str, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_date_keystroke(&pdfrum_script::af::Keystroke, i32, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af_date_keystroke_ex(&pdfrum_script::af::Keystroke, &str, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af_extract_nums(&str) -> core::option::Option<alloc::vec::Vec<alloc::string::String>>
+pub fn pdfrum_script::af_make_number(&str) -> f64
+pub fn pdfrum_script::af_merge_change(&pdfrum_script::af::Keystroke) -> alloc::string::String
+pub fn pdfrum_script::af_number_format(&str, i32, i32, i32, &str, bool) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af_number_keystroke(&pdfrum_script::af::Keystroke, i32, i32) -> core::result::Result<pdfrum_script::af::KeystrokeResult, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_parse_date_ex(&str, &str, f64) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_percent_format(&str, i32, i32, bool) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_percent_keystroke(&pdfrum_script::af::Keystroke, i32, i32) -> core::result::Result<pdfrum_script::af::KeystrokeResult, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_range_validate(&str, bool, f64, &str, bool, f64, &str) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af_simple(&str, f64, f64) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_simple_calculate(&str, &[f64]) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_simple_calculate_texts(&str, &[&str]) -> core::result::Result<f64, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_special_format(&str, i32) -> pdfrum_script::af::AfFormat
+pub fn pdfrum_script::af_special_keystroke(&pdfrum_script::af::Keystroke, i32) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af_special_keystroke_ex(&pdfrum_script::af::Keystroke, &str) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af_split_field_list(&str) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_script::af_time_format(&str, i32, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_time_format_ex(&str, &str, f64) -> core::result::Result<pdfrum_script::af::AfFormat, pdfrum_script::af::Thrown>
+pub fn pdfrum_script::af_time_keystroke(&pdfrum_script::af::Keystroke, i32, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::af_time_keystroke_ex(&pdfrum_script::af::Keystroke, &str, f64) -> pdfrum_script::af::KeystrokeResult
+pub fn pdfrum_script::c_atof(&str) -> f64
+pub fn pdfrum_script::civil_from_ms(f64) -> pdfrum_script::Civil
+pub fn pdfrum_script::day_from_time(f64) -> i32
+pub fn pdfrum_script::hour_from_time(f64) -> i32
+pub fn pdfrum_script::is_leap_year(i32) -> bool
+pub fn pdfrum_script::is_number(&str) -> bool
+pub fn pdfrum_script::is_reserved_mask_char(char) -> bool
+pub fn pdfrum_script::is_valid_24_hour(i32) -> bool
+pub fn pdfrum_script::is_valid_day(i32) -> bool
+pub fn pdfrum_script::is_valid_minute(i32) -> bool
+pub fn pdfrum_script::is_valid_month(i32) -> bool
+pub fn pdfrum_script::is_valid_second(i32) -> bool
+pub fn pdfrum_script::js_to_number(&str) -> core::option::Option<f64>
+pub fn pdfrum_script::make_date(f64, f64) -> f64
+pub fn pdfrum_script::make_day(i32, i32, i32) -> f64
+pub fn pdfrum_script::make_time(i32, i32, i32, i32) -> f64
+pub fn pdfrum_script::mask_satisfied(char, char) -> bool
+pub fn pdfrum_script::merge_change(&str, &str, i32, i32) -> alloc::string::String
+pub fn pdfrum_script::min_from_time(f64) -> i32
+pub fn pdfrum_script::month_from_time(f64) -> i32
+pub fn pdfrum_script::ms_from_civil(i32, i32, i32, i32, i32, i32) -> f64
+pub fn pdfrum_script::parse_data_type(&mut alloc::string::String) -> pdfrum_script::PrintfDataType
+pub fn pdfrum_script::parse_date_using_format(&str, &str, f64) -> (pdfrum_script::ConversionStatus, f64)
+pub fn pdfrum_script::parse_date_with_fallback(&str, &str, f64) -> (f64, bool)
+pub fn pdfrum_script::print_date_using_format(f64, &str) -> alloc::string::String
+pub fn pdfrum_script::sec_from_time(f64) -> i32
+pub fn pdfrum_script::string_to_double(&str) -> f64
+pub fn pdfrum_script::trim_spaces(&str) -> &str
+pub fn pdfrum_script::util_printd(&str, f64) -> core::result::Result<alloc::string::String, pdfrum_script::error::Error>
+pub fn pdfrum_script::util_printd_style(i32, f64) -> core::result::Result<alloc::string::String, pdfrum_script::error::Error>
+pub fn pdfrum_script::util_printf(&str, &[pdfrum_script::PrintfArg]) -> core::result::Result<alloc::string::String, pdfrum_script::error::Error>
+pub fn pdfrum_script::util_printx(&str, &str) -> alloc::string::String
+pub fn pdfrum_script::util_scand(&str, &str, f64) -> core::option::Option<f64>
+pub fn pdfrum_script::year_from_time(f64) -> i32
+pub type pdfrum_script::AfError = pdfrum_script::error::Error

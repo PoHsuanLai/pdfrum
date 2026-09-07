@@ -17,6 +17,7 @@ let out = decode(
     &mut Diagnostics::default(),
 )?;
 assert!(matches!(out, DecodeOutput::Bytes(b) if b == b"Hello"));
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 A broken stream is `Ok` plus a diagnostic. `decode_chain` walks `/Filter`
