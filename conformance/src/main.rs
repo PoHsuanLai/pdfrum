@@ -500,7 +500,7 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         // The entry is doing nothing: either the oracle defect was fixed
         // upstream, or the row left the corpus. Both are good news, and both
         // mean the row can be deleted — so say so rather than leave it to rot.
-        println!("divergence for {path} is inert; the file no longer disagrees");
+        println!("divergence for {path} is inert; the file agrees with the oracle");
     }
     let board = Scoreboard::new(now_utc(), per_file);
     let out = args
@@ -575,7 +575,7 @@ fn mark_divergences(
         .collect()
 }
 
-/// The excused paths that no longer name a diverged row.
+/// The excused paths that name no diverged row.
 fn inert_divergences(
     per_file: &[scoreboard::FileResult],
     divergences: &divergences::Divergences,
