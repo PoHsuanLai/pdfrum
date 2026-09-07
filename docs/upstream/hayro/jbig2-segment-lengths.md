@@ -8,7 +8,15 @@ the latest release, and no issue in the hayro tracker mentions segment
 lengths or truncated streams — the draft stands as written. The corpus file it comes from is
 `testing/resources/pixel/bug_867501.pdf` in the PDFium tree, which renders at
 SSIM 0.646 against PDFium's own output and is the only file in our 1675-file
-corpus whose residual is a codec gap.
+corpus whose residual is a codec gap. **Re-verified 2026-09-08** against
+`hayro-jbig2` 0.3.0: the segment table below was re-derived from the stream's
+actual bytes, `Image::new_embedded` was observed returning
+`Parse(UnexpectedEof)`, and a one-field control isolates the zero declared
+length as the cause on its own.
+
+**Repro files:** `bug_867501.pdf` in `../repro/`.
+**Confidence:** observed output, against `hayro-jbig2` 0.3.0.
+**Host:** Ubuntu 22.04.5 LTS, x86-64.
 
 **Why it is not fixed locally.** The behaviour PDFium relies on is structural —
 where segment bodies are read from, and when a truncated stream is an error —
@@ -75,19 +83,40 @@ Its three segment headers are:
 The image is declared 1 wide and 3 tall.
 
 ```rust
-// with `hayro-jbig2` as the only dependency
+// with `hayro-jbig2 = "=0.3.0"` as the only dependency
 fn main() {
-    let data = /* the 77 bytes above */;
-    let out = hayro_jbig2::decode(/* globals: */ None, &data, 1, 3);
-    // observed: Err(UnexpectedEof)
-    // expected: Ok(_) whose 3 rows are white, black, white
+    let data: &[u8] = /* the 77 bytes above */;
+    match hayro_jbig2::Image::new_embedded(data, None) {
+        Ok(img) => println!("OK {}x{}", img.width(), img.height()),
+        Err(e) => println!("ERR {e:?}"), // observed: ERR Parse(UnexpectedEof)
+    }
+    // expected: Ok(_) whose 3 rows decode white, black, white
 }
 ```
 
-Adjust the call to the crate's actual entry point; the point is that no
-prefix of this stream parses either — the longest run of whole segments is the
-22 bytes holding only the two zero-length ones, so feeding a prefix is not a
-workaround.
+The failure happens inside `new_embedded`, before any region is decoded: it
+calls `parse_segments_sequential` and propagates that error, so `from_segments`
+and the page bitmap are never reached.
+
+No prefix of this stream parses either — the longest run of whole segments is
+the 22 bytes holding only the two zero-length ones, and truncating the input to
+22 or 33 bytes gives the same `Parse(UnexpectedEof)` — so feeding a prefix is
+not a workaround.
+
+**The declared length alone is enough to cause it.** Building a single,
+otherwise well-formed page-information segment — an 11-byte header followed by a
+correct 19-byte body declaring a 1x3 page — and varying only the declared data
+length isolates the behaviour from everything else in the file:
+
+| declared data length | result |
+|---|---|
+| 19 (correct) | `Ok`, `width = 1`, `height = 3` |
+| 0 | `Err(Parse(UnexpectedEof))` |
+
+The bytes are identical apart from that one field, and neither case has a
+segment that overruns. So the rejection is caused by the zero-length body being
+sliced to nothing, independently of the third segment's oversized declaration —
+the two behaviours in the summary above are separable, and this is the first.
 
 ### Expected output
 
