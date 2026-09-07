@@ -5,17 +5,9 @@
 //! Events arrive in **page space** — PDF user space, y-up, origin at the
 //! page's crop box. The text engine works in **plate space** — y-down from
 //! the client rectangle's top-left. Everything between them is one affine,
-//! computed once when a field is first touched, and its inverse.
-//!
-//! The C++ has four spaces rather than two, and the extra one exists only
-//! because its edit control is a widget-toolkit window that wants its own
-//! origin. It also computes the rotation twice, in two places that disagree:
-//! one subtracts the rectangle's edges directly, which is right only for an
-//! already-normalized rectangle, and the other calls accessors that normalize;
-//! and its rotation accessor can return a negative number that one caller
-//! takes the absolute value of and the other does not. Here the rotation is
+//! computed once when a field is first touched, and its inverse. Rotation is
 //! normalized into `[0, 360)` once, at the point the plate rectangle is
-//! computed, and there is one transform.
+//! computed.
 //!
 //! # The quadrant swap
 //!

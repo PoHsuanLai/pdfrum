@@ -12,9 +12,9 @@
 //! | no | yes | deflated | `/Filter /FlateDecode`, `/Length` updated, `/DecodeParms` removed |
 //! | no | no | raw, verbatim | untouched |
 //!
-//! Row 1 is why an untouched image survives a save bit-for-bit (invariant
-//! R14): the compressed bytes never go through a decode/encode cycle, so no
-//! codec's rounding can change them.
+//! Row 1 is why an untouched image survives a save bit-for-bit: the
+//! compressed bytes never go through a decode/encode cycle, so no codec's
+//! rounding can change them.
 //!
 //! Row 2 is the odd one — it strips `/Filter` while writing bytes that are
 //! still filtered, so the dictionary lies about the payload. It is reachable
@@ -33,7 +33,7 @@
 //! whole point of the flag, and matches what the parser then expects to find.
 //! A document declaring it **true** gets an enciphered one.
 //!
-//! This is a deliberate divergence (D17). The oracle skips the cipher for a
+//! This is a deliberate divergence. The oracle skips the cipher for a
 //! metadata stream *unconditionally*, without consulting the flag, so it
 //! writes a file whose `/Encrypt` says the metadata is enciphered and whose
 //! metadata is not — which its own reader then deciphers into rubbish on the
@@ -45,7 +45,7 @@
 //! # `/Length` is never allowed to be wrong
 //!
 //! Whatever row runs, the emitted `/Length` equals the byte count between
-//! `stream\r\n` and `\r\nendstream` (invariant R3). The one subtlety is that
+//! `stream\r\n` and `\r\nendstream`. The one subtlety is that
 //! an unchanged `/Length` is left alone rather than rewritten, which is what
 //! keeps `bug_905142.pdf`'s empty `/Filter /FlateDecode /Length 0` stream
 //! declaring `/Length 0` on the way out.
@@ -70,9 +70,9 @@ pub(crate) fn encode(s: &Stream, enc: Option<&Encryptor<'_>>) -> Encoded {
     let has_filter = s.dict.contains_key(names::FILTER);
     let want_flate = !metadata;
     // The document decides whether its own metadata is enciphered; see the
-    // module docs (divergence D17) for why. `CPDF_Stream::WriteTo` never
-    // consults `IsMetadataEncrypted()` — it has callers only in the parser —
-    // so the C++ skips the cipher unconditionally here.
+    // module docs for why. `CPDF_Stream::WriteTo` never consults
+    // `IsMetadataEncrypted()` — it has callers only in the parser — so the
+    // C++ skips the cipher unconditionally here.
     let want_cipher = !metadata || enc.is_some_and(Encryptor::encrypts_metadata);
 
     // Three of the four rows copy the payload verbatim and differ only in

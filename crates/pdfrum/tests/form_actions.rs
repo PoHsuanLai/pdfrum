@@ -120,13 +120,10 @@ fn no_key_but_return_fires_a_links_action() {
 /// Links are **not** in the ring by default, so the *four* link actions the
 /// fixture carries cannot be reached from a default session.
 ///
-/// Audit item **A67**. This used to assert that no stop in the default ring
-/// fires anything at all — "a default session's ring holds widgets alone" —
-/// an assertion that was only ever true because the ring's push button
-/// silently swallowed its Return. The ring did contain a focusable non-link
-/// widget all along, so the property this test actually owns is a
-/// **comparison**: admitting links to the ring puts strictly more actions in
-/// reach than the default ring has, and the difference is the links.
+/// The property this test owns is a **comparison**: admitting links to the
+/// ring puts strictly more actions in reach than the default ring has, and
+/// the difference is the links. A default session's ring holds widgets
+/// alone.
 #[test]
 fn links_are_not_focusable_by_default() {
     fn reachable(session: &mut FormSession<'_>) -> usize {
@@ -162,7 +159,7 @@ fn links_are_not_focusable_by_default() {
     );
 }
 
-/// `ButtonActionInvokeTest`, inverted. Audit item **A67**.
+/// `ButtonActionInvokeTest`, inverted.
 ///
 /// Upstream asserts `DoURIAction` `.Times(0)` and
 /// `ASSERT_FALSE(FORM_OnChar(…, kReturn, 0))`, both under

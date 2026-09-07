@@ -2,7 +2,7 @@
 //!
 //! This is deliberately *not* the file lexer from `pdfrum-parser`. PDFium
 //! runs a second, simpler tokenizer over content streams, and the two
-//! disagree in ways real files depend on (design brief D21):
+//! disagree in ways real files depend on:
 //!
 //! - words truncate at **255** bytes here, 256 in the file lexer;
 //! - strings truncate at **32767** bytes, a cap the file lexer does not have;

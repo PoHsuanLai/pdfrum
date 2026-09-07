@@ -18,9 +18,9 @@
 //! PDFium guards recursion with two visited sets and nothing else, relying on
 //! the native stack for depth. We keep both sets *and* add an explicit
 //! `Limits::max_colorspace_depth`, because a ten-thousand-deep chain of
-//! distinct `/Indexed` arrays would otherwise overflow a Rust stack
-//! (design brief D8). Exceeding it yields "no colorspace" — the same
-//! observable result the C++ reaches by crashing.
+//! distinct `/Indexed` arrays would otherwise overflow a Rust stack.
+//! Exceeding it yields "no colorspace" — the same observable result the
+//! C++ reaches by crashing.
 
 use super::{CalGray, CalRgb, ColorSpace, IccBased, IccProfile, Indexed, Lab};
 use super::{DeviceN, PatternSpace, Separation};

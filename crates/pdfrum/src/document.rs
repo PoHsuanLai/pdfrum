@@ -375,8 +375,8 @@ impl Document {
     /// conformance, and says exactly how much weaker
     /// and which requirements are not covered.
     ///
-    /// This only reports. Nothing is rewritten, and there is no conversion
-    /// yet: the roadmap orders "report before repair" deliberately.
+    /// This only reports. Nothing is rewritten. Conversion is a separate
+    /// pass.
     ///
     /// ```
     /// use pdfrum::{Document, PdfaLevel};

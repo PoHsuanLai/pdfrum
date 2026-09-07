@@ -227,8 +227,7 @@ mod tests {
         let config = Config::default();
         let got = split_at_size(&mut empty, &config, &stub::metrics(), true, 10.0);
         assert_eq!(empty.lines.len(), 1);
-        // The single line of an empty section covers no words at all, which
-        // used to be spelled `(begin, end) == (-1, -1)`.
+        // The single line of an empty section covers no words at all.
         assert_eq!(
             empty.lines.first().map(|l| l.words.clone()),
             Some(None),
@@ -279,8 +278,7 @@ mod tests {
         let _ = split_at_size(&mut wrapped, &config, &stub::metrics(), true, 10.0);
         // A tenth per character into a quarter: two lines of two, then one.
         assert_eq!(wrapped.lines.len(), 3);
-        // Half-open now, so a line that used to read `(0, 1)` inclusive
-        // reads `0..2`.
+        // Half-open: a two-character line is `0..2`.
         assert_eq!(
             wrapped
                 .lines

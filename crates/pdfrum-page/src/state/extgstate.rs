@@ -364,12 +364,9 @@ mod tests {
     #[test]
     fn a_font_array_looks_its_name_up_in_the_resources() {
         // The resolver here always fails, so a `/Font` array clears the font
-        // rather than installing one — which is the observable half of the
-        // quirk: the spec's `[<ref> size]` form never resolves.
-        //
-        // Kept as written 2026-09-02 (audit A18) because it still holds: a
-        // resolver that finds nothing installs nothing either way. What
-        // changed is *what the lookup is given* — see the two tests below.
+        // rather than installing one. The spec's `[<ref> size]` form never
+        // resolves against a resolver that finds nothing. What the lookup is
+        // given is pinned by the two tests below.
         let s = apply(vec![(
             Name::from("Font"),
             Object::Array(Array::of([Object::Name(Name::from("F1")), Object::Int(12)])),

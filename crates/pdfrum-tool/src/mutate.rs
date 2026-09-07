@@ -2,8 +2,8 @@
 //!
 //! # Why the tool mutates at all
 //!
-//! The oracle cannot save a document, so the milestone's exit check is a
-//! sequence rather than a flag diff: pdfrum mutates and saves, then the
+//! The oracle cannot save a document, so the check is a sequence rather
+//! than a flag diff: pdfrum mutates and saves, then the
 //! *oracle* reopens the result and renders it, and its render is compared
 //! against ours of the same file. That answers the question no test inside
 //! this workspace can — whether a page we rewrote is a page another

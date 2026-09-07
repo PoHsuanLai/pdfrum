@@ -52,5 +52,5 @@ pub use time::{
     year_from_time,
 };
 
-/// Alias matching the interface contract's `AfError` name.
+/// Acrobat's name for this error type.
 pub type AfError = Error;

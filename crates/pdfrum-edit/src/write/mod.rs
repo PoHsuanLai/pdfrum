@@ -4,7 +4,7 @@
 //! the same sequence as a numbered stage machine driven by a resumable
 //! `Continue()` loop — that machinery exists to support pausable saving
 //! through its public API, a facility we do not offer, so the stage numbers
-//! survive here only as the order the steps run in (divergence D2).
+//! survive here only as the order the steps run in.
 //!
 //! ```text
 //! header → old objects → new objects → encrypt dict → xref → trailer
@@ -457,7 +457,7 @@ fn file_id(base: &pdfrum_parser::Document, opts: &SaveOptions) -> id::FileId {
 /// The bytes before the first object: the original file when appending to
 /// it, a header otherwise. The original is copied verbatim; nothing in it is
 /// ever rewritten, which is what keeps signatures and byte-range digests
-/// valid (invariant R7).
+/// valid.
 fn write_front(
     sink: &mut Counting<impl Write>,
     base: &pdfrum_parser::Document,

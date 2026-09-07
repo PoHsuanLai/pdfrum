@@ -247,8 +247,8 @@ pub fn mirror_char(code: u32) -> u32 {
 // what a reader searches and copies, and a space that is invisibly not a
 // space defeats both.
 //
-// PDFium hides this from its own goldens because the object gate (audit items
-// A40/A43) deletes the spaces-only text objects that carry these characters
+// PDFium hides this from its own goldens because the object gate
+// deletes the spaces-only text objects that carry these characters
 // before extraction sees them, then regenerates plain `U+0020` from the
 // inter-object spacing heuristic. Removing the gate exposes the disagreement,
 // and pdf.js settles which answer is right: `normalizeUnicode`
@@ -517,9 +517,8 @@ mod tests {
         }
         // A code point with the sentinel index is its own mirror.
         assert_eq!(mirror_char(0x0041), 0x0041);
-        // Audit item **A48**. This used to assert `0x0029`, reproducing the
-        // oracle: `fx_unicode.cpp:48` returns 0 above the BMP where the "no
-        // mirror" sentinel is `0x1FF`, so index 0 is read and
+        // `fx_unicode.cpp:48` returns 0 above the BMP where the "no mirror"
+        // sentinel is `0x1FF`, so index 0 is read and
         // `kFXTextLayoutBidiMirror[0] == 0x0029`. UAX #9 rule L4 mirrors only
         // characters possessing `Bidi_Mirrored` and `BidiMirroring.txt` has no
         // mappings above the BMP, so a supplementary code point is its own

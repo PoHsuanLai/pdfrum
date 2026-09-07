@@ -340,11 +340,9 @@ pub struct Content<T> {
     /// Which `/Contents` element it came from, for the editor, or `None` for
     /// an object that was created rather than parsed.
     ///
-    /// `None` sorts before `Some(0)`, which is what gives a brand-new object
-    /// the lowest free `/Contents` index in the regenerator's ordered walk
-    /// rather than one past the end. That ordering used to be bought with a
-    /// `-1` sentinel; `Option`'s own `Ord` gives it for free and makes the
-    /// check something the compiler enforces.
+    /// `None` sorts before `Some(0)` — `Option`'s own `Ord` — which is what
+    /// gives a brand-new object the lowest free `/Contents` index in the
+    /// regenerator's ordered walk rather than one past the end.
     pub content_stream: Option<usize>,
     /// Whether the object has been changed since it was parsed, so its
     /// content stream must be written again on save

@@ -9,17 +9,9 @@
 //! naturally: a field where even the smallest step overflows takes the
 //! smallest, and one where every step fits takes the largest.
 //!
-//! **Corrected 2026-08-29.** This was ported with the predicate inverted —
-//! reading the search as landing on the first size that *fits* and returning
-//! the step before, which is one that overflows — and the module said so, at
-//! length, as deliberate behavior. It is not: `lower_bound`'s comparator is
-//! `!IsBigger(size)`, and `lower_bound` returns the first element for which
-//! the comparator is **false**, so it finds the first size that is *bigger*
-//! than the plate. Every field with no explicit size was therefore set at 4
-//! rather than at the size that fills its box. Nothing caught it because the
-//! only consumer until now was a free-text annotation, which almost always
-//! carries a size in its `/DA`; `calculate.pdf`'s two `/Tx` widgets carry none
-//! and their goldens show twelve-point digits where this produced specks.
+//! `lower_bound`'s comparator is `!IsBigger(size)`, and `lower_bound` returns
+//! the first element for which the comparator is **false**, so it finds the
+//! first size that is *bigger* than the plate.
 
 use crate::vt::{Config, FONT_SIZE_STEPS, Metrics, Section, split};
 

@@ -763,9 +763,9 @@ pub(crate) fn install(context: &mut Context) -> JsResult<()> {
             NativeFunction::from_fn_ptr(*function),
         )?;
     }
-    // `event` is a live object the `AF*` functions read and write. The full
-    // per-kind field table is §4 of the brief; what a bare script sees before
-    // any field event has fired is the `Initialize` default.
+    // `event` is a live object the `AF*` functions read and write. What a
+    // bare script sees before any field event has fired is the `Initialize`
+    // default.
     let event = ObjectInitializer::new(context)
         .property(
             boa_engine::js_string!("value"),

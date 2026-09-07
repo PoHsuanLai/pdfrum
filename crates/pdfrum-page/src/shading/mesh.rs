@@ -445,9 +445,7 @@ impl<'a> MeshReader<'a> {
     // `iStartColor` locals against an untouched `point_count` — correct, and
     // what this function does. pdf.js has no counterpart (it composites mesh
     // patches on a canvas and needs no bbox helper), so the oracle's own
-    // renderer is the independent reading here. This is the audit's A23,
-    // previously recorded as design brief D18 — "declined", where the
-    // oracle-bug rule makes it obligatory.
+    // renderer is the independent reading here.
     #[must_use]
     pub fn read_patches(&mut self, kind: ShadingKind) -> Vec<Patch> {
         // A tensor patch carries four extra interior points.

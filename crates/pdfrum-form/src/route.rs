@@ -1749,10 +1749,10 @@ pub fn popup_view<R: Resolve>(
 
 /// How far one scrollable control has scrolled, in rows.
 ///
-/// The second value getter the chrome ruling asks for, and the reason it is
-/// keyed by annotation rather than carried on [`popup_view`]: a **list box**
+/// Keyed by annotation rather than carried on [`popup_view`]: a **list box**
 /// scrolls without any dropdown being open, and its scroll bar is the host's
-/// to draw for exactly the same reason the dropdown is.
+/// to draw for exactly the same reason the dropdown is. The host draws chrome;
+/// this crate returns values, not callbacks.
 ///
 /// [`None`] for an annotation that is not a choice widget, or one the session
 /// has never built state for.
@@ -1821,12 +1821,12 @@ pub fn scroll_view<R: Resolve>(
 
 /// The host reporting that the user picked a row of an open dropdown.
 ///
-/// The **intent** half of the chrome ruling: a host that drew the list from
-/// [`popup_view`] tells the session what was chosen, and the session does
-/// what a click on that row would have done — select it, shut the list, and
-/// hand back the widget's new appearance. Exactly `NotifyLButtonUp`'s
-/// sequence, reachable without synthesizing a click at coordinates the host
-/// would have to compute backwards from the geometry it was given.
+/// A host that drew the list from [`popup_view`] tells the session what was
+/// chosen, and the session does what a click on that row would have done —
+/// select it, shut the list, and hand back the widget's new appearance.
+/// Exactly `NotifyLButtonUp`'s sequence, reachable without synthesizing a
+/// click at coordinates the host would have to compute backwards from the
+/// geometry it was given.
 ///
 /// An index past the end of the options is ignored, and the response is
 /// [`Response::ignored`] — a host cannot corrupt a field by miscounting.
@@ -2017,8 +2017,7 @@ fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo, choice: &Ch
     });
     // A widget whose `/DA` names a font the form does not declare has no face
     // to measure with. Falling back to the font size keeps the clamp finite
-    // rather than dividing by zero; it is the old behaviour, kept only for
-    // the path that cannot do better.
+    // rather than dividing by zero, for the path that cannot do better.
     match measured {
         Some(height) if height > 0.0 => height,
         _ => config.font_size,

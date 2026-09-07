@@ -569,9 +569,7 @@ impl<'a> FormSession<'a> {
     /// terminal-field list — and that is the space
     /// [`FieldRef::index`](pdfrum_form::FieldRef::index) carries and the space
     /// [`install_page_scripts`](FormSession::install_page_scripts) installs
-    /// under. It used to be keyed by the page-local `FieldId` instead, which
-    /// agreed only for a single-page form whose widgets appear in `/Fields`
-    /// order; `pdfrum_form::WidgetInfo::field_index` is what closed that.
+    /// under. Calculation order uses document-wide field indices.
     #[cfg(feature = "javascript")]
     fn install_calculation_order(&mut self) {
         let Cascades::Scripted(cascade) = &mut self.state.cascade else {

@@ -1,18 +1,17 @@
 //! Every public enum variant reachable from `pdfrum::*` is constructible
 //! with only `pdfrum::` paths.
 //!
-//! This is the gate adds on top of [`reexports`]: proved a type in a
-//! signature can be *named*; this proves a variant can be *written*, payload
-//! and all. `ColorMode::Forced` was the first known hole — `ColorScheme` was
-//! re-exported, `Argb` was not, and there was no expression a
-//! `cargo add pdfrum` caller could write that produced the variant.
+//! [`reexports`] proves a type in a signature can be *named*; this proves a
+//! variant can be *written*, payload and all. `ColorMode::Forced` needs
+//! `Argb` as well as `ColorScheme` — without both, a `cargo add pdfrum`
+//! caller has no expression that produces the variant.
 //!
 //! The list is derived from `docs/api-baseline/pdfrum.txt` and
 //! `pdfrum+javascript.txt`, not by hand:
 //!
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
 //! 2. Look those names up as `pub enum` in the member-crate snapshots
-//! (renames from 's error payloads: `OpenError` is `LoadError`,
+//! (facade error payloads: `OpenError` is `LoadError`,
 //!    `Rotation` is `pdfrum_page::Rotation`, and so on).
 //! 3. Take every `pub Enum::Variant` / `pub Enum::Variant(payload)` line
 //!    (struct-variant fields are `Enum::Variant::field` and are skipped).
@@ -310,7 +309,6 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::TextActualTextUnprintable,
         DiagKind::TextCharcodeZero,
         DiagKind::TextCharcodesUnmapped(0),
-        DiagKind::TextCharsDeduplicated(0),
         DiagKind::TextHyphenNoPrevChar,
         DiagKind::TextObjectDegenerate,
         DiagKind::TextObjectDropped,
@@ -839,7 +837,9 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 357, "default-feature variant count");
+    // 357 -> 356: `DiagKind::TextCharsDeduplicated` was dropped, the one
+    // variant that had no recording site.
+    assert_eq!(constructed, 356, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 41, "default-feature enum count");
 }
 

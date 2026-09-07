@@ -1,5 +1,5 @@
 //! Importing pages between documents, and the four bugs this crate fixes
-//! rather than ports (design brief D13–D16, escalation E10).
+//! rather than ports.
 //!
 //! Each fix has its own test here, because "we deliberately diverge" is only
 //! a claim until something pins the divergence. Every other quirk in the
@@ -204,7 +204,7 @@ fn an_out_of_range_index_fails() {
 }
 
 // ---------------------------------------------------------------------------
-// D14 — import is transactional
+// Import is transactional
 // ---------------------------------------------------------------------------
 
 // The C++ leaves a stray blank page behind a failed import, and leaves the
@@ -235,7 +235,7 @@ fn a_failed_import_leaves_the_destination_untouched() {
 }
 
 // ---------------------------------------------------------------------------
-// D13 — `/Type /Pages` resolves to the destination's real node
+// `/Type /Pages` resolves to the destination's real node
 // ---------------------------------------------------------------------------
 
 // The C++ hardcodes object 4, which is right only because a freshly created
@@ -283,7 +283,7 @@ trailer\n<< /Root 9 0 R /Size 10 >>\n"
 }
 
 // ---------------------------------------------------------------------------
-// D15 — importing never mutates the source
+// Importing never mutates the source
 // ---------------------------------------------------------------------------
 
 // PDFium's page constructor writes `/Type /Page` into a source dictionary
@@ -686,7 +686,7 @@ fn every_n_up_sheet_has_the_size_asked_for() {
     }
 }
 
-// D16: a source page reused on a *later* sheet must be registered in that
+// A source page reused on a *later* sheet must be registered in that
 // sheet's own `/Resources /XObject`. The C++ reuses the name from a map it
 // never clears while clearing the per-sheet registry, so the sub-page renders
 // blank on every sheet after the first.

@@ -470,7 +470,7 @@ pub fn render(json: &RunJson) -> String {
 /// Two runs of the same corpus side by side: what the defaults cost and what
 /// that buys, per engine and per file.
 ///
-/// The pair is the deliverable. A parity number alone says only "we are
+/// The pair is the finding. A parity number alone says only "we are
 /// faster with things turned off", which nobody doubted; the gap and the
 /// SSIM it costs are the finding. Every engine's rows appear in both
 /// columns, so an engine the profile cannot move shows the same number

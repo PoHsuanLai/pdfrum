@@ -12,10 +12,6 @@
 // that path, which is common in the corpus. The doctest above asserts the
 // wrapped call does not panic, so a future `vello_cpu` that implements the
 // field cannot silently change our rounding.
-//
-// The crate names follow vello's own: upstream ships `vello` (GPU, on `wgpu`),
-// `vello_cpu` and `vello_hybrid`, so the bare name is the GPU backend and this
-// one, which wraps `vello_cpu`, says so.
 #![forbid(unsafe_code)]
 
 mod convert;

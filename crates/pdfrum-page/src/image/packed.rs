@@ -3,11 +3,8 @@
 //!
 //! The image ladder's fourth rung produces bytes: whatever the filter chain
 //! left, in the depth the dictionary declares. Widening those to eight bits
-//! per component used to be a pass over the whole image
-//! (the image ladder's `unpack`, in its generic arm), producing a whole
-//! `Pixels` that [`crate::image::Source`] then walked back down row by row — a
-//! full-size intermediate built only to be consumed one row at a time. On the
-//! guide that pass was 292 M `Ir`.
+//! per component is a row-at-a-time pass: [`Unpacked`] walks the packed
+//! samples and yields one widened row per call.
 //!
 //! [`Packed`] is the same samples in the state the codec left them, plus the
 //! geometry needed to walk them: a [`Depth`], a component count, a pitch and

@@ -1740,7 +1740,7 @@ mod tests {
         assert!(got.contains("0 0.2 0.443137 rg\n"), "{got}");
         // Selected text is white.
         assert!(got.contains("1 g\n"), "{got}");
-        // A live selection hides the caret (brief §1.20.5 rule 7).
+        // A live selection hides the caret.
         let sel = got.find("0 0.2 0.443137 rg\n").expect("band");
         let bt = got.find("BT\n").expect("text");
         assert!(sel < bt, "selection sits behind the text: {got}");

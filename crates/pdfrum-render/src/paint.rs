@@ -232,8 +232,7 @@ fn draw_path_inner<B: RasterBackend>(
     {
         let geometry = crate::walkprofile::phase(crate::walkprofile::Phase::PathXform, || {
             // One buffer, reserved to the source's length: the transform and
-            // the clamp are one pass. It used to be two whole `BezPath`s, the
-            // first discarded at this call — see `transform_hard_clip`.
+            // the clamp are one pass — see `transform_hard_clip`.
             crate::walkprofile::alloc_items(
                 crate::walkprofile::Site::PathGeometry,
                 path.elements().len(),

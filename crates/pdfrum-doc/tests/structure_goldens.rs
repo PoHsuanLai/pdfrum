@@ -137,8 +137,8 @@ fn the_same_element_tree_is_reachable_from_either_page() {
     assert_eq!(first.matches("S: ").count(), second.matches("S: ").count());
 }
 
-/// The dump must terminate on every one of these, and a stack overflow is
-/// what it used to do.
+/// The dump must terminate on every one of these; a cycle must not overflow
+/// the stack.
 ///
 /// A kid slot carries two indices from different spaces — its position in the
 /// parent's `/K`, and its position in the tree's element table — and

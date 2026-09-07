@@ -1,6 +1,6 @@
 //! The faces an ingested SVG's `<text>` is set in.
 //!
-//! roadmap item 3, and the reason it is a feature of its own. An SVG
+//! An SVG
 //! names fonts by *family* — `font-family: Inter, sans-serif` — and a PDF
 //! carries font *programs*. Nothing bridges those two without a font
 //! database, so the caller supplies one: [`SvgFonts`] is a set of face
@@ -21,14 +21,13 @@
 //! **Outlines.** `usvg` lays the text out and flattens each span to filled
 //! paths, and the ingestion walk draws those paths like any others — so text
 //! goes into the page as vectors with no font embedded and no encoding to get
-//! wrong, and it renders identically everywhere. The roadmap's "embedded
-//! fonts on request" half is not this pass's; §6
-//! records why outlines are the honest default and what embedding would need.
+//! wrong, and it renders identically everywhere. Outlines are the default
+//! because embedding would need a font program and an encoding this pass
+//! does not carry.
 //!
 //! An SVG whose `<text>` names a family this set does not carry draws
 //! nothing, and that is reported as [`Unsupported::Text`](crate::Unsupported)
-//! exactly as it was before the feature existed — a missing face is a
-//! reported gap, never a silent one.
+//! — a missing face is a reported gap, never a silent one.
 
 use std::sync::Arc;
 

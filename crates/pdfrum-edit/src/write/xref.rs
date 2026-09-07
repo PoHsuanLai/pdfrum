@@ -22,8 +22,8 @@
 //!
 //! # Every entry says generation 00000
 //!
-//! The writer renumbers every object to generation 0, so the table must agree
-//! (invariant R9). The only `65535` in the output is the free head's.
+//! The writer renumbers every object to generation 0, so the table must agree.
+//! The only `65535` in the output is the free head's.
 
 use std::collections::BTreeMap;
 
@@ -89,10 +89,8 @@ impl ObjectOffsets {
 // `kMaxObjectNumber = 24 * 1024 * 1024` (`cpdf_parser.h:64`) happens to make
 // unreachable. pdf.js writes incremental updates with its own serializer and
 // has no comparable path. We format `u64` with `{:010}`, which produces
-// identical bytes below 2^31 and correct bytes above it. This is the audit's
-// A74, previously recorded as design brief D3 — "a fix, not a behavior
-// change", where the oracle-bug rule makes the fix obligatory. Unreachable on
-// the corpus: no fixture is 2 GiB.
+// identical bytes below 2^31 and correct bytes above it — a fix, not a
+// behavior change. Unreachable on the corpus: no fixture is 2 GiB.
 fn entry_line(out: &mut Vec<u8>, offset: u64) {
     out.extend_from_slice(format!("{offset:010} 00000 n\r\n").as_bytes());
 }

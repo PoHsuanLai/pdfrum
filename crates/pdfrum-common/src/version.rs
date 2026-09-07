@@ -10,9 +10,7 @@ use core::fmt;
 /// The version digits from a `%PDF-M.N` header.
 ///
 /// Two independent digits, not a packed integer. The packed form — `17` for
-/// 1.7 — used to be this type's public spelling on
-/// `Document::version`, `SaveOptions::version` and `write_header`; it now
-/// survives only as a private conversion beside the header parser
+/// 1.7 — survives only as a private conversion beside the header parser
 /// (`pdfrum-parser`'s `doc::read_version`), and appears in no public
 /// signature anywhere in the workspace.
 ///

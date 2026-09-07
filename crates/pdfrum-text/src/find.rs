@@ -22,11 +22,10 @@ const NON_BREAKING_SPACE: char = '\u{00A0}';
 // a line break.
 //
 // `U+00AD`, not the `U+FFFE` noncharacter `cpdf_textpage.cpp:1361`
-// (`AppendChar(0xfffe)`) writes: audit **A41**'s buffer half repairs it at
-// the source, in `pipeline`'s `SOFT_HYPHEN`. Dropping it from the haystack is
-// **A42**, and the two are independent — A42 would still be needed if the
-// buffer carried a plain `-`, because a query for the un-hyphenated word has
-// to match across the break either way.
+// (`AppendChar(0xfffe)`) writes: `pipeline`'s `SOFT_HYPHEN` carries the real
+// character. Dropping it from the haystack is independent of which character
+// stands there — a query for the un-hyphenated word has to match across the
+// break either way.
 const HYPHEN_SENTINEL: char = '\u{00AD}';
 
 /// How a search behaves.
@@ -205,8 +204,7 @@ pub fn is_whole_word(text: &[char], start: usize, end: usize) -> bool {
 ///
 /// Yields text-offset ranges. `Iterator` rather than the C++'s
 /// find-next/find-previous pair: "previous" is a reverse walk over the same
-/// sequence, so the second engine the C++ constructs is unnecessary (design
-/// brief D7).
+/// sequence, so the second engine the C++ constructs is unnecessary.
 #[derive(Debug, Clone)]
 pub struct Search<'a> {
     /// The haystack, case-folded when the search is insensitive, with the
@@ -465,17 +463,15 @@ mod tests {
 
     const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
 
-    // Audit item **A42**. `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into
-    // the text buffer at a soft hyphen and `cpdf_textpagefind.cpp:262`
-    // searches that buffer verbatim, so a word split across a line break can
-    // never be found (crbug.com/431824298). We drop the hyphen from the
-    // haystack and map back, so the word is found and the range is still a
-    // text offset — which is the property the fix has to keep.
+    // `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into the text buffer at a
+    // soft hyphen and `cpdf_textpagefind.cpp:262` searches that buffer
+    // verbatim, so a word split across a line break can never be found
+    // (crbug.com/431824298). We drop the hyphen from the haystack and map
+    // back, so the word is found and the range is still a text offset.
     //
-    // The character dropped is `U+00AD` rather than `U+FFFE` since audit
-    // **A41**'s buffer half; A42 is unaffected by that, because what it
-    // needs is that *something* stands between the two halves of the word
-    // and is not itself part of either.
+    // The character dropped is `U+00AD` rather than `U+FFFE`; what matters is
+    // that *something* stands between the two halves of the word and is not
+    // itself part of either.
     #[test]
     fn a_word_split_across_a_line_break_is_found_joined() {
         // "a note-\nbook here", as the pipeline writes it: the hyphen and the

@@ -85,46 +85,25 @@ pub const BACKEND_ENV: &str = "PDFRUM_BACKEND";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
     /// The analytic AGG-parity rasterizer — the default for `--png`.
-    ///
-    /// Renamed 2026-09-02, was `Exact`.
     #[default]
     Agg,
     /// `tiny-skia` — the determinism baseline and Tier C's gating partner.
     TinySkia,
     /// `vello_cpu`, at its pinned SIMD level and render mode.
-    ///
-    /// Renamed 2026-09-02, was `Vello`: the crate behind it is
-    /// `pdfrum-raster-vello-cpu` and the bare name now belongs to the GPU
-    /// backend, which this tool has no renderer for.
     VelloCpu,
 }
 
 impl Backend {
     /// The backend a name selects, or `None` when it names none of them.
     ///
-    /// **Both pre-2026-09-02 spellings are still accepted**, and for the same
-    /// reason in each case: [`Backend::resolve`] falls back to the default
-    /// rather than erroring, so a name this function stops recognising does
-    /// not become an error a script's author can see — it becomes a silent
-    /// switch to whatever the default happens to be.
-    ///
-    /// - `"exact"` is `Agg` (crate renamed to `pdfrum-raster-agg`). Dropping
-    ///   it would have landed on the default, which *is* `Agg`, so nothing
-    ///   would have moved — but the reason would have been a swallowed typo
-    ///   rather than a name, and the next rename would move it for real.
-    /// - `"vello"` is `VelloCpu` (crate renamed to
-    ///   `pdfrum-raster-vello-cpu`; the bare name now belongs to the GPU
-    ///   backend, which this tool has no renderer for). **This one is not
-    ///   cosmetic:** dropping it would have sent every existing
-    ///   `--use-renderer=vello` and `PDFRUM_BACKEND=vello` run to the
-    ///   default — `Agg` — silently rendering with a different rasterizer
-    ///   than the script asked for, which is exactly the "a typo must not
-    ///   change what a conformance run means" hazard [`Backend::resolve`]
-    ///   documents.
+    /// `"agg"` is [`Agg`], `"tiny-skia"` / `"tinyskia"` is [`TinySkia`],
+    /// `"vello-cpu"` / `"vello_cpu"` / `"vello"` is [`VelloCpu`].
+    /// [`Backend::resolve`] falls back to the default rather than erroring, so
+    /// an unrecognised name is a silent switch.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
-            "agg" | "exact" => Some(Self::Agg),
+            "agg" => Some(Self::Agg),
             "tiny-skia" | "tinyskia" => Some(Self::TinySkia),
             "vello-cpu" | "vello_cpu" | "vello" => Some(Self::VelloCpu),
             _ => None,

@@ -65,7 +65,7 @@ impl Op {
 /// Parse the `--backend` value.
 fn backend(s: &str) -> Option<Backend> {
     match s {
-        "agg" | "exact" => Some(Backend::Agg),
+        "agg" => Some(Backend::Agg),
         "tinyskia" | "tiny-skia" => Some(Backend::TinySkia),
         "vello-cpu" | "vello_cpu" | "vello" => Some(Backend::VelloCpu),
         _ => None,
@@ -865,8 +865,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
 /// `scripts/profile.nu` prefers `perf record`, which samples the hardware and
 /// unwinds DWARF; it is strictly better and this fallback does not pretend
 /// otherwise. But on a machine where `perf` is unavailable — no binary, or
-/// `kernel.perf_event_paranoid > 1`, which is the common case in a container
-/// and is the case on the machine 's numbers were taken on
+/// `kernel.perf_event_paranoid > 1`, which is the common case in a container —
 /// the alternatives are all bad: a backtrace sampler needs `unsafe`
 /// (`unsafe_code = "forbid"` workspace-wide) or an unwinder crate, and a sampler that only reports elapsed time tells you nothing you
 /// did not already know.

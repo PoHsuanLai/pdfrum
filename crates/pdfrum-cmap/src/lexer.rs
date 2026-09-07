@@ -13,7 +13,7 @@
 //! root re-export block is the crate's surface.
 //!
 //! The shape [`Words`] hands back is pinned by `a_cid_range_splits_into_five_words`
-//! below, which is the doctest this module doc used to carry.
+//! below.
 
 /// PDF whitespace. Note `0x80` and `0xFF`, which the PDF specification does
 /// not list: PDFium's character table classifies them as whitespace and real

@@ -175,7 +175,7 @@ pub fn kerning_shift(kerning: f32, font_size: f32, horz_scale: f32, vertical: bo
 /// The matrix a glyph is drawn with, without its translation.
 ///
 /// `[horz_scale 0; 0 1; 0 0] × text_matrix × ctm` in PDF order, which in
-/// kurbo's operand order is `ctm * text_matrix * scale` (design brief D14).
+/// kurbo's operand order is `ctm * text_matrix * scale`.
 #[must_use]
 pub fn glyph_matrix(horz_scale: f32, text_matrix: Affine, ctm: Affine) -> Affine {
     let scale = Affine::new([f64::from(horz_scale), 0.0, 0.0, 1.0, 0.0, 0.0]);

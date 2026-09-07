@@ -11,9 +11,7 @@
 //! `CStretchEngine::Continue` pulls `CPDF_DIB::GetScanline` per source row
 //! (`cstretchengine.cpp:346`), so unpacking, colour conversion and the
 //! horizontal stretch all happen inside one scanline's lifetime and the only
-//! full-height buffer is destination-width. Ours used to materialize the whole
-//! source as RGBA first, which on the guide was 1.3 G `Ir` for a buffer that
-//! was then reduced and discarded.
+//! full-height buffer is destination-width.
 //!
 //! # The stages
 //!
@@ -32,8 +30,7 @@
 //! image it drives an [`Unpacked`] stage that widens the row it is about to
 //! yield, and for a [`Samples::Whole`] one it borrows straight out of the
 //! decoded buffer. So the pipeline is `Unpacked -> Converted` for everything
-//! the filter chain left packed, and the full-size widened buffer the eager
-//! `unpack` used to build never exists.
+//! the filter chain left packed: there is no full-size widened buffer.
 
 use crate::color::{Rgb, adobe_cmyk_to_srgb};
 use crate::image::{BitImage, Pixels, Samples, Unpacked};
@@ -288,11 +285,10 @@ impl<'a> Source<'a> {
 
 /// Components to premultiplied RGBA, one row at a time.
 ///
-/// The second and last stage of today's pipeline: it takes whatever
+/// The second and last stage of the pipeline: it takes whatever
 /// [`Source`] produced, runs it through `convert_row`, and joins
-/// the mask alpha, the matte and the transfer function — all of which are
-/// per-pixel decisions that used to sit inside `to_pixmap`'s loop and are now
-/// the properties of the stage that they are.
+/// the mask alpha, the matte and the transfer function — all per-pixel
+/// decisions that belong to this stage.
 #[derive(Debug)]
 pub struct Converted<'a> {
     source: Source<'a>,

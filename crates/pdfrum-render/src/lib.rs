@@ -4,7 +4,7 @@
 // `pdfrum-page`: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]
 
-// The engine's own machinery. Private per — the surface is the
+// The engine's own machinery. Private: the surface is the
 // `pub use` block below plus the four modules a *backend* implementing
 // `RasterBackend` has to reach into, which are declared separately under
 // "The backend seam".

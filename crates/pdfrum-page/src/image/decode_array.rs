@@ -189,8 +189,6 @@ mod tests {
         assert!(m.apply(0, 99.0).is_finite());
     }
 
-    /// The 16-bit ruling, pinned over the whole sample range.
-    ///
     /// A 16-bit sample is a value in `[0, 65535]` mapped linearly onto the
     /// `/Decode` range (ISO 32000-1 §8.9.5) and then **rounded** onto a byte.
     /// pdf.js computes exactly that (`DeviceRgbCS.getRgbBuffer`,
@@ -224,12 +222,13 @@ mod tests {
         }
         // 16 256 of 65 536 — the rest of the range is where dropping the low
         // byte happens to land on the rounded answer anyway. Pinned so the
-        // ruling's blast radius against the oracle is a number in the tree
-        // rather than a claim in a doc.
+        // count of samples that differ from the oracle is a number in the
+        // tree rather than a claim in a doc.
         assert_eq!(differ_from_oracle, 16_256);
     }
 
-    /// Below 16 bits the ruling changes nothing at all.
+    /// Below 16 bits, rounding, truncating and the oracle's integer scale
+    /// agree on every raw value.
     ///
     /// `step` is exactly `1/max` and the products are small enough to be exact
     /// in `f32`, so rounding and truncating agree on every raw value at 1, 2, 4

@@ -103,10 +103,9 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLin
         // The soft hyphen the search-facing text carries at a line break reads
         // back as the hyphen it stood for, so a URL split across two lines is
         // still matched. `cpdf_linkextract.cpp:154-155` does exactly this —
-        // over `U+FFFE`, because that is what its buffer holds; audit A41's
-        // buffer half made ours hold the real `U+00AD` instead, so the repair
-        // is the same repair over a character that is no longer a
-        // noncharacter.
+        // over `U+FFFE`, because that is what its buffer holds. Ours holds
+        // the real `U+00AD` instead, so the repair is the same repair over a
+        // real character.
         candidate = candidate.replace('\u{00AD}', "-");
 
         if candidate.chars().count() > 5 {
@@ -175,7 +174,7 @@ fn char_range(
 
 /// `count` characters from `first`, or **nothing** when the range runs past
 /// the end — which is what `WideStringView::Substr` does rather than clamping,
-/// and is how the D5 index mismatch stays harmless.
+/// and is how a char-list versus text-buffer index mismatch stays harmless.
 fn substr(text: &[char], first: usize, count: usize) -> String {
     if count == 0 {
         return String::new();
@@ -352,7 +351,7 @@ pub fn trim_external_brackets(text: &[char], start: usize, mut end: usize) -> us
 /// The C++ walks a `size_t` down past zero, which reads out of bounds when
 /// `start` is zero — unreachable, because its only caller runs the loop body
 /// only when `start > 0`. An inclusive descending range cannot underflow at
-/// all (design brief D6).
+/// all.
 fn trim_backwards_to(text: &[char], target: char, start: usize, end: &mut usize) {
     if *end < start {
         return;
@@ -422,8 +421,7 @@ pub fn check_mail_link(candidate: &str) -> Option<String> {
         }
         if ch != '.' || i == marker + 1 {
             // The C++ subtracts on `size_t` here and relies on the wrap; the
-            // checked form keeps the reachable semantics and drops the rest
-            // (design brief D6).
+            // checked form keeps the reachable semantics and drops the rest.
             let host_end = if i == marker + 1 {
                 i.checked_sub(2)
             } else {
@@ -465,7 +463,7 @@ mod tests {
 
     use super::*;
 
-    // Audit item **A46**. The two index spaces diverge exactly where a
+    // The two index spaces diverge exactly where a
     // character is in the char list but not in the text — which is what
     // `AddCharInfo` (`cpdf_textpage.cpp:783-786`) produces for a non-normal
     // character. Cutting the text by char-list offsets then slices the wrong
@@ -815,7 +813,7 @@ mod tests {
     fn a_substring_past_the_end_yields_nothing_rather_than_clamping() {
         let text: Vec<char> = "abc".chars().collect();
         assert_eq!(substr(&text, 0, 3), "abc");
-        // Past the end is empty, which is what keeps the D5 index mismatch
+        // Past the end is empty, which is what keeps an index mismatch
         // from being a panic.
         assert_eq!(substr(&text, 1, 9), "");
         assert_eq!(substr(&text, 9, 1), "");

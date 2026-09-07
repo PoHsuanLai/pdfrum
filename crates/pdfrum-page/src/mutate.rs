@@ -3,13 +3,11 @@
 //!
 //! # A page is a value, so "dirty" is a field and not a callback
 //!
-//! The C++ page-object holder is a live object graph with observers: touching
-//! a page object flips a flag on it and, for a removal, inserts an index into
-//! a set on the holder. Our [`Page`] is a plain record, so the same two facts
-//! live as two plain fields — [`Content::dirty`](crate::Content::dirty) on each object and
+//! [`Page`] is a plain record. The two dirty facts live as two fields —
+//! [`Content::dirty`](crate::Content::dirty) on each object and
 //! [`Page::dirty_streams`] on the page — and the functions in this module are
-//! the only things that set them. Nothing observes anything; a mutation is a
-//! function from a page to a page with two more bits set.
+//! the only things that set them. A mutation is a function from a page to a
+//! page with two more bits set.
 //!
 //! # Why removal needs a set and modification does not
 //!
@@ -30,13 +28,9 @@
 //!
 //! A brand-new object has never been in a content stream, so its
 //! [`Content::content_stream`](crate::Content::content_stream) is `None`. It
-//! sorts before `Some(0)` in the regenerator's ordered walk, which is what
-//! gives a new object the lowest free `/Contents` index rather than one past
-//! the end.
-//!
-//! That ordering used to be bought with a public `NO_CONTENT_STREAM: i32 = -1`
-//! that callers compared against. `Option`'s own `Ord` gives the same order,
-//! and the compiler makes the check mandatory rather than optional.
+//! sorts before `Some(0)` in the regenerator's ordered walk — `Option`'s own
+//! `Ord` — which is what gives a new object the lowest free `/Contents` index
+//! rather than one past the end.
 
 use std::collections::BTreeSet;
 

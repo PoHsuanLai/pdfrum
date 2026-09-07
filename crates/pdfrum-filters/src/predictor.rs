@@ -693,9 +693,9 @@ mod tests {
         ));
     }
 
-    // Open question Q3 in the design brief, resolved as "reproduce the
-    // oracle": for two or four bits per component with one colour the stride
-    // computes to zero, and the C++ loop then adds every byte to itself.
+    // Reproduce the oracle: for two or four bits per component with one colour
+    // the stride computes to zero, and the C++ loop then adds every byte to
+    // itself.
     #[test]
     fn tiff_with_a_zero_stride_doubles_every_byte() {
         for bits_per_component in [2u32, 4] {

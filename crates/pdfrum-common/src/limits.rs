@@ -8,9 +8,7 @@
 //! PDFium has no cap and we chose to add one anyway the field says so and
 //! names what it bounds (`max_decoded_stream_len`, `max_cmap_ranges`,
 //! `max_name_tree_depth`, the script budgets); where PDFium has no cap and we
-//! enforce none either, there is no field — `max_string_len` was one of those
-//! and was removed rather than left defaulting to `usize::MAX` for a
-//! hardening pass nobody had scheduled.
+//! enforce none either, there is no field.
 //!
 //! Two fields are **off by default** rather than PDFium-equivalent, because
 //! they are a host's ceiling on untrusted input and not a parser's: the render

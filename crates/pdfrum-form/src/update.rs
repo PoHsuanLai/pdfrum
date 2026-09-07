@@ -1,28 +1,13 @@
 //! What applying an event hands back.
 //!
-//! This is the crate's **entire** output channel, and its shape is the design
-//! decision the module exists to record: nothing is pushed at a caller.
+//! This is the crate's **entire** output channel: nothing is pushed at a
+//! caller. `apply` **returns** what changed, and the caller re-renders
+//! whatever it likes — which is what a golden comparison does anyway, since
+//! it diffs whole pages. Dirty rectangles describe pixels to someone else; a
+//! library that hands back appearance streams has nobody to describe them to.
 //!
-//! The C++ this replaces fills a thirty-slot table of function pointers and
-//! calls out through it — invalidate this rectangle, set that cursor, start a
-//! timer, focus changed, follow this link. Half the complexity of its widget
-//! layer exists to feed the first of those: a dirty-rectangle accumulator, a
-//! per-line rectangle push, a one-unit inflation, and a lifetime protocol
-//! repeated four times so the callback target can be torn down mid-call.
-//!
-//! All of it goes. `apply` **returns** what changed, and the caller re-renders
-//! whatever it likes — which is exactly what a golden comparison does anyway,
-//! since it diffs whole pages. Dirty rectangles describe pixels to someone
-//! else; a library that hands back appearance streams has nobody to describe
-//! them to.
-//!
-//! Two things become better rather than merely smaller in the process.
 //! Actions come back as a **request** the caller may inspect, ignore or
-//! perform, instead of a callback that has already fired by the time anyone
-//! could object. And a focus change is an ordinary observation in the
-//! returned list rather than a callback that only exists in some versions of
-//! the embedding interface — which is why the version split upstream has here
-//! has no analogue.
+//! perform. A focus change is an ordinary observation in the returned list.
 
 use pdfrum_doc::GeneratedAp;
 use pdfrum_doc::nav::Action;
@@ -78,9 +63,9 @@ pub enum UpdateKind {
     /// "blank". Nothing here needs it. A widget that genuinely draws nothing
     /// is one whose field type gets no appearance at all — a signature, or a
     /// type the classifier could not name — and those never receive
-    /// interaction state, so they never produce an update of any kind. If a
-    /// later milestone needs real suppression, it needs a new variant *and* a
-    /// positive marker in the overlay, not a re-reading of this one.
+    /// interaction state, so they never produce an update of any kind. Real
+    /// suppression would need a new variant *and* a positive marker in the
+    /// overlay, not a re-reading of this one.
     RevertedToFileAppearance,
     /// An action fired and the caller decides whether to perform it.
     ///

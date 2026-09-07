@@ -12,9 +12,9 @@
 //!   it.
 //! - **`usecmap` names a parent.** The operator's operand — the word before
 //!   it — is captured here and resolved by [`crate::parse_embedded`], which
-//!   builds the inheritance. This crate used to discard it, matching the
-//!   oracle's empty `else if`; that is an oracle bug (see the marked site
-//!   below) and §9.7.5.3's two inheritance channels are now both live.
+//!   builds the inheritance. The oracle's empty `else if` is an oracle bug
+//!   (see the marked site below); §9.7.5.3's two inheritance channels are
+//!   both live.
 //! - **Nothing here fails.** Every malformed construct is skipped, clamped or
 //!   ignored, and the CMap that comes out is whatever the program managed to
 //!   say.

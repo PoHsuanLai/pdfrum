@@ -663,7 +663,7 @@ fn render_grouped<B: RasterBackend>(
         _ => ctx.transparency,
     };
     // Isolated means the group starts transparent; non-isolated means it
-    // starts from a copy of what is already on the page. `[oracle-bug]` A12:
+    // starts from a copy of what is already on the page. `[oracle-bug]`:
     // that copy is kept so it can be **removed again** below, which
     // `cpdf_renderstatus.cpp` never does — see `Pixmap::remove_backdrop`.
     let (mut sub, initial_backdrop) = if needs_backdrop(transparency) {
@@ -698,7 +698,7 @@ fn render_grouped<B: RasterBackend>(
     );
     let mut pixels = backend.finish(sub);
 
-    // `[oracle-bug]` A12: take the initial backdrop back out before the group
+    // `[oracle-bug]`: take the initial backdrop back out before the group
     // is composited over the very pixels it was copied from, per §11.4.6's
     // `C = Cn + (Cn - C0) x (a0/agn - a0)`. It must happen *before* the alphas
     // and the mask, which apply to the group's own contribution.
@@ -872,7 +872,7 @@ fn render_direct<B: RasterBackend>(
                 initial_stroke: ctx.initial_stroke,
                 ..ctx.deeper()
             };
-            // `[oracle-bug]` A13: a knockout group composites each of its own
+            // `[oracle-bug]`: a knockout group composites each of its own
             // objects against the group's **initial** backdrop rather than
             // against the accumulated result, so a later object *replaces* an
             // earlier one where they overlap instead of blending over it
@@ -1407,10 +1407,10 @@ fn render_text<B: RasterBackend>(
         // The oracle's small-text path: an alpha bitmap, blitted whole, rather
         // than an outline filled where it lands. It is the majority of the
         // text in the corpus, and reproducing it is what closes the coverage
-        // band the render brief has carried since wave 3. When
-        // it declines — an unhintable face is fine, but a glyph too large or
-        // too degenerate to rasterize is not — the oracle skips the glyph
-        // outright (`if (!glyph.glyph_) continue;`), and so does this.
+        // band. When it declines — an unhintable face is fine, but a glyph
+        // too large or too degenerate to rasterize is not — the oracle skips
+        // the glyph outright (`if (!glyph.glyph_) continue;`), and so does
+        // this.
         if let Some(placement) = glyph.bitmap
             && kinds.fill
             && !kinds.stroke
@@ -2117,7 +2117,7 @@ fn image_placement(
 
 /// Paint an image whose mask has a resolution of its own.
 ///
-/// A mask is **never resolution-reduced** (design brief §1.19.9), so its
+/// A mask is **never resolution-reduced**, so its
 /// dimensions are its own and generally not the base's: `bug_1396266` puts a
 /// 64×64 stencil on a 3×3 image, `bug_1236` a 100×100 `/SMask` on a 400×400
 /// one. PDFium never reconciles the two grids. It renders the base into a
@@ -2482,21 +2482,19 @@ mod tests {
     /// a degenerate clip is only a rectangle like any other, and this pins
     /// that rather than assuming it.
     ///
-    /// The NaN half is the finding. `f64::min` and `f64::max` drop a NaN
-    /// operand and return the other, so the bracket's fold over a path with a
-    /// NaN *endpoint* used to put that NaN straight into the inner box — and
+    /// The NaN half is the one the fold has to get right. `f64::min` and
+    /// `f64::max` drop a NaN operand and return the other, so a fold over a
+    /// path with a NaN *endpoint* must not put that NaN into the inner box:
     /// `outside` compares with `>` and `<`, every comparison against a NaN
-    /// being false, so `!outside(inner, cull)` answered **keep** for every
+    /// being false, so `!outside(inner, cull)` would answer **keep** for every
     /// clip on the page. The exact box does not agree: kurbo's extrema solve
     /// drops the NaN the same way `min`/`max` do, so `path_bbox` is finite and
-    /// `outside` answers it honestly. The bracket kept where the exact test
-    /// culled, and a bracket that changes the answer at all is the one thing
-    /// this bracket may not do.
+    /// `outside` answers it honestly. A bracket that kept where the exact
+    /// test culled would change the answer, and that is the one thing this
+    /// bracket may not do.
     ///
-    /// The direction matters for how alarming this was: the disagreement is a
-    /// *missed* cull, not a wrong one, so nothing was ever drawn incorrectly.
-    /// It is still a disagreement, and the review found it before a document
-    /// did — no corpus file reaches it.
+    /// The direction of a disagreement would be a *missed* cull, not a wrong
+    /// one. No corpus file reaches it.
     #[test]
     fn a_degenerate_clip_and_a_non_finite_point_agree_with_the_exact_answer() {
         // A NaN on a drawn endpoint, which is what reaches the inner box. The

@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn tt_normalize_and_strip_subset_prefix_disagree() {
-        // The brief's §4.5 case: the two strips are genuinely different rules.
+        // The two strips are genuinely different rules.
         let name = "ABCDEF+Foo Bar-Baz";
         assert_eq!(strip_subset_prefix(name.as_bytes()), b"Foo Bar-Baz");
         assert_eq!(tt_normalize(name), "abcdef");

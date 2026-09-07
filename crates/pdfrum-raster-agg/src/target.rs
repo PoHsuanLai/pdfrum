@@ -713,10 +713,10 @@ mod tests {
     /// every offset that puts the image off each edge and each corner of the
     /// target, clipped and unclipped.
     ///
-    /// This is the test the whole rewrite rests on: the hoist is only sound if
-    /// the column clamp, the source offset, the row band and the clip lookup
-    /// are the same answers the per-row derivation gave, and the way to know
-    /// that is to run both and compare the pixels.
+    /// The hoist is only sound if the column clamp, the source offset, the
+    /// row band and the clip lookup are the same answers the per-row
+    /// derivation gave, and the way to know that is to run both and compare
+    /// the pixels.
     #[test]
     fn a_blit_matches_the_span_loop_it_replaced() {
         let img = noisy(5, 4, 0x9E37_79B9);

@@ -196,9 +196,7 @@ pub enum FieldState {
 /// The edit control **is** the state: the text, its layout, the caret, the
 /// selection, the scroll offset and the undo stack are one record with one
 /// invariant, rather than a string here and a stack there that a mutation has
-/// to remember to keep in step. `text` used to be a bare `String` beside a
-/// detached `UndoStack`, and the two could disagree — undoing moved one and
-/// not the other.
+/// to remember to keep in step.
 ///
 /// ```
 /// use pdfrum_doc::vt::{Config, Metrics};
