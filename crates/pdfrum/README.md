@@ -2,10 +2,10 @@
 
 **A composable PDF library built in Rust.**
 
-Tested against [PDFium](https://pdfium.googlesource.com/pdfium/)'s suite as a
-read-only oracle — not a binding. No C/C++ in the library build; `unsafe` is
-forbidden. No XFA, no viewer. JavaScript is off by default (`javascript`
-feature, [boa](https://boajs.dev/)). Every public type is `Send + Sync`.
+pdfrum is a modern, thread-safe PDF library — modular stages you compose,
+CPU or GPU backends, no `unsafe` — tested against PDFium. For a UI, a RAG
+pipeline, or any app that has to open a file. JavaScript is off by default
+(`javascript` feature). No XFA, no viewer.
 
 ```toml
 pdfrum = "0.1"
