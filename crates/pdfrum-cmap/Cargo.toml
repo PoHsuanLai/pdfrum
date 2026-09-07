@@ -11,7 +11,19 @@ keywords = ["pdf", "cmap", "cjk", "encoding", "cid"]
 categories = ["text-processing", "encoding", "internationalization"]
 # The generated table blob is committed and shipped; build.rs only regenerates
 # it when PDFRUM_REGEN_CMAP_TABLES is set (see tables/PROVENANCE.md).
-include = ["src/**", "tables/**", "build.rs", "README*", "LICENSE*"]
+# Extensions are named rather than whole directories: `include` globs read
+# the working tree, not git, so a `**` here would ship build residue such as
+# `__pycache__` that `.gitignore` keeps out of the repository.
+include = [
+    "src/**",
+    "tables/*.bin",
+    "tables/*.json",
+    "tables/*.md",
+    "tables/*.py",
+    "build.rs",
+    "README*",
+    "LICENSE*",
+]
 
 [lints]
 workspace = true

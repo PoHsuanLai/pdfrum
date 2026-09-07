@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["pdf", "render", "parse", "text", "graphics"]
 categories = ["parser-implementations", "graphics", "text-processing", "multimedia::images"]
 
+# docs.rs renders the full API, including every optional-feature type.
+[package.metadata.docs.rs]
+all-features = true
+
 # Copied from `[workspace.lints]` rather than `workspace = true`: Cargo
 # forbids mixing the inherit flag with extra keys, and this crate adds one
 # clippy lint of its own. Keep the two tables in step.
@@ -305,3 +309,27 @@ required-features = ["vello-cpu", "edit", "forms"]
 [[test]]
 name = "svg_form"
 required-features = ["svg-ingest"]
+
+[[test]]
+name = "limits"
+required-features = ["vello-cpu"]
+
+[[test]]
+name = "metadata"
+required-features = ["edit"]
+
+[[test]]
+name = "pdfa_convert"
+required-features = ["edit"]
+
+[[test]]
+name = "stamp"
+required-features = ["vello-cpu", "edit"]
+
+[[test]]
+name = "thumbnails"
+required-features = ["vello-cpu"]
+
+[[test]]
+name = "traits"
+required-features = ["vello-cpu"]
