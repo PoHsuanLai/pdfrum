@@ -53,8 +53,9 @@ const MAX_CHUNK: usize = 10_000_000;
 ///
 /// # Errors
 ///
-/// [`Error::OutputTooLarge`] alone, when the output passes
-/// `limits.max_decoded_stream_len`.
+/// [`Error::OutputTooLarge`] alone, when the stream has more to say than
+/// `limits.max_decoded_stream_len` bytes. The buffer never grows past that
+/// bound, so the error costs no more memory than the bound allows.
 pub fn decode_flate(
     input: &[u8],
     estimated_size: usize,
@@ -78,13 +79,18 @@ pub fn decode_flate(
     let mut finished = false;
 
     loop {
-        if out.len() > limits.max_decoded_stream_len {
+        let filled = out.len();
+        // The budget is a ceiling on the buffer, not just on the result: growing
+        // past it and truncating afterwards would let a bomb allocate the very
+        // memory the limit exists to deny. Room of zero means the previous round
+        // filled the buffer exactly and the stream still wants more.
+        let room = limits.max_decoded_stream_len.saturating_sub(filled);
+        if room == 0 {
             return Err(Error::OutputTooLarge {
                 limit: limits.max_decoded_stream_len,
             });
         }
-        let filled = out.len();
-        out.resize(filled.saturating_add(chunk), 0);
+        out.resize(filled.saturating_add(chunk.min(room)), 0);
         // Unreachable `else`: the resize above just made this range exist.
         let Some(tail) = out.get_mut(filled..) else {
             break;
@@ -112,11 +118,6 @@ pub fn decode_flate(
         }
     }
 
-    if out.len() > limits.max_decoded_stream_len {
-        return Err(Error::OutputTooLarge {
-            limit: limits.max_decoded_stream_len,
-        });
-    }
     if !finished {
         // The stream did not reach its end marker: it is truncated, corrupt,
         // or was never deflate to begin with. All three keep their prefix.
@@ -314,6 +315,40 @@ mod tests {
             decode_flate(&bomb, 0, &limits, &mut diags),
             Err(Error::OutputTooLarge { limit: 1024 * 1024 })
         );
+    }
+
+    // A stream whose decoded size sits far above the budget must not allocate
+    // its way there first: the ceiling bounds the buffer, not merely the value
+    // that comes back.
+    #[test]
+    fn the_buffer_never_grows_past_the_ceiling() {
+        let bomb = compress(&vec![0u8; 8 * 1024 * 1024]);
+        for limit in [0usize, 1, 100, 4096, 65_536] {
+            let limits = Limits {
+                max_decoded_stream_len: limit,
+                ..Limits::default()
+            };
+            let mut diags = Diagnostics::default();
+            assert_eq!(
+                decode_flate(&bomb, 20_000_000, &limits, &mut diags),
+                Err(Error::OutputTooLarge { limit }),
+                "limit {limit}"
+            );
+        }
+    }
+
+    // A payload that fits exactly is not a bomb: the budget is inclusive, so
+    // the last byte of room is usable rather than the trigger for a refusal.
+    #[test]
+    fn a_payload_of_exactly_the_ceiling_decodes() {
+        let payload = vec![9u8; 4096];
+        let limits = Limits {
+            max_decoded_stream_len: payload.len(),
+            ..Limits::default()
+        };
+        let mut diags = Diagnostics::default();
+        let out = decode_flate(&compress(&payload), 0, &limits, &mut diags).expect("it fits");
+        assert_eq!(out, payload);
     }
 
     // The writer's half : whatever the
