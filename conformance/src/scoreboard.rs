@@ -17,6 +17,13 @@ use crate::json::Json;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Status {
     Pass,
+    /// The file disagrees with the oracle and pdfrum is deliberately right:
+    /// the oracle departs from ISO 32000-1 and matching it would mean
+    /// reproducing a known defect. Named in
+    /// [`divergences.toml`](crate::divergences), which admits a row only with
+    /// a reason and a citation. Scored outside the pass/fail denominator and
+    /// reported as its own count — never as a pass.
+    Diverged,
     Fail,
 }
 
@@ -25,6 +32,7 @@ impl Status {
     pub fn as_str(self) -> &'static str {
         match self {
             Status::Pass => "pass",
+            Status::Diverged => "diverged",
             Status::Fail => "fail",
         }
     }
@@ -32,10 +40,10 @@ impl Status {
     /// Parses the JSON spelling; anything unrecognized reads as a failure,
     /// which is the safe direction for the regression gate.
     pub fn from_str(text: &str) -> Status {
-        if text == "pass" {
-            Status::Pass
-        } else {
-            Status::Fail
+        match text {
+            "pass" => Status::Pass,
+            "diverged" => Status::Diverged,
+            _ => Status::Fail,
         }
     }
 }
@@ -178,8 +186,15 @@ pub struct Scoreboard {
 /// Aggregate counts, derived rather than stored so they can never drift.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Totals {
+    /// Rows the pass rate is taken over: `pass + fail`. Diverged rows are not
+    /// among them — a file the oracle scores wrong is not a question this
+    /// corpus can ask, so leaving it in the denominator would grade pdfrum
+    /// against a defect.
     pub files: u64,
     pub pass: u64,
+    /// Rows excused by [`divergences.toml`](crate::divergences), counted
+    /// beside the denominator rather than inside it.
+    pub diverged: u64,
     pub fail: u64,
     /// Failure tag to the number of files carrying it.
     pub by_tag: BTreeMap<String, u64>,
@@ -188,6 +203,16 @@ pub struct Totals {
 }
 
 impl Totals {
+    /// The share of scored files that passed.
+    ///
+    /// `None` when every row diverged and nothing was scored; a rate over an
+    /// empty set is not zero.
+    pub fn pass_rate(&self) -> Option<f64> {
+        // Both counts are corpus sizes, far under f64's exact-integer range.
+        #[allow(clippy::cast_precision_loss, reason = "counts of corpus files")]
+        (self.files > 0).then(|| self.pass as f64 / self.files as f64)
+    }
+
     /// The share of text goldens matched, over all of them.
     ///
     /// `None` when there are none to match; a rate over an empty set is not
@@ -220,13 +245,11 @@ impl Scoreboard {
 
     /// Counts, recomputed from the rows.
     pub fn totals(&self) -> Totals {
-        let mut totals = Totals {
-            files: self.per_file.len() as u64,
-            ..Totals::default()
-        };
+        let mut totals = Totals::default();
         for result in &self.per_file {
             match result.status {
                 Status::Pass => totals.pass += 1,
+                Status::Diverged => totals.diverged += 1,
                 Status::Fail => totals.fail += 1,
             }
             for tag in &result.tags {
@@ -234,6 +257,7 @@ impl Scoreboard {
             }
             totals.text.add(result.tier_a.text);
         }
+        totals.files = totals.pass + totals.fail;
         totals
     }
 
@@ -241,6 +265,11 @@ impl Scoreboard {
     ///
     /// A file that vanished from the new run is *not* a regression: the corpus
     /// or the suppression list may legitimately shrink.
+    ///
+    /// Nor is a file that diverged, because a divergence cannot be reached
+    /// from a pass: [`Status::Diverged`] is only assigned to a row that failed
+    /// its comparison, so a divergence added over a passing file leaves that
+    /// file passing and the entry inert.
     pub fn regressions(previous: &Scoreboard, current: &Scoreboard) -> Vec<String> {
         let now: BTreeMap<&str, Status> = current
             .per_file
@@ -266,6 +295,7 @@ impl Scoreboard {
                 Json::Obj(vec![
                     ("files".to_owned(), Json::int(totals.files)),
                     ("pass".to_owned(), Json::int(totals.pass)),
+                    ("diverged".to_owned(), Json::int(totals.diverged)),
                     ("fail".to_owned(), Json::int(totals.fail)),
                     (
                         "by_tag".to_owned(),
@@ -341,6 +371,22 @@ fn text_totals_json(totals: &Totals) -> Json {
 }
 
 impl FileResult {
+    /// Re-labels a failed row as a deliberate divergence, keeping its tags
+    /// and its notes.
+    ///
+    /// What differed is still worth reading — the row records the same
+    /// mismatch it always did — so only the status moves, and the note gains
+    /// the reason the divergence is allowed.
+    pub fn diverged(mut self, reason: &str) -> FileResult {
+        self.status = Status::Diverged;
+        self.notes = if self.notes.is_empty() {
+            reason.to_owned()
+        } else {
+            format!("{}; diverges deliberately: {reason}", self.notes)
+        };
+        self
+    }
+
     /// A row for a file the tool could not be asked about at all.
     pub fn unsupported_tool(path: String, notes: String) -> FileResult {
         FileResult {
@@ -525,6 +571,70 @@ mod tests {
             tier_b: None,
             notes: "something went wrong".to_owned(),
         }
+    }
+
+    #[test]
+    fn a_diverged_row_leaves_the_denominator_and_is_counted_apart() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                pass("a.pdf"),
+                fail("b.pdf", &["tierA-mismatch"]).diverged("the oracle drops the page's space"),
+                fail("c.pdf", &["crash"]),
+            ],
+        );
+        let totals = board.totals();
+        assert_eq!(totals.files, 2);
+        assert_eq!(totals.pass, 1);
+        assert_eq!(totals.diverged, 1);
+        assert_eq!(totals.fail, 1);
+        assert_eq!(totals.pass_rate(), Some(0.5));
+    }
+
+    #[test]
+    fn a_diverged_row_keeps_its_tags_and_says_why() {
+        let row = fail("b.pdf", &["pixel-fail"]).diverged("the oracle ignores /K");
+        assert_eq!(row.status, Status::Diverged);
+        assert_eq!(row.tags, ["pixel-fail"]);
+        assert_eq!(
+            row.notes,
+            "something went wrong; diverges deliberately: the oracle ignores /K"
+        );
+    }
+
+    #[test]
+    fn a_diverged_row_round_trips_through_json() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![fail("b.pdf", &["pixel-fail"]).diverged("the oracle ignores /K")],
+        );
+        let back = Scoreboard::from_text(&board.to_text()).unwrap();
+        assert_eq!(back, board);
+        assert_eq!(back.per_file[0].status, Status::Diverged);
+    }
+
+    #[test]
+    fn a_divergence_is_never_folded_into_pass() {
+        // The one guarantee a reader of the summary depends on.
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![fail("b.pdf", &["crash"]).diverged("the oracle is wrong")],
+        );
+        let totals = board.totals();
+        assert_eq!(totals.pass, 0);
+        assert_eq!(totals.files, 0);
+        assert_eq!(totals.pass_rate(), None);
+        assert!(board.to_text().contains("\"diverged\": 1"));
+    }
+
+    #[test]
+    fn a_pass_that_diverges_is_not_a_regression() {
+        let before = Scoreboard::new("t".to_owned(), vec![pass("a.pdf")]);
+        let after = Scoreboard::new(
+            "t".to_owned(),
+            vec![fail("a.pdf", &["crash"]).diverged("the oracle is wrong")],
+        );
+        assert!(Scoreboard::regressions(&before, &after).is_empty());
     }
 
     #[test]

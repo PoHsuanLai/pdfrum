@@ -18,6 +18,7 @@
 #![forbid(unsafe_code)]
 
 mod corpus;
+mod divergences;
 mod generate;
 mod goldens;
 mod json;
@@ -266,6 +267,22 @@ fn load_thresholds() -> Result<thresholds::Thresholds> {
     }
 }
 
+/// The deliberate divergences, or nothing when the file is absent.
+///
+/// A malformed file is an error rather than a fallback, for the reason
+/// [`load_thresholds`] gives: this is the other half of the ratchet, and a
+/// typo must not quietly turn every excused row back into a failure — nor an
+/// unparsed one into a pass.
+fn load_divergences() -> Result<divergences::Divergences> {
+    let path = conformance_dir().join("divergences.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => {
+            divergences::parse(&text).with_context(|| format!("parsing {}", path.display()))
+        }
+        Err(_) => Ok(divergences::Divergences::default()),
+    }
+}
+
 /// The `conformance/` directory, resolved from this binary's manifest so the
 /// harness works from any working directory.
 fn conformance_dir() -> PathBuf {
@@ -459,6 +476,8 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
 
     let thresholds = load_thresholds()?;
 
+    let divergences = load_divergences()?;
+
     let store = args.corpus.store();
     let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
     let per_file = score_entries(
@@ -470,6 +489,19 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         &fixup,
         args.corpus.workers(),
     )?;
+    let per_file = mark_divergences(per_file, &divergences);
+    if !divergences.is_empty() {
+        println!(
+            "divergences.toml excuses {} file(s) from the denominator",
+            divergences.len()
+        );
+    }
+    for path in inert_divergences(&per_file, &divergences) {
+        // The entry is doing nothing: either the oracle defect was fixed
+        // upstream, or the row left the corpus. Both are good news, and both
+        // mean the row can be deleted — so say so rather than leave it to rot.
+        println!("divergence for {path} is inert; the file no longer disagrees");
+    }
     let board = Scoreboard::new(now_utc(), per_file);
     let out = args
         .out
@@ -481,10 +513,15 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
     std::fs::write(&out, board.to_text()).with_context(|| format!("writing {}", out.display()))?;
 
     let totals = board.totals();
+    // Three numbers, always. `files` is the denominator the rate is taken
+    // over, and `diverged` sits outside it rather than inside `pass`, so a
+    // reader can never mistake an excused row for a matched one.
     println!(
-        "run: {} files, {} pass, {} fail -> {}",
+        "run: {} files, {} pass ({:.1}%), {} diverged, {} fail -> {}",
         totals.files,
         totals.pass,
+        totals.pass_rate().unwrap_or(0.0) * 100.0,
+        totals.diverged,
         totals.fail,
         out.display()
     );
@@ -515,6 +552,45 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         println!("no regressions against {}", previous_path.display());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Re-labels the rows named in `divergences.toml` as deliberate divergences.
+///
+/// Only a row that *failed* is re-labelled. An entry over a file that already
+/// passes is inert rather than an error: the corpus and the oracle both move,
+/// and an upstream fix landing is exactly the case where a row should go
+/// quiet before anyone gets round to deleting it — an inert entry is visible
+/// in the file and costs nothing, where an error would break the board on the
+/// day the bug was fixed.
+fn mark_divergences(
+    per_file: Vec<scoreboard::FileResult>,
+    divergences: &divergences::Divergences,
+) -> Vec<scoreboard::FileResult> {
+    per_file
+        .into_iter()
+        .map(|result| match divergences.get(&result.path) {
+            Some(entry) if result.status == scoreboard::Status::Fail => result.diverged(&entry.why),
+            _ => result,
+        })
+        .collect()
+}
+
+/// The excused paths that no longer name a diverged row.
+fn inert_divergences(
+    per_file: &[scoreboard::FileResult],
+    divergences: &divergences::Divergences,
+) -> Vec<String> {
+    let diverged: BTreeSet<&str> = per_file
+        .iter()
+        .filter(|result| result.status == scoreboard::Status::Diverged)
+        .map(|result| result.path.as_str())
+        .collect();
+    divergences
+        .iter()
+        .map(|(path, _)| path)
+        .filter(|path| !diverged.contains(path.as_str()))
+        .cloned()
+        .collect()
 }
 
 /// Scores every listing entry, plus a `#form-events` row when a sibling

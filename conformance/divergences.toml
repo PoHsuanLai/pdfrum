@@ -1,0 +1,47 @@
+# Files where pdfrum deliberately disagrees with the oracle.
+#
+# PDFium is the oracle, not the specification. Where the two part company and
+# ISO 32000-1 backs pdfrum, matching the oracle would mean reproducing a known
+# defect, so the file is scored as *diverged*: it leaves the pass/fail
+# denominator and is reported as its own count. It is never folded into
+# `pass` — the summary always prints three numbers.
+#
+# The ratchet is one-directional, as in thresholds.toml. An entry is admitted
+# only with evidence, and the harness enforces that: both `why` and `cite`
+# must be present and non-empty, and an entry naming a file that *passes* is
+# rejected, because there is nothing to excuse. Never add a row to make a
+# regression green.
+#
+# Keyed by the corpus-relative path the scoreboard uses, `#form-events` and
+# `#js-transcript` suffixes included. `why` is one sentence in the harness's
+# voice; `cite` names the tracker issue, the `[oracle-bug]` source location
+# that reasons it, or the upstream write-up under docs/upstream/.
+
+[divergences]
+
+# PDFium's text page drops any text object whose glyph bounding box measures
+# empty (cpdf_textpage.cpp:881, kSizeEpsilon at :42), which costs the page its
+# spaces and, on bug_921, its running prose.
+"resources/whitespace.pdf" = { why = "the page's only text object draws a space, and the oracle's empty-box gate discards it, so `--txt` comes back empty where the page plainly draws one", cite = "crbug.com/40643656; crates/pdfrum-text/src/pipeline.rs `keep_spaces_only`; docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md" }
+"resources/bug_921.in" = { why = "the empty-box gate drops real letters here, not whitespace, so the oracle's text dump loses running prose the page draws", cite = "crbug.com/40643656; docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md" }
+"resources/bug_921.pdf" = { why = "the empty-box gate drops real letters here, not whitespace, so the oracle's text dump loses running prose the page draws", cite = "crbug.com/40643656; docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md" }
+"resources/pixel/bug_665467.in" = { why = "the empty-box gate drops the page's text, which moves both the text dump and the glyphs the render puts down", cite = "crbug.com/40643656; docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md" }
+"resources/pixel/bug_665467.pdf" = { why = "the empty-box gate drops the page's text, which moves both the text dump and the glyphs the render puts down", cite = "crbug.com/40643656; docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md" }
+
+# ISO 32000-1 §11.6.6: every object in a knockout group composites against the
+# group's initial backdrop, so a later object replaces an earlier one where
+# they overlap. PDFium reads no `/K` under core/fpdfapi and
+# `RenderDeviceDriverIface::SetGroupKnockout` is an empty body the AGG driver
+# never overrides, so the oracle renders a knockout group as an ordinary one.
+"resources/pixel/same_color_knockout_fill.in" = { why = "the oracle renders the knockout group as an ordinary transparency group, so its fills accumulate where §11.6.6 says the later one replaces the earlier", cite = "ISO 32000-1 §11.6.6; crates/pdfrum-render/src/walk.rs `render_knockout_form`" }
+"resources/pixel/same_color_knockout_fill.pdf" = { why = "the oracle renders the knockout group as an ordinary transparency group, so its fills accumulate where §11.6.6 says the later one replaces the earlier", cite = "ISO 32000-1 §11.6.6; crates/pdfrum-render/src/walk.rs `render_knockout_form`" }
+
+# The javascript transcripts below assert V8 itself rather than any behaviour
+# ISO 32000-1 or the Acrobat scripting reference defines. pdfrum runs boa, and
+# reproducing them would mean shipping V8's internals. A transcript that
+# differs because pdfrum reaches the *wrong outcome* belongs in `fail`; only a
+# row whose outcome already agrees and whose wording is the engine's own is
+# admissible here.
+"resources/javascript/foreground_task.in#js-transcript" = { why = "the fixture calls `gc`, a V8 debug builtin that is not a language feature and reaches nothing the PDF scripting model defines", cite = "crates/pdfrum-form/src/script/tests.rs `no_io_is_reachable_from_a_script`" }
+"resources/javascript/v8_features.in#js-transcript" = { why = "the golden asserts `typeof gc = function`, which holds only inside V8", cite = "crates/pdfrum-form/src/script/tests.rs `no_io_is_reachable_from_a_script`" }
+"resources/javascript/array_buffer.in#js-transcript" = { why = "the golden pins V8's `Array buffer allocation failed` wording for an allocation both engines refuse", cite = "ECMA-262 §25.1.3.1 (RangeError is required, its message is not)" }
