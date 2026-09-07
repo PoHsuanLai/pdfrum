@@ -45,6 +45,86 @@ pub enum ToolState {
     Unsupported(String),
 }
 
+/// Where a tool binary came from, carried into the scoreboard.
+///
+/// A scoreboard is only as trustworthy as the binary that produced it, and a
+/// stale binary is the failure that hides: it answers the probe, scores every
+/// tier, and reports comparisons that describe code nobody is looking at. The
+/// tool mirrors `pdfium_test`'s flag surface exactly and so has no `--version`
+/// to ask, which leaves the filesystem as the only witness — path, mtime and
+/// size, recorded on the board so a reviewer can tell which build a pass rate
+/// belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolProvenance {
+    pub path: String,
+    /// The binary's mtime as an RFC-3339-ish UTC stamp, or `None` when the
+    /// filesystem would not say.
+    pub modified: Option<String>,
+    pub size: Option<u64>,
+}
+
+impl ToolProvenance {
+    /// Reads what the filesystem knows about the resolved binary.
+    pub fn of(binary: &Path) -> ToolProvenance {
+        let meta = std::fs::metadata(binary).ok();
+        ToolProvenance {
+            path: binary.display().to_string(),
+            modified: meta
+                .as_ref()
+                .and_then(|m| m.modified().ok())
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|since| crate::stamp_utc(since.as_secs())),
+            size: meta.as_ref().map(std::fs::Metadata::len),
+        }
+    }
+
+    /// Renders as the scoreboard's `tool` object.
+    pub fn to_json(&self) -> crate::json::Json {
+        use crate::json::Json;
+        let mut fields = vec![("path".to_owned(), Json::str(&self.path))];
+        if let Some(modified) = &self.modified {
+            fields.push(("modified".to_owned(), Json::str(modified)));
+        }
+        if let Some(size) = self.size {
+            // Not `Json::int`: that saturates at `u32::MAX`, and a release
+            // binary is large enough that the clamp would be a live risk.
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a file size in bytes is inside f64's exact integer range"
+            )]
+            fields.push(("size".to_owned(), Json::Num(size as f64)));
+        }
+        Json::Obj(fields)
+    }
+
+    /// Reads one back; `None` unless a `path` is there to anchor it.
+    pub fn from_json(value: &crate::json::Json) -> Option<ToolProvenance> {
+        use crate::json::Json;
+        Some(ToolProvenance {
+            path: value.get("path").and_then(Json::as_str)?.to_owned(),
+            modified: value
+                .get("modified")
+                .and_then(Json::as_str)
+                .map(str::to_owned),
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the value round-trips a byte count written by `to_json`"
+            )]
+            size: value.get("size").and_then(Json::as_f64).map(|n| n as u64),
+        })
+    }
+
+    /// The one line a run prints so the binary under test is on the record.
+    pub fn summary(&self) -> String {
+        let modified = self.modified.as_deref().unwrap_or("unknown");
+        match self.size {
+            Some(size) => format!("tool {} (modified {modified}, {size} bytes)", self.path),
+            None => format!("tool {} (modified {modified})", self.path),
+        }
+    }
+}
+
 /// A one-page PDF the probe feeds the tool, with a `/MediaBox` on the page
 /// itself so `--show-pageinfo` has something to say about it.
 const PROBE_PDF: &[u8] = b"%PDF-1.7\n\
@@ -1533,6 +1613,34 @@ mod tests {
         assert_eq!(result.tags, [tag::MISSING_GOLDEN]);
         assert_eq!(result.status, Status::Fail);
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn provenance_dates_a_binary_that_is_there() {
+        let dir = std::env::temp_dir().join(format!("pdfrum-prov-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let binary = dir.join("pdfrum-tool");
+        std::fs::write(&binary, b"not really a binary").unwrap();
+
+        let provenance = ToolProvenance::of(&binary);
+        assert_eq!(provenance.path, binary.display().to_string());
+        assert_eq!(provenance.size, Some(19));
+        let modified = provenance.modified.clone().expect("an mtime");
+        assert_eq!(modified.len(), 20, "{modified}");
+        assert!(modified.ends_with('Z'), "{modified}");
+        assert!(provenance.summary().contains(&modified), "{provenance:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provenance_of_a_missing_binary_still_names_the_path() {
+        // The path is the useful half of the diagnostic when the binary is
+        // absent: it says which path was resolved and came up empty.
+        let provenance = ToolProvenance::of(Path::new("/nonexistent/pdfrum-tool"));
+        assert_eq!(provenance.path, "/nonexistent/pdfrum-tool");
+        assert_eq!(provenance.modified, None);
+        assert_eq!(provenance.size, None);
+        assert!(provenance.summary().contains("unknown"), "{provenance:?}");
     }
 }
 
