@@ -1502,3 +1502,55 @@ fn the_glyph_buffer_comes_back_to_the_session_after_a_text_object() {
         "the placement buffer was not returned to the session"
     );
 }
+
+#[test]
+fn stroked_text_in_a_pattern_colour_paints_its_glyphs() {
+    // `Tr 1` with a `/Pattern` stroke colour. The unstroked arm of
+    // `DrawTextPathWithPattern` replaces the run with its bounding rectangle
+    // and clips that to the glyphs; the stroked arm instead turns every glyph
+    // outline into a path object of its own and strokes it through the
+    // pattern machinery. Sending a stroked run down the unstroked arm — or
+    // down neither — leaves the page blank, which is what this pins.
+    let (text, _font) = text_object(
+        substituted_font("Helvetica", 65, &[722; 26]),
+        40.0,
+        b"A",
+        4.0,
+        8.0,
+    );
+    let PageObject::Text(mut content) = text else {
+        panic!("text_object builds a text object");
+    };
+    content.object.render_mode = TextRenderMode::Stroke;
+    content
+        .state
+        .stroke
+        .set_space(std::sync::Arc::new(ColorSpace::Pattern(Box::new(
+            pdfrum_page::PatternSpace {
+                base: Some(Box::new(ColorSpace::DeviceRgb)),
+            },
+        ))));
+    content.state.stroke.set_pattern(
+        pdfrum_object::Name::from("P0"),
+        &[],
+        Some(std::sync::Arc::new(pdfrum_page::Pattern::Tiling(Box::new(
+            solid_tile(4.0, true, [1.0, 0.0, 0.0], Affine::IDENTITY),
+        )))),
+    );
+    let object = PageObject::Text(content);
+    let (vello, tiny) = render_both(&page(48.0, 48.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        let inked = (0..surface.width())
+            .flat_map(|x| (0..surface.height()).map(move |y| (x, y)))
+            .filter(|&(x, y)| {
+                surface
+                    .pixel(x, y)
+                    .is_some_and(|px| px != [255, 255, 255, 255])
+            })
+            .count();
+        assert!(
+            inked > 0,
+            "a pattern-coloured stroked run must paint its glyph outlines"
+        );
+    }
+}
