@@ -1,5 +1,9 @@
 # pdfrum-cli
 
+![pdfrum CLI: info, doctor, extract, search](../../docs/assets/cli/pdfrum-cli.gif)
+
+info · doctor · extract · search. Pages also draw in the terminal (`preview`, `view`).
+
 ```sh
 pdfrum info report.pdf
 pdfrum info report.pdf --json
