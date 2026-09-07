@@ -82,6 +82,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
+name = "bytes"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
 name = "cbc"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -383,6 +389,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-doc"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-common",
+ "pdfrum-filters",
+ "pdfrum-font",
+ "pdfrum-object",
+ "pdfrum-page",
+ "ryu",
+ "thiserror",
+ "unicode-bidi",
+]
+
+[[package]]
 name = "pdfrum-edit"
 version = "0.1.0"
 dependencies = [
@@ -432,6 +453,7 @@ dependencies = [
  "pdfrum-cmap",
  "pdfrum-common",
  "pdfrum-crypt",
+ "pdfrum-doc",
  "pdfrum-edit",
  "pdfrum-filters",
  "pdfrum-object",
@@ -444,6 +466,7 @@ dependencies = [
 name = "pdfrum-object"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "pdfrum-common",
  "ryu",
  "thiserror",
@@ -665,6 +688,12 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "unicode-bidi"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-ident"

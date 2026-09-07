@@ -24,6 +24,7 @@ pdfrum-parser = { path = "../crates/pdfrum-parser" }
 pdfrum-page = { path = "../crates/pdfrum-page", features = ["jpx", "jbig2", "ccitt"] }
 pdfrum-text = { path = "../crates/pdfrum-text" }
 pdfrum-edit = { path = "../crates/pdfrum-edit" }
+pdfrum-doc = { path = "../crates/pdfrum-doc" }
 
 # Panics are the bug. libfuzzer-sys's fuzz_target! hands a safe `&[u8]`.
 [lints.rust]
@@ -245,6 +246,13 @@ bench = false
 [[bin]]
 name = "edit_import"
 path = "fuzz_targets/edit_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "doc_pdfa_check"
+path = "fuzz_targets/doc_pdfa_check.rs"
 test = false
 doc = false
 bench = false
