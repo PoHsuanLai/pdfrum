@@ -80,7 +80,6 @@ pub pdfrum_common::DiagKind::TextActualTextCharDropped
 pub pdfrum_common::DiagKind::TextActualTextUnprintable
 pub pdfrum_common::DiagKind::TextCharcodeZero
 pub pdfrum_common::DiagKind::TextCharcodesUnmapped(u32)
-pub pdfrum_common::DiagKind::TextCharsDeduplicated(u32)
 pub pdfrum_common::DiagKind::TextHyphenNoPrevChar
 pub pdfrum_common::DiagKind::TextObjectDegenerate
 pub pdfrum_common::DiagKind::TextObjectDropped
