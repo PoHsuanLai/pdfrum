@@ -159,3 +159,16 @@ that are:
 | `bug_889099_flattened_agg.png` | 922 B | `testing/resources/embedder_tests/bug_889099_flattened_agg.png`: the oracle's own render of the flattened `bug_889099.pdf`. |
 | `bug_890322_agg.png` | 161 B | `testing/resources/embedder_tests/bug_890322_agg.png`: the oracle's render of `bug_890322.pdf` with annotations, which its flattened save must match. |
 | `bug_896366_agg.png` | 601 B | `testing/resources/embedder_tests/bug_896366_agg.png`: the oracle's render of `bug_896366.pdf` with annotations, which its flattened save must match. |
+
+## PDF/A object-graph cycles
+
+Two files with no counterpart in the oracle's corpus, because the oracle's
+corpus is well-formed by construction and these are not. Both are
+**synthesised** here, hand-written down to the byte offsets in their cross
+reference tables, and both are minimal: the smallest object graph that
+reaches the recursive walk in question.
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `pdfa_self_referential_form.pdf` | 615 B | Five objects. The page's `/Resources /XObject /X0` names form XObject `4 0 R`, whose own `/Resources /XObject /X0` names `4 0 R` again — the cycle ISO 32000-1 §8.10.1 permits the syntax of and forbids nothing about. The resource walk's visited set is what ends it. |
+| `pdfa_deep_page_tree.pdf` | 168782 B | A page tree 5250 nodes deep, built as 250 indirect `/Pages` objects each wrapping the next in 20 **direct** `/Kids` dictionaries. The indirection resets the parser's `max_object_nesting` at every level and the direct nodes carry no object number for a visited set, so `max_page_tree_depth` is the only thing that bounds the walk. |
