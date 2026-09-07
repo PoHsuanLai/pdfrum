@@ -88,7 +88,7 @@ pub struct TextClipRun {
 /// The entries sit behind an `Arc`, so the clone every emitted object takes
 /// of its graphics state shares them: thousands of consecutive paths under
 /// one clip cost one reference count each, and a push copies the vector
-/// only when it is shared. Measured 2026-09-05 (M18 §4): the state clone
+/// only when it is shared. Measured 2026-09-05 (§4): the state clone
 /// was 9.6% of `vector_paths_1751`'s build with the vector owned.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ClipStack {

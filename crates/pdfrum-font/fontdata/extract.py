@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """Extract the fourteen base-14 Foxit CFF blobs from the C++ oracle checkout.
 
-The oracle (`$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++`) stores
-the base-14 substitution faces as C++ `std::array<uint8_t, N>` initializers,
-one per translation unit under `core/fxge/fontdata/chromefontdata/`. This script turns them back into
-the bare CFF byte streams `pdfrum` embeds. It is the base-14 sibling of
-`scripts/extract-foxit-mm.py`, which does the same for the two Multiple-Master
-PFB fallbacks.
+Writes `Foxit*.cff` next to this file. Sibling of
+`crates/pdfrum-type1/tests/fixtures/extract.py` (the two MM fallbacks).
 
-Usage:
-    uv run scripts/extract_fontdata.py [ORACLE_ROOT] [OUT_DIR]
+Usage, from anywhere:
 
-Writes `<OUT_DIR>/{FoxitFixed,...,FoxitDingbats}.cff` (default `./fontdata`).
-All files are PDFium-BSD licensed (see PROVENANCE.md alongside them).
+    uv run crates/pdfrum-font/fontdata/extract.py [ORACLE_ROOT]
 """
 
 from __future__ import annotations
@@ -76,22 +70,20 @@ def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
     """The read-only C++ PDFium checkout.
 
     One place, three inputs, in order: an explicit argument, then
-    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
-    directory README.md already says it lives in. The nushell
-    side resolves the same variable with the same default in `scripts/env.nu`;
-    this is that rule spelled in Python, six lines rather than a shared module
-    the one-shot generators would have to import across directories.
+    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++`.
     """
     if len(sys.argv) > argv_index:
         return pathlib.Path(sys.argv[argv_index])
-    repo = pathlib.Path(__file__).resolve().parent.parent
+    repo = pathlib.Path(__file__).resolve().parents[3]
     return pathlib.Path(os.environ.get("PDFRUM_ORACLE_CHECKOUT", repo.parent / "pdfium-c++"))
 
 
 def main() -> int:
     oracle = oracle_checkout()
     src = oracle / "core/fxge/fontdata/chromefontdata"
-    out = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else "fontdata").resolve()
+    out = pathlib.Path(
+        sys.argv[2] if len(sys.argv) > 2 else pathlib.Path(__file__).resolve().parent
+    ).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
     # Cross-check every expected length against the header's array bounds, so a

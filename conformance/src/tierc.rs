@@ -162,7 +162,7 @@ pub struct Divergence {
 }
 
 impl Divergence {
-    /// The fraction of edge pixels that differ — PLAN §5's metric.
+    /// The fraction of edge pixels that differ — metric.
     #[must_use]
     pub fn edge_rate(&self) -> f64 {
         if self.edge_pixels == 0 {

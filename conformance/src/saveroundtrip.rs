@@ -1,4 +1,4 @@
-//! The M7 exit check: does what pdfrum *writes* still open, and still look
+//! The exit check: does what pdfrum *writes* still open, and still look
 //! the same?
 //!
 //! # Why this needs two binaries
@@ -8,7 +8,7 @@
 //!
 //! 1. **pdfrum saves** every corpus file (`pdfrum-tool --save`).
 //! 2. **The oracle reopens** what pdfrum wrote and renders it. A load failure
-//!    here is the M7 exit criterion failing: another implementation could not
+//! here is the exit criterion failing: another implementation could not
 //!    read our output.
 //! 3. **pdfrum re-renders** the saved file and the result is compared against
 //!    the *original's* golden render at the Tier-B floor. This is what catches
@@ -25,7 +25,7 @@
 //! writer's — the same SSIM the ordinary Tier-B sweep reports, to the digit.
 //!
 //! So the sweep reports a second number beside it: whether the saved file's
-//! SSIM **matches the original's**. That one isolates what M7 is actually
+//! SSIM **matches the original's**. That one isolates what is actually
 //! about. A file whose original renders at 0.9856 and whose saved copy also
 //! renders at 0.9856 has lost nothing in the save, and saying so is more
 //! honest than counting it as a save failure.
@@ -37,7 +37,7 @@
 //!
 //! # The encrypted files carry a password through every step
 //!
-//! Since M10 an encrypted document saves *encrypted*, so its whole sweep runs
+//! Since an encrypted document saves *encrypted*, so its whole sweep runs
 //! under a password: pdfrum opens it with `--password=`, saves it, and the
 //! oracle is handed the same password to reopen it with. That is the
 //! milestone's exit criterion in one line — a file another implementation can
@@ -77,7 +77,7 @@ const SSIM_EPSILON: f64 = 1e-6;
 ///
 /// A file not in this table is swept as a plaintext document; if it turns out
 /// to be encrypted, the tool will fail to open it and the sweep records a
-/// skip rather than a failure, exactly as it did before M10.
+/// skip rather than a failure, exactly as it did before .
 ///
 /// The two `_bad_okey` fixtures are deliberately absent. Their `/O` entry is
 /// truncated, so neither the oracle nor this reader opens them *at all* —
@@ -110,7 +110,7 @@ pub fn password_for(id: &str) -> Option<&'static str> {
 /// An empty `--password=` is not the same as no flag: the oracle reads the
 /// former as "no password given", so passing it would be harmless, but
 /// omitting it keeps the command lines of unencrypted files byte-identical to
-/// what they were before M10 — which is what makes the scoreboard comparable.
+/// what they were before — which is what makes the scoreboard comparable.
 fn password_args(password: Option<&str>) -> Vec<String> {
     password
         .map(|p| format!("--password={p}"))
@@ -135,7 +135,7 @@ pub struct SaveOutcome {
     /// Whether pdfrum wrote a file at all.
     pub saved: bool,
     /// Whether the **oracle** reopened and rendered what pdfrum wrote. This
-    /// is the M7 exit criterion.
+    /// is the exit criterion.
     pub oracle_reopened: bool,
     /// Whether the incremental save's output kept the original as its prefix
     /// and chained its cross-reference, and the oracle reopened it too.
@@ -159,7 +159,7 @@ pub struct SaveOutcome {
     /// Whether every compared page cleared the floor.
     pub within_floor: bool,
     /// Whether the saved file renders no worse than the original did. This
-    /// is what M7 is about: the writer preserving what the reader saw.
+    /// is what is about: the writer preserving what the reader saw.
     pub matches_original: bool,
     /// What went wrong, when something did.
     pub note: String,
@@ -534,7 +534,7 @@ fn check_incremental(
     // A document whose table was rebuilt has nothing to chain from, so the
     // save downgrades to a full one and the prefix property does not apply.
     //
-    // An encrypted document is no longer excused: since M10 its appended
+    // An encrypted document is no longer excused: since its appended
     // objects are enciphered under the key the original bytes already use, so
     // the append discipline applies to it exactly as it does to any other
     // file (edit brief §1.9).
@@ -592,7 +592,7 @@ fn check_incremental(
 pub struct SaveTotals {
     /// Files the tool wrote a document for.
     pub saved: u64,
-    /// Files the oracle reopened — the M7 exit criterion.
+    /// Files the oracle reopened — the exit criterion.
     pub oracle_reopened: u64,
     /// Files whose pixels were compared.
     pub compared: u64,
@@ -608,7 +608,7 @@ pub struct SaveTotals {
     /// Encrypted files swept under a password.
     pub encrypted: u64,
     /// Encrypted files whose saved copy the oracle refused to open without a
-    /// password — the M10 exit criterion's other half.
+    /// password — the exit criterion's other half.
     pub still_encrypted: u64,
     /// Files skipped before any check ran.
     pub skipped: u64,
@@ -662,7 +662,7 @@ impl SaveTotals {
     }
 
     /// The share of compared files whose saved copy rendered no worse than
-    /// the original. This is the number M7 is graded on: it separates what
+    /// the original. This is the number is graded on: it separates what
     /// the writer cost from what the renderer already owed.
     #[must_use]
     pub fn fidelity_rate(&self) -> Option<f64> {
@@ -677,7 +677,7 @@ impl SaveTotals {
 
     /// The share of encrypted files whose saved copy is still encrypted.
     ///
-    /// The M10 exit criterion pairs this with [`Self::reopen_rate`]: the
+    /// The exit criterion pairs this with [`Self::reopen_rate`]: the
     /// oracle opens the file *with* the password and refuses it *without*.
     #[must_use]
     pub fn still_encrypted_rate(&self) -> Option<f64> {
@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(totals.fidelity_rate(), Some(0.0));
     }
 
-    // ---- M10: the encrypted half of the sweep ----
+    // ---- : the encrypted half of the sweep ----
 
     #[test]
     fn a_password_is_found_by_file_name_wherever_the_file_sits() {
@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(password_for("resources/not_encrypted.pdf"), None);
     }
 
-    // An unencrypted file's command line is unchanged from before M10, which
+    // An unencrypted file's command line is unchanged from before , which
     // is what keeps its scoreboard row comparable.
     #[test]
     fn only_a_password_adds_an_argument() {

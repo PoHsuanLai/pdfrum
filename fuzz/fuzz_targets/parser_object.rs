@@ -1,13 +1,7 @@
-//! `parse_object` — the PDF object grammar over arbitrary bytes, in both
-//! strictness modes.
+//! `parse_object` in both strictness modes.
 //!
-//! Objects are parsed in a loop rather than once, because the recursion
-//! guard, the array/dictionary length caps and the recovery paths only get
-//! interesting once the lexer is somewhere in the middle of the input.
-//!
-//! Property: never panics and never fails to terminate. Nesting is capped at
-//! `max_object_nesting`, so a deeply nested input must come back as
-//! `Error::TooDeep`, not as a blown stack.
+//! Property: never panics; nesting past `max_object_nesting` is
+//! `Error::TooDeep`, not a blown stack.
 
 #![no_main]
 

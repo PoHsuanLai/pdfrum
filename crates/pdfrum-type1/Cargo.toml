@@ -12,10 +12,9 @@ categories = ["parser-implementations", "graphics"]
 [lints]
 workspace = true
 
-# §3.6 pins this set. `read-fonts` is here for the
-# Adobe Glyph List only (the `agl` feature) — taking it from `pdfrum-font`
-# instead would be a dependency cycle, and the AGL is squarely read-fonts'
-# business. Its `ps::type1` module is *not* used; see the internal working notes.
+# `read-fonts` is here for the Adobe Glyph List only (the `agl` feature) —
+# taking it from `pdfrum-font` would be a dependency cycle. `ps::type1` is
+# not used.
 [dependencies]
 pdfrum-common.workspace = true
 read-fonts = { workspace = true, features = ["agl"] }

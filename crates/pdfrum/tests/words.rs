@@ -90,7 +90,7 @@ fn the_corpus_guide_gives_a_stable_count_of_real_words() {
     let words = page.words();
     // 33 is the oracle's own count: `pdfium_test --txt` on this page splits
     // into exactly 33 whitespace-separated words, and our page text has been
-    // byte-exact against it since M28 dropped the spurious generated spaces.
+    // byte-exact against it since dropped the spurious generated spaces.
     // The former 45 counted those spurious spaces as word separators.
     assert_eq!(words.len(), 33, "{:?}", texts(&words));
     for word in &words {

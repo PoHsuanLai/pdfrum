@@ -94,7 +94,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<AppearanceUpdate>();
     nameable::<UpdateKind>();
     // kurbo and peniko, the five-and-one this crate's signatures name. Not
-    // `pdfrum::kurbo::Rect` any more: §WP4 replaced `pub use kurbo;` with the
+    // `pdfrum::kurbo::Rect` any more: § replaced `pub use kurbo;` with the
     // types themselves, so these are the assertion that the narrowed set is
     // still the *whole* set a signature can hand back. `FormRect` is gone —
     // `PopupView`/`PopupGeometry` speak `Rect`, and the event methods' points
@@ -140,7 +140,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<FindOptions>();
     nameable::<WebLink>();
     nameable::<TextError>();
-    // WP8's two index spaces, and the table that converts between them. Every
+    // 's two index spaces, and the table that converts between them. Every
     // one appears in a `TextPage` signature: `CharIndex` in `char`, `rects`,
     // `index_at`, `slice` and `WebLink::range`; `TextIndex` in `find`; and
     // `IndexMap` as the public `runs` field a caller needs to cross from one
@@ -340,7 +340,7 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
 ///
 /// `Regenerated` and `LiveEdit` box a `GeneratedAp`; `ActionRequested` carries
 /// a boxed `Action` and a `Modifiers`. All three are the payload of an
-/// ordinary `Response` a caller matches on every event, so WP7 rules them
+/// ordinary `Response` a caller matches on every event, so rules them
 /// re-exports rather than escape hatches.
 #[test]
 fn an_update_payload_is_reachable() {
@@ -369,8 +369,8 @@ fn an_update_payload_is_reachable() {
 
 /// A renderer can act on `focus_for_page` without a second dependency.
 ///
-/// WP7 rules this one explicitly not an escape hatch: it is the question a
-/// renderer asks every frame (SPEC §15.8), so both halves of its answer —
+/// rules this one explicitly not an escape hatch: it is the question a
+/// renderer asks every frame , so both halves of its answer
 /// `Focus` and the `FocusBox` inside it — belong in the facade's block.
 #[test]
 fn a_focus_answer_is_matchable() {
@@ -390,7 +390,7 @@ fn a_focus_answer_is_matchable() {
 ///
 /// A host writing its own commit gate — a validator, an audit log, a policy
 /// that refuses a keystroke — needs `Cascade` and the four payload types, and
-/// needs them from a default `cargo add pdfrum`. WP12 re-exports them
+/// needs them from a default `cargo add pdfrum`. re-exports them
 /// unconditionally for exactly that reason; only `ScriptCascade` is behind the
 /// feature.
 #[test]
@@ -454,7 +454,7 @@ fn the_script_types_are_nameable_from_the_facade() {
 /// the methods can be **called** — that `apply`'s only argument is
 /// constructible, that every wrapper's point is a `pdfrum::Point` a caller can
 /// build, and that no signature reaches for a name the facade does not carry.
-/// It is the gate §WP5's central method needed and did not have: before WP7's
+/// It is the gate §'s central method needed and did not have: before 's
 /// re-export, `apply` was a method whose argument type a `cargo add pdfrum`
 /// caller could not write.
 ///

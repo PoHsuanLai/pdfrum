@@ -85,7 +85,7 @@ impl hayro_jbig2::Decoder for BitSink {
             .saturating_mul(8);
         // A chunk landing entirely outside the bitmap the dictionary asked for
         // is skipped in O(1) instead of one no-op `set` per pixel. This is not
-        // a micro-optimization: M12 found `image_ccitt_transfer` declaring a
+        // a micro-optimization: found `image_ccitt_transfer` declaring a
         // 400x400 image over a codestream whose page is 3562x851, so nineteen
         // twentieths of three million callback-driven pixel writes were being
         // made and then discarded — 16.3 ms of the document's 26.6 ms, on an

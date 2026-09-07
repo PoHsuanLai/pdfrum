@@ -455,7 +455,7 @@ fn a_search_hit_maps_back_to_boxes_on_the_page() {
         .next()
         .expect("a hit");
     // `find` counts in the search text and `rects` counts in the character
-    // list; the page's own map is what bridges them, and after WP8 the types
+    // list; the page's own map is what bridges them, and after the types
     // will not let a caller skip it.
     let from = text.runs.char_index(hit.start).expect("a character");
     let to = text.runs.char_index(hit.end).expect("a character");
@@ -1351,7 +1351,7 @@ fn an_error_keeps_the_member_crates_own_error_as_its_source() {
     assert_eq!(source.to_string(), "not a PDF file");
 }
 
-// ------------------------------------------------- WP10: options and colour
+// ------------------------------------------------- : options and colour
 
 // The facade's `RenderOptions` flags are positive (`smooth_paths`,
 // `interpolate_images`) where the engine's are the oracle's inverted flag

@@ -42,7 +42,7 @@ pub fn write_matrix(out: &mut String, m: Affine) {
         }
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+            reason = "PDF numbers are f32; the geometry vocabulary is f64"
         )]
         write_float(out, *v as f32);
     }
@@ -60,7 +60,7 @@ pub fn write_matrix(out: &mut String, m: Affine) {
 pub fn write_point(out: &mut String, p: Point) {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+        reason = "PDF numbers are f32; the geometry vocabulary is f64"
     )]
     {
         write_float(out, p.x as f32);
@@ -83,7 +83,7 @@ pub fn write_point(out: &mut String, p: Point) {
 pub fn write_rect(out: &mut String, r: Rect) {
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+        reason = "PDF numbers are f32; the geometry vocabulary is f64"
     )]
     {
         write_float(out, r.x0 as f32);

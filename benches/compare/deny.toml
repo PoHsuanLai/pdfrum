@@ -1,10 +1,5 @@
-# cargo-deny for the M21 comparison workspace — the ROOT deny.toml's policy,
-# plus the exceptions this workspace exists to measure. The root workspace's
-# `cargo deny check` never sees this tree (benches/compare is its own
-# workspace, like fuzz/), so this file is what `cargo deny check` reads when
-# run with `--manifest-path benches/compare/Cargo.toml`. Every entry below
-# that is not in the root file is BENCHMARK-ONLY: it admits a peer engine
-# into the comparison, never into a published crate's tree.
+# cargo-deny for this workspace only. Extra allows are peer engines,
+# never a published crate.
 
 [graph]
 all-features = true

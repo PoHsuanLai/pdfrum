@@ -1,22 +1,11 @@
-# pdfrum fuzz ring — a SEPARATE workspace, deliberately not a member of the
-# root one. the Pure-Rust guarantee is that no published crate's
-# dependency tree compiles C or C++; `libfuzzer-sys` links LLVM's C++
-# libFuzzer runtime. Severing this package from the root workspace is what
-# keeps `cargo tree --workspace` in scripts/ci.nu clean — the guarantee then
-# holds by construction rather than by anyone remembering.
-#
-# The empty `[workspace]` table below is what does the severing: without it
-# cargo walks up to `../Cargo.toml` and adopts this package as a member,
-# putting libfuzzer-sys straight into the tree that check inspects. Do not
-# delete it, and do not add `fuzz` to the root manifest's `members`.
+# Own workspace: libfuzzer-sys links C++. The empty [workspace] stops cargo
+# walking up to the root; do not add `fuzz` to root `members`.
 [workspace]
 
 [package]
 name = "pdfrum-fuzz"
 version = "0.0.0"
 edition = "2024"
-# Belt-and-braces on top of the workspace split: this package must never
-# reach a registry, whatever anyone runs at the repo root.
 publish = false
 license = "MIT OR Apache-2.0"
 
@@ -36,21 +25,14 @@ pdfrum-page = { path = "../crates/pdfrum-page", features = ["jpx", "jbig2", "cci
 pdfrum-text = { path = "../crates/pdfrum-text" }
 pdfrum-edit = { path = "../crates/pdfrum-edit" }
 
-# The root workspace forbids `unsafe` and denies panics. This workspace does
-# not inherit those lints (it is a separate workspace by construction), but
-# the targets are still written without `unsafe`: libfuzzer-sys's
-# `fuzz_target!` hands us a safe `&[u8]`, so nothing here needs it. Panics
-# are the *point* here — a panic in a library crate is the bug we are hunting.
+# Panics are the bug. libfuzzer-sys's fuzz_target! hands a safe `&[u8]`.
 [lints.rust]
 unsafe_code = "forbid"
 
 [profile.release]
 debug = 1
-# Overflow checks on: a wrapping arithmetic bug on untrusted sizes is exactly
-# the class of bug says fuzzers must enforce.
+# Wrapping arithmetic on untrusted sizes is the class of bug.
 overflow-checks = true
-
-# cargo-fuzz builds these in release; each gets its own binary.
 
 [[bin]]
 name = "object_decode_text"

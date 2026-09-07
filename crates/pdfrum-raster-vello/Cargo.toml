@@ -8,9 +8,7 @@ repository.workspace = true
 readme = "README.md"
 keywords = ["pdf", "render", "vello", "wgpu", "gpu"]
 categories = ["graphics", "rendering"]
-# excluded from the M13 publish set until it is genuinely ready.
-# It is a capability, not part of the core ring, and nothing in that ring
-# depends on it.
+# Not part of the core ring; nothing in that ring depends on it.
 publish = false
 
 [lints]

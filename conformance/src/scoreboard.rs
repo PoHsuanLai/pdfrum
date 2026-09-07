@@ -43,7 +43,7 @@ impl Status {
 /// Failure tags, the clustering key `triage` groups by.
 pub mod tag {
     /// The `pdfrum-tool` binary is missing, or lacks the subcommand asked of
-    /// it. The whole-corpus M0 baseline.
+    /// it. The whole-corpus baseline.
     pub const UNSUPPORTED_TOOL: &str = "unsupported-tool";
     /// The tool exited by panic or signal.
     pub const CRASH: &str = "crash";
@@ -315,7 +315,7 @@ impl Scoreboard {
 ///
 /// Both rates are written out even though they are derivable, because this
 /// file is read by humans and by burn-down loops that should not have to
-/// divide: `nonempty_rate` is the number M2 criterion means.
+/// divide: `nonempty_rate` is the number criterion means.
 fn text_totals_json(totals: &Totals) -> Json {
     let rate = |value: Option<f64>| value.map_or(Json::Null, Json::Num);
     Json::Obj(vec![
@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn every_failure_in_the_m0_baseline_is_a_regression_free_starting_point() {
-        // M0: everything fails as `unsupported-tool`. Comparing that board to
+        // everything fails as `unsupported-tool`. Comparing that board to
         // itself must report nothing.
         let board = Scoreboard::new(
             "t".to_owned(),

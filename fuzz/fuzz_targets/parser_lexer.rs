@@ -1,14 +1,6 @@
-//! The lexer's token stream over arbitrary bytes.
+//! Lexer token stream, including the literal and hex string readers.
 //!
-//! `Lexer` is not an `Iterator` — it is pumped with `next_word` until
-//! `Token::Eof` — and the property that matters is that the pump always
-//! terminates: every call must leave the position no earlier than it found
-//! it, and `Eof` must eventually arrive. A lexer that can be made to sit
-//! still on a byte is an infinite loop in every caller above it.
-//!
-//! The string readers are driven too, since `read_literal_string` and
-//! `read_hex_string` have their own nesting and escape scanners that
-//! `next_word` never enters.
+//! Property: every `next_word` leaves the position no earlier; `Eof` arrives.
 
 #![no_main]
 

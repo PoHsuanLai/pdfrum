@@ -541,7 +541,7 @@ mod tests {
         assert!(read(b"not a pdf at all").is_none());
     }
 
-    // The three facts the writer reads out of the load (SPEC §5, 2026-08-29).
+    // The three facts the writer reads out of the load .
     #[test]
     fn a_classic_chain_reports_its_offset_and_that_it_is_not_a_stream() {
         let file = build_classic();

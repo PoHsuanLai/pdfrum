@@ -87,9 +87,6 @@ own commit, from `./scripts/api-snapshot.nu update`.
 
 Tests that need the oracle skip if the binary is missing.
 
-`scripts/clean-targets.nu` removes unused `$PDFRUM_TARGET_ROOT` trees
-(default `<repo>/../cargo-target`).
-
 ## Licence
 
 Apache-2.0 OR MIT.

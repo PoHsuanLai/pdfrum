@@ -75,7 +75,7 @@ pub(crate) fn emit_path_points(out: &mut String, path: &BezPath) {
         out.push(' ');
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+            reason = "PDF numbers are f32; the geometry vocabulary is f64"
         )]
         {
             write_float(out, (rect.x1 - rect.x0) as f32);

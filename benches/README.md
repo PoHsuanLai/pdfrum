@@ -1,42 +1,43 @@
-# pdfrum-bench
+# Benchmarks
 
-Not published. No library crate depends on it.
+Three jobs.
 
-| Path | |
+| Job | Where |
 |---|---|
-| `corpus/` | 44 measurement PDFs. See `corpus/PROVENANCE.md`. |
-| `corpus-list/` | Shared document list (`pdfrum-corpus`). |
-| `fixtures/` | Seven older documents, kept for table continuity. |
-| `src/bin/ratchet.rs` | Compare a run to `baseline.json`. |
-| `src/bin/profile.rs` | One operation in a loop (`scripts/profile.nu`). |
-| `src/bin/scaling.rs` | One rayon thread count per process. |
-| `baseline.json` | Committed medians and noise bands. |
+| Is this commit slower? | Criterion groups on the crate they measure. `ratchet` vs `baseline.json`. |
+| Where does the time go? | `profile` binary (`scripts/profile.nu`). |
+| How do we compare to peers? | `compare/` — own workspace. Engines, tables, numbers: [`docs/benchmarks/`](../docs/benchmarks/). |
+
+The 44 PDFs are `corpus/`. One list (`pdfrum-corpus`) so every number is the same files. `fixtures/` is a smaller set, not the ratchet.
+
+Criterion groups live with the code:
 
 | Crate | Groups |
 |---|---|
-| `pdfrum-parser` `benches/open.rs` | `open` |
-| `pdfrum-page` `benches/build.rs` | `build` |
-| `pdfrum-render` `benches/render.rs` | `render-{cold,warm}-{exact,tinyskia,vello}` |
-| `pdfrum-text` `benches/text.rs` | `text` |
-| `pdfrum-edit` `benches/save.rs` | `save` |
+| `pdfrum-parser` | `open` |
+| `pdfrum-page` | `build` |
+| `pdfrum-render` | `render-{cold,warm}-{agg,tinyskia,vello-cpu}` |
+| `pdfrum-text` | `text` |
+| `pdfrum-edit` | `save` |
 
 `render-cold` builds a fresh `RenderSession` inside the timed closure.
 `render-warm` holds one session across iterations. The oracle column is warm.
 
 ```sh
-scripts/bench-quick.nu                 # 18 files, ~3 min
 cargo bench --workspace                # 44 files × 11 groups, ~1 h
 cargo bench -p pdfrum-render
 cargo run --release -p pdfrum-bench --bin ratchet -- check
 cargo run --release -p pdfrum-bench --bin ratchet -- update
-scripts/profile.nu render benches/corpus/text_foxittext.pdf 50 exact
-scripts/bench-oracle.nu
+scripts/profile.nu render benches/corpus/text_foxittext.pdf 50 agg
+cargo run --release -p pdfrum-bench --bin scaling -- --threads 8
 ```
 
-A filtered `cargo bench` leaves other crates' Criterion results on disk;
-`check` will treat them as fresh. Run `--workspace` before a check that
-decides anything.
+`cargo bench -p` one crate leaves other groups' Criterion files on disk;
+`check` treats them as fresh. Run `--workspace` before a check that decides
+anything.
 
 Run-to-run spread reaches 5% on heavy documents. A result inside the band
-in `baseline.json` is no result. A parity-engine speed change also needs an
-unchanged conformance board.
+in `baseline.json` is no result.
+
+`compare/` is not a workspace member: two peers wrap C. Do not add it to
+root `members`. Commands: [`compare/README.md`](compare/README.md).

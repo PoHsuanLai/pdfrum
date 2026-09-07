@@ -1,13 +1,13 @@
-//! `compare` — pdfrum beside its peers on one corpus, against the oracle.
+//! pdfrum beside its peers on one corpus, against the oracle.
 //!
 //! ```text
-//! compare run       --corpus DIR [--every N] --engines a,b --out JSON ...
-//! compare report    JSON            # regenerate the tables from a run
-//! compare adoption  --out JSON ...  # crates, C, build time, size, unsafe, licence
-//! compare child     ...             # what `run` spawns; not for hands
+//! compare run       --corpus DIR --engines a,b --out JSON
+//! compare report    JSON
+//! compare adoption  --out JSON
+//! compare child     ...             # spawned by `run`
 //! ```
 //!
-//! docs/benchmarks/README.md is the method; is the contract.
+//! Method: `docs/benchmarks/README.md`.
 
 #![forbid(unsafe_code)]
 #![allow(

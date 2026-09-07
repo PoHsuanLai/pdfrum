@@ -268,7 +268,7 @@ mod tests {
         assert_eq!(out.reference(names::ENCRYPT), Some(ObjRef::new(41, 0)));
     }
 
-    // Bug873's shape, modulo dict order (SPEC §2): the reference's trailing
+    // Bug873's shape, modulo dict order : the reference's trailing
     // space separates the next key, and /ID comes last.
     #[test]
     fn a_classic_trailer_reads_the_way_the_golden_does() {

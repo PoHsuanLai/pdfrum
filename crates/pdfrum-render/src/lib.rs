@@ -110,7 +110,7 @@ pub mod scanline;
 // reporting items are part of the instrument rather than of the crate a
 // `cargo add pdfrum-render` reaches, which is why the committed API
 // snapshots deliberately do not cover the `profiling` feature.
-// Its own docs make the the style rules
+// Its own docs make the
 // argument for the thread-local, and it holds.
 #[cfg(feature = "profiling")]
 pub mod walkprofile;

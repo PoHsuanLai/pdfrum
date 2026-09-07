@@ -14,7 +14,7 @@ corpus whose residual is a codec gap.
 where segment bodies are read from, and when a truncated stream is an error —
 and neither half can be reached from a wrapper around the crate's public API.
 Both halves are small, both look like defects rather than design, and a
-first-party JBIG2 port is not justified by one file (SPEC §12 asks for the
+first-party JBIG2 port is not justified by one file (asks for the
 narrowest faithful fix). So the fix belongs upstream.
 
 ---

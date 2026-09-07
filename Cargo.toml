@@ -1,4 +1,4 @@
-# pdfrum workspace — crate map in README.md; style in CONTRIBUTING.md;
+# pdfrum workspace — crate map in README.md; style in CONTRIBUTING.md
 # closed dependency set in this file, enforced by deny.toml and the gate.
 
 [workspace]
@@ -17,10 +17,7 @@ members = [
     "crates/pdfrum-raster-vello-cpu",
     "crates/pdfrum-raster-tinyskia",
     "crates/pdfrum-raster-agg",
-    # M12c. A workspace member so it is built, tested and linted like anything
-    # else — but nothing in the core ring depends on it, and
-    # `scripts/check-no-wgpu.nu` asserts that the facade's default tree still
-    # resolves without `wgpu`.
+    # GPU backend. Isolation: scripts/check-no-wgpu.nu.
     "crates/pdfrum-raster-vello",
     "crates/pdfrum-text",
     "crates/pdfrum-doc",
@@ -30,24 +27,12 @@ members = [
     "crates/pdfrum",
     "crates/pdfrum-tool",
     "crates/pdfrum-markdown",
-    # M24. SVG export: a `RenderDevice` that accumulates vectors while an
-    # ordinary rasterizer supplies the offscreen targets the engine composites
-    # in. It adds no external dependency to the shipped tree; `resvg` is a
-    # dev-dependency of its round-trip test only.
+    # SVG export. `resvg` is a round-trip-test dev-dependency only.
     "crates/pdfrum-svg",
     "crates/pdfrum-cli",
-    # M22 phase 2. The C ABI: `libpdfrum.so`, `libpdfrum.a` and `pdfrum.h`.
-    # The one member that overrides the workspace's `unsafe_code = "forbid"`,
-    # under the rule in the crate rustdoc — unsafe only in the `extern "C"`
-    # boundary, every one with a `# Safety` section, nothing unsafe below the
-    # facade. It adds no external dependency: `pdfrum` is all it needs.
+    # C ABI. The one member that allows `unsafe`, only at `extern "C"`.
     "crates/pdfrum-capi",
-    # M22 phase 4. The WebAssembly binding: the same handles as the C ABI in
-    # JavaScript shape, plus the TypeScript types wasm-bindgen generates from
-    # the same source. A member so it is formatted, linted and documented like
-    # anything else; its own tests run on `wasm32-unknown-unknown` under Node,
-    # which `scripts/ci.nu` runs as its own stage and skips with a note when
-    # the target or `node` is absent.
+    # WebAssembly binding. Tests: wasm32-unknown-unknown under Node.
     "crates/pdfrum-wasm",
     "conformance",
     "benches",
@@ -60,7 +45,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/PoHsuanLai/pdfrum"
 
-# the style rules: no unsafe anywhere, no panics in library code.
+# No unsafe anywhere, no panics in library code.
 # `clippy::indexing_slicing = warn` is added per-crate in parser-facing crates
 # (their input is untrusted); tests may unwrap (see clippy.toml).
 [workspace.lints.rust]
@@ -77,8 +62,7 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 
-# is the closed manifest; every lib dependency is declared here with an
-# exact pin (versions verified against crates.io 2026-08-29). Member crates
+# Every lib dependency is declared here with an exact pin. Member crates
 # inherit an entry only when they actually use it.
 [workspace.dependencies]
 # internal
@@ -95,9 +79,8 @@ pdfrum-render = { path = "crates/pdfrum-render", version = "=0.1.0" }
 pdfrum-raster-vello-cpu = { path = "crates/pdfrum-raster-vello-cpu", version = "=0.1.0" }
 pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "=0.1.0" }
 pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
-# M12c's GPU backend. Deliberately **not** a dependency of the facade or the
-# tool: it is reachable by naming it, which is what keeps a headless build's
-# tree free of `wgpu`.
+# GPU backend. Not a dependency of the facade or the tool: reachable only
+# by naming it, which keeps a headless build free of `wgpu`.
 pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
@@ -107,9 +90,8 @@ pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
 pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "=0.1.0" }
 pdfrum-svg = { path = "crates/pdfrum-svg", version = "=0.1.0" }
-# The M12 bench corpus list. A leaf — it depends on nothing, which is what lets
-# five library crates dev-depend on it without any of them acquiring a
-# dependency on the facade that depends on them. `publish = false`.
+# Bench corpus list. A leaf so library crates can share it without depending
+# on the facade. `publish = false`.
 pdfrum-corpus = { path = "benches/corpus-list", version = "=0.1.0" }
 
 # rendering & geometry
@@ -117,17 +99,11 @@ kurbo = "=0.13.1"
 peniko = "=0.6.1"
 vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
-# M12c: GPU vello, used by exactly one crate (`pdfrum-raster-vello`) that
-# nothing in the core ring depends on. `default-features` are left ON because
-# vello's `wgpu`/`wgpu_default` pair is what provides `Renderer` at all —
-# without them the crate is an encoder with no way to rasterize.
+# GPU vello, used only by `pdfrum-raster-vello`. Default features stay on
+# vello's `wgpu`/`wgpu_default` pair is what provides `Renderer`.
 #
-# The version is 0.10.0 and it resolves **wgpu 29**. That matters beyond a
-# pin: device
-# injection only typechecks against the exact wgpu a `Renderer` was built
-# with, so the backend re-exports vello's own `wgpu` and an embedder must hand
-# it a device from *that* one. There is no vello release against wgpu 30
-# today; when there is, this pin is the only line that changes.
+# Pin is 0.10.0 / wgpu 29. Device injection typechecks against the wgpu a
+# `Renderer` was built with, so the backend re-exports vello's own `wgpu`.
 vello = "=0.10.0"
 
 # fonts
@@ -135,8 +111,7 @@ skrifa = "=0.46.2"
 read-fonts = "=0.43.3"
 fontdb = { version = "=0.24.0", default-features = false }
 # `variable-fonts` (on by default) pulls a second skrifa/write-fonts/kurbo and
-# buys only CFF2 + variation instancing, neither of which the C++ subsetter
-# does either (edit brief E4). Off keeps the tree to one skrifa.
+# buys only CFF2 + variation instancing. Off keeps the tree to one skrifa.
 subsetter = { version = "=0.2.6", default-features = false }
 
 # codecs & color
@@ -156,7 +131,7 @@ md-5 = "=0.11.0"
 sha1 = "=0.11.0"
 sha2 = "=0.11.0"
 unicode-bidi = "=0.3.18"
-# A31: RFC 4013 SASLprep needs NFKC for the revision-6 password preparation
+# RFC 4013 SASLprep needs NFKC for revision-6 password preparation
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
 unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
@@ -164,16 +139,11 @@ smallvec = "=1.15.2"
 thiserror = "=2.0.20"
 rayon = "=1.12.0"
 
-# JavaScript engine — M15. Reachable ONLY through `pdfrum-form`'s default-off
-# `script` feature, which `scripts/check-no-boa.nu` asserts mechanically in
-# both directions (absent by default; present with the feature, so the first
-# check cannot pass vacuously).
+# JavaScript engine. Reachable only through `pdfrum-form`'s default-off
+# `javascript` feature (`scripts/check-no-boa.nu`).
 #
-# `default-features = false` is load-bearing, not tidiness: the three defaults
-# are `float16`, `xsum` and `temporal`, and `temporal` alone drags
-# `icu_calendar`, `temporal_rs` and `timezone_provider` — an ICU tree for a
-# `Temporal` API no PDF script has ever called. See for the measured
-# admission (132 crates, zero `-sys`, zero `cc`, `cargo deny` clean).
+# `default-features = false` is load-bearing: `temporal` pulls an ICU tree
+# for a `Temporal` API no PDF script uses.
 boa_engine = { version = "=0.22.0", default-features = false }
 
 # tools & tests only: never in a library crate.
@@ -182,39 +152,17 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 clap = { version = "=4.6.6", features = ["derive", "env"] }
 png = "=0.18.1"
-# M24's round trip: `pdfrum-svg`'s SVG rendered by a *second* engine and
-# scored against the oracle's PNG, so the export has a correctness story the
-# raster board cannot give it. **`pdfrum-svg`'s dev-dependency only** — it
-# never enters the shipped tree.
+# SVG round-trip: `pdfrum-svg`'s SVG rendered by a second engine and scored
+# against the oracle PNG. Dev-dependency of `pdfrum-svg` only.
 #
-# `default-features = false` per the rule (take what we need, not what
-# a crate defaults to): the defaults are `text`, `system-fonts`, `memmap-fonts`
-# and `raster-images`, and the first three exist to *shape text*, which our SVG
-# never asks for — every glyph is already a filled outline. Dropping them drops
-# `fontdb`, `rustybuzz`, `ttf-parser`, `unicode-bidi`, `unicode-script`,
-# `unicode-vo` and `memmap2`. `raster-images` is the one feature kept: it is
-# what admits `<image>` decoding, and our images travel as PNG data URIs.
-# 0.47 resolves `tiny-skia` 0.12.0, the version the workspace already pins, so
-# no duplicate rasterizer enters the graph. Pure Rust throughout.
+# Defaults dropped (`text`, `system-fonts`, `memmap-fonts`) because every
+# glyph is already a filled outline. `raster-images` kept for `<image>`.
 resvg = { version = "=0.47.0", default-features = false, features = ["raster-images"] }
-# M25's SVG *ingestion*: the resolved tree the facade's `Canvas::draw_svg`
-# compiles into page operators. The first new **runtime** dependency of the
-# SVG milestones, and it is default-off behind `pdfrum/svg-ingest`.
+# SVG ingestion: the resolved tree `Canvas::draw_svg` compiles into page
+# operators. Default-off behind `pdfrum/svg-ingest`.
 #
-# `default-features = false` per the rule. The defaults are `text`,
-# `system-fonts` and `memmap-fonts`, and all three exist to shape text — which
-# means a second font stack (`fontdb`, `rustybuzz`, `ttf-parser`,
-# `unicode-bidi`, `unicode-script`, `unicode-vo`) beside the one pdfrum
-# already carries. Dropping them is the point rather than a saving: SVG text
-# must map through `pdfrum-font`, not through a rival.
-#
-# The consequence is stated rather than hidden: without `text`, `usvg` drops
-# `<text>` elements from the resolved tree entirely, so ingestion reports them
-# as unsupported instead of drawing them.
-#
-# Ten crates new to the workspace's normal tree, all pure Rust. `kurbo 0.13.1`
-# is the version the workspace already pins, so no duplicate geometry crate
-# enters the graph. Same version as `resvg` above, which depends on it.
+# Defaults dropped so SVG text maps through `pdfrum-font`, not a second font
+# stack. Without `text`, `usvg` drops `<text>` from the tree.
 usvg = { version = "=0.47.0", default-features = false }
 # Criterion, for the five per-crate bench targets and `pdfrum-bench`. Declared
 # here rather than repeated in six manifests so the pin and its reason live in
@@ -229,38 +177,26 @@ usvg = { version = "=0.47.0", default-features = false }
 # newer than it. It appears in no library crate's normal dependency tree.
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
-# M12: a release build carries line tables so `scripts/profile.nu` names
-# functions instead of addresses. `debug = 1` is line-tables-plus-frame-info,
-# not full DWARF locals — it changes no code the optimizer emits, costs only
-# binary size and link time, and without it every profile in the internal working notes
-# would have had to be taken against a separate build that is not the one
-# `cargo bench` measures. Benchmarks and profiles now describe the same binary.
+# Line tables so `scripts/profile.nu` names functions. `debug = 1` is
+# line-tables-plus-frame-info, not full DWARF locals.
 [profile.release]
 debug = 1
 
-# M22 phase 4. The profile `crates/pdfrum-wasm` is built under, named rather
-# than folded into `release` for two reasons: cargo ignores a `[profile.*]`
-# table in a workspace *member*, so it had to live here; and size is a trade
-# only the web binding wants — `opt-level = "z"` and `lto` cost native build
-# time and native speed that nothing else in this workspace is asking to
-# spend. `wasm-pack build --profile wasm` and `cargo build --profile wasm`
-# both take it. The measurement behind the settings is in the internal working notes.
+# Profile `crates/pdfrum-wasm` is built under. Cargo ignores `[profile.*]` in
+# a workspace member, so it lives here. Size is a trade only the web binding
+# wants.
 [profile.wasm]
 inherits = "release"
-# Optimize for speed, which on this crate is *also* the smallest. Measured on
-# the shipped module — the `_bg.wasm` wasm-bindgen emits, after `wasm-opt -Oz`:
+# Speed, which on this crate is also the smallest. Measured on the shipped
+# `_bg.wasm` after `wasm-opt -Oz`
 #
-#   opt-level      raw        after bindgen   after wasm-opt -Oz
-#   3            5,650,552      5,097,256          4,827,012
-#   "s"          5,959,819      5,368,249          4,932,482
-#   "z"          6,040,761      5,409,739          4,982,040
+# opt-level raw after bindgen after wasm-opt -Oz
+# 3 5,650,552 5,097,256 4,827,012
+# "s" 5,959,819 5,368,249 4,932,482
+# "z" 6,040,761 5,409,739 4,982,040
 #
-# `3` wins at every stage, by 3% over `"z"` on the shipped artefact. That is
-# the opposite of the usual advice, and it was measured rather than assumed:
-# this crate's bulk is a rasterizer and three image codecs, whose inner loops
-# `z` refuses to unroll or vectorize and then pays for in call overhead and
-# spill code. No tie-break on render time was needed — `3` is both the
-# smallest and the fastest here.
+# `3` wins at every stage. The crate is a rasterizer and three image codecs
+# `z` refuses to unroll those loops.
 opt-level = 3
 # One codegen unit lets LLVM see the whole module.
 codegen-units = 1

@@ -22,8 +22,6 @@ first crates.io release.
 
 ### Known limitations
 
-- Peak render memory on one pathological image document. See
-  `docs/benchmarks/losses-explained.md`.
 - Warm median render is slower than pdfium-render and mupdf.
 - No public-key (`Adobe.PubSec`) encryption.
 - Spurious spaces in some text extractions.

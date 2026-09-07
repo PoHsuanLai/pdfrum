@@ -1,13 +1,7 @@
 //! `import_pages` and `n_page_to_one` — copying between two documents.
 //!
-//! Property: never panics, and the destination stays a document.
-//!
-//! The copier is the one place in the crate that walks an *untrusted* object
-//! graph while building a new one, so it is where a cycle, a dangling
-//! reference or a self-referential page tree turns into either a hang or a
-//! malformed output. Both source and destination come from the same input
-//! here — the second half of the bytes, so the two documents differ — which
-//! makes a source that references the destination's numbering reachable.
+//! Property: never panics; the destination stays a document. A failed import
+//! leaves it alone.
 
 #![no_main]
 
@@ -20,8 +14,7 @@ use pdfrum_edit::{
 };
 use pdfrum_parser::{LoadOptions, load};
 
-/// How many pages an import may ask for. A fuzzer asking for thousands only
-/// measures allocation.
+/// A fuzzer asking for thousands of pages only measures allocation.
 const MAX_PAGES: u32 = 32;
 
 fuzz_target!(|data: &[u8]| {
@@ -54,7 +47,6 @@ fuzz_target!(|data: &[u8]| {
         save(edit, &options, &mut out).ok().map(|()| out)
     };
 
-    // ---- importing pages as pages ----
     let mut edit = EditDoc::new(&dest);
     if import_pages(&mut edit, &src, &pages, &ImportOptions::default()).is_ok()
         && let Some(out) = saved(&edit)
@@ -72,7 +64,6 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    // ---- a failed import must leave the destination alone ----
     let mut edit = EditDoc::new(&dest);
     let past_the_end = PageRange::of([src.page_count().saturating_add(1)]);
     if import_pages(&mut edit, &src, &past_the_end, &ImportOptions::default()).is_err()
@@ -86,7 +77,6 @@ fuzz_target!(|data: &[u8]| {
         );
     }
 
-    // ---- N-up ----
     let mut edit = EditDoc::new(&dest);
     let grid = NUpOptions {
         sheet: (612.0, 792.0),

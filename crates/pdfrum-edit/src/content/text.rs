@@ -127,7 +127,7 @@ fn matrix_font_size(matrix: Affine) -> f32 {
     let sy = c.get(1).copied().unwrap_or(0.0);
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+        reason = "PDF numbers are f32; the geometry vocabulary is f64"
     )]
     {
         sx.hypot(sy) as f32

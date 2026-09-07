@@ -1,4 +1,4 @@
-//! PDF/A conversion (ISO 19005), M26 parts 3 and 4.
+//! PDF/A conversion (ISO 19005), parts 3 and 4.
 //!
 //! The checker in `pdfrum-doc` reports what a document fails; this repairs it.
 //! The two are deliberately separate crates and deliberately in that order,

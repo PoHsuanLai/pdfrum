@@ -2,15 +2,15 @@
 //! SVG input.
 //!
 //! The board scores PDFs against `pdfium_test`'s pixels, and an SVG fixture
-//! has no oracle PNG at all — there is no `pdfium_test` for SVG. M25's proof
-//! is the mirror of M24's: draw the SVG into a page with
+//! has no oracle PNG at all — there is no `pdfium_test` for SVG. proof
+//! is the mirror of : draw the SVG into a page with
 //! [`Canvas::draw_svg`](pdfrum::Canvas::draw_svg), render *that page* with
 //! our own engine, and compare the result to `resvg` — a second, independent
 //! implementation with its own parser, its own geometry and its own
 //! rasterizer — rendering the same SVG directly, scored with the board's own
 //! SSIM.
 //!
-//! The bar is legitimately below the raster board's, for the reason M24 gives
+//! The bar is legitimately below the raster board's, for the reason gives
 //! and one more: `resvg` is not our rasterizer *and* the page render goes
 //! through a PDF content stream in between, where a colour is quantised to
 //! eight bits per channel and a gradient becomes a sampled shading function.
@@ -21,7 +21,7 @@
 //!
 //! # The fixture store, and why a missing one is not a pass
 //!
-//! Unlike M24's, this corpus **is** committed: `tests/fixtures/svg` is
+//! Unlike , this corpus **is** committed: `tests/fixtures/svg` is
 //! seventeen small hand-written documents, not multi-megabyte artifacts
 //! generated from a build of the oracle. There is therefore no legitimate
 //! "the store is absent" case for the corpus itself, and the test says so:
@@ -186,7 +186,7 @@ const FIXTURES: &[(&str, Expect)] = &[
     ("declined_pattern", Expect::Declined(Unsupported::Pattern)),
     ("declined_mask", Expect::Declined(Unsupported::Mask)),
     ("declined_blend", Expect::Declined(Unsupported::BlendMode)),
-    // M25 item 3. What these three prove depends on the feature, which is
+    // item 3. What these three prove depends on the feature, which is
     // why `TEXT_EXPECT` is a constant rather than a literal: with `svg-text`
     // the text is laid out in the face this test registers and drawn as
     // outlines, and it must clear the Text floor with an empty report; with
@@ -214,7 +214,7 @@ const FIXTURES: &[(&str, Expect)] = &[
 #[cfg(feature = "svg-text")]
 const TEXT_EXPECT: Expect = Expect::Carried(Class::Text);
 /// Without the text stack a `<text>` leaves no node in the tree, and the loss
-/// is raised from the source XML instead — the behaviour M25 shipped.
+/// is raised from the source XML instead — the behaviour shipped.
 #[cfg(not(feature = "svg-text"))]
 const TEXT_EXPECT: Expect = Expect::Declined(Unsupported::Text);
 
@@ -437,7 +437,7 @@ fn every_fixture_ingests_and_clears_its_floor() {
 
 /// A construct with no PDF spelling is **reported**, never silently dropped.
 ///
-/// The half of M25's exit condition the SSIM table cannot state. The table
+/// The half of exit condition the SSIM table cannot state. The table
 /// above already checks each declined fixture names its own construct; this
 /// checks the stronger property behind it — that every variant of
 /// [`Unsupported`] the corpus can reach is in fact reachable, so the enum is
@@ -460,7 +460,7 @@ fn every_reported_construct_has_a_fixture_that_raises_it() {
     // first needs a GIF or WebP, which no fixture carries because embedding
     // one would add a decoder to the *test*, and the second needs a focal
     // gradient, which `usvg` normalises away in the cases a small fixture can
-    // express. Both are recorded as named debt in `docs/roadmap.md`'s M25
+    // express. Both are recorded as named debt in `docs/roadmap.md`'s
     // entry rather than left as an unexplained gap.
     // `Text` is in this list only without `svg-text`. With the feature and a
     // face registered, the corpus draws its text rather than reporting it —
@@ -495,7 +495,7 @@ fn every_reported_construct_has_a_fixture_that_raises_it() {
 
 /// A compiled form draws the **same picture** the inline path draws.
 ///
-/// M25 item 2's other half. `tests/svg_form.rs` proves the file holds one
+/// item 2's other half. `tests/svg_form.rs` proves the file holds one
 /// copy of the content however many pages place it; that is a claim about
 /// objects, and it would be satisfied by a form that draws the wrong thing.
 /// This is the pixel claim beside it: every carried fixture, compiled through
@@ -610,7 +610,7 @@ fn compile_and_render(svg: &str) -> ssim::Image {
 
 /// A `<text>` this session has no face for is **reported**, never swallowed.
 ///
-/// M25 item 3's other half, and the one the fixture table cannot state. With
+/// item 3's other half, and the one the fixture table cannot state. With
 /// a face registered, `usvg` falls back to the default family for any name it
 /// does not know, so every `<text>` draws and none is declined — which is
 /// good behaviour and is what the table above measures. The reported path is

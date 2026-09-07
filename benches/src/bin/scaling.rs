@@ -1,15 +1,11 @@
 //! One thread count, every multi-page corpus document, one line each.
 //!
-//! `scripts/bench-scaling.nu` runs this once per thread count and reads the
-//! curve off the output. It is a separate process per configuration on purpose:
-//! rayon's global pool is built once and cannot be resized, so a single process
-//! sweeping thread counts would measure the first one several times.
+//! One process per thread count: rayon's global pool is built once and cannot
+//! be resized, so a single process sweeping counts would measure the first
+//! one several times.
 //!
-//! The parallel shape is `map_init(RenderSession::new, …)`, which is what
-//! `crates/pdfrum/examples/parallel-render.rs` documents as the right one — a
-//! session per *worker*, reused across every page that worker handles, rather
-//! than one per page. A benchmark that built a session per page would measure
-//! cache construction and call it thread scaling.
+//! `map_init(RenderSession::new, …)`: a session per worker, reused across
+//! that worker's pages. A session per page would measure cache construction.
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};

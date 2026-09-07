@@ -486,7 +486,7 @@ fn transforming_an_object_dirties_it_and_the_move_survives_a_save() {
         other => panic!("expected a path, got {other:?}"),
     };
     // `kurbo::Shape` is named through `kurbo` and not through `pdfrum`,
-    // because §WP4 narrowed the facade's re-export to the five types its own
+    // because § narrowed the facade's re-export to the five types its own
     // signatures speak and `Shape` is not one of them. A caller wanting it
     // adds `kurbo` — which is what this test's manifest already does, and
     // what the ordinary Rust rule says.

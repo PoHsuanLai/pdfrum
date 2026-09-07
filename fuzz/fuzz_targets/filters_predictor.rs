@@ -1,13 +1,7 @@
-//! `predictor` — the TIFF and PNG un-predictors applied after Flate/LZW.
+//! `predictor` — TIFF and PNG un-predictors after Flate/LZW.
 //!
-//! This is the size-arithmetic hot spot of the filter ring: row size is
-//! `colors × bits_per_component × columns` rounded up to bytes, and every one
-//! of those three comes straight out of `/DecodeParms` with no bound the file
-//! must respect. The fuzzer drives all three from the input, deliberately
-//! including the values that overflow a naive product.
-//!
-//! Property: never panics. A bad parameter set must come back as
-//! `BadPredictorParams` or `SizeOverflow`, never as a crash.
+//! Property: never panics. A bad parameter set is `BadPredictorParams` or
+//! `SizeOverflow`.
 
 #![no_main]
 

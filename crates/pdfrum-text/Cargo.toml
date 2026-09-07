@@ -42,16 +42,7 @@ thiserror.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-parser.workspace = true
 
-# M12 benches. This crate owns the `text` group: every page's text extracted,
-# over the shared corpus in `benches/corpus`. See `benches/text.rs` for what
-# it measures and the internal working notes for why each crate owns its own.
-#
-# `pdfrum` is a dev-dependency and a *cycle* — the facade depends on this crate.
-# Cargo permits that for dev-dependencies and it appears in no published normal
-# tree. It is here rather than an entry at this crate's own seam because a
-# benchmark's number has to describe the same work as the oracle column it is
-# compared against, and `pdfium_test` renders a document rather than calling one
-# layer of one.
+# `text` group over `benches/corpus`. `pdfrum` is a permitted dev-dependency cycle.
 pdfrum.workspace = true
 pdfrum-corpus.workspace = true
 criterion.workspace = true

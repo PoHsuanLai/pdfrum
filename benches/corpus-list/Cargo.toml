@@ -1,25 +1,14 @@
 [package]
 name = "pdfrum-corpus"
-description = "The M12 benchmark corpus: which documents, and what class each is in"
+description = "The benchmark corpus: which documents, and what class each is in"
 publish = false
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# A leaf on purpose: **no pdfrum dependency, and no criterion**.
-#
-# Since M12's per-crate bench split, five library crates each own a `benches/`
-# target and every one of them needs the same document list. Had that list
-# stayed in `pdfrum-bench` — which depends on the facade, which depends on all
-# of them — each crate would have taken a dev-dependency pointing back at its
-# own dependents. Cargo permits that cycle, but the resulting graph makes
-# `cargo bench -p pdfrum-parser` build the vello rasterizer, which is the
-# opposite of what the split is for.
-#
-# So the list lives here, in a crate whose entire dependency set is `std`, and
-# `pdfrum-bench` depends on *it* rather than the other way round. The rule that
-# keeps it that way: nothing in this crate may know what a PDF is.
+# A leaf: no pdfrum dependency, no criterion. Five library crates share this
+# list so `cargo bench -p pdfrum-parser` does not build the rasterizer.
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

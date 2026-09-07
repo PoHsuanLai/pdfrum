@@ -1,7 +1,4 @@
-//! The engines, one module each, and the registry the parent and the child
-//! both consult. Every peer is behind the cargo feature of its own name so a
-//! build without it still lists it — as "not compiled in" — rather than
-//! silently dropping the row.
+//! Engines. A missing feature still lists the row as "not compiled in".
 
 use std::path::Path;
 

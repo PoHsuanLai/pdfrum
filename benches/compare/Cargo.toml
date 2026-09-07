@@ -1,18 +1,6 @@
-# pdfrum-compare — M21's comparative benchmark harness. A SEPARATE workspace,
-# deliberately not a member of the root one, on the same argument as fuzz/:
-# every peer engine here is a competing PDF implementation, two of them wrap
-# C (PDFium and MuPDF), and none of them may ever enter the tree that
-# `scripts/ci.nu`'s pure-Rust check walks. The empty `[workspace]` table is
-# what does the severing — without it cargo walks up to `../../Cargo.toml`
-# and adopts this package as a member. Do not delete it, and do not add
-# `benches/compare` to the root manifest's `members`.
-#
-# `pdfrum` is taken by path with its DEFAULT features, so it is measured
-# exactly as `cargo add pdfrum` delivers it. Every peer is optional and
-# behind a feature of its own name; the default set is the pure-Rust peers,
-# and the two C baselines are `--features c-engines` because they need a
-# clang (mupdf-sys runs bindgen and compiles MuPDF) and a `libpdfium.so`
-# (pdfium-render binds one at runtime; see docs/benchmarks/README.md).
+# Own workspace: two peers wrap C and must not enter the library tree.
+# Do not delete `[workspace]`, and do not add this dir to root `members`.
+# pdfrum is default features (`cargo add pdfrum`). C engines: `--features c-engines`.
 [workspace]
 
 [package]
@@ -23,10 +11,8 @@ edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
 
-# The workspace lints, minus the three denies, for the reason
-# benches/Cargo.toml gives: a harness that cannot find its oracle should stop
-# and say so. `unsafe_code = "forbid"` is kept — the C engines are reached
-# through their safe wrappers only, which is the point of measuring them.
+# Harness: a missing oracle should stop. C engines are reached through
+# their safe wrappers.
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
@@ -70,8 +56,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 png = "=0.18.1"
 
-# Peers — "Benchmark peers" records each with its licence and
-# whether C is in its build. Versions are the ones names.
+# Peers. C engines are behind `c-engines`.
 hayro = { version = "=0.7.1", optional = true }
 hayro-interpret = { version = "=0.7.0", optional = true }
 # hayro's geometry vocabulary, needed to read a glyph's position out of its

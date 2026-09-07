@@ -10,12 +10,11 @@ encoding IDs behave identically. The fixtures below generalize that: a fixed
 skeleton (head/hhea/hmtx/maxp/loca/glyf/post) plus whatever cmap the test under
 examination needs.
 
-Usage (from the workspace root):
+Usage:
 
-    python3 scripts/make-tt-fixtures.py [OUT_DIR]
+    python3 crates/pdfrum-font/tests/fixtures/make.py [OUT_DIR]
 
-with OUT_DIR defaulting to `crates/pdfrum-font/tests/fixtures`. Output is
-deterministic: re-running the script reproduces the committed bytes exactly.
+OUT_DIR defaults to this directory. Output is deterministic.
 """
 
 from __future__ import annotations
@@ -26,13 +25,7 @@ from pathlib import Path
 
 UNITS_PER_EM = 1000
 
-DEFAULT_OUT_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "crates"
-    / "pdfrum-font"
-    / "tests"
-    / "fixtures"
-)
+DEFAULT_OUT_DIR = Path(__file__).resolve().parent
 
 
 # --------------------------------------------------------------------------

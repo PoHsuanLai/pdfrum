@@ -10,8 +10,8 @@ keywords = ["pdf", "render", "parse", "text", "graphics"]
 categories = ["parser-implementations", "graphics", "text-processing", "multimedia::images"]
 
 # Copied from `[workspace.lints]` rather than `workspace = true`: Cargo
-# forbids mixing the inherit flag with extra keys, and WP13 adds one
-# clippy lint on this crate only. Keep the two tables in step.
+# forbids mixing the inherit flag with extra keys, and this crate adds one
+# clippy lint of its own. Keep the two tables in step.
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
@@ -23,7 +23,7 @@ panic = "deny"
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
-# WP13: boolean parameters that mean "which mode" are enums on this crate's
+# Boolean parameters that mean "which mode" are enums on this crate's
 # surface. `struct_excessive_bools` stays allowed on engine option structs
 # that mirror oracle flag words (`pdfrum_render::RenderOptions`).
 fn_params_excessive_bools = "deny"
@@ -70,38 +70,15 @@ markdown = ["dep:pdfrum-markdown"]
 # a build that never exports one should not carry it.
 svg = ["dep:pdfrum-svg"]
 
-# M25: an SVG document drawn into a page as vectors, through
-# `Canvas::draw_svg` inline or `DocEdit::compile_svg` once into a Form
-# XObject. Needs `edit`, because a canvas is a drawing session over an
-# editable document.
-#
-# What it brings: `usvg` with `default-features = false`, a `png` decoder, and
-# **22 crates** new to a *default* `pdfrum` — all pure Rust. That figure was
-# recorded as ten until 2026-09-07, on a count of `usvg`'s own subtree rather
-# than the delta a caller actually pays.
-#
-# Default-off, because 22 crates is a real cost for a caller who never meets
-# an SVG — and it is deliberately *separate* from `pdfrum-svg`'s export
-# feature, which adds nothing to the tree at all: exporting and ingesting
-# share a subject but not a price, and a caller who only exports should pay
-# nothing for a parser.
+# An SVG drawn into a page as vectors, through `Canvas::draw_svg` inline or
+# `DocEdit::compile_svg` once into a Form XObject. Needs `edit`. Default-off
+# and separate from `svg` (export): ingesting costs `usvg`; exporting does not.
 svg-ingest = ["edit", "dep:usvg", "dep:png"]
 
-# M25 item 3: `<text>` in an ingested SVG, converted to outlines.
-#
-# A *third* feature rather than part of `svg-ingest`, because it is the only
-# thing in this crate that costs a second font stack. `usvg/text` brings ten
-# more crates — `rustybuzz` and `ttf-parser` beside the workspace's own
-# skrifa/read-fonts, and a `fontdb 0.23` beside the `fontdb 0.24` that
-# `system-fonts` already resolves, a genuine duplicate that 0.x semver cannot
-# collapse. A caller who ingests logos and never meets a `<text>` should not
-# pay that, so they do not.
-#
-# What it does **not** bring is `usvg`'s `system-fonts` or `memmap-fonts`:
-# nothing scans the host, and the font database starts empty. The faces come
-# from the caller through `SvgFonts`, which is what keeps SVG text mapping
-# through fonts *we* were handed rather than through whatever the machine
-# happens to have installed. records the measurement.
+# `<text>` in an ingested SVG, converted to outlines. Separate from
+# `svg-ingest` because `usvg/text` pulls a second font stack (`rustybuzz`,
+# `ttf-parser`, a second `fontdb`). Faces come from the caller through
+# `SvgFonts`; `usvg`'s `system-fonts` / `memmap-fonts` stay off.
 svg-text = ["svg-ingest", "usvg/text"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
@@ -130,13 +107,9 @@ profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true
 pdfrum-parser.workspace = true
-# `[spec]` 2026-09-02, WP1: the facade names `pdfrum_crypt::Permissions` in
-# `Document::permissions`, so it depends on the crate that owns the type
-# rather than laundering it through `pdfrum-parser`. No new crate reaches the
-# tree — `pdfrum-crypt` is already here transitively, through the parser —
-# and the external set is untouched. The edge is what WP1's rule
-# requires: the crate that owns the encoding owns the type, and the facade
-# forwards it rather than translating it.
+# The facade names `pdfrum_crypt::Permissions` in `Document::permissions`,
+# so it depends on the crate that owns the type rather than laundering it
+# through `pdfrum-parser`.
 pdfrum-crypt.workspace = true
 pdfrum-font.workspace = true
 pdfrum-page.workspace = true
@@ -155,11 +128,8 @@ pdfrum-markdown = { workspace = true, optional = true }
 pdfrum-svg = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
-# M25's SVG ingestion, behind `svg-ingest`. `default-features = false` per the
-# rule: the defaults are `text`, `system-fonts` and `memmap-fonts`,
-# all three of which exist to *shape text* through a second font stack, and
-# pdfrum has its own. See for what dropping them drops and what the
-# consequence for `<text>` is.
+# SVG ingestion, behind `svg-ingest`. Defaults off: `text`, `system-fonts`
+# and `memmap-fonts` would pull a second font stack.
 usvg = { workspace = true, optional = true }
 # Decoding a PNG an SVG `<image>` carried, so it embeds as PDF image samples
 # rather than being dropped. Optional and reached only through `svg-ingest`;
@@ -185,35 +155,18 @@ rayon.workspace = true
 # the examples turn them into files.
 png.workspace = true
 
-# The other two CPU rasterizers, as **dev**-dependencies (2026-09-02). They
-# left the normal tree when `Page::render_on` took the backend as an argument,
-# and they are here because `tests/facade.rs` asserts the property that
-# justifies the seam: every backend renders the same page at the same size.
-# A dev-dependency is exactly what a caller who names one of them writes, so
-# the test is also the worked example.
+# The other two CPU rasterizers. `tests/facade.rs` asserts every backend
+# renders the same page at the same size.
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-agg.workspace = true
 
-# The engine, named directly (WP10, 2026-09-02). It is already a normal
-# dependency, but an integration test is its own crate and can only `use` what
-# the manifest lists for it. `tests/facade.rs` drives
-# `pdfrum_render::RenderOptions` with the oracle's own `no_path_smooth` and
-# asserts the facade's positive `smooth_paths` renders byte-identically — the
-# only way to check that inversion from outside the crate.
+# Already a normal dependency; an integration test is its own crate.
 pdfrum-render.workspace = true
 
-# The filter chain, for `tests/canvas.rs`. An integration test is its own
-# crate, and reading back what the canvas wrote means decoding the stream the
-# save flate-compressed on the way out — which is exactly the round trip the
-# M23 contract asks to be proved. Already a normal dependency; this adds
-# nothing to the tree a caller compiles.
+# Filter chain, for `tests/canvas.rs` reading back a flate-compressed stream.
 pdfrum-filters.workspace = true
-# M25's ingestion round trip (`tests/svg_ingest.rs`): render the fixture SVG
-# with a *second* implementation and score our page against it, so ingestion
-# has the same kind of correctness story M24's export has. **Dev-only** —
-# `resvg` never enters the shipped tree, which `scripts/ci.nu`'s pure-Rust
-# check covers. Its SSIM module is shared with `pdfrum-svg`'s round trip
-# rather than transcribed a second time, so both report the same metric.
+# Ingestion round trip (`tests/svg_ingest.rs`): render the fixture SVG with
+# a second implementation and score our page against it. Dev-only.
 resvg.workspace = true
 # An integration test is its own crate and can only `use` what the manifest
 # lists for it: `tests/svg_ingest.rs` names `Diagnostics` to render the page
@@ -344,21 +297,14 @@ required-features = ["vello-cpu", "edit", "forms"]
 name = "svg_export"
 required-features = ["vello-cpu", "svg"]
 
-# M25's ingestion round trip: score what `Canvas::draw_svg` drew against
-# `resvg` rendering the same SVG directly.
 [[test]]
 name = "svg_ingest"
 required-features = ["svg-ingest", "tinyskia"]
 
-# M26's PDF/A oracle. Runs on the default set — the checker adds no
-# dependency — but names `Document::open`, so it needs a build that parses.
 [[test]]
 name = "pdfa_oracle"
 required-features = ["vello-cpu", "edit", "forms"]
 
-# M25 item 2: that a compiled form is **one** object however many pages place
-# it. A claim about the saved bytes rather than the pixels, so it needs no
-# rasterizer — only the editor and the ingestion feature.
 [[test]]
 name = "svg_form"
 required-features = ["svg-ingest"]

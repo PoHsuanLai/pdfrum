@@ -38,7 +38,7 @@ which is also the order of `kFoxitFonts` and `kBase14FontNames` in
 present:
 
 ```
-uv run scripts/extract-foxit-base14.py [ORACLE_ROOT] [OUT_DIR]
+uv run crates/pdfrum-font/fontdata/extract.py [ORACLE_ROOT]
 ```
 
 The script verifies each blob's length twice — against the `std::array<uint8_t,

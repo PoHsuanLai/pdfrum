@@ -1,13 +1,6 @@
-//! `load` with a password — the encrypted-document path end to end.
+//! `load` with a password — the encrypted path (`/R` 2–6, Latin-1/UTF-8 retry).
 //!
-//! Separate from `parser_load` because the password changes which code runs,
-//! not just which answer comes back: a supplied password takes the document
-//! through owner-then-user key derivation, the `/R` 5 and 6 SHA-2 ladders,
-//! and the Latin-1/UTF-8 re-encoding retry — none of which the unencrypted
-//! target reaches. Seeded with the oracle's `encrypted_*.pdf` resources.
-//!
-//! Property: never panics. Every document that opens must decrypt its
-//! strings and streams without panicking.
+//! Property: never panics; a document that opens decrypts without panicking.
 
 #![no_main]
 
@@ -16,10 +9,7 @@ use std::sync::Arc;
 use libfuzzer_sys::fuzz_target;
 use pdfrum_parser::{LoadOptions, load};
 
-/// The passwords the oracle's own encrypted fixtures use, plus the shapes
-/// that exercise the re-encoding retry: a Latin-1 byte that is not UTF-8, a
-/// valid multi-byte UTF-8 sequence, and one past the 127-byte ISO limit the
-/// crate deliberately does not enforce.
+/// Oracle fixture passwords, plus Latin-1 / UTF-8 retry shapes.
 fn password(selector: u8, from_input: &[u8]) -> Option<Vec<u8>> {
     match selector % 8 {
         0 => None,

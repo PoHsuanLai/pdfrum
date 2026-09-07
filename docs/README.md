@@ -5,8 +5,7 @@ README and rustdoc.
 
 | | |
 |---|---|
-| [`benchmarks/`](benchmarks/README.md) | Method and numbers vs pdfium-render, mupdf, hayro, pdf-rs, pdf-extract |
-| [`benchmarks/losses-explained.md`](benchmarks/losses-explained.md) | Every loss, with cause and verdict |
+| [`benchmarks/`](benchmarks/README.md) | Engines, operations, tables, current numbers |
 | [`benchmarks/data/`](benchmarks/data/) | Raw JSON for those runs |
 | [`upstream/`](upstream/README.md) | Bug reports against PDFium, vello, hayro, zune, plus repros |
 | [`roadmap.md`](roadmap.md) | What's next |

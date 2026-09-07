@@ -44,8 +44,7 @@ fn at(index: usize) -> CharIndex {
 
 /// The read-only C++ PDFium checkout, resolved the one way every script and
 /// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
-/// sibling `../pdfium-c++` directory README.md and name.
-/// `scripts/env.nu` holds the nushell spelling of the same rule.
+/// sibling `../pdfium-c++` directory README.md names.
 ///
 /// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, and an integration test in one crate
@@ -265,7 +264,7 @@ fn control_characters_are_in_the_char_stream_and_not_in_the_text() {
     }
 }
 
-/// `page_text(start, count)` as it stood before WP8, computed from the public
+/// `page_text(start, count)` as it stood before , computed from the public
 /// segment table alone.
 ///
 /// The point of keeping it here rather than deleting it with the method: it is
@@ -325,7 +324,7 @@ fn an_unmappable_character_is_still_counted() {
 /// not, so a spaces-only object vanishes.
 ///
 /// `[oracle-bug]` We keep it, and this page yields the one character the bug
-/// asks for. M28 narrowed *how* we keep it: the general advance gate that
+/// asks for. narrowed *how* we keep it: the general advance gate that
 /// used to do so kept every spaces-only object on every page, which
 /// duplicated separators the inter-object rules already emit and was the
 /// "spurious generated space" defect. The rescue is now page-level —
@@ -445,7 +444,7 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
 }
 
 /// `Bug921`. Audit items **A40 + A43**, restored 2026-09-06 by user ruling
-/// after M28 briefly gave them up.
+/// after briefly gave them up.
 ///
 /// PDFium's box gate drops five objects on this page that draw running
 /// Russian prose. Its `--txt` begins mid-sentence at "разве не выражает"
@@ -509,8 +508,7 @@ fn four_letter_and_sentence_fixtures_read_plainly() {
 #[ignore = "bug_1769: we keep glyphs the overlap logic should drop, giving \
             `world wo d` for `wo d wo d`. Not the substitution-metrics cluster \
             this was once filed under -- that is fixed, and this file did not \
-            move with it; the cause is in the dedup pass. See \
-            the internal working notes."]
+            move with it; the cause is in the dedup pass."]
 fn two_pinned_upstream_bugs_stay_pinned() {
     // `Bug444176962`: a space that ought to be generated is not
     // (crbug.com/444176962). `Bug1769`: characters the overlap logic drops
@@ -574,7 +572,7 @@ fn cropping_a_page_does_not_change_its_characters() {
 ///
 /// Audit items **A40 + A43** changed this to `" \r\n \r\n {HELLO}"`, on the
 /// reasoning that the three space-only objects each draw a space glyph with
-/// a real advance and only the empty bounding box hid them. M28 measured
+/// a real advance and only the empty bounding box hid them. measured
 /// that reasoning and it does not hold **when the page has other objects**:
 /// the inter-object rules (`GenerateSpace`) already emit a separator from
 /// the gap such an object sits in, so keeping the object emits it twice.
@@ -924,7 +922,7 @@ fn extraction_never_panics_on_any_resource_fixture() {
 
 /// A hand-check that the character stream really is what the oracle dumps.
 ///
-/// The encoding itself moved to `pdfrum-tool` with `--txt` (WP8); what this
+/// The encoding itself moved to `pdfrum-tool` with `--txt` ; what this
 /// crate owes the dump is the *stream*, so that is what is checked: one entry
 /// per character, in order, decoding to the page's text.
 #[test]

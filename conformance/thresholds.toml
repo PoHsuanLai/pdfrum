@@ -10,6 +10,5 @@
 ssim = 0.99
 
 # Per-file overrides, keyed by the corpus-relative path the scoreboard uses
-# (e.g. "corpus/fx/text/hello.pdf", "resources/annots.pdf"). Empty at M0:
-# nothing renders yet, so nothing has earned a tighter floor.
+# (e.g. "corpus/fx/text/hello.pdf", "resources/annots.pdf").
 [per_file]

@@ -15,8 +15,7 @@
 //!
 //! # What this file adds that the library cannot
 //!
-//! Two things, and they are exactly the two the library's own status doc says
-//! are missing:
+//! Two things the library cannot see:
 //!
 //! - **Arity.** Every one of the 72 golden assertions `pdfrum-script` could
 //!   not answer expects `Incorrect number of parameters passed to function.`,

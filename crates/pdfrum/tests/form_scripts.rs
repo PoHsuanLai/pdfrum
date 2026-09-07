@@ -129,7 +129,7 @@ fn committing_runs_the_rest_of_the_cascade() {
     let committed = session.blur();
     assert!(committed.consumed);
 
-    // The `AF*` library answered, which is the half of the object model M15
+    // The `AF*` library answered, which is the half of the object model
     // step 1 built. A transcript with no `PASS:` line at all would mean the
     // engine was reached but `AFNumber_Format` and its family were not.
     let text = session

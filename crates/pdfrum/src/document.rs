@@ -374,7 +374,7 @@ impl Document {
     /// and which requirements are not covered.
     ///
     /// This only reports. Nothing is rewritten, and there is no conversion
-    /// yet: the roadmap orders M26 "report before repair" deliberately.
+    /// yet: the roadmap orders "report before repair" deliberately.
     ///
     /// ```
     /// use pdfrum::{Document, PdfaLevel};

@@ -1,12 +1,7 @@
-//! `decode_jbig2` — the JBIG2 entry point.
+//! `decode_jbig2` — arbitrary bytes, not via the image ladder.
 //!
-//! Fuzzed here rather than through the image ladder so the codec sees
-//! arbitrary bytes directly, and fuzzed regardless of which implementation
-//! sits behind the entry point: the contract is the boundary, not the
-//! decoder.
-//!
-//! Property: never panics. The requested bitmap is sized from the *caller's*
-//! dimensions, so it must be bounded before the codec runs.
+//! Property: never panics. The requested bitmap is sized from the caller's
+//! dimensions and must be bounded before the codec runs.
 
 #![no_main]
 

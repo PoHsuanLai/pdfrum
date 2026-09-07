@@ -329,7 +329,7 @@ impl RenderDevice for VelloCpuDevice {
             debug_assert_eq!(
                 (m.width(), m.height()),
                 (self.width, self.height),
-                "an AlphaMask must be device-sized and device-aligned (SPEC §8)"
+                "an AlphaMask must be device-sized and device-aligned"
             );
             if m.width() != self.width || m.height() != self.height {
                 return None;
@@ -379,7 +379,7 @@ impl RasterBackend for VelloCpuBackend {
         // explicitly permitted, so only layers are the precondition.
         debug_assert!(
             !d.frames.contains(&Frame::Layer),
-            "snapshot requires every layer popped (SPEC §8)"
+            "snapshot requires every layer popped"
         );
         d.rasterize()
     }

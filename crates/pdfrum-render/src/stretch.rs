@@ -568,7 +568,7 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
     // fixed-point-shifted bytes exactly like the source: one shift per axis
     // keeps the arithmetic identical to a single-pass accumulation of the
     // product weights, up to the two roundings the C++ also performs.
-    // M12: both passes walk row slices rather than calling `pixel`/`set_pixel`
+    // both passes walk row slices rather than calling `pixel`/`set_pixel`
     // per texel. The arithmetic is unchanged — same taps, same fixed-point
     // accumulation, same `>> 16` — but `pixel()` returned an `Option<[u8; 4]>`
     // built from four separate bounds-checked `get`s and `set_pixel` recomputed

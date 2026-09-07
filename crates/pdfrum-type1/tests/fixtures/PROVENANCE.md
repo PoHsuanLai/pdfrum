@@ -21,7 +21,7 @@ initializers:
 present:
 
 ```
-uv run scripts/extract-foxit-mm.py [ORACLE_ROOT]
+uv run crates/pdfrum-type1/tests/fixtures/extract.py [ORACLE_ROOT]
 ```
 
 The script verifies each blob's length against the `std::array<uint8_t, N>`

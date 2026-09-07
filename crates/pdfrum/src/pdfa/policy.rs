@@ -3,7 +3,7 @@
 //!
 //! # Why these are types and not a bool and a string
 //!
-//! The roadmap's fourth item for M26 names the failure mode: *silent lossy
+//! The roadmap's fourth item for names the failure mode: *silent lossy
 //! conversion*. A conversion that quietly drops a font, rasterizes a page or
 //! deletes an annotation has produced a file that passes a validator and is
 //! not the document the caller handed in. The only defence is that every

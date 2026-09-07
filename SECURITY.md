@@ -3,9 +3,9 @@
 pdfrum parses untrusted PDFs. A crash, a panic in library code, an unbounded
 allocation, or a hang on a crafted file is a security bug.
 
-**Do not** open a public GitHub issue. Email the maintainer, or use GitHub's
-private vulnerability reporting. Include a minimal PDF, what you saw, and the
-crate version or commit.
+**Do not** open a public GitHub issue. Use [GitHub private vulnerability
+reporting](https://github.com/PoHsuanLai/pdfrum/security/advisories/new).
+Include a minimal PDF, what you saw, and the crate version or commit.
 
 In scope: panics in a published crate; unbounded memory or CPU outside
 `Limits`; a document script reaching the network, filesystem, or a process

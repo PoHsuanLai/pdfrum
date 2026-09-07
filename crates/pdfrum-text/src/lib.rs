@@ -52,8 +52,8 @@
 // page interpreter: index with `get()` and do arithmetic that cannot trap.
 #![warn(clippy::indexing_slicing)]
 
-// Every module is private and the crate root is the whole surface
-//: a caller of `pdfrum-text` needs the types below, and the
+// Every module is private and the crate root is the whole surface:
+// a caller of `pdfrum-text` needs the types below, and the
 // bidi resolver, the Unicode tables, the link scanners and the segment
 // builder are how this crate reaches them, not what it offers.
 mod bidi;

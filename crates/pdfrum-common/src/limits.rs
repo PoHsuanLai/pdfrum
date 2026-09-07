@@ -49,7 +49,7 @@ use crate::deadline::{Deadline, Operation};
 // syntax over `Default` the way callers configure options, and the attribute
 // forbids exactly that outside this crate. New fields are additive here.
 //
-// `Clone` and not `Copy` since M20 phase 3: a [`Deadline`] shares a stop
+// `Clone` and not `Copy`: a [`Deadline`] shares a stop
 // flag between its clones, and a `Copy` of an `Arc` is not a thing. Every
 // reader takes `&Limits`; the few owners clone once.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +108,7 @@ pub struct Limits {
     /// erroring.
     pub max_name_tree_depth: u32,
 
-    // ---- The script engine (SPEC §10, `[spec]` 2026-09-02, M15 brief E4) ----
+    // ---- The script engine ----
     //
     // The first three map one-for-one onto `boa`'s `RuntimeLimits`; the
     // fourth is ours. What they do **not** bound is heap growth and regex
@@ -141,7 +141,7 @@ pub struct Limits {
     /// configurable rather than looser.
     pub max_calculate_depth: u32,
 
-    // ---- A host's ceilings on untrusted input (M20 phase 3) ----
+    // ---- A host's ceilings on untrusted input ----
     /// The most pixels one render may produce: width × height of the target
     /// under the render transform. `None` — the default — is no cap.
     ///

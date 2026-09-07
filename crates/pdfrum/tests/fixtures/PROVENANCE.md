@@ -33,7 +33,7 @@ about the same bytes:
 | `rectangles.pdf` | 633 B | Eight path objects on one page, one element. The visibility and transform tests' fixture: eight distinguishable shapes with no fonts to complicate the resource sweep. |
 | `hello_world_2_pages.pdf` | 962 B | Two pages **sharing one content stream and one resource dictionary**. Editing one page must copy rather than rewrite, and this is the file that fails if it does not. |
 
-One more arrived with the decode target (M12b P1). It is the only fixture here
+One more arrived with the decode target . It is the only fixture here
 that is **assembled** rather than taken whole from the oracle, because no file
 in the oracle's corpus draws one image twice at two very different sizes, and
 that is precisely the shape the decode target has to be tested against:
@@ -48,13 +48,13 @@ that is precisely the shape the decode target has to be tested against:
 | `annots_action_handling.pdf` | 2.5 KB | Two widgets followed by four `/Link` annotations, the first carrying `/A << /S /URI /URI (https://cs.chromium.org/) >>`. It is the fixture for actions arriving as **requests** rather than as callbacks, and for the rule that the focus ring admits links only when a caller asks it to. |
 | `substituted_da_font.pdf` | 812 B | `testing/resources/pixel/form_textfield_focused_ltr.in` expanded by `testing/tools/fixup_pdf_template.py`, byte for byte. One `/Tx` widget on a 200x100 page, `/Rect [50 40 150 70]`, `/DA (/Arial 12 Tf 0 0 0 rg)` over a `/DR` declaring `/Arial` as a bare `/Type /Font /Subtype /TrueType /BaseFont /Arial` — **nothing embedded**, so which face lays the field out is entirely the substitution's choice. That is what makes it the fixture for the question `FormSession::with_context` exists to answer: under the hermetic `test_fonts` set `/Arial` becomes Arimo (905/−211, a 13.392-unit caret at 12pt) and under a default context it falls through to the built-in base-14 Helvetica (718/−219, 11.244). It is also the fixture for the second face, since its Ansi `/DA` font cannot write a single Hebrew code point. |
 
-One arrived with the `script` feature (WP12). It is the only fixture here that
+One arrived with the `script` feature . It is the only fixture here that
 is not read by a default build: `tests/form_scripts.rs` is behind
 `#[cfg(feature = "javascript")]`, so a `cargo test -p pdfrum` never opens it.
 
 | File | Size | What it exercises |
 |---|---:|---|
-| `public_methods.pdf` | 30 KB | `testing/resources/javascript/public_methods.pdf`, verbatim. One `/Tx` field named `Text Box` whose `/AA` carries **all four hooks** — `/C`, `/F`, `/K` and `/V` — which makes it the one file in the oracle's corpus that exercises every wire `FormSession::with_scripts` installs. Its `/AA /K` opens with an `app.alert` naming itself, and that line is what the seam test keys on: it is produced by the document's own JavaScript and by nothing else. It is by far the largest fixture here, and that is the trade — every smaller `/AA` fixture in the corpus either carries one hook or needs the `Doc`/`Field` object model M15 has not built (`this.getField(…)`), and a fixture whose script cannot run proves nothing about a seam. |
+| `public_methods.pdf` | 30 KB | `testing/resources/javascript/public_methods.pdf`, verbatim. One `/Tx` field named `Text Box` whose `/AA` carries **all four hooks** — `/C`, `/F`, `/K` and `/V` — which makes it the one file in the oracle's corpus that exercises every wire `FormSession::with_scripts` installs. Its `/AA /K` opens with an `app.alert` naming itself, and that line is what the seam test keys on: it is produced by the document's own JavaScript and by nothing else. It is by far the largest fixture here, and that is the trade — every smaller `/AA` fixture in the corpus either carries one hook or needs the `Doc`/`Field` object model has not built (`this.getField(…)`), and a fixture whose script cannot run proves nothing about a seam. |
 
 One arrived with `Error::WrongPassword`, because a doctest that shows a caller
 matching that variant needs a file that produces it, and until now none of
@@ -108,13 +108,13 @@ that are:
 | `mona_lisa.jpg` | 6167 B | `testing/resources/mona_lisa.jpg`, verbatim. The **only** JPEG in the oracle's `testing/resources/`, and the one its own `FPDFEditEmbedderTest` JPEG cases load. A 120x120 baseline SOF0, three components, eight-bit precision, JFIF with no Adobe APP14 — which is exactly the combination that pins the DCT passthrough: `/DeviceRGB`, `/BitsPerComponent 8`, `/Filter /DCTDecode`, and **no** `/DecodeParms /ColorTransform 0`, since libjpeg reads a marker-less three-component frame as YCbCr. Its 6 KB of entropy-coded scan also makes it a real round-trip rather than a header exercise: the same bytes must come back out of the saved file and decode to the same picture. |
 | `gray.jp2` | 211 B | `testing/resources/gray.jp2`, verbatim. A 4x4 one-component JP2 file — the smallest JPEG 2000 in the corpus — carrying the full twelve-byte `jP  ` signature box before its `jp2c`. It is the fixture for the `/JPXDecode` arm, where the point is what is **absent**: §7.4.9 leaves `/ColorSpace` and `/BitsPerComponent` to the codestream, so the dictionary this writes has four keys and a `/Filter`, and a reader that finds a `/BitsPerComponent` there would be reading something we should not have written. |
 
-## Text index mapping (M17, 2026-09-04)
+## Text index mapping
 
 | File | Size | What it exercises |
 |---|---:|---|
 | `bug_1139.pdf` | 796 B | `testing/resources/bug_1139.pdf`, verbatim. `hello_world.pdf` with a leading control character in its text: one more character in the character stream than in the text, so the char-index/text-index maps differ by one — the oracle's `fpdf_searchex_embeddertest.cpp` tables. |
 
-## Signatures (M17, 2026-09-04)
+## Signatures
 
 | File | Size | What it exercises |
 |---|---:|---|
@@ -123,7 +123,7 @@ that are:
 | `signature_reason.pdf` | 1764 B | `testing/resources/signature_reason.pdf`, verbatim. A signature carrying a `/Reason` string, `test reason`. |
 | `docmdp.pdf` | 1262 B | `testing/resources/docmdp.pdf`, verbatim. A certifying signature with a `DocMDP` `/Reference` whose `/TransformParams /P` is 1. |
 
-## Thumbnails (M17, 2026-09-04)
+## Thumbnails
 
 | File | Size | What it exercises |
 |---|---:|---|
@@ -134,7 +134,7 @@ that are:
 | `simple_thumbnail1.png` | 458 B | `testing/resources/embedder_tests/simple_thumbnail1.png`: page 1's. |
 | `thumbnail_with_no_filters.png` | 99 B | `testing/resources/embedder_tests/thumbnail_with_no_filters.png`: the unfiltered thumbnail as decoded. |
 
-## Attachments (M17, 2026-09-04)
+## Attachments
 
 | File | Size | What it exercises |
 |---|---:|---|
@@ -143,7 +143,7 @@ that are:
 | `embedded_attachments_invalid_types.pdf` | 1172 B | `testing/resources/embedded_attachments_invalid_types.pdf`, verbatim. `CheckSum` written as a name on one attachment and as a stream on the other. |
 | `embedded_attachments_with_desc.pdf` | 1417 B | `testing/resources/embedded_attachments_with_desc.pdf`, verbatim. Four attachments whose `/Desc` is text, absent, a number, and empty. |
 
-## Flatten (M17, 2026-09-04)
+## Flatten
 
 | File | Size | What it exercises |
 |---|---:|---|

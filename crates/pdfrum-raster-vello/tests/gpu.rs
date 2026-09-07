@@ -8,7 +8,6 @@
 //! `cargo nextest run` shows the message; CI stays green.
 //!
 //! These are correctness assertions, not measurements. The numbers live in
-//! the internal working notes, where they can carry the adapter they were taken
 //! on.
 
 use kurbo::{Affine, BezPath, Rect};
@@ -131,7 +130,7 @@ fn a_layer_composites_with_its_alpha() {
 
 #[test]
 fn a_device_sized_mask_halves_what_it_covers() {
-    // The path §4.2 of the status doc builds by hand, because vello has no
+    // Built by hand, because vello has no
     // layer that takes a supplied coverage plane. Today's engine passes `None`
     // at every call site, so without this test the mapping would be untested
     // code shipped on a contract.
@@ -294,7 +293,7 @@ fn an_image_lands_on_its_own_pixel_grid() {
     // `draw_image`'s convention: the transform maps the image's pixel grid,
     // not its unit square. Reading it the other way collapses a whole-page
     // image onto one pixel — silently and totally — which is exactly the
-    // mistake SPEC §8 item 8 records having been made once already.
+    // mistake records having been made once already.
     let Some(backend) = gpu() else { return };
     let mut device = backend.new_target(32, 32, peniko::Color::TRANSPARENT);
     let img = Pixmap::filled(16, 16, peniko::Color::from_rgba8(0, 0, 255, 255));

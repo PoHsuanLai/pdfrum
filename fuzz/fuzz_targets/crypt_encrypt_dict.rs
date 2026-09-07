@@ -1,13 +1,7 @@
-//! `SecurityHandler::from_encrypt_dict` over an arbitrary `/Encrypt`
-//! dictionary.
+//! `SecurityHandler::from_encrypt_dict` over a parsed `/Encrypt` dictionary.
 //!
-//! The dictionary is not synthesised field by field: the input is parsed as a
-//! PDF object by `pdfrum-parser`, so the fuzzer explores the real shape space
-//! the handler sees in a document — `/V` and `/R` of any type, `/Length` in
-//! bits or bytes or nonsense, `/O`/`/U`/`/OE`/`/UE`/`/Perms` of any length.
-//!
-//! Property: constructing a handler from arbitrary bytes never panics, and
-//! whatever handler comes back can decrypt without panicking either.
+//! Property: construction never panics; a handler that comes back can decrypt
+//! without panicking, and plaintext never grows.
 
 #![no_main]
 

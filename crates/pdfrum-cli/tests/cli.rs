@@ -1425,7 +1425,7 @@ fn extract_words_lists_every_word_with_its_box_font_and_size() {
     assert!(rows[0]["x1"].as_f64() <= rows[1]["x0"].as_f64());
     assert!(rows[2]["y0"].as_f64() > rows[0]["y1"].as_f64());
     // The corpus guide's first page has 33 words -- the oracle's own count
-    // for this page, which our text has matched byte for byte since M28.
+    // for this page, which our text has matched byte for byte since .
     let guide = json(&[
         "extract",
         "words",
@@ -1866,7 +1866,7 @@ fn completions_and_manual_pages_come_from_the_command_tree() {
     assert!(count > 40, "{count} pages");
 }
 
-// ---- M20 phase 1: composition ----------------------------------------------
+// ---- : composition ----------------------------------------------
 
 #[test]
 fn a_dash_reads_the_document_from_stdin() {

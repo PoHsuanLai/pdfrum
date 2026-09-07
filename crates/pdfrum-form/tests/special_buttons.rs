@@ -115,8 +115,7 @@ fn a_control_with_no_on_state_stays_clear() {
 /// exactly what `state_for_control` turns back into a per-kid answer, and
 /// what `route.rs` passes as `LiveInput::appearance_state`.
 ///
-/// Recorded in the internal working notes's OWED table as item 8: the recording
-/// landed in M14 and the drawing could not, because the generator read `/AS`
+/// landed in and the drawing could not, because the generator read `/AS`
 /// from the widget dictionary and took no override.
 #[test]
 fn a_radio_groups_siblings_answer_off_and_the_chosen_kid_answers_its_own_name() {

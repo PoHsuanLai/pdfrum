@@ -24,7 +24,7 @@ pdfrum-parser.workspace = true
 clap.workspace = true
 png.workspace = true
 sha2.workspace = true
-# the style rules: the lib-shaped modules in this crate (json, thresholds, ssim,
+# The lib-shaped modules in this crate (json, thresholds, ssim,
 # pixels, transcode, suppressions, goldens) carry real `Error` enums; `anyhow`
 # stays at the CLI edge only.
 thiserror.workspace = true

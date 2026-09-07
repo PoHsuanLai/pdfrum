@@ -1,13 +1,6 @@
-//! Inline images — `BI … ID … EI`, the quirkiest corner of content parsing.
+//! Inline images — `BI … ID … EI`. Input is also run with a `BI` prefix.
 //!
-//! Seeded with a `BI` prefix so the fuzzer spends its budget inside the
-//! dictionary scan, the abbreviation expansion, the length inference and the
-//! `EI` resync rather than rediscovering the two bytes that reach them.
-//!
-//! Property: never panics and always terminates. The resync loop absorbs
-//! bytes until a standalone `EI` token or the end of the data, and an
-//! inline image whose declared size vastly exceeds what is there must clamp
-//! rather than allocate.
+//! Property: never panics; a declared size past the remaining bytes clamps.
 
 #![no_main]
 
@@ -18,10 +11,8 @@ fuzz_target!(|data: &[u8]| {
     let limits = pdfrum_fuzz::limits();
     let mut diags = pdfrum_fuzz::diags();
 
-    // The bare input, in case it already contains a `BI`.
     let _ = parse_content(data, &limits, &mut diags);
 
-    // …and the input forced into the inline-image path.
     let mut prefixed = Vec::with_capacity(data.len() + 3);
     prefixed.extend_from_slice(b"BI ");
     prefixed.extend_from_slice(data);

@@ -1,12 +1,6 @@
-//! `decode_jpx` — the JPEG 2000 entry point.
+//! `decode_jpx` — JPEG 2000, with colorspace and `/SMaskInData` from control bytes.
 //!
-//! The colorspace and `/SMaskInData` come from the input's control bytes,
-//! because the conversion table's interesting rows are the ones where the
-//! PDF's declared space and the codestream's disagree — including the two
-//! that fail the whole load.
-//!
-//! Property: never panics, whichever row of the conversion table an input
-//! lands on.
+//! Property: never panics, whichever conversion-table row the input lands on.
 
 #![no_main]
 

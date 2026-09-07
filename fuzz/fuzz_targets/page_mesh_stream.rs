@@ -1,13 +1,6 @@
-//! Mesh shading streams — types 4 to 7's bit-packed vertex data.
+//! Mesh shading streams — types 4–7 bit-packed vertex data.
 //!
-//! The bit widths and the decode ranges come from the input's control bytes,
-//! so the fuzzer reaches every combination of coordinate width, component
-//! width and flag width the format allows, plus the ones it does not.
-//!
-//! Property: never panics, always terminates. The bit reader returns zero
-//! past the end rather than failing, so a truncated stream must stop the
-//! decode rather than looping — and the capacity predicates, which divide
-//! rather than multiply, are what decide that.
+//! Property: never panics; a truncated stream stops rather than looping.
 
 #![no_main]
 

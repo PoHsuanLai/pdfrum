@@ -148,7 +148,7 @@ pub fn push_popup<R: Resolve>(
     let resources = Resources::for_page(page.resources.clone());
     // Already page-space `kurbo`: `PopupGeometry::rect` widens on the way out
     // of `pdfrum-form`, so the four `f64::from` calls this used to need are
-    // gone (§WP4).
+    // gone .
     let placed = popup.geometry.rect;
     let matrix = pdfrum_doc::geom::match_rect(
         pdfrum_doc::geom::normalize(placed),
@@ -210,7 +210,7 @@ fn popup_dict<R: Resolve>(popup: &pdfrum::PopupView, widget: &Dict, r: &R) -> Di
     let rect = popup.geometry.rect;
     // `Object::Real` is `f32`, and every value here was widened from an `f32`
     // by `PopupGeometry::rect`, so the narrowing is exact and the `/Rect`
-    // array is byte-for-byte what it was before §WP4 widened the field.
+    // array is byte-for-byte what it was before § widened the field.
     #[expect(
         clippy::cast_possible_truncation,
         reason = "every value in PopupGeometry::rect was widened from an f32"
@@ -243,7 +243,7 @@ fn popup_dict<R: Resolve>(popup: &pdfrum::PopupView, widget: &Dict, r: &R) -> Di
     // Written as `/V`, the row's own text, and **not** as `/I`. The appearance
     // reader `ap::field_body::selected_indices` is `/V`-first and matches by
     // *value*, which is correct for its own job — the producer it reproduces
-    // is `CPDFSDK_AppStream::SetAsListBox`, and OWED item 7 records that
+    // is `CPDFSDK_AppStream::SetAsListBox`, and records that
     // making it index-first would flip `listbox_form.{in,pdf}` to fail. So an
     // `/I [2]` here would match nothing and band no row at all. `/V` is the
     // channel this reader speaks, and a synthetic dictionary should speak it
@@ -448,7 +448,7 @@ mod tests {
 
     /// The banded row is written as `/V`, the row's **text**, and never as
     /// `/I`. `ap::field_body::selected_indices` is `/V`-first and matches by
-    /// value — correct for its own job, which OWED item 7 settles — so an
+    /// value — correct for its own job, which settles — so an
     /// index array would band nothing at all.
     #[test]
     fn the_band_is_written_as_a_value_and_never_as_an_index() {

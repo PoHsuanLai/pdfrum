@@ -1,8 +1,7 @@
 //! `decode_ascii_hex` — `/ASCIIHexDecode`.
 //!
-//! Property: never panics, never grows, and stops at `>` — the consumed
-//! count is where the next filter in the chain resumes, so it must stay
-//! inside the input.
+//! Property: never panics, never grows; consumed (the next filter's start)
+//! stays inside the input.
 
 #![no_main]
 

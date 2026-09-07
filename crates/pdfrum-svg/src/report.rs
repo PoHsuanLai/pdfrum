@@ -10,7 +10,7 @@
 //! # What the causes are inferred from
 //!
 //! `RenderDevice` carries no cause channel — the engine hands a device a
-//! pixmap and a transform, not a reason — and M24 explicitly keeps the trait
+//! pixmap and a transform, not a reason — and explicitly keeps the trait
 //! unchanged. The classification therefore reads the *shape of the engine's
 //! own behaviour* around each draw, which is observable through
 //! [`RasterBackend`](pdfrum_render::RasterBackend) without changing anything:
@@ -18,8 +18,7 @@
 //! own and blits the result, so the offscreen work that happened between one
 //! root draw and the previous one is the evidence. Three of the causes have
 //! an exact fingerprint and two are a residue; [`RasterCause`] says which is
-//! which on each variant, and §4 states the limit in
-//! full.
+//! which on each variant.
 
 use kurbo::Rect;
 

@@ -1,13 +1,6 @@
 //! `SecurityHandler::decrypt` over arbitrary ciphertext.
 //!
-//! Where `crypt_encrypt_dict` fuzzes handler *construction* and decrypts one
-//! payload as an afterthought, this target fixes a small set of real handlers
-//! and pours arbitrary bytes through them at every length — which is where
-//! the AES block/IV/padding arithmetic lives. The handlers are built from
-//! synthesised `/Encrypt` dictionaries rather than reached through a
-//! document, so no input is wasted getting past the key derivation.
-//!
-//! Property: no panic at any payload length, and no payload grows.
+//! Property: no panic at any payload length; plaintext never grows.
 
 #![no_main]
 
@@ -15,12 +8,8 @@ use libfuzzer_sys::fuzz_target;
 use pdfrum_crypt::{CryptClass, SecurityHandler};
 use pdfrum_object::{Dict, Name, NoResolve, ObjRef, Object, PdfString};
 
-/// An `/Encrypt` dictionary for revision `r`, version `v`, cipher `cfm`.
-///
-/// `/O` and `/U` are the padding string itself, which is what an empty
-/// user password over a zero file id produces closely enough for the
-/// handler to construct — and when it does not, the handler simply reports
-/// a wrong password and this input is skipped.
+/// An `/Encrypt` dictionary. `/O`/`/U` are the padding string (empty user
+/// password over a zero file id); a wrong password skips the input.
 fn encrypt_dict(v: i64, r: i64, length: i64, cfm: &str) -> Dict {
     let mut cf = Dict::new();
     let mut stdcf = Dict::new();

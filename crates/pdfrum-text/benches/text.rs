@@ -1,26 +1,7 @@
-//! What extracting a page's text costs.
+//! Extracting every page's text. Ids `<class>/<stem>`.
 //!
-//! One criterion group, `text`, over the 44 documents in `benches/corpus`, ids
-//! spelt `<class>/<stem>` so `benches/src/bin/ratchet.rs` can aggregate by
-//! class. Every page's text, through this crate's layout pass: the glyph runs
-//! reassembled into characters, the ToUnicode mapping applied, the reading order
-//! recovered and the whole page flattened to a `String`.
-//!
-//! The `text` class documents are the ones that move this number and the
-//! `image` ones are near-free, which is the point of having a class per
-//! document rather than one aggregate: an extraction regression that only shows
-//! on CJK is invisible in a suite mean and obvious in `text/text_cjk_page`.
-//!
-//! # One session across the document's pages
-//!
-//! A `RenderSession` is built once per iteration and threaded through the
-//! document's pages, which is what a caller extracting a document does — the
-//! font parse and the CMap build are per document, not per page, and paying them
-//! per page would be measuring the cache rather than the extractor. The session
-//! is fresh per iteration (the cold convention `render-cold` uses), so the font
-//! parse is *in* the number rather than amortized away over a run; unlike the
-//! render groups this one has no oracle column to be comparable with, so there
-//! is no warm variant and no target, only a ratchet.
+//! One `RenderSession` per iteration, reused across pages. Fresh each
+//! iteration so the font parse is in the number. No oracle column.
 
 use std::hint::black_box;
 use std::time::Duration;
@@ -57,7 +38,6 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

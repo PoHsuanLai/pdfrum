@@ -1,7 +1,7 @@
 //! The round trip, because the conformance board cannot score SVG.
 //!
 //! The board compares our pixels to `pdfium_test`'s, and an SVG file has
-//! none. M24's proof is instead: convert a page to SVG, render *that* with
+//! none. proof is instead: convert a page to SVG, render *that* with
 //! `resvg` — a second engine, with its own rasterizer and its own
 //! antialiasing — at the board's DPI, and compare the result to the oracle's
 //! own PNG with the same SSIM the board uses.
@@ -59,7 +59,7 @@ fn oracle_floor(class: Class) -> f64 {
         // Mixed: worst is mixed_tcpdf_045, 0.9628.
         Class::Text | Class::Image | Class::Mixed => 0.90,
         // Worst: shading_tcpdf_030, 0.8532. The mesh files are the low end of
-        // the corpus and §4 says why: a mesh is a raster region, and `resvg`
+        // the corpus: a mesh is a raster region, and `resvg`
         // resamples that embedded PNG with its own filter.
         Class::Shading => 0.80,
         // Only one file in this class has a golden — forms_widgets_407, at
@@ -106,7 +106,7 @@ fn engine_options() -> RenderOptions {
 
 /// The golden store, resolved the way every test in this repository resolves
 /// an oracle artifact: `$PDFRUM_GOLDENS`, else the in-repo
-/// `conformance/goldens` that `scripts/env.nu` and the harness default to.
+/// `conformance/goldens` the harness defaults to.
 ///
 /// `None` when neither exists. **The store is not committed** — it is
 /// generated locally from a built `pdfium_test`, which `.github/workflows/
@@ -356,7 +356,7 @@ fn every_corpus_file_converts_and_clears_its_floor() {
 /// The report is non-empty exactly where the file composites in the pixel
 /// domain, and empty where it does not.
 ///
-/// The half of M24's exit condition the SSIM table cannot state: a page of
+/// The half of exit condition the SSIM table cannot state: a page of
 /// paths and text must convert to *vectors*, not to one big embedded PNG that
 /// happens to score well.
 #[test]

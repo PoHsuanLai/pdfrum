@@ -1,10 +1,6 @@
 //! `decode_lzw` — `/LZWDecode`, both `/EarlyChange` settings.
 //!
 //! Property: never panics; output never exceeds `max_decoded_stream_len`.
-//! The interesting inputs are a code stream that never emits a clear code, a
-//! code referring to a table entry that does not exist yet, and a stream that
-//! ends mid-code — the two malformations PDFium rejects and everything it
-//! tolerates.
 
 #![no_main]
 

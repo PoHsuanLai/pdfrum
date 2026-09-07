@@ -1,8 +1,7 @@
 //! `decode_ascii85` — `/ASCII85Decode`.
 //!
-//! Property: never panics; the consumed count never runs past the input, and
-//! base-85 never expands past four output bytes per five input ones (with
-//! `z` — one input byte for four output — as the worst case).
+//! Property: never panics; consumed stays inside the input; output ≤ 4×
+//! (`z` is the densest spelling).
 
 #![no_main]
 

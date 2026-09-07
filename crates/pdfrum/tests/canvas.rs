@@ -127,7 +127,7 @@ fn an_emitted_stream_reparses() {
     assert!(text.contains("2 w"), "line width: {text}");
 }
 
-// M25's stroke attributes: cap, join, miter limit and dash all reach the
+// stroke attributes: cap, join, miter limit and dash all reach the
 // stream, and the defaults do not. This is a facade capability in its own
 // right -- a caller who never touches SVG gets it from `draw_page` -- so it
 // is proved here rather than only through the SVG round trip.

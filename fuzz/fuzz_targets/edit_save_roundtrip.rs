@@ -1,17 +1,6 @@
 //! `save` — a document that opened, written back out and opened again.
 //!
-//! Two properties, and the second is the interesting one:
-//!
-//! - the writer never panics, whatever damage the reader tolerated to get a
-//!   `Document` at all;
-//! - **a file that opened must save to a file that opens.** The writer sees
-//!   only objects the reader already made sense of, so there is no input it
-//!   can legitimately turn into something unopenable. A failure here is a
-//!   writer bug by construction, not a "bad input" case — which is what makes
-//!   it worth asserting rather than merely surviving.
-//!
-//! Seeded with the oracle's `testing/resources` PDFs, so the corpus starts
-//! from documents that exercise real recovery paths rather than from noise.
+//! Property: never panics; a file that opened must save to a file that opens.
 
 #![no_main]
 
@@ -48,7 +37,6 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    // The load-bearing assertion: our own output opens.
     let reloaded = load(Arc::from(&out[..]), &opts)
         .unwrap_or_else(|err| panic!("a saved document did not reopen: {err:?}"));
     assert_eq!(
@@ -57,7 +45,6 @@ fuzz_target!(|data: &[u8]| {
         "the page count changed across a save"
     );
 
-    // And everything the facade asks of a fresh document still answers.
     let _ = reloaded.catalog();
     let _ = reloaded.trailer();
     let _ = reloaded.last_xref_offset();

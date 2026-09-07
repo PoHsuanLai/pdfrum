@@ -1,121 +1,22 @@
-//! The benchmark ratchet: compare a criterion run against the committed
-//! `baseline.json`, fail on a regression, and record an improvement.
-//!
-//! This is the performance half of what `conformance/scoreboard.json` is for
-//! correctness, and it is deliberately built the same way: a committed file of
-//! numbers, a checker that refuses a change making them worse, and an explicit
-//! update step that makes an improvement permanent. A benchmark suite with no
-//! ratchet reports drift; one with a ratchet prevents it.
+//! Compare a criterion run against `baseline.json`.
 //!
 //! ```text
-//! cargo bench --workspace                # produces target/criterion/**
+//! cargo bench --workspace
 //! cargo run --release -p pdfrum-bench --bin ratchet -- check
 //! cargo run --release -p pdfrum-bench --bin ratchet -- update
 //! ```
 //!
-//! # The machine
+//! Reads `target/criterion/**` by group name, not by crate. `cargo bench -p`
+//! one crate leaves other groups stale on disk; `check` cannot see that.
+//! Run `--workspace` first.
 //!
-//! **Run all three on `himmel`.** `baseline.json` has been a `himmel` artefact
-//! since 2026-09-06: 32 idle CPUs,
-//! nothing else on the box. A check on the shared development machine is not
-//! evidence — at load 30–40 its scatter is several times the ±3–8% bands
-//! below, which is how §23 and §24 each spent a day telling false regressions
-//! from real ones. Run it there, or do not quote it.
+//! Per benchmark, new median vs committed, outside that group's noise band:
+//! slower → regression (`update` writes nothing unless `--accept-regressions`);
+//! faster → improvement (`update` writes it); inside the band → keep the old
+//! number, so the floor does not walk down with noise.
 //!
-//! # Where the benchmarks live, and why this still works
-//!
-//! Since M12's per-crate split there is no single bench crate: `pdfrum-parser`
-//! owns `open`, `pdfrum-page` owns `build`, `pdfrum-render` owns the six render
-//! groups, `pdfrum-text` owns `text` and `pdfrum-edit` owns `save`. That change
-//! is invisible here, and deliberately so — this binary reads
-//! `target/criterion/**`, which criterion keys by *group name*, not by which
-//! crate's binary produced it. `cargo bench --workspace` fills the same
-//! directory the single crate used to. What it does mean is that
-//! `cargo bench -p pdfrum-render` leaves `open`, `build`, `text` and `save`
-//! stale on disk, so `check` would compare four groups against a run that did
-//! not happen; the "not run" report cannot see that, because the files are
-//! there. Run the whole workspace before a `check` that decides anything.
-//!
-//! # The id mapping across the split
-//!
-//! The render group names changed and the ids therefore did too:
-//!
-//! ```text
-//! render-agg/<class>/<stem>   ->  render-cold-agg/<class>/<stem>
-//! render-tinyskia/...           ->  render-cold-tinyskia/...
-//! render-vello-cpu/...              ->  render-cold-vello-cpu/...
-//! (new)                         ->  render-warm-{exact,tinyskia,vello}/...
-//! (new)                         ->  build/<class>/<stem>
-//! ```
-//!
-//! `open`, `text` and `save` keep their ids exactly. The three renamed groups
-//! measure the same thing they did — a fresh session per iteration — so their
-//! old numbers were *transferable* in principle, and the baseline was
-//! nonetheless re-initialized rather than renamed. The reason is that the same
-//! commit changed what the render path costs (the two outlier fixes), so a
-//! carried-over number would have shown a large improvement in a file whose
-//! purpose is to make improvements visible one at a time. Re-initializing
-//! records the new floor honestly; §10 carries the
-//! before/after comparison the ratchet would otherwise have printed.
-//!
-//! # The rule
-//!
-//! For each benchmark, `check` compares the new median against the committed
-//! one:
-//!
-//! - **slower by more than the noise band** → a regression. Reported, and the
-//!   process exits non-zero. `update` writes *nothing* in that case, not even
-//!   the improvements — a regression stops the run. `update
-//!   --accept-regressions` is the way past it, and it is deliberately a
-//!   separate spelling: the ratchet cannot tell a deliberate trade from a
-//!   defect, or a real slowdown from a baseline entry that was always wrong,
-//!   so raising a number is a decision a person makes and writes down. The
-//!   flag records what was measured; the commit records why.
-//! - **faster by more than the noise band** → an improvement. Reported;
-//!   `update` writes it into the baseline so it cannot silently be given back.
-//! - **inside the band** → unchanged, and nothing happens. The baseline keeps
-//!   the *old* number rather than jittering toward the new one, because a
-//!   baseline that absorbs every in-band sample ratchets itself downward one
-//!   noise-width at a time and ends up failing on a machine that is behaving
-//!   perfectly.
-//!
-//! A benchmark absent from the baseline is new, not a failure. A benchmark
-//! absent from the run is *not* checked and is reported as such — running a
-//! filtered subset must not look like a pass over the whole corpus.
-//!
-//! # The band
-//!
-//! Per group, from `baseline.json`'s `bands` map, because the groups do not
-//! have the same repeatability: `open` is microseconds and jitters several
-//! percent between runs on an idle machine, where a render is milliseconds and
-//! sits inside two. §"The noise band" has the measured
-//! distribution each number comes from — they are empirical, not chosen to be
-//! round. They describe an idle box and were not widened when the baseline
-//! moved to `himmel`: moving to a quieter machine is a reason to trust the
-//! bands, not to loosen them.
-//!
-//! **A band is only as good as the harness's own reproducibility.** These were
-//! measured while the render groups still ran the three pathological image
-//! documents in the middle of the corpus, where the ~500 MB resident set they
-//! leave behind was charged to the rows measured after them. On 2026-09-06 two
-//! runs of the same binary at the same commit reported 34 and 27 regressions
-//! sharing only 13 rows, with the warm cluster moving bodily between
-//! rasterizer backends — which no code change can do. The harness now orders
-//! those documents last, and the bands want re-deriving from runs taken after
-//! that change; carries it. A threshold below the
-//! harness's reproducibility does not detect regressions, it manufactures a
-//! fresh set each run.
-//!
-//! # Why the median and not the mean or criterion's own slope
-//!
-//! The median, with criterion's own 95% confidence interval available as a
-//! sanity check. A wall-clock sample is bounded below by the real cost and
-//! unbounded above by whatever else the machine was doing, so the mean of a
-//! contended run is permanently inflated while the median is not. Criterion's
-//! `slope` estimate is better still for benchmarks whose iteration count
-//! varies, but it is absent for the ones criterion measures in "flat" mode, and
-//! a ratchet that changes statistic depending on the benchmark cannot be
-//! compared across a corpus.
+//! Median, not mean: a wall-clock sample is bounded below by the real cost.
+//! An idle machine. A filtered run that skips a group is not a pass.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -326,21 +227,15 @@ fn check(
         if record.refuses_regressions() {
             println!();
             println!(
-                "The ratchet only tightens. First check this is `himmel` — on the\n\
-                 shared box these bands are noise, and a row measured next to a\n\
-                 document that leaves a large heap behind it can clear a band on\n\
-                 process state alone.\n\
+                "The ratchet only tightens. Confirm this is an idle machine;\n\
+                 on a loaded box these bands are noise.\n\
                  \n\
-                 If every row above has been attributed — a deliberate trade, or a\n\
-                 baseline entry that was wrong — write the attribution down and\n\
-                 re-run as:\n\
+                 To accept the new numbers:\n\
                  \n\
                      cargo run --release -p pdfrum-bench --bin ratchet -- \\\n\
                          update --accept-regressions\n\
                  \n\
-                 which raises these rows to what they measured. Do not edit\n\
-                 benches/baseline.json by hand: the flag records the same numbers\n\
-                 and leaves the run that produced them in the terminal."
+                 Do not edit benches/baseline.json by hand."
             );
             std::process::exit(1);
         }
@@ -605,19 +500,15 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, Entry>, bands: &BTreeM
     // in a diff and parses.
     out.push_str(
         "{\n  \"_\": [\n\
-         \x20   \"The M12 performance ratchet. Medians in nanoseconds, taken\",\n\
-         \x20   \"from criterion's own estimates.json. Regenerate on `himmel`,\",\n\
-         \x20   \"the idle bench box these numbers describe -- a run on the\",\n\
-         \x20   \"shared machine is noise against the bands below:\",\n\
+         \x20   \"Performance ratchet. Medians in nanoseconds, taken from\",\n\
+         \x20   \"criterion's estimates.json. Regenerate on the idle bench\",\n\
+         \x20   \"box these numbers describe -- a run on a shared machine is\",\n\
+         \x20   \"noise against the bands below:\",\n\
          \x20   \"\",\n\
          \x20   \"  cargo bench --workspace\",\n\
          \x20   \"  cargo run --release -p pdfrum-bench --bin ratchet -- update\",\n\
          \x20   \"\",\n\
-         \x20   \"Edit a number by hand only to record a deliberate trade, and\",\n\
-         \x20   \"say so in docs/status/M13-perf-baseline.md in the same\",\n\
-         \x20   \"commit -- its last section is the current record. The bands\",\n\
-         \x20   \"below are measured, not chosen; see that document's section\",\n\
-         \x20   \"on the noise band before widening one.\"\n\
+         \x20   \"Edit a number by hand only to record a deliberate trade.\"\n\
          \x20 ],\n",
     );
 
@@ -679,7 +570,7 @@ fn default_bands() -> BTreeMap<String, f64> {
         // so the *absolute* interval is tighter and the *fractional* one is
         // wider. Both effects are real and they do not cancel; the bands are
         // re-measured at the warm counts rather than inherited from the cold
-        // ones, and docs/status/M12.md §2 carries the distribution.
+        // ones.
         ("render-warm-agg", 0.04),
         ("render-warm-tinyskia", 0.04),
         ("render-warm-vello-cpu", 0.05),

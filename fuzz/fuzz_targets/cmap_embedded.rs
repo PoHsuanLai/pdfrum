@@ -1,14 +1,7 @@
-//! `parse_embedded` — a CMap program from a font's `/Encoding` stream, then
-//! decoding text through whatever came out.
+//! `parse_embedded` — a CMap program, then decoding text through it.
 //!
-//! One target covers both what the status doc calls `cmap_embedded` and
-//! `cmap_lexer`: the lexer has no public entry point separate from the
-//! parser that consumes it, and running the resulting CMap over the same
-//! bytes checks the second property the doc names — that decoding terminates
-//! and every code stays inside the input.
-//!
-//! Property: parsing never panics, decoding always terminates (each step
-//! advances), and the offsets a decode reports never run past the input.
+//! Property: parse never panics; `next_char` always advances and never runs
+//! past the input.
 
 #![no_main]
 

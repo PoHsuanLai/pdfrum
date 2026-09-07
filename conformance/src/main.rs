@@ -52,8 +52,7 @@ use scoreboard::{FileResult, Scoreboard};
 ///
 /// Resolved against `CorpusArgs::checkout()`, so `--checkout` and
 /// `$PDFRUM_ORACLE_CHECKOUT` move the binary with the tree they name;
-/// `--oracle` / `$PDFRUM_ORACLE_BIN` override it outright. `scripts/env.nu`
-/// spells the same two variables and the same two defaults for the scripts.
+/// `--oracle` / `$PDFRUM_ORACLE_BIN` override it outright.
 const DEFAULT_ORACLE: &str = "out/Release/pdfium_test";
 
 /// The environment spelling of `--allow-dirty-oracle`.
@@ -83,10 +82,10 @@ enum Command {
     Triage(TriageArgs),
     /// Diff the two rasterizers against each other over our own engine.
     TierC(TierCArgs),
-    /// Save every corpus file and check that the oracle reopens it (M7).
+    /// Save every corpus file and check that the oracle reopens it .
     SaveRoundTrip(SaveArgs),
     /// Mutate a page of every corpus file, save it, and check that the
-    /// oracle's render of the result matches ours (M11).
+    /// oracle's render of the result matches ours .
     MutateRoundTrip(MutateArgs),
 }
 
@@ -192,7 +191,7 @@ struct SaveArgs {
     render_sample: usize,
 }
 
-/// Arguments for the mutation sweep (M11's exit check).
+/// Arguments for the mutation sweep (exit check).
 ///
 /// Needs both binaries for the same reason the save sweep does, and for a
 /// sharper one: the comparison is between the two implementations' renders of
@@ -718,7 +717,7 @@ fn report_save_totals(totals: &saveroundtrip::SaveTotals, files: usize) {
         totals.incremental_checked,
         percent(totals.incremental_rate())
     );
-    // M10: an encrypted file must save encrypted. The oracle opening it with
+    // an encrypted file must save encrypted. The oracle opening it with
     // the password says the cipher is right; the oracle refusing it without
     // one says a cipher is there at all.
     if totals.encrypted > 0 {
@@ -734,7 +733,7 @@ fn report_save_totals(totals: &saveroundtrip::SaveTotals, files: usize) {
 /// Save every corpus file, check the oracle reopens it, and diff a sample's
 /// pixels against the original's golden render.
 ///
-/// The numbers this prints are what M7 and M10 are graded on. Only the first
+/// The numbers this prints are what and are graded on. Only the first
 /// two are gates: a file the tool could not *open* is skipped rather than
 /// failed, because Tier B already scores that and counting it twice would let
 /// a parse regression read as a writer bug.

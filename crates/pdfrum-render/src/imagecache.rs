@@ -346,7 +346,7 @@ mod tests {
     fn one_image_larger_than_the_whole_budget_is_still_cached() {
         // The `image_bug_718762` case: a 5000x5000 image is 100 MB
         // premultiplied, larger than the 64 MB budget, and is exactly the
-        // entry M12.md §3.6 exists to make a hit.
+        // entry .md §3.6 exists to make a hit.
         let mut cache = RenderedImageCache::default();
         let side = 5000;
         let key = PixmapRequest::for_image(&gray(side, side), Argb::BLACK, None, side, side);

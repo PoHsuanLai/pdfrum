@@ -729,7 +729,7 @@ impl RenderDevice for AggDevice {
             debug_assert_eq!(
                 (m.width(), m.height()),
                 (w, h),
-                "an AlphaMask must be device-sized and device-aligned (SPEC §8)"
+                "an AlphaMask must be device-sized and device-aligned"
             );
             (m.width() == w && m.height() == h).then(|| m.clone())
         });
@@ -806,7 +806,7 @@ impl RasterBackend for AggBackend {
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
         debug_assert!(
             d.layers.is_empty(),
-            "snapshot requires every layer popped (SPEC §8)"
+            "snapshot requires every layer popped"
         );
         d.base.pixels().clone()
     }
@@ -1660,7 +1660,7 @@ mod tests {
 
     #[test]
     fn a_clear_type_glyph_reaches_the_pixels_with_its_fringes_intact() {
-        // The whole of M14 OWED item 2's pixel claim, through the trait rather
+        // Pixel claim, through the trait rather
         // than through `Target`: a black glyph whose three stripes differ comes
         // out a *coloured* pixel, which no single-alpha image draw can produce.
         let backend = AggBackend::new();

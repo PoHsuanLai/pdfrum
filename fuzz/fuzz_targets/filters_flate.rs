@@ -1,11 +1,6 @@
-//! `decode_flate` — `/FlateDecode`, raw deflate over arbitrary bytes.
+//! `decode_flate` — `/FlateDecode`.
 //!
-//! `estimated_size` comes from the input too, because it sizes the first
-//! output chunk and a lying `/Length` is exactly what a hostile file
-//! supplies.
-//!
-//! Property: never panics; output never exceeds `max_decoded_stream_len`
-//! (the 1 MiB fuzz cap), which is the zip-bomb guard `Limits` documents.
+//! Property: never panics; output never exceeds `max_decoded_stream_len`.
 
 #![no_main]
 

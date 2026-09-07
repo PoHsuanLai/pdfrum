@@ -1,6 +1,6 @@
 //! The Form `XObject`: one SVG, many placements, **one** copy of the content.
 //!
-//! M25's roadmap item 2. `Canvas::draw_svg` writes the SVG's operators inline
+//! roadmap item 2. `Canvas::draw_svg` writes the SVG's operators inline
 //! into the page it is drawing on; for one placement that is equivalent to a
 //! form and it is what shipped first. For the same logo on twenty pages it is
 //! twenty copies of the same content, and the exit criterion asked for one

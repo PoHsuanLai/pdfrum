@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-# Populate fuzz/corpus/<target>/ from the committed seeds plus, when the
-# read-only oracle checkout is present, its full testing/resources and
-# testing/corpus PDF sets.
-#
-# `corpus/` is gitignored working state — this script rebuilds it. What is
-# committed is `seeds/`, the small curated set (see fuzz/README.md
-# "Seed corpora" for provenance).
+# Rebuild fuzz/corpus/<target>/ from seeds/ plus, when present, the oracle's
+# testing/resources and testing/corpus PDFs.
 #
 # Usage: fuzz/seed-corpus.sh [path-to-pdfium-c++-checkout]
-#
-# The checkout defaults to `$PDFRUM_ORACLE_CHECKOUT`, itself defaulting to
-# `<repo>/../pdfium-c++` — the sibling directory README.md and say
-# it lives in, and the same variable and default `scripts/env.nu` resolves for
-# the nushell side.
+# Default: $PDFRUM_ORACLE_CHECKOUT, else <repo>/../pdfium-c++.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# `fuzz/` is one level below the repository root; `..` from here is that root.
 repo_root="$(cd .. && pwd)"
 ORACLE="${1:-${PDFRUM_ORACLE_CHECKOUT:-$repo_root/../pdfium-c++}}"
 
@@ -36,12 +26,8 @@ for t in "${targets[@]}"; do
     fi
 done
 
-# The whole-file targets take real PDFs. Everything the oracle ships is fair
-# game: `testing/resources` is the unit-test fixture set (small, and rich in
-# deliberately broken files), `testing/corpus` is the rendering corpus.
-# The writer's targets want the same real PDFs: `edit_save_roundtrip` opens
-# one and writes it back out, and `edit_import` splits the input into two
-# documents, so a real file gives it two halves of real structure.
+# Whole-file targets take real PDFs. Named by content hash so re-running
+# never duplicates.
 pdf_targets=(
     parser_load parser_load_password parser_xref parser_lexer
     edit_save_roundtrip edit_import
@@ -50,8 +36,6 @@ if [ -d "$ORACLE/testing" ]; then
     count=0
     while IFS= read -r pdf; do
         for t in "${pdf_targets[@]}"; do
-            # Name by content hash so re-running never duplicates and the
-            # two source trees cannot collide on a basename.
             h=$(sha1sum "$pdf" | cut -c1-16)
             cp -n "$pdf" "corpus/$t/$h.pdf" 2>/dev/null || true
         done

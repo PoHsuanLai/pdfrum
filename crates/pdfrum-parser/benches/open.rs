@@ -1,28 +1,8 @@
-//! What opening a document costs: header, cross-reference, trailer, catalog.
+//! Opening a document: header, xref, trailer, catalog. Ids `<class>/<stem>`.
 //!
-//! One criterion group, `open`, over the 44 documents in `benches/corpus`, ids
-//! spelt `<class>/<stem>` so `benches/src/bin/ratchet.rs` can aggregate by
-//! class. Pages are deliberately *not* touched — the engine parses them on
-//! demand, and this measures what `open` itself costs. What `open` does touch is
-//! this crate: the lexer's byte scans, the cross-reference table or stream, the
-//! recovery scan when one is broken, and the trailer chain.
-//!
-//! It is the widest-spread group in the suite (an 8% band against the render
-//! groups' 3–4%) for a plain reason: most of these documents open in tens of
-//! microseconds, which is short enough that a scheduler tick is visible in the
-//! median. the internal working notes has the measured distribution.
-//!
-//! # Through the facade
-//!
-//! `pdfrum::Document::from_bytes` rather than this crate's own reader, for the
-//! reason `pdfrum-render/benches/render.rs` gives at more length: the number has
-//! to describe the same work as the oracle column it is compared against, and
-//! `pdfium_test` opens a document rather than a cross-reference table. The
-//! facade adds the catalog resolve and the page-tree root lookup, both of which
-//! land in this crate anyway.
-//!
-//! From bytes already in memory, so the number is parse and cross-reference
-//! recovery rather than the filesystem.
+//! Pages are not touched. `pdfrum::Document::from_bytes` from memory, so
+//! the number is parse and recovery, not the filesystem. Widest band in the
+//! suite: most files open in tens of microseconds.
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -56,7 +36,6 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

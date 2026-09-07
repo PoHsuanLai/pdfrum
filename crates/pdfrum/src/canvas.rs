@@ -1314,10 +1314,10 @@ fn alpha_of(color: Color) -> f64 {
     f64::from(color.components[3]).clamp(0.0, 1.0)
 }
 
-/// An `f64` narrowed to the `f32` a PDF number is (SPEC §2).
+/// An `f64` narrowed to the `f32` a PDF number is.
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+    reason = "PDF numbers are f32; the geometry vocabulary is f64"
 )]
 fn as_f32(value: f64) -> f32 {
     value as f32

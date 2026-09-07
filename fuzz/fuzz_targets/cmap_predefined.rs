@@ -1,13 +1,7 @@
-//! The predefined-CMap path: name lookup, then decoding text through the
-//! CMap that came back.
+//! Predefined CMap lookup, then decoding text through it.
 //!
-//! The predefined tables are static data, so the fuzzer's leverage is not the
-//! table but the *text* run through it — every mixed-two-byte coding scheme
-//! has codes the decoder can reach and codes it cannot, and the boundary is
-//! where the offset arithmetic lives.
-//!
-//! Property: `next_char` always advances, never runs past the input, and the
-//! iterator and the counter agree on how many codes a string holds.
+//! Property: `next_char` always advances, never runs past the input; iterator
+//! and counter agree.
 
 #![no_main]
 
