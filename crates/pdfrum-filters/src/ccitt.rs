@@ -25,7 +25,7 @@
 //! inverting, and why the image path must know which way round these bits are.
 
 use hayro_ccitt::{DecodeSettings, Decoder, DecoderContext, EncodingMode};
-use pdfrum_common::{DiagKind, Diagnostics, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Resolve, names};
 
 use crate::Error;
@@ -165,13 +165,19 @@ impl CcittParams {
 ///
 /// # Errors
 ///
-/// [`Error::BadCcittParams`] alone, when the parameters and the image
-/// dimensions between them describe an image no decoder can produce.
+/// [`Error::BadCcittParams`] when the parameters and the image dimensions
+/// between them describe an image no decoder can produce,
+/// [`Error::SizeOverflow`] when the row stride and height do not multiply,
+/// and [`Error::OutputTooLarge`] when the resulting buffer would pass
+/// `limits.max_decoded_stream_len`. The dimensions are attacker-controlled up
+/// to 65535 in each direction, so the size is settled before anything is
+/// allocated.
 pub fn decode_ccitt(
     input: &[u8],
     params: CcittParams,
     image_width: u32,
     image_height: u32,
+    limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<CcittImage, Error> {
     let (width, height) = params.resolve_size(image_width, image_height)?;
@@ -185,6 +191,11 @@ pub fn decode_ccitt(
     let total = row_bytes
         .checked_mul(usize::try_from(height).map_err(|_| Error::SizeOverflow)?)
         .ok_or(Error::SizeOverflow)?;
+    if total > limits.max_decoded_stream_len {
+        return Err(Error::OutputTooLarge {
+            limit: limits.max_decoded_stream_len,
+        });
+    }
 
     let encoding = match params.k.cmp(&0) {
         std::cmp::Ordering::Less => EncodingMode::Group4,
@@ -288,7 +299,7 @@ impl Decoder for RowSink {
 mod tests {
     use super::{CcittParams, decode_ccitt};
     use crate::Error;
-    use pdfrum_common::Diagnostics;
+    use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Dict, Name, NoResolve, Object, names};
 
     fn parms(pairs: &[(&Name, Object)]) -> Dict {
@@ -391,7 +402,8 @@ mod tests {
                 rows: 2,
                 ..CcittParams::default()
             };
-            let image = decode_ccitt(b"", params, 0, 0, &mut diags).expect("valid size");
+            let image = decode_ccitt(b"", params, 0, 0, &Limits::default(), &mut diags)
+                .expect("valid size");
             assert_eq!(image.row_bytes, expected, "width {width}");
             assert_eq!(image.bits.len(), expected * 2);
         }
@@ -410,15 +422,16 @@ mod tests {
         };
         let mut diags = Diagnostics::default();
         for input in [&b""[..], b"\xde\xad\xbe\xef", b"\x00\x00\x00", b"\xff"] {
-            let image =
-                decode_ccitt(input, params, 64, 4, &mut diags).expect("damage is never an error");
+            let image = decode_ccitt(input, params, 64, 4, &Limits::default(), &mut diags)
+                .expect("damage is never an error");
             assert_eq!(image.width, 64);
             assert_eq!(image.height, 4);
             assert_eq!(image.bits.len(), image.row_bytes * 4, "fully sized");
         }
         // An empty stream cannot produce a single row, so every bit stays as
         // the white prefill left it.
-        let image = decode_ccitt(b"", params, 64, 4, &mut diags).expect("valid");
+        let image =
+            decode_ccitt(b"", params, 64, 4, &Limits::default(), &mut diags).expect("valid");
         assert!(image.bits.iter().all(|&b| b == 0xff), "all white");
     }
 
@@ -432,7 +445,7 @@ mod tests {
             ..CcittParams::default()
         };
         let mut diags = Diagnostics::default();
-        let image = decode_ccitt(&[0b1000_0000], params, 8, 8, &mut diags)
+        let image = decode_ccitt(&[0b1000_0000], params, 8, 8, &Limits::default(), &mut diags)
             .expect("truncation is never an error");
         assert_eq!(image.height, 8);
         assert_eq!(image.bits.len(), image.row_bytes * 8);
@@ -455,7 +468,8 @@ mod tests {
             ..CcittParams::default()
         };
         let mut diags = Diagnostics::default();
-        let image = decode_ccitt(b"", params, 64, 2, &mut diags).expect("valid");
+        let image =
+            decode_ccitt(b"", params, 64, 2, &Limits::default(), &mut diags).expect("valid");
         assert!(
             image.bits.iter().all(|&b| b == 0x00),
             "white prefill inverted"
@@ -473,7 +487,8 @@ mod tests {
             ..CcittParams::default()
         };
         let mut diags = Diagnostics::default();
-        let image = decode_ccitt(&[0b1000_0000], params, 8, 1, &mut diags).expect("valid");
+        let image = decode_ccitt(&[0b1000_0000], params, 8, 1, &Limits::default(), &mut diags)
+            .expect("valid");
         assert_eq!(image.bits.first(), Some(&0xff), "an all-white row");
     }
 
@@ -492,8 +507,48 @@ mod tests {
                     encoded_byte_align: seed % 2 == 0,
                     ..CcittParams::default()
                 };
-                let _ = decode_ccitt(&junk, params, 37, 9, &mut diags);
+                let _ = decode_ccitt(&junk, params, 37, 9, &Limits::default(), &mut diags);
             }
         }
+    }
+
+    // `/Columns` and `/Rows` are the stream's to declare, and the two together
+    // name the buffer. An empty stream claiming the largest image the
+    // parameters allow asks for half a gigabyte; the budget answers before the
+    // allocation happens.
+    #[test]
+    fn a_vast_declared_image_is_refused_rather_than_allocated() {
+        let params = CcittParams {
+            columns: 65535,
+            rows: 65535,
+            ..CcittParams::default()
+        };
+        let limits = Limits {
+            max_decoded_stream_len: 1024 * 1024,
+            ..Limits::default()
+        };
+        let mut diags = Diagnostics::default();
+        assert_eq!(
+            decode_ccitt(b"", params, 0, 0, &limits, &mut diags).err(),
+            Some(Error::OutputTooLarge { limit: 1024 * 1024 })
+        );
+    }
+
+    // The same image under a budget that accommodates it still decodes, so the
+    // check bounds the buffer without narrowing what the decoder accepts.
+    #[test]
+    fn an_image_within_the_budget_still_decodes() {
+        let params = CcittParams {
+            columns: 64,
+            rows: 4,
+            ..CcittParams::default()
+        };
+        let limits = Limits {
+            max_decoded_stream_len: 32,
+            ..Limits::default()
+        };
+        let mut diags = Diagnostics::default();
+        let image = decode_ccitt(b"", params, 0, 0, &limits, &mut diags).expect("32 bytes fit");
+        assert_eq!(image.bits.len(), 32);
     }
 }
