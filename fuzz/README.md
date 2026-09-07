@@ -53,6 +53,7 @@ Stream-decoding targets run under `Limits` with `max_decoded_stream_len` =
 | `edit_save_roundtrip` | `save` then `load` | | oracle PDFs |
 | `edit_subset` | `subset` | | committed (`tiny.ttf`) |
 | `edit_import` | `import_pages` / `n_page_to_one` | | oracle PDFs |
+| `doc_pdfa_check` | `pdfa::check` | | oracle PDFs |
 
 `seeds/` is committed. `corpus/` is gitignored working state that
 `fuzz/seed-corpus.sh` rebuilds from those plus, when present, the oracle's
