@@ -25,6 +25,10 @@ pub struct Cluster {
 
 /// Clusters a scoreboard's failures, largest first.
 ///
+/// A [`Status::Diverged`] row is not a cluster member: it is not a unit of
+/// work, because the work would be reproducing an oracle defect. It stays
+/// visible as the report's own `diverged` count.
+///
 /// A `tierA-mismatch` is split by *which* dump differed, because the tag
 /// alone is not a unit of work: at it covered every file in the corpus
 /// while the metadata and pageinfo dumps were already byte-exact everywhere
@@ -102,8 +106,13 @@ pub fn render(board: &Scoreboard, clusters: &[Cluster]) -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "conformance triage - {} files, {} pass, {} fail (generated {})",
-        totals.files, totals.pass, totals.fail, board.generated_at
+        "conformance triage - {} files, {} pass ({:.1}%), {} diverged, {} fail (generated {})",
+        totals.files,
+        totals.pass,
+        totals.pass_rate().unwrap_or(0.0) * 100.0,
+        totals.diverged,
+        totals.fail,
+        board.generated_at
     );
     if let (Some(rate), Some(nonempty)) = (totals.text_rate(), totals.text_nonempty_rate()) {
         // Both rates, because the first one flatters a tool that extracts
@@ -147,6 +156,7 @@ pub fn to_json(board: &Scoreboard, clusters: &[Cluster]) -> Json {
             Json::Obj(vec![
                 ("files".to_owned(), Json::int(totals.files)),
                 ("pass".to_owned(), Json::int(totals.pass)),
+                ("diverged".to_owned(), Json::int(totals.diverged)),
                 ("fail".to_owned(), Json::int(totals.fail)),
             ]),
         ),
@@ -279,6 +289,39 @@ mod tests {
         let clusters = cluster(&board);
         assert_eq!(clusters.len(), 1);
         assert_eq!(clusters[0].examples, ["c.pdf"]);
+    }
+
+    #[test]
+    fn diverged_files_are_not_clustered() {
+        // A divergence is not a unit of work: doing it would mean reproducing
+        // an oracle defect.
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                fail("a.pdf", &[tag::PIXEL_FAIL]).diverged("the oracle ignores /K"),
+                fail("c.pdf", &[tag::CRASH]),
+            ],
+        );
+        let clusters = cluster(&board);
+        assert_eq!(clusters.len(), 1);
+        assert_eq!(clusters[0].tag, tag::CRASH);
+    }
+
+    #[test]
+    fn the_report_prints_passed_diverged_and_failed_apart() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                pass("a.pdf"),
+                fail("b.pdf", &[tag::PIXEL_FAIL]).diverged("the oracle ignores /K"),
+                fail("c.pdf", &[tag::CRASH]),
+            ],
+        );
+        let report = render(&board, &cluster(&board));
+        assert!(
+            report.starts_with("conformance triage - 2 files, 1 pass (50.0%), 1 diverged, 1 fail"),
+            "{report}"
+        );
     }
 
     #[test]
