@@ -443,7 +443,7 @@ pub fn decode_image<R: Resolve>(
         // samples, so they go through `unpack` like any other 1-bit picture and
         // pick up `/Decode` and the palette on the way.
         Some(Filter::CcittFax) => {
-            let samples = ccitt_samples(&info, &decoded.data, r, diags)?;
+            let samples = ccitt_samples(&info, &decoded.data, r, limits, diags)?;
             let samples = unpack(&info, space.as_ref(), &samples, diags)?;
             (info.width, info.height, samples, None)
         }
@@ -606,7 +606,7 @@ fn decode_stencil<R: Resolve>(
     // a set bit is white — so from here they take the ordinary decode, which
     // is the inversion below.
     let ccitt = if info.last_filter == Some(Filter::CcittFax) {
-        Some(ccitt_samples(info, &decoded.data, r, diags)?)
+        Some(ccitt_samples(info, &decoded.data, r, limits, diags)?)
     } else {
         None
     };
@@ -672,17 +672,25 @@ fn ccitt_samples<R: Resolve>(
     info: &ImageDict,
     data: &[u8],
     r: &R,
+    limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<Vec<u8>, Error> {
     let params = CcittParams::from_dict(&info.params, r);
-    let image = decode_ccitt(data, params, info.width, info.height, diags).map_err(|_| {
-        diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
-        Error::ImageUndecodable {
-            what: "CCITT fax data would not decode",
-        }
-    })?;
+    let image =
+        decode_ccitt(data, params, info.width, info.height, limits, diags).map_err(|_| {
+            diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+            Error::ImageUndecodable {
+                what: "CCITT fax data would not decode",
+            }
+        })?;
     let pitch = info.pitch().ok_or(Error::ImageTooLarge)?;
     let total = info.total_bytes().ok_or(Error::ImageTooLarge)?;
+    // The repacked buffer is a second image the size of the first, and
+    // `/Width` and `/Height` are the stream's to declare. The same budget that
+    // bounds the decoder's buffer bounds this one.
+    if total > limits.max_decoded_stream_len {
+        return Err(Error::ImageTooLarge);
+    }
     // White, so a row the decoder never produced — a stream that stops short of
     // the declared height — reads as blank rather than as black. The decoder
     // pre-fills its own rows the same way.
@@ -711,9 +719,10 @@ fn ccitt_samples<R: Resolve>(
     info: &ImageDict,
     data: &[u8],
     r: &R,
+    limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Result<Vec<u8>, Error> {
-    let _ = (info, data, r);
+    let _ = (info, data, r, limits);
     diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
     Err(Error::ImageUndecodable {
         what: "this build has no CCITT fax decoder (feature `ccitt`)",
