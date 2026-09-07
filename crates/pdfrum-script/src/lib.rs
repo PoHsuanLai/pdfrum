@@ -1,46 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! Acrobat's `AF*` field helpers and `util.*` formatters, as pure functions.
-//!
-//! These are the routines a PDF's own form scripts call to format a number,
-//! validate a keystroke, or turn a date into text. Here they are plain
-//! functions over plain data: no script engine, no form session, no field
-//! lookup, no clock, and no locale. A date function is handed the current time
-//! as a parameter rather than reading one, which is what makes the whole crate
-//! deterministic and testable without a document.
-//!
-//! # What a caller gets back
-//!
-//! A format function answers an [`AfFormat`]: an [`AfOutcome`] saying what
-//! should happen to the field value, and [`AfEffects`] carrying anything the
-//! function asked of the host — alerts to show, and a text colour to apply.
-//! A keystroke function answers a [`KeystrokeResult`] the same way. Nothing is
-//! performed as a side effect and nothing is discarded, so a caller with a real
-//! field can reproduce the whole of Acrobat's behaviour and a caller without one
-//! can ignore the parts it cannot honour.
-//!
-//! Failures are [`Thrown`]: the [`Error`] Acrobat raises, plus any alert the
-//! same call also asked for. The message strings are compared verbatim by the
-//! conformance transcripts, so they are API — see [`error`].
-//!
-//! ```
-//! use pdfrum_script::{AfOutcome, af_number_format};
-//!
-//! let out = af_number_format("1234.5", 2, 0, 0, "$", true);
-//! assert_eq!(out.outcome, AfOutcome::Formatted("$1,234.50".into()));
-//! assert!(out.effects.is_empty());
-//! ```
-//!
-//! A negative under the red style prints no minus at all — the colour is the
-//! sign, and it comes back as data:
-//!
-//! ```
-//! use pdfrum_script::{AfColor, AfOutcome, af_number_format};
-//!
-//! let out = af_number_format("-1234.5", 2, 0, 1, "", false);
-//! assert_eq!(out.outcome, AfOutcome::Formatted("1,234.50".into()));
-//! assert_eq!(out.effects.text_color, Some(AfColor::RED));
-//! ```
-
 #![forbid(unsafe_code)]
 #![warn(clippy::indexing_slicing)]
 #![warn(missing_docs)]

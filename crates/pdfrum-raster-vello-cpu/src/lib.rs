@@ -1,35 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! `vello_cpu` implementation of `pdfrum-render`'s `RenderDevice` and
-//! `RasterBackend` traits — the primary rasterizer. Fully wraps the backend so
-//! its still-moving API never leaks into the engine.
-//!
-//! The SIMD feature level and render mode are pinned rather than detected
-//! ([`vello_cpu::Level::baseline`], the f32 [`RenderMode::OptimizeQuality`]
-//! pipeline), so output does not vary between machines: `vello_cpu` is
-//! bit-exact across thread counts but not across feature levels.
-//! [`VelloCpuDevice::draw_image`] clamps its `alpha` to `0.0..=1.0` and, below
-//! one, wraps the draw in an opacity layer with the sampler at exactly `1.0`,
-//! because `vello_cpu 0.2.0` panics on any other sampler alpha.
-//!
-//! ```
-//! use kurbo::Affine;
-//! use pdfrum_render::{ImageQuality, Pixmap, RasterBackend, RenderDevice};
-//! use pdfrum_raster_vello_cpu::VelloCpuBackend;
-//!
-//! let backend = VelloCpuBackend::new();
-//! let mut device = backend.new_target(4, 4, peniko::Color::WHITE);
-//!
-//! // A translucent image draw: the sampler alpha vello_cpu 0.2.0 refuses,
-//! // routed through an opacity layer instead of panicking.
-//! let image = Pixmap::filled(4, 4, peniko::Color::from_rgba8(255, 0, 0, 255));
-//! device.draw_image(&image, Affine::IDENTITY, ImageQuality::Nearest, 0.5);
-//!
-//! let pixmap = backend.finish(device);
-//! let [r, g, b, a] = pixmap.pixel(1, 1).expect("in bounds");
-//! assert_eq!(a, 255, "over an opaque page");
-//! assert!(r > g && g == b, "half red over white: {r},{g},{b}");
-//! ```
-
 // Determinism, pinned. Measured, a baseline-vs-AVX2 pair differs by one count
 // on a handful of pixels, reproducibly, in the shared flattening stage. That is
 // inside the cross-backend rounding budget, but it would make our own output
@@ -47,7 +16,6 @@
 // The crate names follow vello's own: upstream ships `vello` (GPU, on `wgpu`),
 // `vello_cpu` and `vello_hybrid`, so the bare name is the GPU backend and this
 // one, which wraps `vello_cpu`, says so.
-
 #![forbid(unsafe_code)]
 
 mod convert;

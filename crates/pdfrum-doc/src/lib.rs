@@ -1,26 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! Document-level features (ISO 32000 §12): bookmarks/outline, named
-//! destinations, links and actions, annotations with appearance-stream
-//! generation (variable text), the AcroForm data model (fill/read, no JS),
-//! the structure tree, and metadata.
-//!
-//! # The one thing to understand before reading anything else
-//!
-//! Upstream, generating an appearance stream **mutates the document**: a
-//! sticky note's `/Rect` is replaced by a 20×20 box, an ink annotation's is
-//! inflated by half its border width, and every annotation touched gains an
-//! `/AP /N` and a marker key. Those mutations are visible to everything that
-//! reads the file afterwards, including the `--annot` dump the conformance
-//! harness diffs byte-for-byte.
-//!
-//! Parsed objects here are values, and the parser's store is immutable, so
-//! [`ap::generate_appearances`] returns an [`AnnotOverlay`] instead: a
-//! per-annotation record of the stream it produced and the dictionary edits
-//! it implies. Every reader in this crate takes an `Option<&AnnotOverlay>`
-//! and consults it before the raw dictionary. Forget to thread it and the
-//! output is *upstream's pre-generation* state, which is wrong in a way no
-//! type will catch.
-
 #![forbid(unsafe_code)]
 // Every byte this crate reads came from an untrusted file: index with `get()`.
 #![warn(clippy::indexing_slicing)]

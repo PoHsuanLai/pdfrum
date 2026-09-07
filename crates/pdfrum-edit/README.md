@@ -1,6 +1,10 @@
 # pdfrum-edit
 
-Serializer: full rewrite, incremental append, page import, N-up, subsetting.
+The crate that writes (ISO 32000-1 §7.5.8). A save rewrites the file or
+appends a new body+xref+trailer. Regenerating a touched page's content is
+lossy (colour becomes `rg`/`RG`; shadings, text clips and Type 3 runs are
+dropped); an untouched page is copied as stored. Page import, N-up,
+subsetting.
 
 ```rust
 use std::sync::Arc;

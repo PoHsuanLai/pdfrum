@@ -1,7 +1,7 @@
 # pdfrum-doc
 
-Bookmarks, dests, links, annotations, AcroForm, structure tree, metadata.
-No JavaScript.
+Catalog-level structure (ISO 32000-1 §12): outline, destinations, links,
+annotations, AcroForm, tagged structure tree, metadata. No JavaScript.
 
 Appearance generation returns an `AnnotOverlay` — it does not mutate the
 store. Readers take `Option<&AnnotOverlay>`.

@@ -1,6 +1,9 @@
 # `libpdfrum`
 
 C ABI over [`pdfrum`](../pdfrum): `libpdfrum.so`, `libpdfrum.a`, `pdfrum.h`.
+Every export is an opaque handle plus one call into the facade. This is the
+one workspace crate where `unsafe` is allowed, and only inside `extern "C"`
+(or a private helper of one). Zeroed option structs are the defaults.
 
 ```sh
 cargo build -p pdfrum-capi --release
@@ -47,7 +50,7 @@ int main(void) {
 - Render: `pdfrum_page_render_size`, allocate `stride * height`, then
   `pdfrum_page_render`. RGBA8, straight alpha, top-down.
 
-No JavaScript. `pdfrum_page_markdown` is behind `#ifdef PDFRUM_MARKDOWN`.
+No JavaScript — the facade's `javascript` feature is not forwarded.
+`pdfrum_page_markdown` is behind `#ifdef PDFRUM_MARKDOWN`.
 
-`crates/pdfrum-capi/ctest/run.sh` is the checked example. Rustdoc has the
-unsafe / type / memory rules.
+`crates/pdfrum-capi/ctest/run.sh` is the checked example.

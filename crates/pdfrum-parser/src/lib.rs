@@ -1,23 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! The fidelity-critical file parser (ISO 32000 §7.5): zero-copy lexer,
-//! object syntax, xref reading (classic tables, xref streams, hybrids,
-//! prev-chains) with full-file recovery rebuild, object streams, incremental
-//! updates, encryption hookup, and the lazy object store behind `Resolve`.
-//!
-//! ```
-//! use std::sync::Arc;
-//! use pdfrum_parser::{LoadOptions, load};
-//!
-//! let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/minimal.pdf")[..]);
-//! let doc = load(bytes, &LoadOptions::default())?;
-//! assert_eq!(doc.page_count(), 1);
-//! # Ok::<(), pdfrum_parser::LoadError>(())
-//! ```
-//!
-//! Damage is normal. A malformed file that can be read is read: the repair is
-//! recorded in [`Document::diags`] and the parse continues. [`LoadError`] is
-//! reserved for a document that cannot be opened at all.
-
 // Broken-file tolerance is this crate's superpower, and the layering is what
 // makes it testable. Each module is a stage that can be exercised on values
 // alone:
@@ -30,7 +11,6 @@
 //   can offer, and rebuilds it from scratch when none of them work.
 // - `doc` ties those together into a `Document` whose object store fetches
 //   lazily, decrypts, and guards against reference cycles.
-
 #![forbid(unsafe_code)]
 #![warn(clippy::indexing_slicing)]
 

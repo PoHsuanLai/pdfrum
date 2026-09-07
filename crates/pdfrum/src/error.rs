@@ -150,7 +150,7 @@ pub enum ErrorCode {
     Text = 8,
     /// [`Error::Limit`]: a ceiling the caller set was exceeded.
     Limit = 9,
-    /// [`Error::Svg`]: an SVG would not resolve. Only produced with the
+    /// `Error::Svg`: an SVG would not resolve. Only produced with the
     /// `svg-ingest` feature; the number is reserved either way.
     Svg = 10,
 }

@@ -1,35 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! PDF stream filters (ISO 32000-1 §7.4) as pure functions over byte slices:
-//! Flate with PNG/TIFF predictors, LZW, RunLength, ASCIIHex/ASCII85, and
-//! CCITT fax. Image codecs (DCT/JPX/JBIG2) are recognized here but decoded by
-//! the page layer's image path.
-//!
-//! ```
-//! use pdfrum_common::{Diagnostics, Limits};
-//! use pdfrum_object::{Dict, Name, NoResolve};
-//! use pdfrum_filters::{DecodeOutput, Filter, decode};
-//!
-//! let filter = Filter::from_name(&Name::from("AHx")).expect("a filter we know");
-//! let mut diags = Diagnostics::default();
-//! let out = decode(
-//!     filter,
-//!     b"48656C6C6F>",
-//!     &Dict::new(),
-//!     &NoResolve,
-//!     &Limits::default(),
-//!     &mut diags,
-//! )?;
-//! assert!(matches!(out, DecodeOutput::Bytes(b) if b == b"Hello"));
-//! # Ok::<(), pdfrum_filters::Error>(())
-//! ```
-//!
-//! A broken filter stream is not an error: Flate returns the prefix it
-//! inflated, LZW discards a trailing partial code, `ASCIIHex` skips non-hex
-//! bytes, RunLength zero-fills a run past its input — each with a
-//! [`Diagnostic`](pdfrum_common::Diagnostic) and an [`Ok`]. `Err` means no
-//! bytes can be produced at all, and a caller that gets one falls back to the
-//! raw stream, which is what [`decode_chain`] does for you.
-
 // Damage tolerance is the point: a broken filter stream is not an error in the
 // files this crate exists to open.
 //
@@ -42,7 +11,6 @@
 // this crate does not decode and returns `DecodeOutput::Image` with the bytes
 // produced so far, which is how a `/Filter [/ASCII85Decode /DCTDecode]` image
 // reaches the JPEG decoder already de-ASCII'd.
-
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file: index with
 // `get()`, and size arithmetic goes through `checked_*`.

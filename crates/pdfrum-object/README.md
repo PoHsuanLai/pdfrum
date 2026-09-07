@@ -1,6 +1,11 @@
 # pdfrum-object
 
-PDF objects: `Object`, `Dict`, `Array`, `ObjRef`, `Name`, `Resolve`.
+The eight object types in ISO 32000-1 §7.3 — null, boolean, integer, real,
+string, name, array, dictionary — plus streams and indirect references
+(`N G R`). Construction and typed access only; no parsing lives here.
+
+Resolution is one hop: a reference to a reference is absent. Integers have
+two readings (`4294967295` as int vs number).
 
 ```rust
 use pdfrum_object::{Array, Dict, NoResolve, Object, names};
@@ -12,8 +17,7 @@ let page = Dict::from_pairs([
 assert_eq!(page.rect(names::RECT, &NoResolve).width(), 612.0);
 ```
 
-Accessors come in resolving and non-resolving pairs. Integers have two
-readings (`4294967295` as int vs number).
+Accessors come in resolving and non-resolving pairs.
 
 Part of [pdfrum](https://crates.io/crates/pdfrum). `#![forbid(unsafe_code)]`.
 

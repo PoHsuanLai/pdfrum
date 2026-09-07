@@ -1,49 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! Font handling (ISO 32000-1 §9): font dictionaries (Type1/TrueType/Type0/
-//! Type3/CID), encodings and `/Differences`, `/ToUnicode`, code→CID→GID
-//! mapping, glyph outlines and metrics via `skrifa`, substitution and fallback
-//! selection, and the per-session glyph cache.
-//!
-//! # The shape of the problem
-//!
-//! A PDF font dictionary says almost nothing directly. It names a base font,
-//! points at an encoding, and — usually — carries a program. Everything that
-//! matters is derived: which glyph a byte selects, what character it stands
-//! for, and how wide it is. Those three questions have *different* answers
-//! arrived at by *different* ladders, and reproducing the ladders is what this
-//! crate is for.
-//!
-//! [`Font::decode`] is the single entry point that answers all three at once,
-//! yielding one [`CharItem`] per character code in a string. Everything above
-//! this crate — rendering and text extraction alike — reads that stream and
-//! nothing else.
-//!
-//! ```no_run
-//! use pdfrum_common::{Diagnostics, Limits};
-//! use pdfrum_font::{FontCache, load};
-//! # fn demo(dict: &pdfrum_object::Dict, doc: &impl pdfrum_object::Resolve) -> Option<()> {
-//! let cache = FontCache::default();
-//! let mut diags = Diagnostics::default();
-//! let font = load(dict, doc, &cache, &Limits::default(), &mut diags)?;
-//!
-//! for item in font.decode(b"Hello") {
-//!     let text: String = item.unicode.iter().collect();
-//!     println!("code {:#x} -> glyph {:?} -> {text:?} ({}/1000 em)",
-//!              item.code.0, item.gid.map(|g| g.0), item.width);
-//! }
-//! # Some(())
-//! # }
-//! ```
-//!
-//! # Damage tolerance
-//!
-//! A simple font *always* constructs, even with no program, no encoding and no
-//! glyphs — PDFium's `LoadCommon` has no failing path, and neither does ours.
-//! Only a Type0 font can fail to load, in the four ways [`Error`] names, and
-//! only because the oracle treats those as "the resource is not there".
-//! Everything else is a [`pdfrum_common::Diagnostics`] entry and a
-//! best-effort result.
-
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted font program or font
 // dictionary: index with `get()`, never with `[]`.

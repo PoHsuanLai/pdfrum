@@ -1,6 +1,8 @@
 # pdfrum-common
 
-`Diagnostics`, `Limits`, and a re-export of [`kurbo`](https://docs.rs/kurbo).
+`Diagnostics` is the damage channel; `Limits` are the ceilings. `PdfVersion`
+is the `%PDF-m.n` header; `PageIndex` is zero-based. Geometry is
+[`kurbo`](https://docs.rs/kurbo).
 
 ```rust
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};

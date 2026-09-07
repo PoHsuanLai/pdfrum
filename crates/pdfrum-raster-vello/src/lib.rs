@@ -1,48 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! GPU `vello` backend for `pdfrum-render`, on a caller-supplied `wgpu` device.
-//!
-//! [`VelloBackend::new`] borrows the caller's `Device` and `Queue`; nothing is
-//! created here. Hand it a device from this crate's re-exported [`wgpu`], not
-//! from one you depend on separately — injection only typechecks against the
-//! exact version [`vello::Renderer`] was built against. [`request_adapter`] is
-//! the fallback for a headless process, and it leaks its one device. GPU
-//! rasterization is not bit-reproducible across vendors and drivers, so this
-//! is never the facade's default; and [`vello::Scene`] is retained, so every
-//! offscreen target the engine asks for — a transparency group, a soft mask, a
-//! tiling-pattern cell — costs a texture, a dispatch and a `map_async`.
-//!
-//! ```no_run
-//! use kurbo::Affine;
-//! use pdfrum_render::{Brush, FillRule, AntiAlias, RasterBackend, RenderDevice};
-//! use pdfrum_raster_vello::VelloBackend;
-//!
-//! # fn demo(device: &pdfrum_raster_vello::wgpu::Device,
-//! #         queue: &pdfrum_raster_vello::wgpu::Queue)
-//! #     -> Result<(), pdfrum_raster_vello::Error> {
-//! // The primary path: the embedder's own device and queue, borrowed.
-//! let backend = VelloBackend::new(device, queue)?;
-//! let mut target = backend.new_target(64, 64, peniko::Color::WHITE);
-//!
-//! let mut square = kurbo::BezPath::new();
-//! square.move_to((8.0, 8.0));
-//! square.line_to((56.0, 8.0));
-//! square.line_to((56.0, 56.0));
-//! square.line_to((8.0, 56.0));
-//! square.close_path();
-//! target.fill_path(
-//!     &square,
-//!     Affine::IDENTITY,
-//!     &Brush::Solid(peniko::Color::from_rgba8(255, 0, 0, 255)),
-//!     FillRule::Winding,
-//!     AntiAlias::On,
-//! );
-//!
-//! let pixmap = backend.finish(target);
-//! assert_eq!(pixmap.pixel(32, 32), Some([255, 0, 0, 255]));
-//! # Ok(())
-//! # }
-//! ```
-
 // The crate names follow vello's own: upstream's `vello` is the GPU renderer on
 // `wgpu`, so the bare name belongs here and the CPU wrapper is
 // `pdfrum-raster-vello-cpu`.
@@ -68,7 +24,6 @@
 //
 // Tier C only: the CPU backends stay the oracle-compared ones and this is
 // compared against them. It never joins the conformance scoreboard.
-
 #![forbid(unsafe_code)]
 
 mod adapter;
