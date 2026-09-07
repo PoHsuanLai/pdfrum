@@ -33,7 +33,7 @@ pdfrum-filters.workspace = true
 smallvec.workspace = true
 
 # `save` group over `benches/corpus`. `pdfrum` is a permitted dev-dependency cycle.
-pdfrum.workspace = true
+pdfrum = { path = "../pdfrum" }
 pdfrum-corpus.workspace = true
 criterion.workspace = true
 

@@ -39,8 +39,8 @@ use pdfrum_common::kurbo::{PathEl, Point, Shape};
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_type1::{AxisKind, Container, Encoding, Gid, Type1Font};
 
-const SANS: &[u8] = include_bytes!("fixtures/FoxitSansMM.pfb");
-const SERIF: &[u8] = include_bytes!("fixtures/FoxitSerifMM.pfb");
+const SANS: &[u8] = include_bytes!("../../pdfrum-font/fontdata/FoxitSansMM.pfb");
+const SERIF: &[u8] = include_bytes!("../../pdfrum-font/fontdata/FoxitSerifMM.pfb");
 
 fn load(bytes: &[u8]) -> Type1Font {
     let mut diags = Diagnostics::default();
