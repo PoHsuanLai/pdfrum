@@ -417,6 +417,7 @@ fn construct_default_feature_variants() -> usize {
     let _ = SaveError::BadPageRange;
     let _ = SaveError::EncryptedSaveUnsupported;
     let _ = SaveError::PasswordNotText;
+    let _ = SaveError::NoEntropy;
     let _ = SaveError::Io(std::io::Error::other("construct"));
     let _ = SaveError::NoDestinationCatalog;
     let _ = SaveError::Object(ObjectError::UnresolvedRef(ObjRef::new(1, 0)));
@@ -437,7 +438,7 @@ fn construct_default_feature_variants() -> usize {
         offset: 0,
     });
     let _ = SaveError::InlinePage(PageIndex::from(0u32));
-    n += 18;
+    n += 19;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -837,9 +838,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    // 357 -> 356: `DiagKind::TextCharsDeduplicated` was dropped, the one
-    // variant that had no recording site.
-    assert_eq!(constructed, 356, "default-feature variant count");
+    assert_eq!(constructed, 357, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 41, "default-feature enum count");
 }
 

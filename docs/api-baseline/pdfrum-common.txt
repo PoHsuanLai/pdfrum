@@ -103,6 +103,10 @@ pub pdfrum_common::DiagKind::XrefEntriesShifted
 pub pdfrum_common::DiagKind::XrefPrevLoop
 pub pdfrum_common::DiagKind::XrefRebuilt
 pub pdfrum_common::DiagKind::XrefStreamEntryDropped
+impl pdfrum_common::DiagKind
+pub fn pdfrum_common::DiagKind::message(&self) -> &'static str
+impl core::fmt::Display for pdfrum_common::DiagKind
+pub fn pdfrum_common::DiagKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum pdfrum_common::LimitExceeded
 pub pdfrum_common::LimitExceeded::RenderPixels
 pub pdfrum_common::LimitExceeded::RenderPixels::allowed: u64
@@ -130,6 +134,8 @@ pub pdfrum_common::Operation::Script
 pub enum pdfrum_common::Severity
 pub pdfrum_common::Severity::Recovered
 pub pdfrum_common::Severity::Suspicious
+impl core::fmt::Display for pdfrum_common::Severity
+pub fn pdfrum_common::Severity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_common::Deadline
 impl pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::after(core::time::Duration) -> pdfrum_common::Deadline

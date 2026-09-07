@@ -38,8 +38,7 @@ crate-type = ["cdylib", "rlib"]
 # - `system-fonts` — there is no host font directory in a browser. The bundled
 #   Foxit base-14 faces carry text, which is what the facade's own wasm32
 #   check has always assumed.
-# - `javascript` — `boa`'s `getrandom` needs its `wasm_js` feature on this
-#   target, and running a document's own script in a page is a different
+# - `javascript` — running a document's own script in a page is a different
 #   security proposition from rendering it. A caller who wants it builds
 #   their own module.
 #
@@ -61,6 +60,11 @@ wasm-bindgen = "0.2.128"
 # this crate names. `js-sys` is `wasm-bindgen`'s own companion and adds
 # nothing to the tree that `wasm-bindgen` did not already put there.
 js-sys = "0.3.78"
+# An encrypting save mints its file key and AES vectors from the operating
+# system. `wasm32-unknown-unknown` has none, so `getrandom` routes to the Web
+# Crypto API instead; the backend cfg that selects it lives in
+# `.cargo/config.toml` beside this feature.
+getrandom = { workspace = true, features = ["wasm_js"] }
 
 [dev-dependencies]
 # The Node test harness. `wasm-bindgen-test` is to `wasm32` what `#[test]` is

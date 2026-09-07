@@ -29,71 +29,69 @@
 //!
 //! # Where the initialisation vectors come from
 //!
-//! AES needs a fresh vector per payload and `pdfrum-crypt` has none to give:
-//! this workspace takes no global randomness and no `getrandom` dependency.
-//! So the writer supplies them, from [`IvSource`]: a counter stirred with a
-//! seed taken from the document's own bytes. Two consequences, both wanted:
+//! AES-CBC needs a vector per payload, and under AESV3 (ISO 32000-2 §7.6.5.3)
+//! the file key enciphers every object verbatim, with no per-object
+//! derivation. The vector is therefore the only thing separating two
+//! ciphertexts under one key, and it has to satisfy both of CBC's
+//! requirements:
 //!
-//! - **A save is reproducible.** The same document saved twice produces the
-//!   same ciphertext, which is what lets a whole encrypted file be
-//!   snapshot-tested. The C++ cannot be: its vectors come from a
-//!   process-global Mersenne Twister seeded off the environment.
-//! - **Vectors do not repeat within a file.** Each payload advances the
-//!   counter, so no two objects share one — which is the property that
-//!   actually matters for CBC. They are *unpredictable to an attacker* only
-//!   as far as the file's own bytes are, which for a document being
-//!   re-encrypted under a key the attacker would need anyway is the honest
-//!   bar. A caller wanting more passes [`IvSource::from_seed`] with bytes of
-//!   its own choosing.
+//! - **Unique within a save.** Two payloads sharing a key and a vector leak
+//!   the XOR of their first blocks to anyone holding the ciphertext, key or
+//!   no key. [`IvSource`] mixes a per-save secret with the object number and
+//!   a counter, so each payload gets its own vector however the writer
+//!   enumerates objects.
+//! - **Unpredictable.** The per-save secret is 32 bytes drawn from the
+//!   operating system, so a vector cannot be recomputed from anything the
+//!   file itself exposes — its length, its head, its tail, or a sibling file
+//!   built from the same template.
+//!
+//! An encrypted save is therefore not byte-reproducible: reproducible
+//! ciphertext is reproducible secrets. [`crate::IdSource::Fixed`] pins
+//! everything a save writes in the clear, which is what reproducibility is
+//! for.
 
 use std::cell::Cell;
 
 use pdfrum_crypt::{CryptClass, Iv, SecurityHandler};
 use pdfrum_object::ObjRef;
+use sha2::{Digest, Sha256};
+
+use crate::Error;
 
 /// Where a save's AES initialisation vectors come from.
 ///
-/// Deliberately not `Copy`: it holds a counter, and a copy would hand two
-/// call sites the same vector sequence.
-#[derive(Debug)]
+/// Deliberately neither `Copy` nor `Clone`: it holds a counter, and a copy
+/// would hand two call sites the same vector sequence. Its `Debug` shows the
+/// counter and withholds the secret, which a log has no use for.
 pub struct IvSource {
-    /// Absorbed from the document's bytes; see the module docs.
-    seed: u64,
+    /// Thirty-two bytes from the operating system, drawn once per save. The
+    /// vectors are unpredictable exactly because this is.
+    secret: [u8; 32],
     /// Advanced once per vector handed out.
     counter: Cell<u64>,
 }
 
-impl IvSource {
-    /// A source seeded from the document's own bytes.
-    ///
-    /// The whole file is not hashed — a save must not become linear in the
-    /// input a second time — so the seed absorbs the length and a sample of
-    /// the head and tail. That is enough to distinguish documents; it is not
-    /// meant to be unguessable, and the module docs say why.
-    #[must_use]
-    pub fn from_document(bytes: &[u8]) -> Self {
-        const SAMPLE: usize = 64;
-        let head = bytes.get(..SAMPLE.min(bytes.len())).unwrap_or_default();
-        let tail = bytes
-            .get(bytes.len().saturating_sub(SAMPLE)..)
-            .unwrap_or_default();
-        let mut seed = bytes.len() as u64;
-        for byte in head.iter().chain(tail) {
-            seed = seed
-                .wrapping_mul(0x5851_F42D_4C95_7F2D)
-                .wrapping_add(u64::from(*byte).wrapping_add(1));
-        }
-        Self::from_seed(seed)
+impl std::fmt::Debug for IvSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IvSource")
+            .field("counter", &self.counter.get())
+            .finish_non_exhaustive()
     }
+}
 
-    /// A source from a caller's own seed, for a save that must be pinned to
-    /// exact bytes.
-    #[must_use]
-    pub const fn from_seed(seed: u64) -> Self {
-        Self {
-            seed,
+impl IvSource {
+    /// A source keyed by fresh operating-system randomness.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoEntropy`] when the platform's generator is unavailable.
+    pub fn from_os() -> Result<Self, Error> {
+        let mut secret = [0u8; 32];
+        getrandom::fill(&mut secret).map_err(|_| Error::NoEntropy)?;
+        Ok(Self {
+            secret,
             counter: Cell::new(0),
-        }
+        })
     }
 
     /// The next vector, advancing the counter.
@@ -105,20 +103,18 @@ impl IvSource {
         let index = self.counter.get();
         self.counter.set(index.wrapping_add(1));
 
-        // Absorb, then squeeze one byte per round from the high bits — the
-        // same shape `write::id::mix` uses, and for the same reason: every
-        // input must reach every output byte.
-        let mut state = self
-            .seed
-            .wrapping_add(index)
-            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-            ^ u64::from(obj.num).rotate_left(32);
+        // SHA-256 over the secret and the pair that makes this payload
+        // unique. Absorbing before emitting is what carries every input into
+        // every output byte; the vector is the leading half of the digest.
+        let mut hash = Sha256::new();
+        hash.update(self.secret);
+        hash.update(index.to_le_bytes());
+        hash.update(obj.num.to_le_bytes());
+        hash.update(obj.generation.to_le_bytes());
+        let digest = hash.finalize();
         let mut out = [0u8; 16];
-        for slot in &mut out {
-            state = state
-                .wrapping_mul(0x5851_F42D_4C95_7F2D)
-                .wrapping_add(0x1405_7B7E_F767_814F);
-            *slot = u8::try_from(state >> 56).unwrap_or(0);
+        for (slot, byte) in out.iter_mut().zip(digest) {
+            *slot = byte;
         }
         Iv(out)
     }
@@ -226,7 +222,7 @@ mod tests {
     // vector, whether they belong to one object or to many.
     #[test]
     fn vectors_never_repeat_within_one_save() {
-        let ivs = IvSource::from_seed(1);
+        let ivs = IvSource::from_os().unwrap();
         let mut seen = std::collections::BTreeSet::new();
         for num in 1..40u32 {
             for _ in 0..4 {
@@ -236,41 +232,22 @@ mod tests {
         assert_eq!(seen.len(), 39 * 4);
     }
 
-    // Reproducibility: two sources built the same way agree step for step.
+    // Unpredictability: two sources drawn from the OS share nothing, so a
+    // vector cannot be recovered from another save of the same document.
     #[test]
-    fn one_seed_gives_one_sequence() {
-        let a = IvSource::from_seed(7);
-        let b = IvSource::from_seed(7);
+    fn two_sources_never_agree() {
+        let a = IvSource::from_os().unwrap();
+        let b = IvSource::from_os().unwrap();
         for num in 1..8u32 {
-            assert_eq!(a.next(ObjRef::new(num, 0)), b.next(ObjRef::new(num, 0)));
+            assert_ne!(a.next(ObjRef::new(num, 0)), b.next(ObjRef::new(num, 0)));
         }
-        // A different seed does not.
-        let c = IvSource::from_seed(8);
-        assert_ne!(a.next(ObjRef::new(1, 0)), c.next(ObjRef::new(1, 0)));
-    }
-
-    // Two documents differing anywhere the sample reaches get different
-    // vectors, so a save never reuses another file's sequence.
-    #[test]
-    fn different_documents_seed_differently() {
-        let a = IvSource::from_document(b"%PDF-1.7 hello");
-        let b = IvSource::from_document(b"%PDF-1.7 world");
-        assert_ne!(a.next(ObjRef::new(1, 0)), b.next(ObjRef::new(1, 0)));
-        // And length alone is enough to separate two otherwise-equal heads.
-        let c = IvSource::from_document(b"%PDF-1.7 hello!");
-        assert_ne!(
-            IvSource::from_document(b"%PDF-1.7 hello").next(ObjRef::new(1, 0)),
-            c.next(ObjRef::new(1, 0))
-        );
-        // An empty document is a seed like any other, not a panic.
-        let _ = IvSource::from_document(b"").next(ObjRef::new(1, 0));
     }
 
     // The round trip through the encryptor's own object numbering.
     #[test]
     fn an_encryptor_round_trips_under_its_object_number() {
         let h = handler();
-        let ivs = IvSource::from_seed(3);
+        let ivs = IvSource::from_os().unwrap();
         let enc = Encryptor::new(&h, &ivs, 12);
         let payload = b"the quick brown fox".to_vec();
         let sealed = enc.encrypt(CryptClass::String, &payload);
@@ -287,7 +264,7 @@ mod tests {
         let h = handler();
         let security = Security {
             handler: &h,
-            ivs: IvSource::from_seed(1),
+            ivs: IvSource::from_os().unwrap(),
             encrypt_object: Some(9),
         };
         assert!(security.for_object(9).is_none());
@@ -297,7 +274,7 @@ mod tests {
         // With no encrypt object named, every object gets one.
         let security = Security {
             handler: &h,
-            ivs: IvSource::from_seed(1),
+            ivs: IvSource::from_os().unwrap(),
             encrypt_object: None,
         };
         assert!(security.for_object(9).is_some());
@@ -308,7 +285,7 @@ mod tests {
     #[test]
     fn the_identity_handler_writes_what_it_was_given() {
         let h = SecurityHandler::Identity;
-        let ivs = IvSource::from_seed(5);
+        let ivs = IvSource::from_os().unwrap();
         let enc = Encryptor::new(&h, &ivs, 4);
         let payload = vec![0xABu8; 33];
         assert_eq!(enc.encrypt(CryptClass::Stream, &payload), payload);

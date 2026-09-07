@@ -25,6 +25,7 @@ pub pdfrum_edit::Error::InlinePage(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::Io(core::io::error::Error)
 pub pdfrum_edit::Error::MissingGlyph(pdfrum_edit::MissingGlyph)
 pub pdfrum_edit::Error::NoDestinationCatalog
+pub pdfrum_edit::Error::NoEntropy
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
 pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::PasswordNotText
@@ -38,7 +39,6 @@ pub enum pdfrum_edit::IdSource
 pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
 impl pdfrum_edit::IdSource
-pub fn pdfrum_edit::IdSource::entropy(self) -> [u8; 64]
 pub fn pdfrum_edit::IdSource::tag_byte(self, u64) -> u8
 pub enum pdfrum_edit::PageBox
 pub pdfrum_edit::PageBox::Art
@@ -110,8 +110,9 @@ pub pdfrum_edit::ImportOptions::at: pdfrum_common::page_index::PageIndex
 pub pdfrum_edit::ImportOptions::viewer_preferences: bool
 pub struct pdfrum_edit::IvSource
 impl pdfrum_edit::IvSource
-pub fn pdfrum_edit::IvSource::from_document(&[u8]) -> Self
-pub const fn pdfrum_edit::IvSource::from_seed(u64) -> Self
+pub fn pdfrum_edit::IvSource::from_os() -> core::result::Result<Self, pdfrum_edit::Error>
+impl core::fmt::Debug for pdfrum_edit::IvSource
+pub fn pdfrum_edit::IvSource::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_edit::MissingGlyph
 pub pdfrum_edit::MissingGlyph::character: char
 pub pdfrum_edit::MissingGlyph::offset: usize
