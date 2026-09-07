@@ -1,6 +1,6 @@
 # Every character above U+FFFF mirrors to `)`
 
-**Filed** as crbug.com/pdfium/555940408 on 2026-09-02.
+**Filed** as crbug.com/555940408 on 2026-09-02.
 
 **Still open** at checkout `a043bed4a` (2026-09-05): `core/fxcrt/fx_unicode.cpp` is untouched since `6f2272e1f`.
 

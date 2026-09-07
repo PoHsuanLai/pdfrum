@@ -2,7 +2,7 @@
 
 `Diagnostics` is the damage channel; `Limits` are the ceilings. `PdfVersion`
 is the `%PDF-m.n` header; `PageIndex` is zero-based. Geometry is
-[`kurbo`](https://docs.rs/kurbo).
+[`kurbo`](https://crates.io/crates/kurbo).
 
 ```rust
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};

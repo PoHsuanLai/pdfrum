@@ -1,6 +1,6 @@
 # `/TR` transfer function array is loaded in reverse: `array[2]` drives red, and the fourth function is never read
 
-**Filed** as crbug.com/pdfium/555940409 on 2026-09-02.
+**Filed** as crbug.com/555940409 on 2026-09-02.
 
 **Fixed upstream** in `2621636d3` (2026-09-03), "Fix reversed channel order when loading transfer function array", `Fixed: 555940409`; seen at checkout `a043bed4a` on 2026-09-05.
 
