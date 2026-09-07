@@ -403,27 +403,41 @@ impl DiagKind {
             Self::PageTreeRepaired => "page tree repaired",
             Self::PageTreeDepthExceeded => "page tree deeper than the depth cap; walk stopped",
             Self::PasswordReencoded => "password accepted only after re-encoding",
-            Self::CMapNameUnknown => "/Encoding named no built-in CMap; fell back to two-byte codes",
+            Self::CMapNameUnknown => {
+                "/Encoding named no built-in CMap; fell back to two-byte codes"
+            }
             Self::CMapTableMissing => "no built-in CMap table carries that exact name",
             Self::CMapUsecmapUnknown => "usecmap named a CMap that is not built in",
             Self::CMapUsecmapDepth => "/UseCMap chain ran past its depth cap",
             Self::CMapCodespaceDropped => "codespace range bounds discarded",
             Self::CMapTruncatedCodespace => "codespace bound had no closing >",
             Self::CMapReversedRange => "begincidrange start code was above its end code",
-            Self::CMapWideMappingsDropped => "character mappings too wide for the coding scheme dropped",
+            Self::CMapWideMappingsDropped => {
+                "character mappings too wide for the coding scheme dropped"
+            }
             Self::CMapRangeLimit => "CMap declared more ranges than the limit allows",
             Self::CMapOperandOverflow => "too many operands for one CMap construct",
             Self::Type1PfbTruncated => "PFB segment chain ended early",
             Self::Type1HexTruncated => "PFA hexadecimal private section ended early",
             Self::Type1EncodingGlyphMissing => "Type 1 /Encoding named an undefined glyph",
-            Self::Type1CharstringAborted => "Type 1 charstring could not be interpreted to completion",
-            Self::Type1BlendInconsistent => "Multiple-Master blend arrays disagreed; treated as non-variable",
-            Self::ToUnicodeBlockRejected => "/ToUnicode block rejected; its mappings were discarded",
+            Self::Type1CharstringAborted => {
+                "Type 1 charstring could not be interpreted to completion"
+            }
+            Self::Type1BlendInconsistent => {
+                "Multiple-Master blend arrays disagreed; treated as non-variable"
+            }
+            Self::ToUnicodeBlockRejected => {
+                "/ToUnicode block rejected; its mappings were discarded"
+            }
             Self::FontProgramUnreadable => "embedded font program unreadable; substituted instead",
-            Self::CidToGidStreamShort => "/CIDToGIDMap stream was shorter than the CIDs indexing it",
+            Self::CidToGidStreamShort => {
+                "/CIDToGIDMap stream was shorter than the CIDs indexing it"
+            }
             Self::FontWidthsTruncated => "font widths array was malformed; parsing stopped early",
             Self::GsubUnreadable => "OpenType GSUB table unreadable; upright forms drawn",
-            Self::FontSubstitutionFailed => "no face found and the built-in fallback failed to parse",
+            Self::FontSubstitutionFailed => {
+                "no face found and the built-in fallback failed to parse"
+            }
             Self::UnknownOperator => "content-stream keyword named no operator",
             Self::OperandsDropped => "more than sixteen operands accumulated; oldest evicted",
             Self::OperandCountMismatch => "operator did not get its exact operand count",
@@ -453,15 +467,23 @@ impl DiagKind {
             Self::ImageBadBitDepth => "image /BitsPerComponent was not 1, 2, 4, 8 or 16",
             Self::ImageBadDimensions => "image /Width or /Height was zero, negative, or too large",
             Self::ImageDimensionsFromCodec => "codec dimensions differed from the dictionary's",
-            Self::JpxColorSpaceOverride => "JPEG 2000 codestream colour space replaced the dictionary's",
+            Self::JpxColorSpaceOverride => {
+                "JPEG 2000 codestream colour space replaced the dictionary's"
+            }
             Self::ImageDecodeFailed => "codec refused an embedded image",
             Self::MaskDropped => "image mask could not be loaded; base image kept unmasked",
             Self::ImageStreamTruncated => "image data ended early; remainder zero-filled",
-            Self::ColorKeyArrayShort => "colour-key /Mask array was short; missing ranges default to zero",
+            Self::ColorKeyArrayShort => {
+                "colour-key /Mask array was short; missing ranges default to zero"
+            }
             Self::MediaBoxDefaulted => "page /MediaBox was missing or empty; US Letter used",
-            Self::OptionalContentPolicyUnknown => "optional-content /P policy is not one of the four defined",
+            Self::OptionalContentPolicyUnknown => {
+                "optional-content /P policy is not one of the four defined"
+            }
             Self::TextObjectDegenerate => "text object had no width and was dropped",
-            Self::TextObjectDropped => "text object dropped because the one before it showed no glyphs",
+            Self::TextObjectDropped => {
+                "text object dropped because the one before it showed no glyphs"
+            }
             Self::TextObjectDuplicate => "text object was a redraw of a recent one and was dropped",
             Self::TextCharcodesUnmapped(_) => "character codes had no Unicode mapping",
             Self::TextCharcodeZero => "character code zero emitted a NUL",
@@ -472,10 +494,14 @@ impl DiagKind {
             Self::TreeDepthExceeded => "tree exceeded its depth cap; lookup answered not-found",
             Self::NameTreeLimitsRepaired => "name-tree /Limits array was short or reversed",
             Self::NameTreeMalformed => "name-tree /Names array had an odd length",
-            Self::LegacyNamedDest => "named destination resolved through the pre-1.2 /Dests dictionary",
+            Self::LegacyNamedDest => {
+                "named destination resolved through the pre-1.2 /Dests dictionary"
+            }
             Self::DestPageUnresolved => "destination page could not be turned into an index",
             Self::AnnotSubtypeUnknown => "annotation /Subtype matched no known spelling",
-            Self::AppearanceGenerated => "appearance stream generated for an annotation that had none",
+            Self::AppearanceGenerated => {
+                "appearance stream generated for an annotation that had none"
+            }
             Self::QuadPointsTruncated => "/QuadPoints length was not a multiple of eight",
             Self::InkPathDropped => "/InkList sub-array was too short or had an odd length",
             Self::DefaultAppearanceMalformed => "/DA string held no Tf operator",
