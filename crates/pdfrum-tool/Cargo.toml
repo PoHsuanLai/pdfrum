@@ -3,9 +3,11 @@ name = "pdfrum-tool"
 description = "CLI mirroring the pdfium_test oracle's flags and output formats"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
+publish = false
 keywords = ["pdf", "cli", "render", "pdfium"]
 categories = ["command-line-utilities", "graphics", "text-processing"]
 
@@ -13,8 +15,7 @@ categories = ["command-line-utilities", "graphics", "text-processing"]
 workspace = true
 
 [features]
-# Default-off: `scripts/check-no-boa.nu` asserts no workspace member's
-# default features reach `boa_engine`.
+# Default-off.
 javascript = ["dep:pdfrum-form", "pdfrum-form/javascript", "pdfrum/javascript"]
 
 [dependencies]
@@ -31,7 +32,7 @@ pdfrum-parser.workspace = true
 # `pdfrum-form` directly is what makes the tool exercise the API a consumer
 # would use.
 pdfrum.workspace = true
-# Only for `--js-transcript`, behind the `script` feature: the transcript is
+# Only for `--js-transcript`, behind the `javascript` feature: the transcript is
 # `pdfrum_form::script::ScriptCascade`'s, and the facade does not re-export it
 # (it cannot — the facade's default features must not reach an engine).
 pdfrum-form = { workspace = true, optional = true }

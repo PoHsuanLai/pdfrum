@@ -51,14 +51,17 @@ pdfrum completions zsh > ~/.zfunc/_pdfrum
 limit (`--max-pixels`, `--time-limit`).
 
 Human output is a record, a table, a section, or a one-line summary. Colour
-off in a pipe and under `NO_COLOR`. Print through `src/out.rs`.
+off in a pipe and under `NO_COLOR`.
 
 `pdfrum serve --stdio` is JSON-RPC, one request/response per line, result =
 the command's `--json`. `--mcp` is the same as MCP tools.
 
 ```sh
-cargo install --path crates/pdfrum-cli --features javascript
+cargo install pdfrum-cli
+cargo install pdfrum-cli --features javascript
 pdfrum scripts run form.pdf
 ```
 
 Facade client only. `pdfrum-tool` is the oracle-mirror binary, not this.
+
+MIT OR Apache-2.0

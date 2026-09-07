@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Shared foundation of the pdfrum workspace: the diagnostics channel for
 //! damage-tolerant parsing, hard resource limits mirroring PDFium's (with the
 //! [`Deadline`] a host may add and the [`LimitExceeded`] a host's own ceiling

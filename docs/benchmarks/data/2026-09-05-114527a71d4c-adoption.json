@@ -2,7 +2,7 @@
   {
     "engine": "pdfrum",
     "version": "0.1.0",
-    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a58f791ade9594178/crates/pdfrum\" }",
+    "dependency": "pdfrum = { path = \"/path/to/pdfrum/crates/pdfrum\" }",
     "license": "MIT OR Apache-2.0",
     "crates": 88,
     "native_build_crates": [],

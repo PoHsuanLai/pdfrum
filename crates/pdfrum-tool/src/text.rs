@@ -85,7 +85,7 @@ pub fn extract_page<R: Resolve>(
 /// see `pdfrum_text::words`. A page that will not build yields no words,
 /// which is what an empty page gives.
 ///
-/// Behind the `script` feature because `--js-transcript` is its only caller:
+/// Behind the `javascript` feature because `--js-transcript` is its only caller:
 /// nothing else the tool prints counts words.
 #[cfg(feature = "javascript")]
 #[must_use]

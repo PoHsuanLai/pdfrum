@@ -3,6 +3,7 @@ name = "pdfrum-markdown"
 description = "Markdown and layout-preserving text from a PDF page: the structure tree where there is one, typographic heuristics where there is not"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

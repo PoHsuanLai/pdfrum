@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Text extraction, search, and link detection for PDF pages
 //! (ISO 32000-1 §14.8.2).
 //!

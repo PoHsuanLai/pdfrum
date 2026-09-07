@@ -5,7 +5,7 @@
   "label": "d1",
   "profile": "default",
   "machine": {
-    "hostname": "frieren",
+    "hostname": "host",
     "cpus": 32,
     "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
     "uptime_before": "16:31:54 up 11 days, 17:46,  3 users,  load average: 14.28, 20.63, 17.14",
@@ -14,13 +14,13 @@
     "loadavg_after": "14.49 18.45 16.67 7/3116 1568501"
   },
   "corpus": {
-    "root": "/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/benches/corpus",
+    "root": "/path/to/pdfrum/benches/corpus",
     "rule": "every .pdf of the recursive listing",
     "files": 44
   },
   "oracle": {
-    "binary": "/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test",
-    "font_dir": "/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts",
+    "binary": "/path/to/pdfium-c++/out/Release/pdfium_test",
+    "font_dir": "/path/to/pdfium-c++/third_party/test_fonts",
     "checkout_commit": "a043bed4a0d7"
   },
   "dpi": 150.0,

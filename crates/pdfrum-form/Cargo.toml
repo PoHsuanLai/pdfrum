@@ -3,6 +3,7 @@ name = "pdfrum-form"
 description = "Form interaction: events, focus, the edit control, the commit cascade"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -15,10 +16,7 @@ workspace = true
 [features]
 # The `boa`-backed `Cascade` — a document's own `/AA` scripts, actually run.
 #
-# Default-off, and that is the whole point: with the feature off `boa_engine`
-# and its 132 transitive crates are not in the tree at all, so
-# `cargo add pdfrum` puts no JavaScript engine in anyone's dependency graph.
-# `scripts/check-no-boa.nu` asserts it in both directions.
+# Default-off: with it off, `boa_engine` is not in the tree.
 javascript = ["dep:boa_engine", "dep:pdfrum-script"]
 
 [dependencies]
@@ -29,7 +27,7 @@ pdfrum-page.workspace = true
 pdfrum-font.workspace = true
 kurbo.workspace = true
 thiserror.workspace = true
-# Both optional and both enabled by `script` alone. `pdfrum-script` is the
+# Both optional and both enabled by `javascript` alone. `pdfrum-script` is the
 # `AF*` and `util.*` library — pure functions over plain data, no engine —
 # which the binding exposes to scripts as globals rather than reimplementing.
 boa_engine = { workspace = true, optional = true }

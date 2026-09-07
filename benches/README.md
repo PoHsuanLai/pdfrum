@@ -24,7 +24,7 @@ Criterion groups live with the code:
 `render-warm` holds one session across iterations. The oracle column is warm.
 
 ```sh
-cargo bench --workspace                # 44 files × 11 groups, ~1 h
+cargo bench --workspace                # 44 files × 10 groups, ~1 h
 cargo bench -p pdfrum-render
 cargo run --release -p pdfrum-bench --bin ratchet -- check
 cargo run --release -p pdfrum-bench --bin ratchet -- update

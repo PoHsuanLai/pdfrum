@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! `vello_cpu` implementation of `pdfrum-render`'s `RenderDevice` and
 //! `RasterBackend` traits — the primary rasterizer. Fully wraps the backend so
 //! its still-moving API never leaks into the engine.

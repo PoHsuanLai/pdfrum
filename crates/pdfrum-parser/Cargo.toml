@@ -3,6 +3,7 @@ name = "pdfrum-parser"
 description = "PDF file parser: lexer, xref, object store, damage recovery"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

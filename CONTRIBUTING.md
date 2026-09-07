@@ -26,16 +26,16 @@ Optional — the gate notes and continues if they are missing: `cargo-deny`,
 
 `./scripts/ci.nu` runs fmt, clippy `-D warnings`, nextest (with `javascript`
 on the CLI and the tool), doctests, rustdoc, the API snapshot, `cargo deny`,
-the no-`-sys` check, the C header and C test, WASM tests, the wgpu/boa leak
-checks, and `cargo check` of `fuzz/`.
+the no-`-sys` check, the C header and C test, WASM tests, and
+`cargo check` of `fuzz/`.
 
 CI does not run the conformance board or the bench ratchet.
 
 ## Conformance
 
-PDFium is a read-only oracle outside this repo. The harness diffs ~1750
-files on text, structure, pixels (SSIM ≥ 0.99), and JS transcripts into
-`conformance/scoreboard.json`.
+PDFium is a read-only oracle outside this repo. The harness diffs 1759
+files on text, structure, pixels (floors in `conformance/thresholds.toml`),
+and JS transcripts into `conformance/scoreboard.json`.
 
 Name any board rows a change moves. Silent movement is a regression.
 Divergences from PDFium are documented next to the code; where PDFium is
@@ -62,8 +62,7 @@ the file; `ratchet update` and say by how much. Comparative numbers:
 - No panics in library crates. Damage goes to `Diagnostics`; `Err` means stop.
 - `unsafe_code = "forbid"` except `pdfrum-capi` (see that crate's rustdoc).
 - No `-sys`, no C in a library build. Write thirty lines instead of a helper
-  crate. GPU is the one exemption: `pdfrum-raster-vello`, checked by
-  `scripts/check-no-wgpu.nu`.
+  crate. GPU is the one exemption: `pdfrum-raster-vello`, never a default dep.
 - Port PDFium behaviour, not C++ shape.
 
 Rustdoc is for callers: first sentence, invariant, `# Errors`, one example.

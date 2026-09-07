@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! PDF standard security (ISO 32000 §7.6): opening an encrypted document and
 //! deciphering its strings and streams, revisions 2 through 6.
 //!

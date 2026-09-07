@@ -31,8 +31,8 @@ test suite runs without the oracle checkout.
 
 **License.** PDFium, BSD 3-clause (`LICENSE` in the oracle checkout). Original
 code copyright 2014 Foxit Software Inc.; the PFB blobs themselves are
-`ChromeSansMM` / `ChromeSerifMM` 001.000, dated 2006. records these
-as redistributable with the project.
+`ChromeSansMM` / `ChromeSerifMM` 001.000, dated 2006. Redistributable
+under BSD-3-Clause.
 
 **What they contain.** Both are PFB (`80 01 …`), `/FontType 1`,
 `/FontMatrix [0.001 0 0 0.001 0 0]`, 230 glyphs, two design axes

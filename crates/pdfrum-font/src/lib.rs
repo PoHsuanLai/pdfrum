@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! Font handling (ISO 32000-1 §9): font dictionaries (Type1/TrueType/Type0/
 //! Type3/CID), encodings and `/Differences`, `/ToUnicode`, code→CID→GID
 //! mapping, glyph outlines and metrics via `skrifa`, substitution and fallback
@@ -27,7 +28,7 @@
 //!
 //! for item in font.decode(b"Hello") {
 //!     let text: String = item.unicode.iter().collect();
-//!     println!("code {:#x} -> glyph {} -> {text:?} ({}/1000 em)",
+//!     println!("code {:#x} -> glyph {:?} -> {text:?} ({}/1000 em)",
 //!              item.code.0, item.gid.map(|g| g.0), item.width);
 //! }
 //! # Some(())

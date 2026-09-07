@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! The fidelity-critical file parser (ISO 32000 §7.5): zero-copy lexer,
 //! object syntax, xref reading (classic tables, xref streams, hybrids,
 //! prev-chains) with full-file recovery rebuild, object streams, incremental

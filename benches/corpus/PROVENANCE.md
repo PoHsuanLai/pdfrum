@@ -20,11 +20,8 @@ criterion column and the `pdfium_test` column describe the same work.
 
 ## Why this corpus replaces the seven in `../fixtures`
 
-`../fixtures` holds the set and is kept: it is what's
-tables measured, and deleting it would strand those numbers. But it has a
-stated weakness that exists partly to fix — quoting .md: *"PDFium's
-`testing/resources` are unit-test inputs: the largest is 85 KB, and only two
-files exceed two pages. Nothing here resembles a 300-page report."*
+`../fixtures` is kept: the ratchet already measured it. Those files are
+unit-test inputs — the largest is 85 KB, and only two exceed two pages.
 
 This set is chosen against that. The largest file here is 5.0 MB, nine
 documents have eight pages or more, and the classes are populated by
@@ -111,8 +108,8 @@ oversight:
 - **text** (9 files) — glyph-dominated pages. `text_tcpdf_055` draws 3616 show-
   text operations over 14 pages and is the heaviest; the three `text_cjk_*`
   files carry CJK, where glyph lookup rather than glyph count is what costs;
-  `text_foxittext` is carried over from `../fixtures` unchanged so the wave-7b
-  glyph-cache numbers in stay comparable.
+  `text_foxittext` is carried over from `../fixtures` unchanged so glyph-cache
+  numbers stay comparable.
 - **vector** (6 files) — path-dominated. `vector_paths_1751` is the only
   genuinely pure one in the checkout (30303 path operators, zero text, zero
   images) and is therefore the control for anything touching the scanline

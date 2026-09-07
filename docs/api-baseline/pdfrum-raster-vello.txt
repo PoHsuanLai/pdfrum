@@ -1,0 +1,60 @@
+pub mod pdfrum_raster_vello
+pub use pdfrum_raster_vello::wgpu
+#[non_exhaustive] pub enum pdfrum_raster_vello::Error
+pub pdfrum_raster_vello::Error::Device(alloc::string::String)
+pub pdfrum_raster_vello::Error::NoAdapter
+pub pdfrum_raster_vello::Error::Readback(alloc::string::String)
+pub pdfrum_raster_vello::Error::Render(alloc::string::String)
+pub pdfrum_raster_vello::Error::Renderer(alloc::string::String)
+pub pdfrum_raster_vello::Error::TargetTooLarge
+pub pdfrum_raster_vello::Error::TargetTooLarge::h: u32
+pub pdfrum_raster_vello::Error::TargetTooLarge::max: u32
+pub pdfrum_raster_vello::Error::TargetTooLarge::w: u32
+pub struct pdfrum_raster_vello::AdapterReport
+pub pdfrum_raster_vello::AdapterReport::backend: alloc::string::String
+pub pdfrum_raster_vello::AdapterReport::device_type: alloc::string::String
+pub pdfrum_raster_vello::AdapterReport::driver: alloc::string::String
+pub pdfrum_raster_vello::AdapterReport::max_dimension: u32
+pub pdfrum_raster_vello::AdapterReport::name: alloc::string::String
+impl pdfrum_raster_vello::AdapterReport
+pub fn pdfrum_raster_vello::AdapterReport::is_real_gpu(&self) -> bool
+pub fn pdfrum_raster_vello::AdapterReport::of(&wgpu::api::adapter::Adapter) -> Self
+impl core::fmt::Display for pdfrum_raster_vello::AdapterReport
+pub fn pdfrum_raster_vello::AdapterReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_raster_vello::OwnedDevice
+pub pdfrum_raster_vello::OwnedDevice::report: pdfrum_raster_vello::AdapterReport
+pub struct pdfrum_raster_vello::VelloBackend<'a>
+impl pdfrum_raster_vello::VelloBackend<'static>
+pub fn pdfrum_raster_vello::VelloBackend<'static>::adapter_report(&self) -> core::option::Option<pdfrum_raster_vello::AdapterReport>
+impl<'a> pdfrum_raster_vello::VelloBackend<'a>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::accepts(&self, u32, u32) -> bool
+pub fn pdfrum_raster_vello::VelloBackend<'a>::check_target(&self, u32, u32) -> core::result::Result<(), pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::device_fault(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::max_dimension(&self) -> u32
+pub fn pdfrum_raster_vello::VelloBackend<'a>::new(&'a wgpu::api::device::Device, &'a wgpu::api::queue::Queue) -> core::result::Result<Self, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::try_finish(&self, pdfrum_raster_vello::VelloDevice) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::try_new_target(&self, u32, u32, peniko::Color) -> core::result::Result<pdfrum_raster_vello::VelloDevice, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::try_snapshot(&self, &pdfrum_raster_vello::VelloDevice) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_raster_vello::Error>
+impl core::fmt::Debug for pdfrum_raster_vello::VelloBackend<'_>
+pub fn pdfrum_raster_vello::VelloBackend<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl pdfrum_render::device::RasterBackend for pdfrum_raster_vello::VelloBackend<'_>
+pub type pdfrum_raster_vello::VelloBackend<'_>::Device = pdfrum_raster_vello::VelloDevice
+pub fn pdfrum_raster_vello::VelloBackend<'_>::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_raster_vello::VelloBackend<'_>::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn pdfrum_raster_vello::VelloBackend<'_>::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn pdfrum_raster_vello::VelloBackend<'_>::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub struct pdfrum_raster_vello::VelloDevice
+impl core::fmt::Debug for pdfrum_raster_vello::VelloDevice
+pub fn pdfrum_raster_vello::VelloDevice::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl pdfrum_render::device::RenderDevice for pdfrum_raster_vello::VelloDevice
+pub fn pdfrum_raster_vello::VelloDevice::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
+pub fn pdfrum_raster_vello::VelloDevice::fill_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, pdfrum_render::device::FillRule, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_raster_vello::VelloDevice::pop(&mut self)
+pub fn pdfrum_raster_vello::VelloDevice::push_clip(&mut self, &kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub fn pdfrum_raster_vello::VelloDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
+pub fn pdfrum_raster_vello::VelloDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
+pub fn pdfrum_raster_vello::VelloDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
+pub const pdfrum_raster_vello::MAX_TARGET_DIMENSION: u32
+pub const pdfrum_raster_vello::PINNED_AA: vello::AaConfig
+pub fn pdfrum_raster_vello::request_adapter() -> core::result::Result<pdfrum_raster_vello::VelloBackend<'static>, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::try_real_gpu() -> core::option::Option<pdfrum_raster_vello::VelloBackend<'static>>

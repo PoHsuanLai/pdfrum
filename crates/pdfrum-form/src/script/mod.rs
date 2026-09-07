@@ -1,6 +1,6 @@
 //! A `boa`-backed [`Cascade`](crate::Cascade): a document's own scripts, run.
 //!
-//! Behind the default-off `script` feature; with it off, `boa_engine` is not
+//! Behind the default-off `javascript` feature; with it off, `boa_engine` is not
 //! in the dependency tree at all.
 //!
 //! **A script reaches no I/O.** `Doc.submitForm`, `Doc.print`, `app.launchURL`

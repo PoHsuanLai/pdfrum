@@ -3,10 +3,10 @@ name = "pdfrum-script"
 description = "Acrobat AF* and util.* form-script helpers as pure functions (no JS engine)"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-publish = false
 keywords = ["pdf", "acroform", "javascript", "forms"]
 categories = ["parser-implementations"]
 

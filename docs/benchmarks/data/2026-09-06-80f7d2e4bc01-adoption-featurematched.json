@@ -2,7 +2,7 @@
   {
     "engine": "pdfrum",
     "version": "0.1.0",
-    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\" }",
+    "dependency": "pdfrum = { path = \"/path/to/pdfrum/crates/pdfrum\" }",
     "license": "MIT OR Apache-2.0",
     "crates": 88,
     "native_build_crates": [],
@@ -14,7 +14,7 @@
   {
     "engine": "pdfrum-parse-only",
     "version": "0.1.0",
-    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\", default-features = false }",
+    "dependency": "pdfrum = { path = \"/path/to/pdfrum/crates/pdfrum\", default-features = false }",
     "license": "MIT OR Apache-2.0",
     "crates": 63,
     "native_build_crates": [],
@@ -26,7 +26,7 @@
   {
     "engine": "pdfrum-render-only",
     "version": "0.1.0",
-    "dependency": "pdfrum = { path = \"/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a442c19988aacffb2/crates/pdfrum\", default-features = false, features = [\"vello-cpu\", \"codecs-all\"] }",
+    "dependency": "pdfrum = { path = \"/path/to/pdfrum/crates/pdfrum\", default-features = false, features = [\"vello-cpu\", \"codecs-all\"] }",
     "license": "MIT OR Apache-2.0",
     "crates": 78,
     "native_build_crates": [],

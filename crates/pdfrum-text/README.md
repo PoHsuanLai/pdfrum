@@ -3,10 +3,14 @@
 Extraction, reading order, search, selection, links. Does not render.
 
 ```rust
-use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_text::{ExtractOptions, extract};
+use pdfrum_text::{FindOptions, TextIndex, TextPage};
 
-let text = extract(page, resolver, &ExtractOptions::default(), &Limits::default(), &mut Diagnostics::default());
+let page = TextPage {
+    search_text: "Hello, world!".chars().collect(),
+    ..TextPage::default()
+};
+let hit = page.find("world", FindOptions::default()).next().expect("a match");
+assert_eq!(hit, TextIndex::new(7)..TextIndex::new(12));
 ```
 
 Two index spaces: `CharIndex` (what the page draws, including controls) and

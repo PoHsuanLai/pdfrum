@@ -408,10 +408,9 @@ fn the_adapter_is_named_and_is_not_software() {
 /// The GPU backend satisfies [`pdfrum::Page::render_on`]'s bound.
 ///
 /// The facade's `Backend` enum could never name this crate — naming it would
-/// have put `wgpu` in every `cargo add pdfrum` tree, which is the thing
-/// `scripts/check-no-wgpu.nu` exists to forbid. Since 2026-09-02 the backend
-/// is an argument instead, so a caller who *does* hold a `wgpu::Device` hands
-/// it straight to `render_on` and the facade never learns the crate exists.
+/// put `wgpu` in every `cargo add pdfrum` tree. The backend is an argument:
+/// a caller who holds a `wgpu::Device` hands it to `render_on` and the facade
+/// never learns the crate exists.
 ///
 /// This is the assertion that the arrangement type-checks. It runs a real
 /// render when there is a GPU and skips cleanly when there is not, exactly as

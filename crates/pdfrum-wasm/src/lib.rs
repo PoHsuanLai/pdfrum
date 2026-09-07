@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! `pdfrum` for the web — the WebAssembly binding over the [`pdfrum`] facade.
 //!
 //! This crate is a translation layer and nothing else: every export is an

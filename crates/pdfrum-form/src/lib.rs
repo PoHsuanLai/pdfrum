@@ -80,9 +80,10 @@
 //! - **Two field index spaces exist**: [`FieldId`] is page-local, and
 //!   [`FieldRef::index`] is the document-wide position a script names.
 //! - **Scripts are off by default.** [`NoScripts`] is the identity cascade;
-//!   `ScriptCascade`, behind the `script` feature, runs the document's own
+//!   `ScriptCascade`, behind the `javascript` feature, runs the document's own
 //!   JavaScript.
 
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 // Every position in this crate is derived from an untrusted file's layout:
 // index with `get()`.
@@ -109,7 +110,7 @@ mod popup;
 pub mod route;
 /// The `boa`-backed [`Cascade`] — a document's own scripts, run.
 ///
-/// Behind the default-off `script` feature.
+/// Behind the default-off `javascript` feature.
 #[cfg(feature = "javascript")]
 pub mod script;
 mod session;
