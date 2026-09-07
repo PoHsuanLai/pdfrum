@@ -1,5 +1,5 @@
-# pdfrum workspace — see PLAN.md §3 for the crate architecture,
-# STYLE.md for the binding style rules, DEPS.md for the closed dependency set.
+# pdfrum workspace — crate map in README.md; style in CONTRIBUTING.md;
+# closed dependency set in this file, enforced by deny.toml and the gate.
 
 [workspace]
 resolver = "2"
@@ -38,7 +38,7 @@ members = [
     "crates/pdfrum-cli",
     # M22 phase 2. The C ABI: `libpdfrum.so`, `libpdfrum.a` and `pdfrum.h`.
     # The one member that overrides the workspace's `unsafe_code = "forbid"`,
-    # under the rule in docs/design/capi.md — unsafe only in the `extern "C"`
+    # under the rule in the crate rustdoc — unsafe only in the `extern "C"`
     # boundary, every one with a `# Safety` section, nothing unsafe below the
     # facade. It adds no external dependency: `pdfrum` is all it needs.
     "crates/pdfrum-capi",
@@ -60,7 +60,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/PoHsuanLai/pdfrum"
 
-# STYLE.md §3: no unsafe anywhere, no panics in library code.
+# the style rules: no unsafe anywhere, no panics in library code.
 # `clippy::indexing_slicing = warn` is added per-crate in parser-facing crates
 # (their input is untrusted); tests may unwrap (see clippy.toml).
 [workspace.lints.rust]
@@ -77,7 +77,7 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 
-# DEPS.md is the closed manifest; every lib dependency is declared here with an
+# is the closed manifest; every lib dependency is declared here with an
 # exact pin (versions verified against crates.io 2026-08-29). Member crates
 # inherit an entry only when they actually use it.
 [workspace.dependencies]
@@ -97,7 +97,7 @@ pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "=0.1.0" }
 pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
 # M12c's GPU backend. Deliberately **not** a dependency of the facade or the
 # tool: it is reachable by naming it, which is what keeps a headless build's
-# tree free of `wgpu` (DEPS.md's exemption and its blast radius).
+# tree free of `wgpu`.
 pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
@@ -122,8 +122,8 @@ tiny-skia = "=0.12.0"
 # vello's `wgpu`/`wgpu_default` pair is what provides `Renderer` at all —
 # without them the crate is an encoder with no way to rasterize.
 #
-# The version is 0.10.0 and it resolves **wgpu 29**, not the wgpu 30 PLAN.md
-# §M12c predicted. That matters beyond a pin: device
+# The version is 0.10.0 and it resolves **wgpu 29**. That matters beyond a
+# pin: device
 # injection only typechecks against the exact wgpu a `Renderer` was built
 # with, so the backend re-exports vello's own `wgpu` and an embedder must hand
 # it a device from *that* one. There is no vello release against wgpu 30
@@ -172,11 +172,11 @@ rayon = "=1.12.0"
 # `default-features = false` is load-bearing, not tidiness: the three defaults
 # are `float16`, `xsum` and `temporal`, and `temporal` alone drags
 # `icu_calendar`, `temporal_rs` and `timezone_provider` — an ICU tree for a
-# `Temporal` API no PDF script has ever called. See DEPS.md for the measured
+# `Temporal` API no PDF script has ever called. See for the measured
 # admission (132 crates, zero `-sys`, zero `cc`, `cargo deny` clean).
 boa_engine = { version = "=0.22.0", default-features = false }
 
-# tools & tests only (DEPS.md "Tools & tests only"): never in a library crate.
+# tools & tests only: never in a library crate.
 anyhow = "=1.0.104"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
@@ -187,7 +187,7 @@ png = "=0.18.1"
 # raster board cannot give it. **`pdfrum-svg`'s dev-dependency only** — it
 # never enters the shipped tree.
 #
-# `default-features = false` per the DEPS.md rule (take what we need, not what
+# `default-features = false` per the rule (take what we need, not what
 # a crate defaults to): the defaults are `text`, `system-fonts`, `memmap-fonts`
 # and `raster-images`, and the first three exist to *shape text*, which our SVG
 # never asks for — every glyph is already a filled outline. Dropping them drops
@@ -201,7 +201,7 @@ resvg = { version = "=0.47.0", default-features = false, features = ["raster-ima
 # compiles into page operators. The first new **runtime** dependency of the
 # SVG milestones, and it is default-off behind `pdfrum/svg-ingest`.
 #
-# `default-features = false` per the DEPS.md rule. The defaults are `text`,
+# `default-features = false` per the rule. The defaults are `text`,
 # `system-fonts` and `memmap-fonts`, and all three exist to shape text — which
 # means a second font stack (`fontdb`, `rustybuzz`, `ttf-parser`,
 # `unicode-bidi`, `unicode-script`, `unicode-vo`) beside the one pdfrum
@@ -210,7 +210,7 @@ resvg = { version = "=0.47.0", default-features = false, features = ["raster-ima
 #
 # The consequence is stated rather than hidden: without `text`, `usvg` drops
 # `<text>` elements from the resolved tree entirely, so ingestion reports them
-# as unsupported instead of drawing them (docs/design/svg-ingest.md §6).
+# as unsupported instead of drawing them.
 #
 # Ten crates new to the workspace's normal tree, all pure Rust. `kurbo 0.13.1`
 # is the version the workspace already pins, so no duplicate geometry crate
@@ -222,7 +222,7 @@ usvg = { version = "=0.47.0", default-features = false }
 #
 # Pinned to 0.5, not the current 0.8: since 0.6 criterion depends
 # unconditionally on `alloca`, which has a `cc` build-dependency and compiles
-# C. DEPS.md's pure-Rust guarantee is enforced by `cargo-deny`, which bans `cc`
+# C. the pure-Rust guarantee is enforced by `cargo-deny`, which bans `cc`
 # outright, and `scripts/ci.nu` walks the whole workspace — so 0.8 fails the
 # gate. There is no feature flag that avoids it (`alloca` is not optional). 0.5
 # predates that dependency and is pure Rust; nothing in any bench uses an API

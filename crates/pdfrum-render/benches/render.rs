@@ -55,9 +55,8 @@
 //! because they are not three implementations of one number: `vello_cpu` is a
 //! retained-scene rasterizer that does all its work in `finish`, and the two
 //! immediate-mode backends do theirs per primitive. A ratchet that averaged them
-//! would hide a regression in one behind an improvement in another, and DEPS.md's
-//! performance ring admits a dependency on a *class* moving — so the class has
-//! to be measurable on its own.
+//! would hide a regression in one behind an improvement in another, so the
+//! class has to be measurable on its own.
 //!
 //! # Through the facade, not through this crate's own entry point
 //!

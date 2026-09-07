@@ -11,7 +11,7 @@ that serves as this project's conformance oracle:
   which carries the same terms for the corpus half. Redistribution in source form
   is permitted with the copyright notice retained, which this file does.
 - **Modifications:** none. The bytes are unchanged, and deliberately so: both
-  sides of the comparison in `docs/status/M8.md` render *these* files, so the
+  sides of the comparison in render *these* files, so the
   criterion column and the `pdfium_test` column describe the same work.
 
 | File | Pages | Size | Why it is in the set |
@@ -40,5 +40,5 @@ nothing here resembles a 300-page report, and these numbers should not be
 extrapolated to one. `testing/corpus` holds larger and more realistic files —
 `foxittext.pdf` is one — but it is a *conformance* corpus, and taking more of
 it would make the benchmark set drift toward the thing the conformance harness
-already measures. `docs/status/M8.md` records this as a stated limitation
+already measures. records this as a stated limitation
 rather than working around it.

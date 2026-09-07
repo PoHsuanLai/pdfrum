@@ -3,7 +3,7 @@
 //! Both `generate-goldens` and `run` are embarrassingly parallel over ~1400
 //! independent files whose work is dominated by a subprocess. `rayon` is a
 //! library-ring dependency reserved for parallel page rendering in the facade
-//! (DEPS.md), so the harness uses `std::thread` with a shared index: a dozen
+//!, so the harness uses `std::thread` with a shared index: a dozen
 //! lines, no dependency, and the ordering guarantee we actually need — results
 //! come back keyed by input index and are sorted before use, so output does
 //! not depend on scheduling.

@@ -1,5 +1,5 @@
 //! `conformance run` — drives `pdfrum-tool` over the corpus and scores it
-//! against the golden store (PLAN.md §5).
+//! against the golden store.
 //!
 //! Tiering, per file:
 //!
@@ -233,8 +233,7 @@ fn invoke_tool(tool: &ToolPaths, input: &Path) -> Result<Produced> {
         if produced.page_count.is_none() {
             produced.page_count = parse_page_count(&stderr);
         }
-        // `code()` is None exactly when a signal ended the process (PLAN.md
-        // §5: "panic = automatic failure, caught per-file").
+        // `code()` is None exactly when a signal ended the process.
         if output.status.code().is_none() {
             produced.crashed.push(format!("{pass:?}"));
         }
@@ -620,7 +619,7 @@ fn score_form_events_inner(
 /// Scoreboard path for a `--js-transcript` comparison.
 ///
 /// Singular, matching `form-events`: the cluster is `js-transcripts`, the row
-/// family is `#js-transcript` (docs/design/pdfrum-script.md §6.2).
+/// family is `#js-transcript`.
 #[must_use]
 pub fn js_transcript_path(id: &str) -> String {
     format!("{id}#js-transcript")
@@ -684,8 +683,9 @@ fn score_js_transcript_inner(
     fixup: &Path,
 ) -> Result<FileResult> {
     std::fs::create_dir_all(scratch)?;
-    // The python expander, not a Rust one. docs/design/pdfrum-script.md §6.2
-    // proposes reimplementing `fixup_pdf_template.py` in Rust; that is a
+    // The python expander, not a Rust one. Reimplementing
+    // `fixup_pdf_template.py` in Rust is a
+
     // choice rather than a necessity, and every other cluster in this harness
     // already goes through the subprocess. Sharing one expander means the
     // javascript fixtures cannot disagree with the rest of the corpus about

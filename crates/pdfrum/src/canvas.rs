@@ -6,11 +6,8 @@
 //! — and the canvas emits one content stream that is **appended** to the
 //! page's `/Contents`. The page's own streams are never rewritten, so nothing
 //! a save would otherwise lose (`pdfrum_edit`'s regeneration losses) applies
-//! to a page that is only drawn on.
-//!
-//! `docs/design/canvas.md` states the coordinate space and the
-//! resource-merging rule in full; the two are summarised on [`Canvas`] and
-//! [`DocEdit::draw_page`] respectively.
+//! to a page that is only drawn on. The coordinate space is on [`Canvas`];
+//! the resource-merging rule is on [`DocEdit::draw_page`].
 //!
 //! # There is no layout here, deliberately
 //!
@@ -189,7 +186,7 @@ impl Stroke {
 /// line cap style, written as `J`.
 ///
 /// An enum rather than the `0`/`1`/`2` the operator takes: the wire spelling
-/// is an encoding detail (STYLE.md §2), and `LineCap::Round` says at a call
+/// is an encoding detail, and `LineCap::Round` says at a call
 /// site what `1` does not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LineCap {
@@ -447,7 +444,7 @@ enum Surface {
     ///
     /// Behind the feature that is the only thing that compiles a form: with
     /// `svg-ingest` off nothing constructs it, and a variant nothing
-    /// constructs is the dead code STYLE.md §4 forbids.
+    /// constructs is the dead code forbids.
     #[cfg(feature = "svg-ingest")]
     Form,
 }
@@ -1161,7 +1158,7 @@ impl Canvas<'_, '_> {
     /// rectangle through an [`SvgFit`](crate::SvgFit) and then calls this.
     /// Crate-internal because a second public placement that differs only in
     /// taking a pre-fitted rectangle would be a way of saying the same thing
-    /// twice (STYLE.md §4).
+    /// twice.
     pub(crate) fn place_form(&mut self, form: &SvgForm, into: Rect) {
         if into.width() == 0.0 || into.height() == 0.0 || form.bbox.is_zero_area() {
             return;
@@ -1203,7 +1200,7 @@ impl DocEdit<'_> {
     /// The shared half of [`DocEdit::compile_svg`]; it is crate-internal
     /// because the caller-facing surface for "drawing a caller wrote once" is
     /// [`DocEdit::draw_page`] with the caller's own closure, and a second
-    /// spelling of it would be an option with no reader (STYLE.md §4).
+    /// spelling of it would be an option with no reader.
     ///
     /// # Errors
     ///

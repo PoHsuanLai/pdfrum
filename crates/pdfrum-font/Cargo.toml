@@ -24,7 +24,7 @@ default = []
 # `memmap2`, whatever features it asks for.
 system-fonts = ["dep:fontdb"]
 
-# `docs/design/pdfrum-font.md` §3 pins this set. `skrifa` draws outlines,
+# §3 pins this set. `skrifa` draws outlines,
 # `read-fonts` reads the tables skrifa does not surface (`cmap` subtable
 # platform ids, `GSUB`, `OS/2` code-page ranges) and owns the Adobe Glyph
 # List; `fontdb` is a face *enumerator* only — the matching policy is ours

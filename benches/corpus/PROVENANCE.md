@@ -2,7 +2,7 @@
 
 The 44 PDFs in this directory are copied **verbatim** from the PDFium checkout
 that serves as this project's conformance oracle. Nothing is modified: both
-sides of every comparison in `docs/status/M12.md` render *these bytes*, so the
+sides of every comparison in render *these bytes*, so the
 criterion column and the `pdfium_test` column describe the same work.
 
 - **Source:** `testing/corpus/` and `testing/resources/` of the PDFium
@@ -20,7 +20,7 @@ criterion column and the `pdfium_test` column describe the same work.
 
 ## Why this corpus replaces the seven in `../fixtures`
 
-`../fixtures` holds the M8 set and is kept: it is what `docs/status/M8.md`'s
+`../fixtures` holds the M8 set and is kept: it is what's
 tables measured, and deleting it would strand those numbers. But it has a
 stated weakness that M12 exists partly to fix — quoting M8.md: *"PDFium's
 `testing/resources` are unit-test inputs: the largest is 85 KB, and only two
@@ -112,7 +112,7 @@ oversight:
   text operations over 14 pages and is the heaviest; the three `text_cjk_*`
   files carry CJK, where glyph lookup rather than glyph count is what costs;
   `text_foxittext` is carried over from `../fixtures` unchanged so the wave-7b
-  glyph-cache numbers in `docs/status/pdfrum-render.md` stay comparable.
+  glyph-cache numbers in stay comparable.
 - **vector** (6 files) — path-dominated. `vector_paths_1751` is the only
   genuinely pure one in the checkout (30303 path operators, zero text, zero
   images) and is therefore the control for anything touching the scanline

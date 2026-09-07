@@ -67,7 +67,7 @@ jobs:
         with:
           # `wasm-bindgen` must match the `wasm-bindgen` crate version in
           # `crates/pdfrum-wasm/Cargo.toml`; a mismatch is a runtime error.
-          # Keep the two in step (DEPS.md records the same constraint).
+          # Keep the two in step.
           tool: cargo-nextest,cargo-deny,wasm-bindgen@0.2.128,cargo-binstall
 
       - name: Install nushell

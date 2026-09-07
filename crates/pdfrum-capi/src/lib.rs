@@ -10,15 +10,26 @@
 //! The workspace sets `unsafe_code = "forbid"`. This crate overrides it to
 //! `allow`, under a rule that is narrower than the lint it replaces:
 //!
-//! - `unsafe` appears **only** inside an `extern "C"` boundary function. No
-//!   helper below the boundary is unsafe, and no `unsafe` reaches the facade
-//!   or anything under it.
+//! - `unsafe` appears **only** inside an `extern "C"` boundary function, or
+//!   a private helper in this crate that exists to serve one. No `unsafe`
+//!   reaches the facade or anything under it.
 //! - Every `extern "C"` function carries a `# Safety` section naming what the
-//!   caller must guarantee about each pointer it passes.
+//!   caller must guarantee about each pointer it passes. cbindgen copies that
+//!   comment into the header, so the C programmer and the Rust reviewer read
+//!   the same text.
+//! - Every `unsafe` block carries a `// SAFETY:` comment saying which of
+//!   those guarantees it leans on.
 //! - Pointer *validity* is the caller's contract — C cannot prove it and
 //!   neither can we. Pointer *nullness* is ours: every pointer this library
 //!   reads is null-checked, and a null is answered with an error return, never
 //!   a crash.
+//!
+//! # Types
+//!
+//! Each handle is its own newtype (`pdfrum_document`, `pdfrum_page`, …). There
+//! is no `void *` handle. C-visible enums are `#[repr(u32)]` and convert from
+//! the facade by a total `match`, never a numeric cast. Options are structs
+//! (`pdfrum_limits`, `pdfrum_save_options`); a zeroed struct is the default.
 //!
 //! # Memory
 //!
@@ -50,7 +61,7 @@
 //! forwarded: document scripts stay a build-time decision and the C library
 //! does not run them.
 
-// The one workspace exception. See the rule above and docs/design/capi.md.
+// The one workspace exception. See the crate-level rustdoc.
 #![allow(unsafe_code)]
 
 mod cancel;

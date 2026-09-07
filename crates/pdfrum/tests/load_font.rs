@@ -119,7 +119,7 @@ fn dark_pixels(data: &[u8]) -> usize {
 /// resolves the same two variables with the same defaults for the nushell
 /// side, and `conformance` for the CLI.
 ///
-/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// Six lines rather than a shared module: forbids a `common`,
 /// `util` or `helpers` module name, an integration test cannot reach another
 /// crate's test code, and the one sibling that wants this
 /// (`load_font_subset.rs`) carries the same six lines with the same comment.
@@ -1941,7 +1941,7 @@ fn load_cid_type2_font_custom() {
     // The CMap's five ranges overlap at their endpoints, so CID 3 is named
     // twice — U+2F00 by the first block and U+4E00 by the second. The
     // lowest-value-wins collision policy (`InsertIntoMaps`,
-    // `docs/design/pdfrum-font.md` §1.6.1) keeps U+2F00 forward, while the
+    // §1.6.1) keeps U+2F00 forward, while the
     // *reverse* map keeps CID 3 for U+4E00, which is why `encode` above wrote
     // CID 3 for it and extraction reads U+2F00 back. That asymmetry is the
     // oracle's, and it is the caller's CMap that produces it.

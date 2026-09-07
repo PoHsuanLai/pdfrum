@@ -7,7 +7,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# The workspace lints, minus the three STYLE.md §3 denies. Those govern
+# The workspace lints, minus the three denies. Those govern
 # *library* code, and clippy.toml already exempts tests; a benchmark is the
 # same category — a missing fixture or an unopenable document is a broken
 # harness, and the useful behaviour is to stop and say so rather than to
@@ -56,7 +56,7 @@ pdfrum-raster-vello-cpu.workspace = true
 pdfrum-common.workspace = true
 kurbo.workspace = true
 # The `scaling` binary measures the facade's rayon multi-page path, which is
-# the one place DEPS.md admits rayon at all ("lib (facade only)").
+# the one place admits rayon at all ("lib (facade only)").
 rayon.workspace = true
 peniko.workspace = true
 
@@ -70,4 +70,4 @@ peniko.workspace = true
 # than about one crate: the corpus files themselves, the committed baseline, the
 # ratchet that judges a run against it, and the two whole-engine binaries
 # (`profile`, `scaling`) that need the facade and the rasterizer seam at once.
-# See `README.md` for the layout and `docs/status/M12.md` §1.8 for why.
+# See `README.md` for the layout and §1.8 for why.

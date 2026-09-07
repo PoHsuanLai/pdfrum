@@ -29,7 +29,7 @@
 # Requires `cargo public-api` and a nightly toolchain, because the tool reads
 # rustdoc's JSON output and that is nightly-only. Neither is a dependency of
 # this workspace: `cargo public-api` is a `~/.cargo/bin` binary, it is NOT in
-# DEPS.md, and it must never appear in a crate's Cargo.toml. Install with
+# and it must never appear in a crate's Cargo.toml. Install with
 #
 #   cargo install cargo-public-api --locked
 #
@@ -59,7 +59,7 @@ const TOOLCHAIN = 'nightly'
 # `impl Send for ...` and derived `Clone`/`Debug`/`PartialEq` — noise that is
 # identical for every type and tells a reviewer nothing about the surface.
 # With it the file is the API a reader would write down by hand, which is what
-# STYLE.md §4's "one screen a reviewer can read" is measured against.
+# "one screen a reviewer can read" is measured against.
 #
 # The trade: an auto-trait regression (a type quietly losing `Send`) does not
 # show in the diff. The facade already has a unit test asserting `Send + Sync`
@@ -175,7 +175,7 @@ def require-tool []: nothing -> nothing {
     if (which cargo-public-api | is-empty) {
         print --stderr "error: cargo-public-api is not installed."
         print --stderr "       install with: cargo install cargo-public-api --locked"
-        print --stderr "       It is developer tooling only — do not add it to DEPS.md"
+        print --stderr "       It is developer tooling only — do not add it to any crate's Cargo.toml"
         print --stderr "       or to any crate's Cargo.toml."
         exit 1
     }
@@ -333,7 +333,7 @@ def "main check" [] {
 
 # The per-crate item counts, as a table.
 #
-# This is the number STYLE.md §4's "fits in one lib.rs re-export block a
+# This is the number "fits in one lib.rs re-export block a
 # reviewer can read in one screen" is actually about, and the reason it is here
 # rather than in a comment somewhere: the claim is checkable, and WP11 is
 # graded against it crate by crate.

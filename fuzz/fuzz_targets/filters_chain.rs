@@ -17,7 +17,7 @@
 //! that it was is what this target got wrong originally (crash artifact
 //! `crash-c91cae880d64e58bba8aea9a5ac469a3fba0f26e`, now a seed). Only Flate
 //! and LZW consult it. The design brief's divergence D2
-//! (`docs/design/pdfrum-filters.md`) settles this deliberately: RunLength keeps
+//! settles this deliberately: RunLength keeps
 //! PDFium's own `kMaxStreamSize` of 20 MiB as a separate filter-specific
 //! constant, because that cap is a rejection the oracle really performs and
 //! files depend on it. The ASCII filters have no cap at all, and do not need

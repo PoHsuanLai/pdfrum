@@ -81,8 +81,7 @@ fn streams_carrying(doc: &Document, needle: &[u8]) -> usize {
 /// Which spelling of the drawing a document was built with.
 ///
 /// An enum rather than a `compiled: bool`, because the two are the milestone
-/// item's before and after and the test reads better naming them (STYLE.md
-/// §2).
+/// item's before and after and the test reads better naming them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Spelling {
     /// `Canvas::draw_svg` on every page: the operators written once per page.

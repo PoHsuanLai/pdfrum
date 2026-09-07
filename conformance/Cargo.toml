@@ -10,21 +10,21 @@ repository.workspace = true
 [lints]
 workspace = true
 
-# Tool ring only (DEPS.md "Tools & tests only"). JSON and TOML are hand-rolled
+# Tool ring only. JSON and TOML are hand-rolled
 # over our own closed schemas rather than pulled in as dependencies: the
 # scoreboard is the project's fitness function and the SSIM ratchet must never
-# shift under a dependency update (DEPS.md, same rationale as hand-rolled SSIM).
+# shift under a dependency update.
 [dependencies]
 anyhow.workspace = true
 # The save round-trip mode checks the append discipline through the library
 # rather than through the tool, because `--save` writes a full save and the
-# incremental path has no flag of its own (SPEC.md §11's ruling E7).
+# incremental path has no flag of its own.
 pdfrum-edit.workspace = true
 pdfrum-parser.workspace = true
 clap.workspace = true
 png.workspace = true
 sha2.workspace = true
-# STYLE.md §3: the lib-shaped modules in this crate (json, thresholds, ssim,
+# the style rules: the lib-shaped modules in this crate (json, thresholds, ssim,
 # pixels, transcode, suppressions, goldens) carry real `Error` enums; `anyhow`
 # stays at the CLI edge only.
 thiserror.workspace = true

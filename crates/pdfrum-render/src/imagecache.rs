@@ -205,7 +205,7 @@ impl RenderedImageCache {
         match self.entries.get(&key) {
             Some(pixmap) => Rendered::Hit(pixmap),
             // Unreachable: the entry was just inserted or already present.
-            // Answered rather than unwrapped, because STYLE.md §3 forbids a
+            // Answered rather than unwrapped, because forbids a
             // panic in library code even for a case the code above excludes.
             None => Rendered::Uncached(render_empty()),
         }

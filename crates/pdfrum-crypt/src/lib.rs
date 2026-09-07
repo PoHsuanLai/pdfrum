@@ -49,7 +49,7 @@
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a password:
-// index with `get()` (SPEC.md §3).
+// index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
 mod create;

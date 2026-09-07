@@ -12,7 +12,7 @@
 // Deriving that here rather than storing it in the page crate is the Q2
 // resolution: it is a pure function of data the page crate already publishes,
 // it is only ever wanted by this crate, and the page object stays a small
-// record (STYLE.md §1). The derivation is one pass with a running pen —
+// record. The derivation is one pass with a running pen —
 // the same accumulation the renderer performs when it draws the run, and
 // the same one `CPDF_TextObject::CalcPositionDataInternal` performs to fill
 // its own arrays.

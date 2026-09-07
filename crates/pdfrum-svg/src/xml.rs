@@ -166,7 +166,7 @@ pub fn escape(out: &mut String, text: &str) {
 
 /// Standard base64 with padding, for a `data:` URI's payload.
 ///
-/// Hand-rolled rather than pulled in: DEPS.md is a closed set, this is
+/// Hand-rolled rather than pulled in: is a closed set, this is
 /// nineteen lines, and `pdfrum-svg` is meant to ship with no dependency
 /// beyond the geometry vocabulary the engine already speaks.
 #[must_use]

@@ -3,7 +3,7 @@
 //! A silent raster fallback is the failure mode this crate exists to avoid,
 //! so every pixel region that reaches the document is recorded with a cause
 //! and the caller reads the list back. The causes are an enum rather than a
-//! string (STYLE.md §2): a caller that wants to reject mesh shadings and
+//! string: a caller that wants to reject mesh shadings and
 //! accept plain images matches on the variant, and adding a cause makes every
 //! such match fail to compile.
 //!
@@ -18,7 +18,7 @@
 //! own and blits the result, so the offscreen work that happened between one
 //! root draw and the previous one is the evidence. Three of the causes have
 //! an exact fingerprint and two are a residue; [`RasterCause`] says which is
-//! which on each variant, and `docs/design/svg.md` §4 states the limit in
+//! which on each variant, and §4 states the limit in
 //! full.
 
 use kurbo::Rect;

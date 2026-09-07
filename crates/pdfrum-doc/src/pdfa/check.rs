@@ -15,7 +15,7 @@
 //!
 //! What that misses is the operand form: a colour set by `1 0 0 rg` rather
 //! than through a named `/ColorSpace`, and a `gs`-less inline transparency.
-//! `docs/design/pdfa.md` §4 records this as the checker's largest known gap,
+//! §4 records this as the checker's largest known gap,
 //! and it is the source of most of the clauses veraPDF reports that we do not.
 //!
 //! It cuts the other way in exactly one place, and that place is worth
@@ -40,7 +40,7 @@ use crate::annot::AnnotFlags;
 /// the encryption check needs `/Encrypt`, which lives there and nowhere else.
 /// The report lists every requirement the document fails. An empty report
 /// means the checks this engine runs all passed, which is a weaker claim than
-/// ISO 19005 conformance; the module docs and `docs/design/pdfa.md` say how
+/// ISO 19005 conformance; the module docs and say how
 /// much weaker.
 #[must_use]
 pub fn check<R: Resolve>(
@@ -114,7 +114,7 @@ fn check_encryption(ctx: &mut Ctx<'_>, trailer: &Dict) {
 ///
 /// This mattered: reporting the absence on its own was an over-report at both
 /// levels, and the veraPDF oracle caught it — it exempts exactly the corpus
-/// files whose colour is not device colour (`docs/design/pdfa.md` §6). So the
+/// files whose colour is not device colour. So the
 /// absence is returned rather than reported, and only [`check_color_space`]
 /// turns it into a violation, when it finds device colour that needed it.
 ///
@@ -279,7 +279,7 @@ fn check_catalog_features<R: Resolve>(ctx: &mut Ctx<'_>, catalog: &Dict, r: &R) 
         // A-2 permits embedded files if they are themselves PDF/A, which this
         // checker cannot verify without recursing into them; A-1 forbids them
         // outright, which it can. Reporting only the case we can decide is
-        // the honest choice — see `docs/design/pdfa.md`.
+        // the honest choice — see.
         if ctx.level == Level::A1b && tree.contains_key(names::EMBEDDED_FILES) {
             ctx.fail(
                 Clause::EmbeddedFile,
@@ -625,7 +625,7 @@ fn check_resources<R: Resolve>(
 /// resource dictionary. veraPDF makes the distinction, which is why a corpus
 /// file with a listed-but-unused unembedded font is a **known over-report**
 /// on our side rather than a disagreement about the font — recorded in
-/// `docs/design/pdfa.md` §6 as the one place the checker is not strictly
+/// §6 as the one place the checker is not strictly
 /// under-reporting.
 fn check_font<R: Resolve>(ctx: &mut Ctx<'_>, font: &Dict, subject: Subject, r: &R) {
     let subtype = font.name(names::SUBTYPE).map_or(&b""[..], Name::as_bytes);
@@ -672,11 +672,11 @@ fn check_font<R: Resolve>(ctx: &mut Ctx<'_>, font: &Dict, subject: Subject, r: &
     // is *conditional* — "if the FontDescriptor contains a CIDSet, then it
     // shall identify all CIDs present" — so an A-2 file with no `/CIDSet` at
     // all conforms. Reporting one at A-2 was an over-report the veraPDF oracle
-    // caught; `docs/design/pdfa.md` §6 records it.
+    // caught.
     //
     // We check for the key's presence, never its completeness: verifying that
     // a `/CIDSet` lists exactly the CIDs in the program means parsing the
-    // embedded font, which §4 lists as not implemented. So A-2's conditional
+    // embedded font, which this checker does not parse. So A-2's conditional
     // rule has no check here at all rather than a check that would guess.
     if ctx.level != Level::A1b {
         return;
@@ -738,7 +738,7 @@ fn check_graphics_state<R: Resolve>(ctx: &mut Ctx<'_>, state: &Dict, subject: &S
     // other than `/None` and the blend modes above, and says nothing about
     // constant alpha. veraPDF agrees — it passes a corpus file carrying
     // `/CA 0.498` — and treating the summary as the rule made us report a
-    // violation that is not one. `docs/design/pdfa.md` §6 records it.
+    // violation that is not one.
 }
 
 /// A device colour space with no output intent to define it.
@@ -752,7 +752,7 @@ fn check_color_space(ctx: &mut Ctx<'_>, space: Option<&Object>, subject: Subject
         // An array space (`/ICCBased`, `/Separation`, `/Indexed`) names its
         // base in element 0; a `/DeviceN` or `/Separation` over a device
         // alternate is the same problem one level down, which this checker
-        // does not chase — recorded as a gap in `docs/design/pdfa.md`.
+        // does not chase — recorded as a gap in.
         _ => return,
     };
     if matches!(name, b"DeviceGray" | b"DeviceRGB" | b"DeviceCMYK") {

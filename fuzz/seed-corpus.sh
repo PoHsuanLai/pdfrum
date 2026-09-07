@@ -10,7 +10,7 @@
 # Usage: fuzz/seed-corpus.sh [path-to-pdfium-c++-checkout]
 #
 # The checkout defaults to `$PDFRUM_ORACLE_CHECKOUT`, itself defaulting to
-# `<repo>/../pdfium-c++` — the sibling directory README.md and PLAN.md §4 say
+# `<repo>/../pdfium-c++` — the sibling directory README.md and say
 # it lives in, and the same variable and default `scripts/env.nu` resolves for
 # the nushell side.
 set -euo pipefail

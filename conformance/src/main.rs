@@ -1,4 +1,4 @@
-//! Conformance harness (PLAN.md §5): runs `pdfrum-tool` over the corpus and
+//! Conformance harness: runs `pdfrum-tool` over the corpus and
 //! resource PDFs, compares against the golden store in `goldens/` (Tier A
 //! byte-exact, Tier B perceptual), and emits `scoreboard.json` — the fitness
 //! function every burn-down loop optimizes.
@@ -150,7 +150,7 @@ struct RunArgs {
     /// Where to write the scoreboard (default: conformance/scoreboard.json).
     #[arg(long)]
     out: Option<PathBuf>,
-    /// Fail if any file passing in this scoreboard now fails (PLAN.md §7).
+    /// Fail if any file passing in this scoreboard now fails.
     #[arg(long, value_name = "OLD_SCOREBOARD")]
     check_regressions: Option<PathBuf>,
 }
@@ -732,8 +732,7 @@ fn report_save_totals(totals: &saveroundtrip::SaveTotals, files: usize) {
 }
 
 /// Save every corpus file, check the oracle reopens it, and diff a sample's
-/// pixels against the original's golden render (PLAN.md M7's exit criteria,
-/// extended by M10's encrypted round trip).
+/// pixels against the original's golden render.
 ///
 /// The numbers this prints are what M7 and M10 are graded on. Only the first
 /// two are gates: a file the tool could not *open* is skipped rather than

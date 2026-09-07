@@ -33,7 +33,7 @@
 // [oracle-bug] The four import-path defects this module fixes rather than
 // ports, each verified at the line. They were ruled on as escalation E10 —
 // "a departure from this program's usual rule", taken at our discretion; the
-// audit's A73 relabels all four as **oracle bugs**, which PLAN.md §212-229
+// audit's A73 relabels all four as **oracle bugs**, which
 // makes obligatory rather than optional to fix. Each is pinned by its own
 // test in `tests/import.rs`.
 //

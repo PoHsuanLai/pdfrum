@@ -370,7 +370,7 @@ impl Document {
     /// Returns every requirement the document fails, each naming the clause
     /// broken and the object that breaks it. An empty report means the checks
     /// this engine runs all passed — which is a weaker claim than ISO 19005
-    /// conformance, and `docs/design/pdfa.md` says exactly how much weaker
+    /// conformance, and says exactly how much weaker
     /// and which requirements are not covered.
     ///
     /// This only reports. Nothing is rewritten, and there is no conversion

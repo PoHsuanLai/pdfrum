@@ -205,7 +205,7 @@ pub(crate) const fn hex_pair(b: u8) -> [u8; 2] {
 /// }
 /// assert_eq!(LENGTH.as_str(), Some("Length"));
 /// ```
-// One of the two sanctioned macros in the project (STYLE.md §2b).
+// One of the two sanctioned macros in the project.
 #[macro_export]
 macro_rules! names {
     ($($(#[$meta:meta])* $konst:ident = $spelling:literal;)*) => {

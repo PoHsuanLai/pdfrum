@@ -9,8 +9,8 @@
 //! # Why the caller supplies them
 //!
 //! `usvg`'s own defaults would scan the host — `system-fonts` and
-//! `memmap-fonts` — and pdfrum does not take a dependency's defaults
-//! (DEPS.md). More to the point, a document whose appearance depends on which
+//! `memmap-fonts` — and pdfrum does not take a dependency's defaults.
+//! More to the point, a document whose appearance depends on which
 //! fonts a build machine happens to have installed is not reproducible, and
 //! reproducibility is the whole reason `SaveOptions::id_source` exists. A
 //! caller who *wants* the host's fonts reads them and registers them, and
@@ -22,7 +22,7 @@
 //! paths, and the ingestion walk draws those paths like any others — so text
 //! goes into the page as vectors with no font embedded and no encoding to get
 //! wrong, and it renders identically everywhere. The roadmap's "embedded
-//! fonts on request" half is not this pass's; `docs/design/svg-ingest.md` §6
+//! fonts on request" half is not this pass's; §6
 //! records why outlines are the honest default and what embedding would need.
 //!
 //! An SVG whose `<text>` names a family this set does not carry draws

@@ -1,6 +1,6 @@
 //! G3: what the GPU backend costs, upload and readback included.
 //!
-//! PLAN.md §M12c is explicit about the accounting: **include upload and
+//! is explicit about the accounting: **include upload and
 //! readback**, because an embedder rendering a page to a texture pays them and
 //! a GPU number that excludes them is marketing rather than measurement. So
 //! the timed region is a whole `render_page` call, which on the
@@ -150,7 +150,7 @@ fn summarize(rows: &[Row]) {
         println!("{class:<10} {g:>7.2}x   GPU wins {w} of {}", of.len());
     }
 
-    // The crossover PLAN.md asks for, read off the data rather than asserted.
+    // The crossover, read off the data rather than asserted.
     // Sorting by CPU time answers "how much work does a page need before the
     // GPU is worth it", which is the question an embedder deciding per page
     // actually has.

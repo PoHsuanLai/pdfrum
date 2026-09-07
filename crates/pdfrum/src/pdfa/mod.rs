@@ -1,9 +1,9 @@
 //! PDF/A conversion (ISO 19005), M26 parts 3 and 4.
 //!
 //! The checker in `pdfrum-doc` reports what a document fails; this repairs it.
-//! The two are deliberately separate crates and deliberately in that order —
-//! `docs/design/pdfa.md` §1 — and the checker's [`Clause`](crate::PdfaClause)
-//! enum is this module's work list.
+//! The two are deliberately separate crates and deliberately in that order,
+//! and the checker's [`Clause`](crate::PdfaClause) enum is this module's
+//! work list.
 //!
 //! # Why the conversion is here and the checker is not
 //!

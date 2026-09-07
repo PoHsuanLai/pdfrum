@@ -1,7 +1,7 @@
 //! The acceptance suite: the two Foxit Multiple-Master faces PDFium falls back
 //! to when nothing else can supply a font.
 //!
-//! These are the crate's reason to exist (`docs/design/pdfrum-font.md` §3.6),
+//! These are the crate's reason to exist,
 //! and there is no C++ unit test to port — PDFium drives them through FreeType
 //! and only the rendered pixels are a reference. So this file pins them two
 //! ways:

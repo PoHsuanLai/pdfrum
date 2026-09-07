@@ -1,4 +1,4 @@
-//! `decode_jpx` — the JPEG 2000 entry point SPEC.md §12 pins.
+//! `decode_jpx` — the JPEG 2000 entry point.
 //!
 //! The colorspace and `/SMaskInData` come from the input's control bytes,
 //! because the conversion table's interesting rows are the ones where the

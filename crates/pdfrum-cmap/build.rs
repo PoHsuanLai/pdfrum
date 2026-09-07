@@ -1,5 +1,5 @@
 //! Generator for `tables/cmaps.bin`, the committed blob of predefined CJK CMap
-//! data (SPEC.md §6; `docs/design/pdfrum-cmap.md` §3.3).
+//! data.
 //!
 //! The blob is a build product that is **committed to the repository**: a
 //! normal `cargo build` only reads it, so the crate builds hermetically and
@@ -26,7 +26,7 @@
 
 // A generator, not library code: a violated invariant must stop the build
 // loudly and name the symbol, which is exactly what a panic does here. The
-// no-panic rule (STYLE.md §3) governs the crate's runtime, not its toolchain.
+// no-panic rule governs the crate's runtime, not its toolchain.
 #![allow(
     clippy::panic,
     clippy::expect_used,

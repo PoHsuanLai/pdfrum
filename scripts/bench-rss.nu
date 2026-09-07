@@ -7,7 +7,7 @@
 # The binary defaults to `$PDFRUM_ORACLE_BIN` (scripts/env.nu), which itself
 # defaults to `<repo>/../pdfium-c++/out/Release/pdfium_test`.
 #
-# PLAN.md §M12's memory target is "peak RSS <= 1.5x oracle". This is what
+# The memory target is "peak RSS <= 1.5x oracle". This is what
 # measures it. The time harness beside it (scripts/bench-oracle.nu) answers a
 # different question with a different method, and the difference is the point:
 #
@@ -214,7 +214,7 @@ def main [
     print $"geometric mean ratio over ($rows | length) documents: ($geo | fixed 2)x"
     print $"worst document: ($worst.document) at ($worst.ratio | fixed 2)x"
     print ""
-    print "PLAN.md §M12 target: peak RSS <= 1.5x oracle."
+    print "Target: peak RSS <= 1.5x oracle."
     if $worst.ratio <= 1.5 {
         print "MET on every document."
     } else if $geo <= 1.5 {

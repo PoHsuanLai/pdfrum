@@ -1,6 +1,6 @@
 //! Text-dump transcoding.
 //!
-//! The oracle writes page text with `--txt` as UTF-32LE (SPEC.md §13), led by
+//! The oracle writes page text with `--txt` as UTF-32LE, led by
 //! a U+FEFF byte-order mark. Tier A compares text as UTF-8, so the golden
 //! store holds the transcoded form and the diff is a plain byte comparison of
 //! two UTF-8 buffers.

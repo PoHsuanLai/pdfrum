@@ -1,5 +1,5 @@
 //! Generator for `tables/unicode.bin`, the committed blob of character-class,
-//! bidi and normalization data (`docs/design/pdfrum-text.md` §3.3, D1).
+//! bidi and normalization data.
 //!
 //! The blob is a build product that is **committed to the repository**, the
 //! same arrangement `pdfrum-cmap` uses for its CJK CMaps: a normal
@@ -32,7 +32,7 @@
 
 // A generator, not library code: a violated invariant must stop the build
 // loudly and name the table, which is exactly what a panic does here. The
-// no-panic rule (STYLE.md §3) governs the crate's runtime, not its toolchain.
+// no-panic rule governs the crate's runtime, not its toolchain.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

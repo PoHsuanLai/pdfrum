@@ -16,7 +16,7 @@
 # | `PDFRUM_WORKTREE_ROOT`    | `<repo>/../worktrees`              |
 #
 # The oracle checkout's default is `../pdfium-c++` because that is where
-# README.md and PLAN.md §4 already say it lives — a sibling of this
+# README.md already says it lives — a sibling of this
 # repository. `conformance/src/main.rs` resolves the same four with the same
 # defaults through clap's `env =`, so the CLI and the scripts cannot drift.
 #
@@ -45,7 +45,7 @@ export def oracle-checkout []: nothing -> string {
     ($env.PDFRUM_ORACLE_CHECKOUT? | default ((repo-root) | path join '..' 'pdfium-c++') | path expand)
 }
 
-# The oracle's `pdfium_test` binary, built per PLAN.md §4.
+# The oracle's `pdfium_test` binary, built from the oracle checkout.
 export def oracle-bin []: nothing -> string {
     ($env.PDFRUM_ORACLE_BIN?
         | default ((oracle-checkout) | path join 'out' 'Release' 'pdfium_test')
@@ -79,7 +79,7 @@ export def require-oracle-bin [] {
     let bin = (oracle-bin)
     if ($bin | path exists) { return $bin }
     print --stderr $"error: no pdfium_test at ($bin)"
-    print --stderr "       build it per PLAN.md §4, or set PDFRUM_ORACLE_BIN to"
+    print --stderr "       build it, or set PDFRUM_ORACLE_BIN to"
     print --stderr "       an existing binary (PDFRUM_ORACLE_CHECKOUT moves the"
     print --stderr "       whole checkout)."
     exit 1

@@ -10,15 +10,11 @@ assignees: ''
 
 ## What you expected
 
-If the expectation comes from another engine or from the specification, say
-which — a difference from PDFium is treated differently from a difference from
-ISO 32000.
+Say if that comes from PDFium, another engine, or ISO 32000.
 
 ## The file
 
-A PDF that reproduces it, attached, is worth more than any description. If the
-file cannot be shared, say what it contains: the filter chain, the font types,
-whether it is encrypted, whether the cross-reference table is damaged.
+Attach a PDF if you can. Otherwise: filters, fonts, encryption, damaged xref.
 
 ## Reproducing
 
@@ -26,13 +22,11 @@ whether it is encrypted, whether the cross-reference table is damaged.
 pdfrum ... file.pdf
 ```
 
-Include the exact command and the output. If it is a rendering difference,
-attach both images.
+Command, output, and both images if it is a render difference.
 
 ## Environment
 
 - pdfrum version or commit:
-- Rust version (`rustc -V`):
+- `rustc -V`:
 - Platform:
-- Features enabled, if not the defaults:
-- Render backend, if it matters:
+- Features / backend, if not default:

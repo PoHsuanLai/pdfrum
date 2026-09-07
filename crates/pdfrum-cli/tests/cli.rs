@@ -1959,7 +1959,7 @@ fn a_dash_reads_the_document_from_stdin() {
 
 #[test]
 fn a_dash_output_writes_the_pdf_to_stdout_and_the_summary_to_stderr() {
-    // The chain from PLAN.md: slice to stdout, read it back from stdin.
+    // The chain: slice to stdout, read it back from stdin.
     let sliced = run(&[
         "pages",
         "slice",

@@ -334,7 +334,7 @@ pub fn rasterize<R: Resolve>(
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
     // The decode target has to be set before the build, because the build is
-    // what decodes the images (SPEC.md §7). `scale` is a uniform scale here —
+    // what decodes the images. `scale` is a uniform scale here —
     // `pdfium_test` has no other kind — so the device box is the display size
     // times it, truncated exactly as the bitmap allocation truncates.
     let (page_w, page_h) = pdfrum_page::display_size_from_dict(

@@ -1,6 +1,6 @@
 //! What the backend does on a real device.
 //!
-//! Every test here needs a GPU, and PLAN.md §M12c's guardrails are explicit
+//! Every test here needs a GPU, and guardrails are explicit
 //! about what that means for a suite that may run without one: **skip with a
 //! clear message, never fail, never hang.** So each test opens a device
 //! through [`try_real_gpu`], which refuses a software adapter as firmly as no

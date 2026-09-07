@@ -7,7 +7,7 @@
 //! compare child     ...             # what `run` spawns; not for hands
 //! ```
 //!
-//! docs/benchmarks/README.md is the method; PLAN.md §M21 is the contract.
+//! docs/benchmarks/README.md is the method; is the contract.
 
 #![forbid(unsafe_code)]
 #![allow(

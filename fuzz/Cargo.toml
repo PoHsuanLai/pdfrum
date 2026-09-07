@@ -1,5 +1,5 @@
 # pdfrum fuzz ring — a SEPARATE workspace, deliberately not a member of the
-# root one. DEPS.md's Pure-Rust guarantee is that no published crate's
+# root one. the Pure-Rust guarantee is that no published crate's
 # dependency tree compiles C or C++; `libfuzzer-sys` links LLVM's C++
 # libFuzzer runtime. Severing this package from the root workspace is what
 # keeps `cargo tree --workspace` in scripts/ci.nu clean — the guarantee then
@@ -47,7 +47,7 @@ unsafe_code = "forbid"
 [profile.release]
 debug = 1
 # Overflow checks on: a wrapping arithmetic bug on untrusted sizes is exactly
-# the class of bug STYLE.md §3 says fuzzers must enforce.
+# the class of bug says fuzzers must enforce.
 overflow-checks = true
 
 # cargo-fuzz builds these in release; each gets its own binary.

@@ -59,8 +59,6 @@
 //! vector text in it. The cost is that a glyph lands where the PDF puts it
 //! rather than where a golden expects it, which is the trade that option
 //! exists to offer and the right side of it for a vector format.
-//!
-//! `docs/design/svg.md` records the full mapping table and its limits.
 
 #![forbid(unsafe_code)]
 

@@ -100,7 +100,7 @@ mod tests {
     }
 
     // Every field is public and `Copy`, so struct-update construction works
-    // the way STYLE.md §4 asks configuration to (this is not a config struct,
+    // the way asks configuration to (this is not a config struct,
     // but the same freedom applies and a reader will try it).
     #[test]
     fn a_minor_can_be_bumped_by_struct_update() {

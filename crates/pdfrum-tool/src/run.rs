@@ -303,7 +303,7 @@ fn save_document(
     let edit = edit;
     // An encrypted document saves encrypted, under the handler the
     // `--password=` opened it with, so the output needs that same password
-    // (SPEC.md §11's M10 ruling). `--save-decrypted` is the way to ask for
+    //. `--save-decrypted` is the way to ask for
     // the plaintext the earlier ruling E3 produced unconditionally.
     let save_options = pdfrum_edit::SaveOptions {
         remove_security: options.save_decrypted,

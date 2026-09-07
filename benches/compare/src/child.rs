@@ -144,7 +144,7 @@ pub fn spawn(args: &ChildArgs<'_>) -> Result<Outcome> {
         .arg(args.budget.as_millis().to_string())
         .arg("--profile")
         .arg(args.profile.name())
-        // Single-threaded, as PLAN.md §M21 asks: `lopdf` parses with rayon by
+        // Single-threaded, as asks: `lopdf` parses with rayon by
         // default, and this keeps every engine on one core.
         .env("RAYON_NUM_THREADS", "1")
         .stdin(Stdio::null())

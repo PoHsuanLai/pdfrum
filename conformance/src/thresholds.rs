@@ -1,7 +1,7 @@
 //! Tier B thresholds and the ratchet rule.
 //!
 //! `conformance/thresholds.toml` carries a global default SSIM floor and
-//! per-file overrides. PLAN.md §5 makes the ratchet one-directional: **a
+//! per-file overrides. makes the ratchet one-directional: **a
 //! passing test's threshold may never loosen**. So an override is only honored
 //! when it is at least as strict as the global floor; a looser one is rejected
 //! rather than silently applied, because a loosened threshold is how a
@@ -9,12 +9,12 @@
 //!
 //! The format read here is the small subset the file actually uses — a
 //! `[section] key = value` shape with `#` comments — parsed in-crate for the
-//! same reason SSIM is hand-rolled (DEPS.md): the ratchet must not move
+//! same reason SSIM is hand-rolled: the ratchet must not move
 //! under a dependency update.
 
 use std::collections::BTreeMap;
 
-/// The default SSIM floor when a file has no override (PLAN.md §5).
+/// The default SSIM floor when a file has no override.
 pub const DEFAULT_SSIM: f64 = 0.99;
 
 /// Parsed `thresholds.toml`.
@@ -46,7 +46,7 @@ pub enum ThresholdError {
     OutOfRange { line: usize, value: f64 },
     #[error(
         "line {line}: {path} sets ssim {value}, looser than the global floor \
-         {global} — the ratchet only tightens (PLAN.md §5)"
+         {global} — the ratchet only tightens"
     )]
     Loosened {
         line: usize,

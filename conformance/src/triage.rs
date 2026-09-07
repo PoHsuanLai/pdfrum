@@ -1,6 +1,6 @@
 //! `conformance triage` — clusters scoreboard failures by tag.
 //!
-//! Each cluster is the unit of work a burn-down agent picks up (PLAN.md §7):
+//! Each cluster is the unit of work a burn-down agent picks up:
 //! one tag, a count, and a few example files to open. Clusters are ordered by
 //! size, with the tag name breaking ties so the report is stable between runs
 //! over the same scoreboard.

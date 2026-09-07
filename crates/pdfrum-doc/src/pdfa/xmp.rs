@@ -2,7 +2,7 @@
 //!
 //! # Why there is no dependency here
 //!
-//! STYLE.md §5 says to write the thirty lines rather than take a crate for
+//! says to write the thirty lines rather than take a crate for
 //! them, and this is that case. A general XMP reader would need namespaces,
 //! entities, RDF's three container forms and its two syntaxes for a property
 //! — a real XML stack. What a PDF/A check actually reads is five scalar
@@ -19,8 +19,8 @@
 //! that the RDF is well-formed, that namespace prefixes are bound to the URIs
 //! they should be, or that a property appears exactly once. A packet this
 //! module reads a `part` out of may still be rejected by a real XMP parser,
-//! which is a known and deliberate source of divergence from veraPDF —
-//! `docs/design/pdfa.md` records it as such rather than hiding it. The
+//! which is a known and deliberate source of divergence from veraPDF.
+//! The
 //! direction of the error matters: leniency *here* makes us report fewer
 //! violations than veraPDF rather than inventing ones it does not see.
 

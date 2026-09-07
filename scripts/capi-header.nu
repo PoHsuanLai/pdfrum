@@ -24,7 +24,7 @@
 # in the commit message why the C surface moved — a change here is a change to
 # what a C program compiled against this library sees.
 #
-# Requires `cbindgen`, which is a `~/.cargo/bin` binary and is NOT in DEPS.md's
+# Requires `cbindgen`, which is a `~/.cargo/bin` binary and is NOT's
 # dependency tables (it has its own tools section there). Install with
 #
 #   cargo install cbindgen --locked
@@ -46,7 +46,7 @@ def require-tool []: nothing -> nothing {
         print --stderr "error: cbindgen is not installed."
         print --stderr "       install with: cargo install cbindgen --locked"
         print --stderr "       It is developer tooling only — do not add it to a"
-        print --stderr "       crate's Cargo.toml. See DEPS.md, \"The C library's tools\"."
+        print --stderr "       crate's Cargo.toml. See CONTRIBUTING.md."
         exit 1
     }
 }

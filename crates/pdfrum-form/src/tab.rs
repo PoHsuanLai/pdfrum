@@ -241,7 +241,7 @@ enum Axis {
 // decides — so it cannot hang here either. We terminate instead: with no
 // candidate, the remainder is appended in index order and the ring records
 // `degenerate`. A library that hangs on input its own spec admits is a bug
-// whatever the oracle does (PLAN.md §226, the M14 ruling this generalises).
+// whatever the oracle does.
 fn band(annots: &[Focusable], axis: Axis) -> FocusRing {
     // Sort by the axis's primary key, keeping annotation order within ties.
     let mut remaining: Vec<Focusable> = annots.to_vec();

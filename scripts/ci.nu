@@ -1,7 +1,7 @@
 #!/usr/bin/env nu
-# CI gate for pdfrum (PLAN.md §7 definition of done).
+# CI gate for pdfrum.
 # Runs: fmt, clippy -D warnings, nextest, doctests, cargo-deny (if installed),
-# and the pure-Rust dependency-tree check from DEPS.md.
+# and the pure-Rust dependency-tree check.
 #
 # Fail-fast: nushell aborts a script when an external command exits non-zero,
 # which is this file's `set -euo pipefail`. Every step below is therefore a
@@ -77,7 +77,7 @@ def main [] {
     let gpu_sys_exemptions = [renderdoc-sys wayland-sys]
     # `linux-raw-sys` is the name's other false positive: rustix's generated
     # Linux syscall constants, `build = false`, Rust sources only, reached
-    # through `crossterm` for `pdfrum view`. Checked 2026-09-05 (DEPS.md).
+    # through `crossterm` for `pdfrum view`. Checked 2026-09-05.
     #
     # `js-sys` is the third, and the `-sys` in it means something else again:
     # it is wasm-bindgen's binding to the JavaScript *standard library*, not to
@@ -109,7 +109,7 @@ def main [] {
     # sides, and that eight pthreads each rendering their own page of one
     # shared document produce pixmaps identical to a single-threaded render.
     #
-    # A C compiler is a **test-time** tool, not a build dependency. DEPS.md's
+    # A C compiler is a **test-time** tool, not a build dependency. The
     # pure-Rust guarantee is about what the library ships, and nothing in
     # `pdfrum-capi`'s own build touches `cc` — the check above still walks this
     # crate's tree and still passes. So a contributor without a C compiler gets
@@ -141,7 +141,7 @@ def main [] {
     if (which cc | is-empty) {
         print --stderr "warning: no C compiler (cc); skipping the C test"
         print --stderr "         it is a test-time tool, not a build dependency —"
-        print --stderr "         see DEPS.md, \"Tools & tests only\""
+        print --stderr "         see CONTRIBUTING.md"
     } else {
         ^./crates/pdfrum-capi/ctest/run.sh
     }
@@ -158,8 +158,7 @@ def main [] {
     # root with `--manifest-path` the tests build and then fail to execute with
     # "Exec format error", because cargo tries to run the `.wasm` itself.
     #
-    # Node and the wasm target are tools, not dependencies (DEPS.md, "The web
-    # binding's tools"), so a contributor without either gets a printed note
+    # Node and the wasm target are tools, not dependencies, so a contributor without either gets a printed note
     # and the rest of the gate — the bargain `cargo deny` and the C test get
     # above.
     print "==> the WebAssembly tests (Node)"
@@ -191,16 +190,14 @@ def main [] {
 
     # Note the check above passes *because* fuzz/ is its own workspace. It
     # brings in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and
-    # pulls `cc` — both of which the filter above would reject. DEPS.md
-    # sanctions that only outside the library ring, and `--workspace` here never
+    # pulls `cc` — both of which the filter above would reject. That is
+    # sanctioned only outside the library ring, and `--workspace` here never
     # reaches fuzz/ because it is not a member. Do not add it to the root
     # Cargo.toml's `members`.
     #
     # *Running* the fuzz ring is not part of this gate: it is minutes to days
     # of work where this script is seconds. Its own gate is
-    # scripts/fuzz-gate.nu, and PLAN.md §6 makes
-    # `scripts/fuzz-gate.nu 86400 parallel` an M1 exit criterion. See
-    # fuzz/README.md for how to run and reproduce.
+    # scripts/fuzz-gate.nu. See fuzz/README.md for how to run and reproduce.
     #
     # *Compiling* it is seconds, so it belongs here. The targets call library
     # API directly — deeper than any caller-facing surface — and being outside

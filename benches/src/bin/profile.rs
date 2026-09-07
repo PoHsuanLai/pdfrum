@@ -223,7 +223,7 @@ const ROUNDS: u32 = 5;
 ///
 /// # Why this is the `forms` operation and not something in `pdfrum-form`
 ///
-/// `docs/status/M12.md` §11 names `forms` at 3.35x warm as the milestone's
+/// §11 names `forms` at 3.35x warm as the milestone's
 /// largest residue, and that figure is a **render** ratio: the `render-warm-*`
 /// criterion groups over `benches/corpus/forms_*.pdf` against
 /// `pdfium_test --render-repeats` on the same files. Neither side of it runs a
@@ -926,8 +926,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
 /// `kernel.perf_event_paranoid > 1`, which is the common case in a container
 /// and is the case on the machine docs/status/M12.md's numbers were taken on —
 /// the alternatives are all bad: a backtrace sampler needs `unsafe`
-/// (`unsafe_code = "forbid"` workspace-wide) or an unwinder crate (DEPS.md is
-/// closed), and a sampler that only reports elapsed time tells you nothing you
+/// (`unsafe_code = "forbid"` workspace-wide) or an unwinder crate, and a sampler that only reports elapsed time tells you nothing you
 /// did not already know.
 ///
 /// So this measures something real instead. It wraps the chosen

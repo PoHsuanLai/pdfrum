@@ -5,8 +5,7 @@
  * difference. Regenerate deliberately with `scripts/capi-header.nu update`.
  *
  * The contracts this header states — who owns which pointer, who frees what,
- * which handle may cross a thread — are written out per function below and in
- * docs/design/capi.md.
+ * which handle may cross a thread — are written out per function below.
  *
  * NOT in this library: the facade's `javascript` feature. A document's own
  * scripts are never executed by libpdfrum, under any build — running untrusted

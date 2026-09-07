@@ -3,7 +3,7 @@
 //! [`parse_content`] is infallible **by contract**, and `decode_image` and
 //! `Function::eval` may return an error but must never panic. Every byte
 //! reaching them came from an untrusted file, so "never panics" is not a
-//! quality goal here — it is the contract STYLE.md §3 states and the fuzz
+//! quality goal here — it is the contract states and the fuzz
 //! ring enforces continuously. These tests are the cheap version that runs
 //! on every commit.
 

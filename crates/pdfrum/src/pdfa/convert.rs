@@ -18,8 +18,7 @@
 //!
 //! # The repairs, and which veraPDF rule each answers
 //!
-//! Measured over the 44-file benchmark corpus at A-2b (`docs/design/pdfa.md`
-//! §9 carries the run). The count is how many of the 41 files veraPDF has an
+//! Measured over the 44-file benchmark corpus at A-2b. The count is how many of the 41 files veraPDF has an
 //! opinion on fail that rule before conversion.
 //!
 //! | Repair | Rule | Files |
@@ -39,7 +38,7 @@
 //!
 //! What this does **not** answer is the font rules — 6.2.11.4.1, 21 files —
 //! except by refusing or rasterizing, and the content-stream rules the checker
-//! cannot see either. `docs/design/pdfa.md` §10 is that list.
+//! cannot see either. §10 is that list.
 
 use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, StringSyntax, names,
@@ -221,7 +220,7 @@ impl Plan {
 
 /// The two obstacles this pipeline can detect and cannot yet repair.
 ///
-/// Both repairs are named debt (`docs/design/pdfa.md` §11): substituting a
+/// Both repairs are named debt: substituting a
 /// font whose program is missing, and rasterizing a page whose content the
 /// level forbids. Neither exists, so both concessions refuse — but they refuse
 /// *having looked*, which is the difference between a policy field that is
@@ -708,9 +707,8 @@ fn sweep_resources(
 ///
 /// Only indirect members. A direct one lives inside the resource dictionary,
 /// which lives inside the page, so reaching it means rewriting the resource
-/// tree wholesale for a key that is rare in that position;
-/// `docs/design/pdfa.md` §10 records it as a gap rather than leaving it
-/// unsaid.
+/// tree wholesale for a key that is rare in that position.
+/// Recorded as a gap rather than left unsaid.
 fn drop_key_from_resources(
     doc: &Document,
     resources: &Dict,
@@ -1155,7 +1153,7 @@ impl IntentProfile {
 /// smaller loss, because sRGB covers two of the three device spaces.
 ///
 /// The scan is the shallow one, over every object's colour-space keys and
-/// array heads — the same no-interpreter limit `docs/design/pdfa.md` §4
+/// array heads — the same no-interpreter limit §4
 /// records for the checker. A `/DeviceCMYK` named only as a content-stream
 /// operand is invisible here, and the file keeps the sRGB intent it would have
 /// had anyway, so the gap costs a repair rather than causing a wrong one.

@@ -70,7 +70,7 @@ pub struct Policy {
     /// font is a hard PDF/A failure that no amount of other repair will fix.
     ///
     /// Accepting is meant to substitute a standard font of the same broad
-    /// shape. **That repair is named debt** (`docs/design/pdfa.md` §11), so
+    /// shape. **That repair is named debt**, so
     /// today accepting means "convert as far as you can": every other repair
     /// applies, the font stays unembedded, and no [`Compromise`] is reported
     /// because nothing was compromised. It is the honest reading of `Accept`
@@ -84,8 +84,7 @@ pub struct Policy {
     ///
     /// Accepting is meant to rasterize the offending page — faithful to the
     /// *appearance*, and destroying the text, the vectors and the
-    /// selectability. **That repair is named debt** (`docs/design/pdfa.md`
-    /// §11), so accepting reads as "convert as far as you can" exactly as
+    /// selectability. **That repair is named debt**, so accepting reads as "convert as far as you can" exactly as
     /// [`Policy::unembeddable_font`] does, and
     /// [`Conversion::rasterized_pages`] is always empty for now.
     pub unrepresentable_content: Concession,
@@ -189,7 +188,7 @@ pub enum Compromise {
     ///
     /// **Never produced yet**, like [`Compromise::PageRasterized`]: the
     /// substitution behind [`Policy::unembeddable_font`] is named debt
-    /// (`docs/design/pdfa.md` §11). Both are here rather than added with their
+    ///. Both are here rather than added with their
     /// repairs because each completes a triple that *is* live — the policy
     /// field, the [`Refusal`] a caller gets today, and the compromise they
     /// will get instead. A caller writes the match arm once.
@@ -230,7 +229,7 @@ pub enum Compromise {
     /// longer text and its vectors are no longer vectors.
     ///
     /// **Never produced yet**: the rasterizing repair is named debt
-    /// (`docs/design/pdfa.md` §10). The variant is part of the vocabulary
+    ///. The variant is part of the vocabulary
     /// because [`Conversion::rasterized_pages`] is the roadmap's "say which"
     /// and a caller writes that match arm once, not when the repair lands.
     PageRasterized {
@@ -273,7 +272,7 @@ pub enum Compromise {
 
 /// A render resolution, in whole dots per inch.
 ///
-/// A newtype because STYLE.md §2 asks for one on a unit-bearing scalar, and
+/// A newtype because asks for one on a unit-bearing scalar, and
 /// because it is what lets [`Conversion`] keep `Eq` — a report a caller cannot
 /// compare for equality is a report they cannot write a test against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

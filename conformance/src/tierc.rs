@@ -1,5 +1,5 @@
 //! Tier C: two rasterizers against each other, over our own engine's
-//! output (PLAN.md §5).
+//! output.
 //!
 //! # Three backends, one gating pair
 //!
@@ -46,7 +46,7 @@
 //! # The proxy is dilated, because the contract's mask is
 //!
 //! The neighbourhood test alone marks the antialiased pixel and stops. The
-//! design brief's mask (`docs/design/pdfrum-render.md` §6.3) is
+//! design brief's mask is
 //! `dilate(union of primitive edges, 1px)`, so a boundary contributes its own
 //! ramp *and* the ring of pixels around it — and [`edge_mask`] therefore
 //! applies a one-pixel dilation. Skipping it was not a simplification but a
@@ -104,7 +104,7 @@
 use crate::ssim::Image;
 
 /// The share of *edge* pixels that may differ before Tier C calls a file
-/// divergent (PLAN.md §5's "< 1% divergence", against the right denominator).
+/// divergent.
 ///
 /// # The denominator this budget was written for is not the one measured
 ///

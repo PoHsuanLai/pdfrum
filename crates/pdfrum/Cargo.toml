@@ -33,7 +33,7 @@ fn_params_excessive_bools = "deny"
 # feature, forwarded.
 #
 # What it brings: `boa_engine` and the ~116 crates behind it, pure Rust and
-# zero `-sys` (DEPS.md records the audit). Default-off, because an engine that
+# zero `-sys`. Default-off, because an engine that
 # executes untrusted script out of a document is a different security
 # proposition from a renderer, and most PDF work does not need it —
 # `scripts/check-no-boa.nu` is the mechanical proof, asserting that a default
@@ -46,7 +46,7 @@ fn_params_excessive_bools = "deny"
 # One rasterizer by default, so `cargo add pdfrum` renders; none with
 # `default-features = false`, for a build that only parses, extracts, reads
 # forms or edits. Every backend is a feature named after its rasterizer, and
-# the GPU one is never in the default set (DEPS.md, "wgpu").
+# the GPU one is never in the default set.
 default = ["vello-cpu", "edit", "forms", "codecs-all", "system-fonts"]
 vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
 tinyskia = ["dep:pdfrum-raster-tinyskia"]
@@ -76,8 +76,7 @@ svg = ["dep:pdfrum-svg"]
 # editable document.
 #
 # What it brings: `usvg` with `default-features = false`, a `png` decoder, and
-# **22 crates** new to a *default* `pdfrum` — all pure Rust (DEPS.md records
-# the audit, the crate list and the reproduction command). That figure was
+# **22 crates** new to a *default* `pdfrum` — all pure Rust. That figure was
 # recorded as ten until 2026-09-07, on a count of `usvg`'s own subtree rather
 # than the delta a caller actually pays.
 #
@@ -102,7 +101,7 @@ svg-ingest = ["edit", "dep:usvg", "dep:png"]
 # nothing scans the host, and the font database starts empty. The faces come
 # from the caller through `SvgFonts`, which is what keeps SVG text mapping
 # through fonts *we* were handed rather than through whatever the machine
-# happens to have installed. DEPS.md records the measurement.
+# happens to have installed. records the measurement.
 svg-text = ["svg-ingest", "usvg/text"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
@@ -135,7 +134,7 @@ pdfrum-parser.workspace = true
 # `Document::permissions`, so it depends on the crate that owns the type
 # rather than laundering it through `pdfrum-parser`. No new crate reaches the
 # tree — `pdfrum-crypt` is already here transitively, through the parser —
-# and DEPS.md's external set is untouched. The edge is what WP1's rule
+# and the external set is untouched. The edge is what WP1's rule
 # requires: the crate that owns the encoding owns the type, and the facade
 # forwards it rather than translating it.
 pdfrum-crypt.workspace = true
@@ -157,9 +156,9 @@ pdfrum-svg = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
 # M25's SVG ingestion, behind `svg-ingest`. `default-features = false` per the
-# DEPS.md rule: the defaults are `text`, `system-fonts` and `memmap-fonts`,
+# rule: the defaults are `text`, `system-fonts` and `memmap-fonts`,
 # all three of which exist to *shape text* through a second font stack, and
-# pdfrum has its own. See DEPS.md for what dropping them drops and what the
+# pdfrum has its own. See for what dropping them drops and what the
 # consequence for `<text>` is.
 usvg = { workspace = true, optional = true }
 # Decoding a PNG an SVG `<image>` carried, so it embeds as PDF image samples
@@ -183,7 +182,7 @@ thiserror.workspace = true
 # `cargo add pdfrum` caller compiles.
 rayon.workspace = true
 # Encoding a pixmap is not the engine's job — the facade hands out pixels and
-# the examples turn them into files (DEPS.md, "Tools & tests only").
+# the examples turn them into files.
 png.workspace = true
 
 # The other two CPU rasterizers, as **dev**-dependencies (2026-09-02). They

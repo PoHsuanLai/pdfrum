@@ -17,7 +17,7 @@
 //! checked afterwards, and it is the only route that fixes the malformed-XMP
 //! failures rather than preserving them.
 //!
-//! What it costs is stated in `docs/design/pdfa.md` §10: XMP properties
+//! What it costs: XMP properties
 //! outside the five the information dictionary mirrors are not carried over.
 //!
 //! # And why there is still no XML dependency
@@ -25,7 +25,7 @@
 //! Writing is the easy direction. A generator controls its own output, so it
 //! needs no parser, no namespace resolution and no RDF container handling —
 //! it needs correct escaping of five strings, which is the twenty lines below.
-//! STYLE.md §5, the same rule the checker's reader cites.
+//! the style rules, the same rule the checker's reader cites.
 
 use crate::PdfaLevel;
 
