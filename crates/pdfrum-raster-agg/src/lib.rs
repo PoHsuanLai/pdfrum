@@ -1,44 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! An analytic scanline rasterizer implementing `pdfrum-render`'s
-//! `RenderDevice` and `RasterBackend` traits.
-//!
-//! Where a supersampling rasterizer quantises a partially covered pixel to one
-//! of seventeen levels, this one integrates the covered area and writes
-//! `min(255, floor(coverage * 256))` of the true geometric coverage, every
-//! intermediate value an integer and no step sampling. That is the whole of
-//! what it offers over the other backends. It is not a byte-for-byte page:
-//! glyph rendering, image resampling and the engine's own decisions are
-//! upstream of this crate. [`AggBackend`] is the entire public surface.
-//!
-//! ```
-//! use kurbo::{Affine, Rect};
-//! use pdfrum_render::{AntiAlias, Brush, FillRule, RasterBackend, RenderDevice};
-//! use pdfrum_raster_agg::AggBackend;
-//!
-//! let backend = AggBackend::new();
-//! let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
-//!
-//! // A rectangle covering exactly half of column 0 and all of column 1.
-//! let mut half = kurbo::BezPath::new();
-//! half.move_to((0.5, 0.0));
-//! half.line_to((2.0, 0.0));
-//! half.line_to((2.0, 1.0));
-//! half.line_to((0.5, 1.0));
-//! half.close_path();
-//! device.fill_path(
-//!     &half,
-//!     Affine::IDENTITY,
-//!     &Brush::Solid(peniko::Color::BLACK),
-//!     FillRule::Winding,
-//!     AntiAlias::On,
-//! );
-//!
-//! let pixmap = backend.finish(device);
-//! // Exactly half, not the nearest of seventeen supersampled levels.
-//! assert_eq!(pixmap.pixel(0, 0).map(|px| px[3]), Some(128));
-//! assert_eq!(pixmap.pixel(1, 0).map(|px| px[3]), Some(255));
-//! ```
-
 // Why a third backend. The two existing backends are third-party rasterizers
 // wrapped behind the trait, and each brings its own idea of what a partially
 // covered pixel is worth. `tiny-skia` supersamples at four subsamples per axis,
@@ -69,7 +29,6 @@
 // `blend::composite_premultiplied` is the one authority, so a pixel this
 // backend blends and a pixel the engine blends in its own offscreen buffers
 // agree by construction.
-
 #![forbid(unsafe_code)]
 // Every coordinate reaching this crate came from an untrusted file by way of
 // the engine: index with `get()` and do arithmetic with `checked_*`.
@@ -805,10 +764,7 @@ impl RasterBackend for AggBackend {
     }
 
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
-        debug_assert!(
-            d.layers.is_empty(),
-            "snapshot requires every layer popped"
-        );
+        debug_assert!(d.layers.is_empty(), "snapshot requires every layer popped");
         d.base.pixels().clone()
     }
 

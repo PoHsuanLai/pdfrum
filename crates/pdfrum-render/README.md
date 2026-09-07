@@ -1,6 +1,8 @@
 # pdfrum-render
 
-`RenderDevice` / `RasterBackend` seam, page walk, compositor, resampling.
+Walks a page-object graph onto a `RasterBackend` (ISO 32000-1 §8.4–8.7).
+An opaque page paints onto white; a transparent one onto nothing.
+Undrawable objects are skipped with a diagnostic.
 
 ```rust
 use pdfrum_common::Diagnostics;

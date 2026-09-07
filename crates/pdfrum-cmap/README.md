@@ -1,6 +1,8 @@
 # pdfrum-cmap
 
-CJK CMaps: 59 named tables (32 decoder stems) plus `parse_embedded`.
+A CMap splits a show-operator string into codes one, two or four bytes wide
+and maps each code to a CID (ISO 32000-1 §9.7.5). 59 named tables (32
+decoder stems) plus `parse_embedded`.
 
 ```rust
 use pdfrum_cmap::from_encoding_name;

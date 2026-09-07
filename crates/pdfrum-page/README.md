@@ -1,7 +1,9 @@
 # pdfrum-page
 
-Content streams → `Op` list → page-object graph. Colorspaces, functions,
-shadings 1–7, transparency.
+A page's `/Contents` is a stream of painting operators in user space
+(points, origin bottom-left, y-up). `parse_content` turns bytes into `Op`s;
+`build_page` folds them against `/Resources` into a page-object graph
+(ISO 32000-1 §8). Colorspaces, functions, shadings 1–7, transparency.
 
 ```text
 bytes ──parse_content──▶ Vec<Op> ──build_page──▶ Page

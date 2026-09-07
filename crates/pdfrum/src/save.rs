@@ -478,7 +478,8 @@ impl Document {
     }
 }
 
-/// Document-level edits: embedded fonts, then a save that writes them.
+/// Document-level edits — pages, fonts, images, attachments, stamps — and the
+/// save that writes them.
 ///
 /// Page content is still edited through [`PageEdit`]; this handle is the
 /// place new *objects* are allocated so a [`crate::TextBuilder`] can name

@@ -1,6 +1,7 @@
 # pdfrum-text
 
-Extraction, reading order, search, selection, links. Does not render.
+Extraction walks an interpreted page-object graph (ISO 32000-1 §14.8.2) and
+never rasterizes. Reading order, search, selection, links.
 
 ```rust
 use pdfrum_text::{FindOptions, TextIndex, TextPage};

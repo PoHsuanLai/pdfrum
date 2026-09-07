@@ -1,7 +1,8 @@
 # pdfrum-filters
 
-Flate (with predictors), LZW, RunLength, ASCIIHex/85, CCITT. DCT / JPX /
-JBIG2 are classified here and decoded elsewhere.
+Stream `/Filter` values (ISO 32000-1 §7.4) as functions over bytes: Flate
+(with predictors), LZW, RunLength, ASCIIHex/85, CCITT. DCT / JPX / JBIG2
+are classified here and decoded elsewhere.
 
 ```rust
 use pdfrum_common::{Diagnostics, Limits};

@@ -26,11 +26,39 @@ A rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/), not a binding.
 No C/C++ in the library build; `unsafe` is forbidden. No XFA, no viewer.
 JavaScript is off by default (`javascript` feature, [boa](https://boajs.dev/)).
 
+## A PDF file
+
+A PDF is a random-access file of objects (ISO 32000-1). `%PDF-m.n` names the
+version. The body is objects. The cross-reference table at the end says where
+each object lives; the trailer points at the table and at the catalog.
+[`Document::open`] reads the bytes, recovers that table (or rebuilds it), and
+leaves objects unparsed until something asks.
+
+An object is null, boolean, integer, real, string, name, array or dictionary,
+plus a stream (a dictionary with bytes) and an indirect reference (`12 0 R`).
+A page is a dictionary in a tree: `/MediaBox` and `/CropBox` in points
+(1/72 inch, origin bottom-left, y-up), `/Resources` (fonts, images, colour
+spaces), and `/Contents` — a stream of painting operators. A form is an
+`/AcroForm` plus widget annotations on those pages.
+
+A render interprets the operators into a page-object graph, then a
+[`RasterBackend`] paints it. Text extraction walks the same graph and never
+rasterizes. Damage the file survives is [`Document::diagnostics`], not an
+`Err`.
+
 This crate is the facade — [`Document`], [`Page`], [`TextPage`], [`Form`].
 The rest of the workspace is public; [`Document::parser`], [`Page::objects`],
-[`PageEdit::graph`] and [`Annotation::dict`] are the escape hatches. Damage
-is reported on [`Document::diagnostics`], not as a failed open. Every public
-type is `Send + Sync`.
+[`PageEdit::graph`] and [`Annotation::dict`] are the escape hatches. Every
+public type is `Send + Sync`.
+
+## Where to start
+
+| task | start at |
+|---|---|
+| open, inspect, save | [`Document`] |
+| one page: draw, text, boxes | [`Page`] |
+| fill a form | [`Form`] to read, [`FormSession`] to type |
+| change pages and write a file | [`DocEdit`] from [`Document::edit`], [`PageEdit`] from [`Page::edit`] |
 
 ## Features
 

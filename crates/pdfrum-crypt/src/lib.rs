@@ -1,27 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! PDF standard security (ISO 32000 §7.6): opening an encrypted document and
-//! deciphering its strings and streams, revisions 2 through 6.
-//!
-//! An `/Encrypt` dictionary plus a password produce a [`SecurityHandler`], and
-//! every string and stream the parser reads passes through
-//! [`SecurityHandler::decrypt`] keyed by the indirect object it belongs to.
-//! [`SecurityHandler::encrypt`] is the inverse under that same handler, so a
-//! save re-enciphers under the file's existing key: no re-keying, and no
-//! `/Encrypt` dictionary is built here.
-//!
-//! ```
-//! use pdfrum_crypt::{CryptClass, SecurityHandler};
-//! use pdfrum_object::{Dict, NoResolve, ObjRef};
-//!
-//! // A document with no /Encrypt needs no handler: payloads pass through.
-//! let handler = SecurityHandler::Identity;
-//! assert_eq!(handler.decrypt(ObjRef::new(1, 0), CryptClass::Stream, b"raw"), b"raw");
-//! assert_eq!(handler.permissions(), pdfrum_crypt::Permissions::ALL);
-//! # let _ = (Dict::new(), NoResolve);
-//! ```
-//!
-//! This crate has no randomness: AES's per-payload [`Iv`] is an argument.
-
 // Revisions 2 to 4 derive an RC4 or AES-128 key by an MD5 ladder over the
 // padded password; revisions 5 and 6 verify a SHA-2 hash and unwrap a 32-byte
 // AES-256 key that the file stores directly.
@@ -47,7 +24,6 @@
 //   done. `is_signature_dict` is what the walker calls.
 // - The metadata exemption. When `SecurityHandler::encrypt_metadata` is false
 //   the object `/Root/Metadata` points at is not decrypted.
-
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a password:
 // index with `get()`.

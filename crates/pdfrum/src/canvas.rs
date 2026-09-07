@@ -488,9 +488,9 @@ impl Canvas<'_, '_> {
     /// `XObject` that no page owns yet.
     ///
     /// A canvas handed to [`DocEdit::draw_page`] or [`DocEdit::draw_pages`]
-    /// always answers `Some`; the `None` case is the form compiled by
-    /// [`DocEdit::compile_svg`], whose content belongs to no page until a
-    /// [`Canvas::place_svg`](crate::Canvas::place_svg) puts it on one.
+    /// always answers `Some`. The `None` case is a Form `XObject` compiled
+    /// by `DocEdit::compile_svg` (feature `svg-ingest`), whose content
+    /// belongs to no page until `Canvas::place_svg` puts it on one.
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world_2_pages.pdf")?;

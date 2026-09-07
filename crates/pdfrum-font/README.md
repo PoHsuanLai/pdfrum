@@ -1,7 +1,9 @@
 # pdfrum-font
 
-Font dictionaries, encodings, ToUnicode, outlines (`skrifa`), substitution
-(`fontdb`). `Font::decode` is the entry point.
+A font dictionary names a base font, an encoding, and usually a program.
+Which glyph a byte selects, what character it stands for, and how wide it
+is are three different ladders (ISO 32000-1 §9). `Font::decode` answers all
+three.
 
 ```rust
 use pdfrum_common::{Diagnostics, Limits};

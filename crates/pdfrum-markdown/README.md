@@ -1,8 +1,9 @@
 # pdfrum-markdown
 
-Markdown from a page. Tagged PDFs use the structure tree; untagged PDFs use
-typography (body size, heading scale, lists, code fences, running headers
-dropped).
+Markdown from a page. A tagged PDF (ISO 32000-1 §14.8) names headings,
+paragraphs, lists, tables and figures in its structure tree; an untagged
+one is read by typography (body size, heading scale, lists, code fences,
+running headers dropped).
 
 `document_blocks` reads a whole document and drops lines that repeat in the
 header/footer band.

@@ -53,9 +53,6 @@ pub use annotation::{AnnotFlags, Annotation, Subtype};
 /// number of pages by [`Canvas::place_svg`].
 #[cfg(feature = "svg-ingest")]
 pub use canvas::SvgForm;
-/// Drawing on an existing page: [`Canvas`] from [`DocEdit::draw_page`],
-/// with [`Paint`], [`Stroke`] and [`Fill`] saying how a shape is painted and
-/// [`LineCap`], [`LineJoin`], [`MiterLimit`] and [`Dash`] shaping the pen.
 #[cfg(feature = "edit")]
 pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 pub use document::{
@@ -131,32 +128,17 @@ pub use pdfrum_form::script::{
 pub use pdfrum_form::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, RenderOptionsBuilder, TextAa};
 
-/// The rasterizer seam, re-exported so a caller can write
-/// [`Page::render_on`]'s bound without adding `pdfrum-render` to their
-/// manifest.
-///
-/// `RasterBackend` makes targets and reads their pixels back;
-/// `RenderDevice` is the target itself, the six drawing calls the engine
-/// issues. A backend crate implements both, and this crate never needs to
-/// know which one you passed.
 pub use pdfrum_render::{RasterBackend, RenderDevice};
 
-/// A font this save is adding: [`EmbeddedFont`] from [`DocEdit::embed_font`],
-/// [`FontEncoding`] choosing simple vs composite, and [`StandardFont`] for
-/// [`DocEdit::standard_font`].
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, MissingGlyph, StandardFont};
 
-/// What [`DocEdit::add_attachment`] writes beside the name and the bytes.
 #[cfg(feature = "edit")]
 pub use attach::{AttachmentOptions, AttachmentOptionsBuilder};
 /// A `SystemTime` as the PDF date string [`AttachmentOptions::modified`] and
 /// [`Metadata`]'s two dates carry.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::pdf_date;
-/// An image this save is adding: [`EmbeddedImage`] from
-/// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
-/// naming the layout of raw samples handed to the latter.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
@@ -179,8 +161,6 @@ pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, SaveOptionsBuilder, UnknownUpdate, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
-/// A mark on every page: what [`DocEdit::stamp_text`] and
-/// [`DocEdit::stamp_image`] draw, and where.
 #[cfg(feature = "edit")]
 pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
 /// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
@@ -222,44 +202,23 @@ pub use pdfrum_page::BuildContext;
 /// [`FormSession`] through [`FormSession::with_context`] with the same one.
 pub use pdfrum_font::SubstitutionOptions;
 
-/// One page's extracted text: the characters in reading order, plus search,
-/// selection and link queries over them.
-///
-/// Returned by [`Page::text`].
 pub use pdfrum_text::{
     CharBox, CharIndex, FindOptions, IndexMap, TextIndex, TextPage, WebLink, Word,
 };
 
-/// A link annotation, and where it points.
-///
-/// Returned by [`Page::links`].
 pub use pdfrum_doc::{Action, ActionKind, Dest, Link};
 
-/// PDF/A conformance checking (ISO 19005): the level asked for, the report,
-/// and the clause and subject of each requirement failed.
-///
-/// Returned by [`Document::check_pdfa`]. In the default feature set — the
-/// checker reads the object graph the parser already builds and adds no
-/// dependency to any tree, so there is nothing for a feature to gate.
 pub use pdfrum_doc::pdfa::{
     Clause as PdfaClause, Level as PdfaLevel, Report as PdfaReport, Subject as PdfaSubject,
     Violation as PdfaViolation,
 };
 
-/// PDF/A *conversion*: what the caller authorizes before it runs, and what it
-/// says it did afterwards.
-///
-/// Returned by and passed to [`Document::to_pdfa`]. Behind `edit` because the
-/// conversion writes a file; the checker above needs no feature.
 #[cfg(feature = "edit")]
 pub use pdfa::{
     Compromise as PdfaCompromise, Concession as PdfaConcession, Conversion as PdfaConversion,
     Dpi as PdfaDpi, Policy as PdfaPolicy, RasterCause as PdfaRasterCause, Refusal as PdfaRefusal,
 };
 
-/// Everything a document reported repairing, working around, or refusing.
-///
-/// Returned by [`Document::diagnostics`].
 pub use pdfrum_common::{
     Deadline, DiagKind, Diagnostic, Diagnostics, LimitExceeded, Limits, Operation, Severity,
 };
@@ -284,18 +243,6 @@ pub use pdfrum_common::PageIndex;
 /// [`Document::owner_permissions`].
 pub use pdfrum_crypt::Permissions;
 
-/// 2D geometry: the five `kurbo` types this crate's signatures name.
-///
-/// [`Rect`] is every rectangle out — [`Page::crop_box`], [`Page::media_box`],
-/// [`Annotation::rect`]. [`Point`] is every point in — [`FormSession`]'s
-/// mouse methods, [`TextBuilder::position`]. [`Affine`] is every transform —
-/// [`RenderOptions::transform`], [`PageEdit::transform`],
-/// [`ImageBuilder::matrix`]. [`BezPath`] is [`PathBuilder::path`]. [`Size`] is
-/// the tolerance `TextPage::index_at` takes.
-///
-/// **Five names, not the whole crate.** These are what this crate's own
-/// signatures are written in; a caller who wants `kurbo::Shape` or `CubicBez`
-/// adds `kurbo` themselves.
 pub use kurbo::{Affine, BezPath, Point, Rect, Size};
 
 /// Colour: the one `peniko` type this crate's signatures name.
@@ -385,13 +332,6 @@ pub use pdfrum_text::Error as TextError;
 /// interchangeable and this crate does not convert between them.
 pub use pdfrum_render::Argb;
 
-/// Which annotation on a page holds the keyboard focus, and what rectangle to
-/// stroke over it.
-///
-/// Returned by [`FormSession::focus_for_page`], which a renderer asks once per
-/// page per frame — so this is an ordinary answer a caller acts on, not an
-/// escape hatch. [`FocusBox`] is the second half and is useless
-/// without the first.
 pub use pdfrum_doc::{Focus, FocusBox};
 
 /// A generated appearance stream and the dictionary edits it implies.
@@ -419,12 +359,6 @@ pub use pdfrum_form::Event;
 pub use pdfrum_object::ObjRef;
 
 pub use pdfrum_doc::structure::{Kid, StructElement, StructTree};
-/// A PDF object, and the dictionary type that is one of its variants.
-///
-/// `Object` is what [`Document::fetch`] hands back and `Dict` is what
-/// [`Annotation::dict`] and [`GeneratedAp::resources`] are. `Dict` is here
-/// rather than behind an escape hatch because `GeneratedAp` carries one and
-/// that is an ordinary payload.
 pub use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, PdfString, Stream};
 pub use pdfrum_parser::{Entry as XrefEntry, Section};
 
@@ -442,13 +376,6 @@ pub use pdfrum_object::Resolve;
 /// The type of [`TextBuilder::render_mode`].
 pub use pdfrum_page::TextRenderMode;
 
-/// A page's `/Rotate`, and the error parsing one from a string returns.
-///
-/// The engine's own type, re-exported rather than wrapped: a rotation is four
-/// quarter turns whichever crate names it, so a facade copy would have been
-/// the same four variants under a second name and a `From` impl between them.
-/// [`Page::rotation`] returns this, and so does [`PageObject`] reached through
-/// [`Page::objects`] -- one type across the seam, nothing to convert.
 pub use pdfrum_page::{NotAQuarterTurn, Rotation};
 
 /// The flattened glyph outlines the rasterizer draws, cached across pages.

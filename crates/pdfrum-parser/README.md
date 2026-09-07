@@ -1,7 +1,9 @@
 # pdfrum-parser
 
-Lexer, xref (tables, streams, hybrids, rebuild), object streams, encryption,
-lazy `Resolve` store.
+A PDF file is `%PDF-m.n`, a body of objects, a cross-reference table (or
+stream) at the end, and a trailer that points at both (ISO 32000-1 §7.5).
+Incremental updates append another body+xref+trailer. `load` recovers that
+table, or rebuilds it by scanning for `N G obj`.
 
 ```rust
 use std::sync::Arc;

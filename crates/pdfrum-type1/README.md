@@ -1,7 +1,8 @@
 # pdfrum-type1
 
-PFA/PFB, `eexec`, Type 1 charstrings, Multiple Master. Fontations does not
-read this format; CFF/TTF stay in `skrifa`.
+Type 1 font programs (ISO 32000-1 §9.6.2): PFA/PFB, `eexec`, charstrings,
+Multiple Master. Fontations does not read this format; CFF/TTF stay in
+`skrifa`.
 
 ```rust
 use pdfrum_common::{Diagnostics, Limits};

@@ -1,33 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! CMaps: how a PDF string becomes character codes, and how those codes
-//! become CIDs (ISO 32000-1 §9.7.5).
-//!
-//! A [`CMap`] both splits a show operator's string into codes one, two or four
-//! bytes wide, mixed within one string, and maps each code to a CID in a
-//! `CIDFont`'s character collection. A font names one by a predefined name
-//! ([`from_encoding_name`]) or as an embedded program ([`parse_embedded`]).
-//!
-//! ```
-//! use pdfrum_cmap::{CharCode, Cid, CodingScheme, from_encoding_name};
-//! use pdfrum_common::Diagnostics;
-//! use pdfrum_object::Name;
-//!
-//! let mut diags = Diagnostics::default();
-//! let cmap = from_encoding_name(&Name::from("Identity-H"), &mut diags);
-//!
-//! // Identity-H reads fixed two-byte codes and maps each to itself.
-//! assert_eq!(cmap.coding_scheme(), CodingScheme::TwoBytes);
-//! let decoded: Vec<(CharCode, Cid)> = cmap.decode(&[0x00, 0x41, 0x30, 0x42]).collect();
-//! assert_eq!(decoded, vec![
-//!     (CharCode(0x0041), Cid(0x0041)),
-//!     (CharCode(0x3042), Cid(0x3042)),
-//! ]);
-//! ```
-//!
-//! Nothing here refuses to work: an unknown `/Encoding` name decodes two-byte
-//! identity codes, a truncated code yields code 0, a garbage program yields
-//! what it managed to say — each on a [`pdfrum_common::Diagnostics`] sink.
-
 // Inheritance runs through three mechanisms, all live:
 //
 // - the built-in tables' own chaining, which is what makes `GB-EUC-V` a thin
@@ -40,7 +11,6 @@
 // child-wins: a code the child maps is the child's answer, and only a code it
 // maps to nothing reaches the parent. The oracle implements neither — see the
 // marked site in `parser.rs`.
-
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a generated
 // blob: index with `get()`.

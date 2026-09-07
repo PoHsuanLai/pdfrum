@@ -1,32 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! The PDF object model as plain values (ISO 32000 §7.3): the [`Object`] enum
-//! (Null/Bool/Int/Real/String/Name/Array/Dict/Stream/Ref), dictionary-key
-//! name constants, and the [`Resolve`] trait for indirect-reference lookup.
-//! Construction and typed access only — no parsing lives here. Everything
-//! above this crate reads PDF through the typed accessors on [`Dict`] and
-//! [`Array`], threading a `&impl Resolve` for the store of indirect objects:
-//!
-//! ```
-//! use pdfrum_object::{Array, Dict, NoResolve, Object, names};
-//!
-//! let page = Dict::from_pairs([
-//!     (names::TYPE.clone(), Object::Name(names::PAGE.clone())),
-//!     (
-//!         names::RECT.clone(),
-//!         Object::Array(Array::of([0, 0, 612, 792].map(Object::from))),
-//!     ),
-//! ]);
-//!
-//! assert_eq!(page.name(names::TYPE), Some(names::PAGE));
-//! assert_eq!(page.rect(names::RECT, &NoResolve).width(), 612.0);
-//! ```
-//!
-//! **Resolution is one hop**: a reference to a reference is absent, and each
-//! accessor comes in a resolving and a non-resolving flavour ([`Resolve`],
-//! [`Dict`]). **Integers have two readings**: a permissions word written
-//! `4294967295` means `-1` through [`narrow_to_signed32`] and
-//! `4294967296.0` through [`widen_to_f32`].
-
 #![forbid(unsafe_code)]
 // Every byte in this crate came from an untrusted file: index with `get()`.
 #![warn(clippy::indexing_slicing)]

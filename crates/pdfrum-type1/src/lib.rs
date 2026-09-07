@@ -1,39 +1,4 @@
 #![doc = include_str!("../README.md")]
-//! Type 1 font programs — PFA/PFB containers, `eexec`-encrypted private
-//! dictionaries, charstrings, Multiple Master interpolation. The one outline
-//! format Fontations does not read; CFF and TrueType are `skrifa`'s.
-//! [`Type1Font::parse`] sniffs the container, decrypts and reads the program
-//! into a plain value (nothing lazy, `Send + Sync`), and
-//! [`Type1Font::instantiate`] blends its outlines at *design* coordinates — a
-//! weight of 50–1450, a width of 100–900.
-//!
-//! ```
-//! use pdfrum_common::Diagnostics;
-//! use pdfrum_type1::Type1Font;
-//!
-//! # fn demo(pfb: &[u8]) -> Option<()> {
-//! let mut diags = Diagnostics::default();
-//! let font = Type1Font::parse(pfb, &Default::default(), &mut diags).ok()?;
-//!
-//! // Character code to glyph, through the font's built-in encoding.
-//! let gid = font.code_to_gid(b'A')?;
-//! let (outline, advance) = font.outline(gid)?;
-//! assert!(!outline.is_empty());
-//!
-//! // A Multiple Master face draws at whatever weight is asked for.
-//! if let Some(axes) = font.mm_axes() {
-//!     let bold = font.instantiate(&[axes[0].max])?;
-//!     assert!(bold.outline(gid).is_some());
-//!     let _ = advance;
-//! }
-//! # Some(())
-//! # }
-//! ```
-//!
-//! A Type 1 font effectively never fails to construct: short of a missing
-//! private section or `/CharStrings`, damage yields a best-effort font, a
-//! [`pdfrum_common::Diagnostics`] entry, and partial outlines.
-
 // Two things need this crate, and nothing else does:
 //
 // 1. Embedded Type 1 programs — a `/FontFile` stream, or a `/FontFile3` whose
@@ -52,7 +17,6 @@
 // Damage tolerated on the way in: a truncated PFB segment, hex that stops
 // mid-byte, a charstring that runs off its end, a Multiple-Master declaration
 // whose parts disagree.
-
 #![forbid(unsafe_code)]
 // Every byte here came from an untrusted `/FontFile` stream: index with
 // `get()`, never with `[]`.

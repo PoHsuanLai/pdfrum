@@ -23,4 +23,8 @@ see — call `free()`. A page keeps its document alive; order does not matter.
 Failed calls throw `Error` with `.code`: 2 not a PDF, 3 wrong password, 5
 render, 9 limit/cancel, 100 bad argument.
 
+`Cancel` is the only stop: `Instant::now` panics on wasm32, so there is no
+wall-clock limit. Compiled with `vello-cpu`, `codecs-all`, `forms`, `edit`,
+`markdown`. No `system-fonts`, no `javascript`.
+
 Types: `pdfrum.d.ts`.
