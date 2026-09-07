@@ -129,7 +129,7 @@ impl PageDict {
 #[derive(Debug)]
 pub struct Document {
     /// The file from its header onwards; every offset indexes into this.
-    bytes: Arc<[u8]>,
+    bytes: ByteSpan,
     /// The trailer, merged across every section that contributed one.
     trailer: Trailer,
     /// The object store.
@@ -181,17 +181,12 @@ struct PageCache {
 /// let not_a_pdf: Arc<[u8]> = Arc::from(&b"just some bytes"[..]);
 /// assert_eq!(load(not_a_pdf, &LoadOptions::default()).err(), Some(LoadError::NotPdf));
 /// ```
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the caller hands the file over: taking it by value says the \
-              document owns it from here, even though a header offset means \
-              what is stored is a slice of it"
-)]
-pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError> {
+pub fn load(bytes: impl Into<ByteSpan>, opts: &LoadOptions) -> Result<Document, LoadError> {
     opts.limits
         .check_deadline(Operation::Open)
         .map_err(LoadError::Limit)?;
     let mut diags = Diagnostics::default();
+    let bytes: ByteSpan = bytes.into();
     let header_offset = find_header(&bytes, &opts.limits).ok_or(LoadError::NotPdf)?;
     if bytes.len() < header_offset.saturating_add(HEADER_SIZE) {
         return Err(LoadError::NotPdf);
@@ -207,17 +202,11 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     // Everything before the header is invisible: offsets in the file are
     // relative to it, so the reader works on the slice from there on.
     //
-    // The overwhelmingly common case is a header at 0, where the "slice" is
-    // the whole file and re-sharing it costs a refcount bump. Only a file
-    // with junk before `%PDF` pays for a copy.
-    let body_bytes: Arc<[u8]> = if header_offset == 0 {
-        Arc::clone(&bytes)
-    } else {
-        Arc::from(bytes.get(header_offset..).unwrap_or_default())
-    };
-    // Converted once per open. Every stream is then a window into this,
-    // which is a refcount bump rather than an allocation.
-    let body = ByteSpan::whole(Arc::clone(&body_bytes));
+    // A window, not a copy: junk before `%PDF` costs a refcount bump like
+    // any other offset. Every stream is then a window into this one.
+    let body = bytes
+        .subspan(header_offset..bytes.len())
+        .unwrap_or_else(|_| ByteSpan::empty());
     let version = read_version(&body);
 
     let (xref, mut trailer, mut xref_shape) =
@@ -284,7 +273,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     diags.extend(&store.drain_diags());
 
     Ok(Document {
-        bytes: body_bytes,
+        bytes: body,
         trailer,
         store,
         version,
@@ -907,7 +896,7 @@ impl Document {
 
     /// The file, from its header onwards.
     #[must_use]
-    pub fn bytes(&self) -> &Arc<[u8]> {
+    pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 

@@ -289,6 +289,8 @@ impl core::cmp::PartialEq for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::eq(&self, &Self) -> bool
 impl core::convert::AsRef<[u8]> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::as_ref(&self) -> &[u8]
+impl core::convert::From<alloc::sync::Arc<[u8]>> for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::from(alloc::sync::Arc<[u8]>) -> Self
 impl core::convert::From<alloc::vec::Vec<u8>> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::from(alloc::vec::Vec<u8>) -> Self
 impl core::fmt::Debug for pdfrum_object::ByteSpan

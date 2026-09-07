@@ -163,6 +163,13 @@ impl fmt::Debug for ByteSpan {
     }
 }
 
+impl From<Arc<[u8]>> for ByteSpan {
+    /// Shares the buffer; nothing is copied.
+    fn from(file: Arc<[u8]>) -> Self {
+        Self::whole(file)
+    }
+}
+
 impl From<Vec<u8>> for ByteSpan {
     /// Adopts the vector's allocation; nothing is copied.
     fn from(bytes: Vec<u8>) -> Self {

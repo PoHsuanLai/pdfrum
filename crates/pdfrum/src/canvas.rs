@@ -1396,7 +1396,7 @@ impl DocEdit<'_> {
     ///
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
-    /// let saved = Document::from_bytes(bytes.into())?;
+    /// let saved = Document::from_bytes(bytes)?;
     /// assert!(saved.page(0)?.text().to_string().contains("drawn"));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
