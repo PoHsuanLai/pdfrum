@@ -715,6 +715,6 @@ fn ingested_text_is_outlines_rather_than_an_embedded_font() {
     assert_eq!(
         after, before,
         "ingesting text as outlines adds no text-showing operator at all: \
-         that is the trade the outline default makes, and \ §6 records it"
+         that is the trade the outline default makes"
     );
 }

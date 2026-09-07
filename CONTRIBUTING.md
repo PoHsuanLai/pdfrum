@@ -24,10 +24,12 @@ Optional — the gate notes and continues if they are missing: `cargo-deny`,
 
 ## CI
 
-`./scripts/ci.nu` runs fmt, clippy `-D warnings`, nextest (with `javascript`
-on the CLI and the tool), doctests, rustdoc, the API snapshot, `cargo deny`,
-the no-`-sys` check, the C header and C test, WASM tests, and
-`cargo check` of `fuzz/`.
+`./scripts/ci.nu` runs fmt, clippy `-D warnings`, the pdfrum feature
+combination matrix (`--no-default-features`, each default-off flag,
+`--all-features`), nextest (with `javascript` on the CLI and the tool),
+doctests, rustdoc (workspace defaults, then pdfrum `--all-features`), the
+API snapshot, `cargo deny`, the no-`-sys` check, the C header and C test,
+WASM tests, and `cargo check` of `fuzz/`.
 
 CI does not run the conformance board or the bench ratchet.
 

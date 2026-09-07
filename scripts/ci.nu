@@ -1,6 +1,7 @@
 #!/usr/bin/env nu
-# CI gate: fmt, clippy -D warnings, nextest, doctests, cargo-deny (if
-# installed), and the pure-Rust dependency-tree check.
+# CI gate: fmt, clippy -D warnings, pdfrum feature combinations, nextest,
+# doctests, cargo-deny (if installed), and the pure-Rust dependency-tree
+# check.
 
 def main [] {
     cd ($env.FILE_PWD | path dirname)
@@ -11,6 +12,33 @@ def main [] {
     print "==> cargo clippy (deny warnings)"
     ^cargo clippy --workspace --all-targets -- -D warnings
 
+    # Default features are clippy and nextest. This is the rest: headless,
+    # each default-off flag, the advertised named-backend build, and
+    # `--all-features`. `--lib` so integration tests that assume a rasterizer
+    # do not have to declare `required-features`.
+    print "==> pdfrum feature combinations"
+    let combos = [
+        {name: 'no-default', flags: [--no-default-features]}
+        {name: 'no-default+forms', flags: [--no-default-features --features forms]}
+        {name: 'no-default+edit', flags: [--no-default-features --features edit]}
+        {name: 'no-default+tinyskia,codecs-all', flags: [--no-default-features --features 'tinyskia,codecs-all']}
+        {name: '+javascript', flags: [--features javascript]}
+        {name: '+markdown', flags: [--features markdown]}
+        {name: '+svg', flags: [--features svg]}
+        {name: '+svg-ingest', flags: [--features svg-ingest]}
+        {name: '+svg-text', flags: [--features svg-text]}
+        {name: '+png', flags: [--features png]}
+        {name: '+tinyskia,agg', flags: [--features 'tinyskia,agg']}
+        {name: '+vello-gpu', flags: [--features vello-gpu]}
+        {name: 'all-features', flags: [--all-features]}
+    ]
+    for c in $combos {
+        print $"    ($c.name)"
+        ^cargo check -p pdfrum --lib --quiet ...$c.flags
+    }
+    print "    tests + all-features"
+    ^cargo check -p pdfrum --tests --all-features --quiet
+
     print "==> cargo nextest run (with the tool's and the CLI's javascript features and pdfrum/svg)"
     ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg
 
@@ -20,6 +48,9 @@ def main [] {
     print "==> cargo doc --no-deps (deny warnings)"
     with-env { RUSTDOCFLAGS: '-D warnings' } {
         ^cargo doc --no-deps --workspace
+        # Default-off items (`Error::Svg`, `DocEdit::compile_svg`, …) are
+        # absent from the workspace build; this one has to see them.
+        ^cargo doc --no-deps -p pdfrum --all-features
     }
 
     ^./scripts/check-rustdoc-coverage.nu
