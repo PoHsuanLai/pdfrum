@@ -40,7 +40,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_crypt::{CryptClass, SecurityHandler};
-use pdfrum_object::{Array, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, names};
+use pdfrum_object::{
+    Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, names,
+};
 
 use crate::error::Error;
 use crate::lexer::Lexer;
@@ -56,7 +58,7 @@ use crate::xref::{Entry, Xref};
 #[derive(Debug)]
 pub struct ObjectStore {
     /// The file, from its header onwards.
-    bytes: Arc<[u8]>,
+    bytes: ByteSpan,
     /// Where every object lives.
     ///
     /// Shared rather than owned. A store is built at least twice per open —
@@ -106,7 +108,7 @@ type Containers = HashMap<u32, Option<Arc<ObjStm>>, pdfrum_common::FxBuildHasher
 impl ObjectStore {
     /// Build a store over a file and its cross-reference table.
     pub(crate) fn new(
-        bytes: Arc<[u8]>,
+        bytes: ByteSpan,
         xref: Arc<Xref>,
         limits: Limits,
         security: SecurityHandler,
@@ -603,6 +605,7 @@ mod tests {
     use crate::xref::Xref;
     use pdfrum_common::Limits;
     use pdfrum_crypt::SecurityHandler;
+    use pdfrum_object::ByteSpan;
     use pdfrum_object::{ObjRef, Resolve, names};
     use std::sync::Arc;
 
@@ -610,7 +613,7 @@ mod tests {
         let mut xref = Xref::new();
         build(&mut xref);
         ObjectStore::new(
-            Arc::from(file),
+            ByteSpan::from(file.to_vec()),
             Arc::new(xref),
             Limits::default(),
             SecurityHandler::Identity,

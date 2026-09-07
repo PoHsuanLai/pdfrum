@@ -35,7 +35,7 @@ use pdfrum_common::{
     DiagKind, Diagnostics, LimitExceeded, Limits, Operation, PageIndex, PdfVersion, Severity,
 };
 use pdfrum_crypt::{Permissions, SecurityHandler};
-use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
+use pdfrum_object::{ByteSpan, Dict, NoResolve, ObjRef, Object, Resolve, names};
 
 use crate::error::Error;
 use crate::store::ObjectStore;
@@ -206,7 +206,18 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
 
     // Everything before the header is invisible: offsets in the file are
     // relative to it, so the reader works on the slice from there on.
-    let body: Arc<[u8]> = Arc::from(bytes.get(header_offset..).unwrap_or_default());
+    //
+    // The overwhelmingly common case is a header at 0, where the "slice" is
+    // the whole file and re-sharing it costs a refcount bump. Only a file
+    // with junk before `%PDF` pays for a copy.
+    let body_bytes: Arc<[u8]> = if header_offset == 0 {
+        Arc::clone(&bytes)
+    } else {
+        Arc::from(bytes.get(header_offset..).unwrap_or_default())
+    };
+    // Converted once per open. Every stream is then a window into this,
+    // which is a refcount bump rather than an allocation.
+    let body = ByteSpan::whole(Arc::clone(&body_bytes));
     let version = read_version(&body);
 
     let (xref, mut trailer, mut xref_shape) =
@@ -273,7 +284,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     diags.extend(&store.drain_diags());
 
     Ok(Document {
-        bytes: body,
+        bytes: body_bytes,
         trailer,
         store,
         version,
@@ -322,7 +333,7 @@ fn read_version(body: &[u8]) -> Option<PdfVersion> {
 
 /// Build the security handler the trailer's `/Encrypt` calls for.
 fn build_security(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     opts: &LoadOptions,
@@ -372,7 +383,7 @@ fn build_security(
 /// nothing. That is not a shortcut: the encryption dictionary is the one
 /// object in a document that is always plaintext.
 fn encrypt_dict(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     limits: &Limits,
@@ -388,7 +399,7 @@ fn encrypt_dict(
 /// object before the trailer's `/Encrypt` can name it (ISO 32000-1 §7.6.1
 /// requires `/Encrypt` be indirect).
 fn encrypt_dict_located(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     limits: &Limits,
@@ -397,7 +408,7 @@ fn encrypt_dict_located(
         Object::Dict(d) => Some((d.clone(), true)),
         Object::Ref(r) => {
             let plain = ObjectStore::new(
-                Arc::clone(body),
+                body.clone(),
                 Arc::clone(xref),
                 limits.clone(),
                 SecurityHandler::Identity,
@@ -427,14 +438,14 @@ fn exempt_metadata(store: &mut ObjectStore, trailer: &Dict) {
 
 /// Build a store over the table, with the metadata exemption applied.
 fn build_store(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     opts: &LoadOptions,
     trailer: &Dict,
     security: SecurityHandler,
 ) -> Arc<ObjectStore> {
     let mut store = ObjectStore::new(
-        Arc::clone(body),
+        body.clone(),
         Arc::clone(xref),
         opts.limits.clone(),
         security,

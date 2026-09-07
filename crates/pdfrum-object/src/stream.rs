@@ -5,14 +5,22 @@ use std::fmt;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
 
+use bytes::Bytes;
+
 use crate::{Dict, Error};
 
 /// A window into a shared byte buffer.
 ///
-/// The document's bytes are held once as an `Arc<[u8]>` and every stream is a
-/// range into it, so opening a file costs one copy no matter how many streams
-/// it holds. Three buffers occur in practice: the file itself, a decrypted
-/// replacement for one stream's bytes, and a decoded object stream's payload.
+/// The document's bytes are held once and every stream is a window into them,
+/// so opening a file costs one copy no matter how many streams it holds. Three
+/// buffers occur in practice: the file itself, a decrypted replacement for one
+/// stream's bytes, and a decoded object stream's payload.
+///
+/// Backed by [`bytes::Bytes`], whose owner pointer is separate from its data
+/// pointer. That is what lets [`ByteSpan::from`] adopt a `Vec<u8>`'s allocation
+/// instead of copying it — `Arc<[u8]>` cannot, because its refcounts live
+/// inline with the payload. A window is a refcount bump, never an allocation,
+/// so [`subspan`](Self::subspan) is the cheap way to carve a file up.
 ///
 /// Decoded (filtered) data is deliberately *not* cached here — the page layer
 /// owns those caches, keyed by the reference that produced them.
@@ -28,8 +36,10 @@ use crate::{Dict, Error};
 /// ```
 #[derive(Clone)]
 pub struct ByteSpan {
-    file: Arc<[u8]>,
-    range: Range<usize>,
+    buf: Bytes,
+    /// Where `buf` begins in the buffer it was carved from. Carried because
+    /// `Bytes` does not record it and [`range`](Self::range) publishes it.
+    start: usize,
 }
 
 impl ByteSpan {
@@ -41,6 +51,8 @@ impl ByteSpan {
     /// before it starts. Ranges come from `/Length` values in untrusted
     /// files, so this is checked rather than trusted.
     pub fn new(file: Arc<[u8]>, range: Range<usize>) -> Result<Self, Error> {
+        // Checked before slicing, never delegated to `Bytes::slice`: that
+        // panics where this must return, and the ranges are untrusted.
         if range.start > range.end || range.end > file.len() {
             return Err(Error::SpanOutOfBounds {
                 start: range.start,
@@ -48,44 +60,53 @@ impl ByteSpan {
                 len: file.len(),
             });
         }
-        Ok(Self { file, range })
+        let start = range.start;
+        Ok(Self {
+            buf: Bytes::from_owner(file).slice(range),
+            start,
+        })
     }
 
     /// A window over a whole buffer.
     #[must_use]
     pub fn whole(file: Arc<[u8]>) -> Self {
-        let range = 0..file.len();
-        Self { file, range }
+        Self {
+            buf: Bytes::from_owner(file),
+            start: 0,
+        }
     }
 
     /// An empty window.
     #[must_use]
     pub fn empty() -> Self {
-        Self::whole(Arc::from(&[][..]))
+        Self {
+            buf: Bytes::new(),
+            start: 0,
+        }
     }
 
     /// The bytes in the window.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        self.file.get(self.range.clone()).unwrap_or_default()
+        &self.buf
     }
 
     /// Number of bytes in the window.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.range.len()
+        self.buf.len()
     }
 
     /// Whether the window is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.range.is_empty()
+        self.buf.is_empty()
     }
 
     /// Where the window sits in its backing buffer.
     #[must_use]
     pub fn range(&self) -> Range<usize> {
-        self.range.clone()
+        self.start..self.start.saturating_add(self.buf.len())
     }
 
     /// A sub-window, with offsets relative to this window's start.
@@ -101,9 +122,10 @@ impl ByteSpan {
                 len: self.len(),
             });
         }
+        let start = self.start.saturating_add(range.start);
         Ok(Self {
-            file: Arc::clone(&self.file),
-            range: (self.range.start + range.start)..(self.range.start + range.end),
+            buf: self.buf.slice(range),
+            start,
         })
     }
 }
@@ -136,14 +158,18 @@ impl fmt::Debug for ByteSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ByteSpan")
             .field("len", &self.len())
-            .field("at", &self.range.start)
+            .field("at", &self.start)
             .finish_non_exhaustive()
     }
 }
 
 impl From<Vec<u8>> for ByteSpan {
+    /// Adopts the vector's allocation; nothing is copied.
     fn from(bytes: Vec<u8>) -> Self {
-        Self::whole(Arc::from(bytes))
+        Self {
+            buf: Bytes::from(bytes),
+            start: 0,
+        }
     }
 }
 
