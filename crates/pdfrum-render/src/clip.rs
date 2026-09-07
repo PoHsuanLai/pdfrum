@@ -1,7 +1,6 @@
 //! Applying a page object's clip stack to a device.
 //!
-//! Three contracts survive the translation from PDFium's 8-bit coverage
-//! region to our two-method trait:
+//! Three contracts on the two-method trait:
 //!
 //! - **An empty clip path clips everything out**, and it does so as the
 //!   deliberately off-canvas rectangle `(-1, -1, 0, 0)` rather than as an

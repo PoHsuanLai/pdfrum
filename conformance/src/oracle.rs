@@ -250,8 +250,8 @@ fn inspect(checkout: &Path) -> CheckoutState {
 /// class of drift: **a tracked `.pdf` regenerated from a template that
 /// disagrees with it.** PDFium's `.in` templates and their committed `.pdf`s
 /// are not always in sync, so re-running `fixup_pdf_template.py` over the
-/// checkout can silently swap a fixture for a different document. The
-/// 2026-09-03 case was `testing/resources/viewer_ref.pdf`: the template says
+/// checkout can silently swap a fixture for a different document.
+/// `testing/resources/viewer_ref.pdf` is the example: the template says
 /// `/Count 1` and the committed file has five pages, so the regeneration
 /// replaced a five-page fixture with a one-page one, and every row scored
 /// against it was scoring a document the corpus does not contain.
@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn tracked_modifications_are_drift() {
-        // Verbatim shape from the 2026-09-03 checkout.
+        // Verbatim shape from a dirty checkout.
         let stdout = concat!(
             " M testing/resources/annotation_highlight_alpha.pdf\n",
             " M testing/resources/bug_1258634.pdf\n",

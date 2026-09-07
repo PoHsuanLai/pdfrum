@@ -94,8 +94,7 @@ pub(crate) fn string_of(value: &JsValue, context: &mut Context) -> JsResult<Stri
 
 // ---- app ----
 
-/// `app.alert` — 42 of the 47 fixtures, and the function the milestone is
-/// scored on.
+/// `app.alert` — 42 of the 47 fixtures.
 ///
 /// # Argument handling is two shapes, and the second is easy to miss
 ///
@@ -718,7 +717,7 @@ fn define_constructor(
 
 // ---- assembling the realm ----
 
-/// Installs every object this milestone binds.
+/// Installs every host object the script realm binds.
 pub(crate) fn install(context: &mut Context, host: Host) -> JsResult<()> {
     context.insert_data(host);
     install_app(context)?;

@@ -222,11 +222,10 @@ fn nested_masked_layers_multiply_and_unwind_in_order() {
 
 #[test]
 fn a_target_past_the_device_limit_is_refused_rather_than_allocated() {
-    // `Error::TargetTooLarge` was documented and never constructed, and the
-    // path that should have produced it allocated `w * h * 4` zeros — up to
-    // seventeen gibibytes — on its way to reporting failure. The fallible
-    // constructor now refuses first, and the infallible one clamps rather than
-    // building a target the device cannot render.
+    // The fallible constructor refuses a request past the device limit
+    // instead of allocating `w * h * 4` zeros on the way to failing. The
+    // infallible one clamps rather than building a target the device cannot
+    // render.
     let Some(backend) = gpu() else { return };
     let over = backend.max_dimension().saturating_add(1);
     let err = backend

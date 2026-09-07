@@ -199,7 +199,7 @@ pub fn image_value_fits(v: f64) -> bool {
 /// by [`matte_source`] before the mask becomes its alpha.
 ///
 /// **The mask is only folded in when it shares the image's sample grid.**
-/// A mask is never resolution-reduced (design brief §1.19.9), so it routinely
+/// A mask is never resolution-reduced, so it routinely
 /// has dimensions of its own, and the two are then resampled to the device
 /// *independently* — which is [`separate_mask`]'s job, not this one. Indexing
 /// a mask of a different size at the base's `(x, y)` reads the wrong sample
@@ -250,10 +250,8 @@ pub(crate) fn converted_rows(image: &ImageData) -> Converted<'_> {
 /// Everything that happens to a converted row before it reaches the pixmap.
 ///
 /// The mask alpha, the matte, the transfer function and the stencil colour
-/// were four decisions taken *inside* the old per-pixel loop, re-made on every
-/// one of an image's samples even though all four are properties of the
-/// image. Here they are resolved once, when the struct is built, and the row
-/// loop reads fields it cannot get wrong.
+/// are four properties of the image, resolved once when the struct is built.
+/// The row loop reads fields it cannot get wrong.
 pub(crate) struct RowFinish<'a> {
     /// The mask to fold into the alpha, when it shares the image's grid.
     ///
@@ -377,8 +375,8 @@ pub fn is_coregistered(mask: &pdfrum_page::ImageMask, image: &ImageData) -> bool
 ///
 /// # Why a plane rather than the pixmap
 ///
-/// The mask is grey by construction — every pixel of the pixmap this used to
-/// return was `[a, a, a, a]` — and the caller's next act is to box-filter it
+/// The mask is grey by construction — every pixel of the four-byte form is
+/// `[a, a, a, a]` — and the caller's next act is to box-filter it
 /// toward a device footprint that is, on a soft-masked thumbnail, an order of
 /// magnitude smaller in each axis. Building the four-byte form first makes
 /// both the build and the filter touch four times the bytes they need to, and
@@ -426,9 +424,7 @@ pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Cow<'_
     //
     // `Pixels::Gray8` names the plane's shape for `resample_quality`'s
     // component count and nothing reads its samples through this descriptor,
-    // so it borrows the plane's length rather than a second copy of it: the
-    // buffer this used to clone was the mask's whole sample array, allocated
-    // and memcpy'd on every draw so that `components()` could answer 1.
+    // so it borrows the plane's length rather than a second copy of it.
     let dict = ImageData {
         width: w,
         height: h,
@@ -471,9 +467,9 @@ pub fn mask_pixmap(plane: &[u8], width: u32, height: u32) -> Pixmap {
 ///
 /// On a soft-masked thumbnail the saving is the whole point rather than a
 /// margin: `image_en_fqa` reduces 29.8 million mask samples per render at
-/// roughly 8.3x in each axis, so the four-channel form built and filtered
-/// 119 MB where one channel needs 30 MB, and the expanded buffer it hands the
-/// device is 1/69th the size of the one it used to build.
+/// roughly 8.3x in each axis, so one channel is 30 MB against 119 MB for
+/// four, and the expanded buffer it hands the device is 1/69th the
+/// four-channel size.
 #[must_use]
 pub fn reduced_mask_pixmap(
     plane: &[u8],

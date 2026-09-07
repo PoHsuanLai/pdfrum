@@ -165,8 +165,7 @@ pub(crate) fn read(
     }
 
     let mut dict = dict;
-    // `/Subtype /Image` is established rather than written back into the
-    // parsed object (design brief D3).
+    // A missing `/Subtype` is filled in as `/Image`.
     if dict.raw(&Name::from("Subtype")).is_none() {
         dict.push(Name::from("Subtype"), Object::Name(Name::from("Image")));
     }

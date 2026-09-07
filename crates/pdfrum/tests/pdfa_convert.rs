@@ -8,9 +8,8 @@
 //! deliberate subset of ISO 19005.
 //!
 //! A conversion has no such excuse. Its output either passes veraPDF or it
-//! does not, and that verdict is the whole deliverable — the roadmap's exit
-//! criterion is "`to_pdfa(A2b)` produces files veraPDF passes for the inputs
-//! it accepts". So the scored test below converts the corpus and counts what
+//! does not: `to_pdfa(A2b)` produces files veraPDF passes for the inputs it
+//! accepts. The scored test below converts the corpus and counts what
 //! passes, with the count pinned: it may go up freely, and it may not go down
 //! without someone editing the floor.
 //!
@@ -40,10 +39,9 @@ use pdfrum_corpus::CORPUS;
 
 /// How many corpus files veraPDF passes at A-2b after conversion.
 ///
-/// Measured, not chosen: the run in §9 — 10 when the
-/// conversion landed, 11 once the CMYK output intent joined it. The floor exists
-/// so the number cannot quietly regress — a change that converts fewer files
-/// fails here rather than being noticed a milestone later.
+/// Measured, not chosen: 10 when the conversion landed, 11 once the CMYK
+/// output intent joined it. The floor exists so the number cannot quietly
+/// regress — a change that converts fewer files fails here.
 ///
 /// Before conversion the same corpus passes **zero**, which is the other half
 /// of the claim and is asserted alongside it.
@@ -119,10 +117,9 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-/// **The deliverable.** Convert the corpus to A-2b and score the output.
+/// Convert the corpus to A-2b and score the output.
 ///
-/// The claim this test makes is the roadmap's exit criterion, and it is made
-/// as a *difference*: the same 44 files before and after, through the same
+/// The claim is a *difference*: the same 44 files before and after, through the same
 /// veraPDF at the same flavour. A conversion that did not move the verdict
 /// would pass a "the output is valid" test written carelessly and fail this
 /// one.

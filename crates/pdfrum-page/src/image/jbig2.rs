@@ -193,8 +193,8 @@ mod tests {
 
         // The dictionary says four pixels wide. `row_bytes` is 1, so the flat
         // index `y * row_bytes + x / 8` stays inside the buffer for x up to 7 —
-        // which is how a wider codestream used to write row 0's pixel 5 and
-        // find itself still in row 0's only byte, and pixel 8 in *row 1*.
+        // a wider unclipped codestream would write row 0's pixel 5 into row
+        // 0's only byte, and pixel 8 into *row 1*.
         //
         // This is `image_ccitt_transfer`'s shape in miniature: it declares
         // 400x400 over a codestream whose page is 3562x851.

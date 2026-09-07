@@ -638,7 +638,7 @@ impl Walk<'_, '_, '_> {
 
     /// Draw one `<text>` element, as outlines.
     ///
-    /// roadmap item 3. `usvg` has already done the hard half — resolved
+    /// `usvg` has already done the hard half — resolved
     /// the family against the faces
     /// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) registered,
     /// run the bidi and the shaping, positioned every glyph, applied
@@ -647,10 +647,10 @@ impl Walk<'_, '_, '_> {
     /// ordinary group of filled paths. So the mapping is: walk that group
     /// like any other. Glyph outlines *are* paths.
     ///
-    /// **Outlines rather than embedded text** is the deliberate default and
-    /// the roadmap's own: the page needs no font embedded and no encoding to
-    /// get right, and it renders identically in every viewer. What it costs
-    /// is selectable text, alongside what embedding would need.
+    /// **Outlines rather than embedded text** is the deliberate default: the
+    /// page needs no font embedded and no encoding to get right, and it
+    /// renders identically in every viewer. What it costs is selectable
+    /// text, alongside what embedding would need.
     ///
     /// An empty flattened group means `usvg` resolved no face for the
     /// element's family — the caller registered none, or none that matches —

@@ -2479,8 +2479,8 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // `/ExtGState /Font` — audit A18. Table 58 makes the array's first
-    // element an *indirect reference to a font dictionary*;
+    // `/ExtGState /Font`. Table 58 makes the array's first element an
+    // *indirect reference to a font dictionary*;
     // `cpdf_allstates.cpp:87-89` reads it as a byte string and looks that up
     // in the page's `/Font` resources, so the spec's form yields `""`, misses,
     // and `cpdf_streamcontentparser.cpp:1239` substitutes stock Helvetica.
@@ -2489,8 +2489,7 @@ mod tests {
     // -----------------------------------------------------------------
 
     /// A map-backed resolver, so a `Ref` in a fixture can actually be
-    /// followed. `NoResolve` cannot, which is why the older `/Font` test
-    /// could only observe "nothing was installed".
+    /// followed.
     #[derive(Debug, Default)]
     struct Store(std::collections::HashMap<u32, std::sync::Arc<pdfrum_object::Object>>);
 

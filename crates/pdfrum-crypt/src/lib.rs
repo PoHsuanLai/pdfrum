@@ -56,7 +56,7 @@ use pdfrum_object::{Dict, Name, ObjRef, Resolve, names};
 /// The C++ collapses every one of these into a single "password error" at the
 /// parser boundary; splitting them changes no document's fate but lets a
 /// caller tell "this needs a password" from "we cannot do this document's
-/// cryptography" (Divergence D3).
+/// cryptography".
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     /// The password is neither the user nor the owner password.
@@ -67,18 +67,16 @@ pub enum Error {
     #[error("/Filter {0:?} is not the standard security handler")]
     UnsupportedHandler(Box<[u8]>),
     /// `[oracle-bug]` **Never constructed.** §7.6.5 table 20 makes `/StmF`
-    /// and `/StrF` independent (audit item A27), so a pair naming different
-    /// crypt filters is conformant and this crate resolves each class
-    /// separately. The variant is kept because it is a public enum member
-    /// and removing it is a breaking change no caller gains from; nothing
-    /// produces it.
+    /// and `/StrF` independent, so a pair naming different crypt filters is
+    /// conformant and this crate resolves each class separately. The variant
+    /// is kept because it is a public enum member and removing it is a
+    /// breaking change no caller gains from; nothing produces it.
     // [oracle-bug] cpdf_security_handler.cpp:305 and :325 return false on a
     // differing pair.
     #[error("/StmF and /StrF name different crypt filters")]
     MismatchedCryptFilters,
-    /// The named crypt filter is not a key in `/CF`. An **empty** name no
-    /// longer lands here: both class keys absent is §7.6.5's `/Identity`
-    /// default rather than an error (audit item A27).
+    /// The named crypt filter is not a key in `/CF`. An **empty** name is
+    /// §7.6.5's `/Identity` default rather than an error.
     // [oracle-bug] cpdf_security_handler.cpp:305 rejects the absent pair.
     #[error("crypt filter {0:?} is not present in /CF")]
     MissingCryptFilter(Box<[u8]>),
@@ -351,7 +349,7 @@ impl SecurityHandler {
     /// ```
     #[must_use]
     pub fn decrypt(&self, obj: ObjRef, class: CryptClass, data: &[u8]) -> Vec<u8> {
-        // `[oracle-bug]` A27: the *string* class branches. §7.6.5 lets
+        // `[oracle-bug]`: the *string* class branches. §7.6.5 lets
         // `/StrF` resolve to `/Identity` beside an enciphering `/StmF`, and
         // such a document's strings are plaintext.
         if class == CryptClass::String && self.strings_identity() {
@@ -359,7 +357,7 @@ impl SecurityHandler {
         }
         // `/EFF` is the one class that can genuinely name another cipher, and
         // does so by cipher only — §7.6.5 gives every `/CF` entry the same
-        // file key (A26).
+        // file key.
         if let (CryptClass::Embedded, Some(cipher)) = (class, self.embedded_cipher()) {
             return self.decrypt_with(obj, cipher, data);
         }
@@ -444,7 +442,7 @@ impl SecurityHandler {
     /// ```
     #[must_use]
     pub fn encrypt(&self, obj: ObjRef, class: CryptClass, iv: Iv, data: &[u8]) -> Vec<u8> {
-        // `[oracle-bug]` A27: a pass-through string class, exactly as on the
+        // `[oracle-bug]`: a pass-through string class, exactly as on the
         // decrypt side.
         if class == CryptClass::String && self.strings_identity() {
             return data.to_vec();
@@ -951,7 +949,6 @@ mod tests {
 
     // ---- T15: the crypt-filter class rules ----
 
-    /// Audit item **A27**. This asserted `Err(MismatchedCryptFilters)`.
     /// §7.6.5 table 20 makes `/StmF` and `/StrF` two independent entries, so
     /// differing names are conformant — the stream filter supplies the
     /// cipher this record models.
@@ -964,8 +961,7 @@ mod tests {
         assert_eq!(cipher_of(&dict), Ok((Cipher::Aes, 16)));
     }
 
-    /// Audit item **A27**. This asserted `Err(MismatchedCryptFilters)` for an
-    /// absent `/StmF` against an explicit `/StrF`, because PDFium compares the
+    /// An absent `/StmF` against an explicit `/StrF`. PDFium compares the
     /// looked-up bytes *before* applying any default and absent reads as
     /// empty. §7.6.5's default is `/Identity`, so the streams pass through
     /// while the strings are enciphered by `/StrF`'s filter.
@@ -979,10 +975,8 @@ mod tests {
         assert_eq!(params.string_cipher, Cipher::Aes, "/StrF names StdCF");
     }
 
-    /// Audit item **A27**. This asserted `Err(MissingCryptFilter)` for both
-    /// entries absent, because the empty name is looked up in `/CF` and is
-    /// not there. §7.6.5 defaults **both** to `/Identity`, so `/CF` is never
-    /// consulted and nothing is enciphered.
+    /// Both class filters absent. §7.6.5 defaults **both** to `/Identity`, so
+    /// `/CF` is never consulted and nothing is enciphered.
     #[test]
     fn both_class_filters_absent_default_to_identity() {
         let dict = test_fixtures::bare_v4_dict();
@@ -992,9 +986,7 @@ mod tests {
         assert!(matches!(handler, SecurityHandler::Identity));
     }
 
-    /// Audit item **A27**. A V4 dictionary with no `/CF` used to be
-    /// `MalformedEncryptDict`, because PDFium's empty-name lookup reached for
-    /// `/CF` before any default applied. With both classes defaulting to
+    /// A V4 dictionary with no `/CF`. With both classes defaulting to
     /// `/Identity`, `/CF` is never consulted, so the dictionary resolves to no
     /// cipher rather than to a malformation.
     #[test]
@@ -1007,9 +999,9 @@ mod tests {
         assert_eq!(cipher_of(&dict), Ok((Cipher::None, 0)));
     }
 
-    /// Audit item **A27**, the case the fix exists for: `/StrF /Identity`
-    /// beside an enciphering `/StmF`. PDFium refuses the document; §7.6.5
-    /// says its strings are plaintext while its streams are enciphered.
+    /// `/StrF /Identity` beside an enciphering `/StmF`. PDFium refuses the
+    /// document; §7.6.5 says its strings are plaintext while its streams are
+    /// enciphered.
     #[test]
     fn an_identity_string_filter_leaves_strings_plaintext_beside_an_enciphering_stream() {
         let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
@@ -1087,12 +1079,10 @@ mod tests {
         );
     }
 
-    // The two public methods are the private word, decoded. This is the
-    // assertion the facade used to make for itself with `bits & 0x100`
-    // before the decode moved here: the AESV2 fixture's `/P` reports
-    // `0xFFFF_F2C0`, which grants neither form filling (bit 9) nor annotation
-    // modification (bit 6) — and the owner's view of the same document grants
-    // everything.
+    // The two public methods are the private word, decoded. The AESV2
+    // fixture's `/P` reports `0xFFFF_F2C0`, which grants neither form filling
+    // (bit 9) nor annotation modification (bit 6) — and the owner's view of
+    // the same document grants everything.
     #[test]
     fn the_public_methods_decode_the_word_the_private_one_reports() {
         let dict = test_fixtures::encrypted_pdf_dict();
@@ -1323,7 +1313,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // `/EFF` — audit A26. The oracle reads the key nowhere
+    // `/EFF`. The oracle reads the key nowhere
     // (`grep '"EFF"' core/ fpdfsdk/` is empty), so an embedded file stream
     // decrypts with the stream filter whatever `/EFF` says. The corpus has
     // no file with an `/EFF` at all, let alone one differing from `/StmF`,
@@ -1371,8 +1361,7 @@ mod tests {
 
     /// An `/EFF` naming a filter with a different `/CFM` gives the embedded
     /// class its own cipher — pdf.js `crypto.js:1120`, `:1336`; ISO 32000-1
-    /// §7.6.5 table 20. Fails on the old behaviour, which folded `Embedded`
-    /// onto `Stream`.
+    /// §7.6.5 table 20. The embedded class is not folded onto `Stream`.
     #[test]
     fn an_eff_naming_another_filter_decrypts_embedded_files_with_it() {
         let dict = eff_dict("V2");

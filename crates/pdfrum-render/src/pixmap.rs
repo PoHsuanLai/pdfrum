@@ -995,7 +995,7 @@ pub(crate) fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
 mod tests {
     use super::*;
 
-    /// Audit item **A13**. Knockout composition, stated pixel-wise: where a
+    /// Knockout composition, stated pixel-wise: where a
     /// later object has coverage it *replaces* the earlier one rather than
     /// blending over it. That is the whole of §11.6.6's rule.
     // The oracle does not implement it: SetGroupKnockout is an empty body at
@@ -1050,7 +1050,7 @@ mod tests {
         );
     }
 
-    /// Audit item **A13**. A mismatched overlay is a no-op, on the same
+    /// A mismatched overlay is a no-op, on the same
     /// invariant `multiply_alpha_mask` keeps.
     #[test]
     fn a_mismatched_knockout_overlay_changes_nothing() {
@@ -1060,7 +1060,7 @@ mod tests {
         assert_eq!(base, before);
     }
 
-    /// Audit item **A12**. The two properties the backdrop-removal formula
+    /// The two properties the backdrop-removal formula
     /// has to have.
     // The oracle gives it neither: cpdf_renderstatus.cpp does not implement
     // backdrop removal at all.
@@ -1099,7 +1099,7 @@ mod tests {
         assert_eq!(group.pixel(0, 0), Some([0, 0, 0, 0]));
     }
 
-    /// Audit item **A12**. A mismatched backdrop is a no-op, on the same
+    /// A mismatched backdrop is a no-op, on the same
     /// invariant `multiply_alpha_mask` keeps.
     #[test]
     fn removing_a_mismatched_backdrop_changes_nothing() {

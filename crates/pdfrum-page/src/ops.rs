@@ -39,8 +39,7 @@ impl LineCap {
     ///
     /// PDFium casts the operand into a three-valued enum unchecked and lets
     /// the rasterizer's `default:` arm absorb anything out of range; clamping
-    /// here is observably identical and keeps the enum honest
-    /// (design brief D5).
+    /// here is observably identical and keeps the enum honest.
     #[must_use]
     pub fn from_int(v: i64) -> Self {
         match v {

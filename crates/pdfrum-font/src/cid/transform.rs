@@ -106,9 +106,9 @@ mod tests {
 
     #[test]
     fn the_table_has_one_hundred_and_fifty_four_rows() {
-        // The design brief says 150; the oracle's array has 154. Counted twice
-        // against the C++ source, and pinned here so a future extraction that
-        // silently drops rows is caught.
+        // The oracle's array has 154. Counted twice against the C++ source,
+        // and pinned here so a future extraction that silently drops rows is
+        // caught.
         assert_eq!(JAPAN1_VERTICAL_CIDS.len(), 154);
     }
 

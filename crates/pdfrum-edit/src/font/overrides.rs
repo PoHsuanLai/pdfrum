@@ -24,8 +24,7 @@
 //! `/CIDToGIDMap`: our subsetter renumbers glyphs, and pointing the CID at
 //! its new glyph through the table ISO 32000-1 §9.7.4.2 already provides
 //! absorbs the renumbering at the one place it can be absorbed without
-//! touching anything a content stream said. See [`super`] for why that
-//! replaced the re-keying the design originally planned.
+//! touching anything a content stream said.
 
 // Where the pass's shape comes from: `cpdf_fontsubsetter.cpp:126-226`. The
 // `/CIDToGIDMap` reading the test's `glyph_at` reproduces is

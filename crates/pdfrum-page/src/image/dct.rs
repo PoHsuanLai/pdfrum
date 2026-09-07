@@ -56,8 +56,8 @@
 //! and so does `zune-jpeg` at `headers.rs:496-508`. `zune-jpeg`'s *conversion*
 //! table is the gap: `worker.rs:63-82` implements `(YCCK, RGB)` and
 //! `(YCCK, RGBA)` and has no `(YCCK, CMYK)` arm, so pinning CMYK — which the
-//! plain-CMYK case needs — used to reject every YCCK image outright. Both are
-//! now asked for their own space, which takes the identity copy at
+//! plain-CMYK case needs — would reject every YCCK image outright. Both are
+//! asked for their own space, which takes the identity copy at
 //! `worker.rs:41-43`, and [`ycck_to_cmyk`] finishes the YCCK one here. The
 //! conversion has to be ours rather than the decoder's so that `/Decode` still
 //! sees CMYK — see that function.

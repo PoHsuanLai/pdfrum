@@ -95,7 +95,7 @@ impl ObjectMap {
 /// `/Type /Pages` resolves to it rather than being copied, so an imported
 /// page's tree links land in the destination's tree. (The C++ hardcodes the
 /// number **4** here, which is right only because a freshly created document
-/// happens to number its pages node 4 — divergence D13.)
+/// happens to number its pages node 4.)
 ///
 /// Returns `None` when the object cannot be copied: it dangles, it is another
 /// page, or one of its array elements failed.
@@ -396,7 +396,7 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
         assert!(map.get(52).is_none());
     }
 
-    // D13: a `/Type /Pages` resolves to the destination's real pages node,
+    // A `/Type /Pages` resolves to the destination's real pages node,
     // not to a hardcoded object 4.
     #[test]
     fn a_pages_node_resolves_to_the_destinations_own() {

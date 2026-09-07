@@ -6,7 +6,7 @@
 //! levels, no paragraph resolution and no explicit-direction handling; the
 //! only mirroring is a single table lookup, applied later. Feeding the same
 //! text through a real UBA implementation gives different output, which is
-//! why this crate does not use `unicode-bidi` (design brief D1).
+//! why this crate does not use `unicode-bidi`.
 
 use crate::unicode::{BidiClass, bidi_class};
 

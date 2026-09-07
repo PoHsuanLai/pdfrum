@@ -12,18 +12,9 @@
 //!
 //! `rg` and `RG` are the only colour operators written, and a `DeviceGray`
 //! colour goes out as three equal components rather than as `g`/`G`. What
-//! *converts* to them is every space, not two.
-//!
-//! *Corrected 2026-09-02 (A71, `[oracle-bug]`).* This paragraph used to end
-//! "Every other space — CMYK, `ICCBased`, Indexed, Separation, `DeviceN`, Lab,
-//! `CalRGB`, and every pattern — writes *nothing*, and the object inherits the
-//! black the stream prologue set. This is a real fidelity loss and it is the
-//! behavior of a regenerated page." The description was accurate of the
-//! oracle; the last sentence was the mistake, because that loss is a defect
-//! rather than a contract and reproducing it was costing fidelity for
-//! nothing. See the comment on `expressible_rgb` for the citations. **Only a
-//! pattern still writes nothing**, because a pattern paints through a resource
-//! no `rg` can name.
+//! *converts* to them is every space, not two. **Only a pattern writes
+//! nothing**, because a pattern paints through a resource no `rg` can name.
+//! See `expressible_rgb` for the `[oracle-bug]` citation.
 //!
 //! # The `ExtGState` carries three keys and no more
 //!
@@ -175,7 +166,7 @@ fn blend_name(blend: BlendMode) -> Name {
 // already written and simply never reached — which is why the fix here is the
 // delegation the C++ declines to perform rather than a new operator.
 // **pdf.js has no counterpart to cite**: it does not regenerate page content,
-// so it is silent here. This is the audit's A71.
+// so it is silent here.
 fn expressible_rgb(colour: &ColorValue) -> Option<Rgb> {
     // A pattern paints through a resource no `rg` can name. That one is a
     // genuine limit rather than the oversight above, and stays.
@@ -220,7 +211,7 @@ pub(crate) struct ResourceNames {
 ///
 /// Returns whether anything was written. `out` is left untouched on a `false`
 /// — the bytes are built into a scratch buffer and committed only on success,
-/// so an unsupported object never contributes an unbalanced fragment (D6).
+/// so an unsupported object never contributes an unbalanced fragment.
 //
 // [oracle-bug] cpdf_pagecontentgenerator.cpp:945-946 writes the graphics
 // prefix and then `*buf << "BT ";`, and `:968-970` is a bare `return` for any
@@ -236,9 +227,7 @@ pub(crate) struct ResourceNames {
 // object we cannot express contributes *nothing*. For well-formed input the
 // rendered result is identical: the stream-level `Q` closes the oracle's
 // stray `q`, and end-of-stream closes the `BT`. What differs is that our
-// output stays parseable. This is the audit's A72, previously recorded as
-// design brief D6 — a divergence we chose, where the oracle-bug rule makes it
-// obligatory.
+// output stays parseable.
 pub(crate) fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames) -> bool {
     let mut body = String::new();
     body.push_str("q ");
@@ -564,7 +553,7 @@ mod tests {
         assert!(out.contains("[3 2] 1.5 d "), "got {out}");
     }
 
-    // `[oracle-bug]` A71: a CMYK fill converts and writes `rg`, where the C++
+    // `[oracle-bug]` a CMYK fill converts and writes `rg`, where the C++
     // writes no operator at all and leaves the object black.
     #[test]
     fn a_cmyk_colour_converts_and_writes_rg() {

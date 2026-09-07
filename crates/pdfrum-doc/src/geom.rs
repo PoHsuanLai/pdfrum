@@ -17,9 +17,9 @@
 //! - `Rect::union`, `Rect::intersect` and `Rect::inflate` are documented as
 //!   valid only for non-negative extents; the appearance generators feed them
 //!   inverted rectangles and rely on normalization happening first.
-//! - `Rect::is_empty` was renamed `is_zero_area` in `kurbo` 0.13 and tests
-//!   `area() == 0.0`; the emptiness this crate means is `x0 >= x1 || y0 >= y1`,
-//!   which is true of an inverted rectangle that has area.
+//! - `Rect::is_zero_area` tests `area() == 0.0`; the emptiness this crate means
+//!   is `x0 >= x1 || y0 >= y1`, which is true of an inverted rectangle that has
+//!   area.
 //!
 //! The private half of the module is where those four divergences live. The
 //! public half is the vocabulary `pdfrum-form` and `pdfrum-tool` share with

@@ -45,8 +45,8 @@ use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_render::RenderOptions;
 
 // The board's SSIM, shared with `pdfrum-svg`'s export round trip rather than
-// transcribed a second time, so the two milestones' published numbers mean
-// the same thing. Its `decode_png` is for the export side, which reads the
+// transcribed a second time, so both round trips score the same way. Its
+// `decode_png` is for the export side, which reads the
 // oracle's PNG off disk; this side has no oracle artifact to read, so the
 // function is unused here and that is a property of sharing the module, not
 // dead code in it.
@@ -460,8 +460,7 @@ fn every_reported_construct_has_a_fixture_that_raises_it() {
     // first needs a GIF or WebP, which no fixture carries because embedding
     // one would add a decoder to the *test*, and the second needs a focal
     // gradient, which `usvg` normalises away in the cases a small fixture can
-    // express. Both are recorded as named debt in `docs/roadmap.md`'s
-    // entry rather than left as an unexplained gap.
+    // express. Both are gaps, not silent omissions.
     // `Text` is in this list only without `svg-text`. With the feature and a
     // face registered, the corpus draws its text rather than reporting it —
     // that is the point of the feature — and the report path is proven by
@@ -666,7 +665,7 @@ fn text_is_reported_when_no_face_is_registered() {
 
 /// Text goes into the page as **outlines**, not as an embedded font.
 ///
-/// The roadmap's item 3 default, and a claim about the file rather than the
+/// A claim about the file rather than the
 /// pixels: a page carrying the text as glyph outlines has no font resource
 /// for it and no text-showing operator, so it renders identically wherever it
 /// is opened. The pixel half is the `text_*` rows in the table above.

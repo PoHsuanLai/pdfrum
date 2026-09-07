@@ -326,7 +326,7 @@ fn boundaries(image: &Pixmap) -> Vec<bool> {
 /// Grow a mask by one pixel in all eight directions.
 ///
 /// One round, which is `conformance/src/tierc.rs`'s `EDGE_DILATION` — the
-/// design brief's own radius, deliberately not tuned past it. Reading from a
+/// contract's radius, deliberately not tuned past it. Reading from a
 /// snapshot rather than in place is what keeps "one pixel" true.
 fn dilate(mask: &[bool], width: u32, height: u32) -> Vec<bool> {
     let w = width as usize;

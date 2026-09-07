@@ -128,7 +128,7 @@ pub(crate) fn write_stream(
     // The true byte count. The C++ writes `last_obj_num * 5` on one path
     // even when fewer records follow, which a strict reader would reject —
     // it survives only because PDFium's own reader re-scans. We do not
-    // reproduce that (divergence D11).
+    // reproduce that.
     out.extend_from_slice(payload.len().to_string().as_bytes());
     out.extend_from_slice(b">>stream\r\n");
     out.extend_from_slice(&payload);
@@ -307,7 +307,7 @@ mod tests {
     }
 
     // The stream form declares its own /Length truthfully, unlike the C++'s
-    // rebuilt-table path (D11).
+    // rebuilt-table path.
     #[test]
     fn an_xref_stream_declares_the_true_record_length() {
         let src = Dict::from_pairs([(names::ROOT.clone(), Object::Ref(ObjRef::new(1, 0)))]);

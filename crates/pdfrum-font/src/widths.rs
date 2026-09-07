@@ -10,17 +10,13 @@ use pdfrum_object::{Array, Dict, Object, Resolve};
 
 /// The sentinel a simple font's width table holds for "not declared".
 ///
-/// Nonzero on purpose: the all-caps aliasing of §1.4 tests `width != 0` and
+/// Nonzero on purpose: the all-caps aliasing tests `width != 0` and
 /// therefore propagates an *unset* width, which a zero sentinel would not.
 ///
 /// `pub(crate)` rather than `pub`: it is read by the ladders that build the
-/// table and by the all-caps aliasing, all inside this crate. It used to leak
-/// anyway — not by name, since `mod widths` is private, but through the
-/// **value**, because [`SimpleWidths::raw`] was a public array documented as
-/// holding it. A caller could read `0xffff` out of a public field with no
-/// exported name to compare it against and no way to `use` one. The array is
-/// now private and [`SimpleWidths::get`] — which
-/// already had exactly the right shape — is the only way in.
+/// table and by the all-caps aliasing, all inside this crate.
+/// [`SimpleWidths::raw`] is private and [`SimpleWidths::get`] is the only
+/// way in.
 pub(crate) const WIDTH_UNSET: u16 = 0xffff;
 
 /// A simple font's 256 advance widths, as declared.

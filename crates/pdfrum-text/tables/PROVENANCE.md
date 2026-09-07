@@ -29,8 +29,7 @@ mail-link character is alphanumeric (`CheckMailLink`), and how a search needle
 is case-folded (`MakeLower`) — read ICU directly. A crate tracking a newer
 Unicode revision classifies some code points differently from the ICU the
 oracle links, and every disagreement is a whole-page Tier-A failure. So the
-values come from the oracle's own ICU, not from the newest data available
-(design brief D1, 's 2026-08-29 ruling).
+values come from the oracle's own ICU, not from the newest data available.
 
 The bidi data is a second, independent reason: PDFium does **not** run the
 Unicode Bidirectional Algorithm. It buckets raw bidi classes four ways and

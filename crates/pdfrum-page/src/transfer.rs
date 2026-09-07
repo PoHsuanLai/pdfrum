@@ -17,8 +17,8 @@
 //!
 //! §8.6.5.9 / table 58 give the array as `[red green blue gray]`, so
 //! `array[0]` is red and `array[3]` is gray, which we read when present. The
-//! oracle reverses the first three and requires exactly three; audit item
-//! **A9** records the divergence, and the derivation is a `//` note below.
+//! oracle reverses the first three and requires exactly three; the
+//! derivation is a `//` note below.
 
 // [oracle-bug] A9. `cpdf_docrenderdata.cpp:90` is
 // `pFuncs[2 - i] = Load(array[i])` while `:113-114` names `samples[0]` as
@@ -76,8 +76,6 @@ pub const CHANNEL_SAMPLES: usize = 256;
 // unusable should black the channel out. pdf.js has no equivalent: its
 // transfer functions are built per array element with no output-count cap
 // (`evaluator.js:944-959`), so the case cannot arise there.
-// This is the audit's A11, previously recorded as design brief D7 —
-// "declined", where the oracle-bug rule makes it obligatory.
 pub const MAX_OUTPUTS: usize = 16;
 
 /// Three 256-entry byte tables, one per channel.
@@ -306,9 +304,9 @@ mod tests {
         ]))
     }
 
-    /// Audit item **A9**. This asserted the oracle's reversal — `array[2]`
-    /// red, `array[0]` blue. Table 58 gives the array as
-    /// `[red green blue gray]`, so element `i` drives channel `i`.
+    /// Table 58 gives the array as `[red green blue gray]`, so element `i`
+    /// drives channel `i`. The oracle reverses it — `array[2]` red,
+    /// `array[0]` blue.
     #[test]
     fn the_first_array_element_drives_red() {
         // Three constants no two of which collide, so the mapping of array
@@ -326,9 +324,8 @@ mod tests {
         assert_eq!(tr.apply(2, 0), 200, "array[2] must drive blue");
     }
 
-    /// Audit item **A9**, end to end: the ordering survives to the bytes a
-    /// renderer reads. The inverting function is in the **first** slot now,
-    /// because table 58 makes that one red.
+    /// The array order survives to the bytes a renderer reads. The inverting
+    /// function is in the **first** slot, because table 58 makes that one red.
     #[test]
     fn the_array_order_survives_to_the_output_bytes() {
         let identity = constant_ramp();

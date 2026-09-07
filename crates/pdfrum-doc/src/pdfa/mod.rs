@@ -2,8 +2,8 @@
 //!
 //! # Report before repair
 //!
-//! This module only *reports*. Nothing here rewrites a document, and the
-//! conversion the roadmap calls `to_pdfa` is a later pass deliberately: a
+//! This module only *reports*. Nothing here rewrites a document, and
+//! conversion is a later pass deliberately: a
 //! checker that has been cross-examined against an independent implementation
 //! is a result, and one that has not is a claim. The oracle is veraPDF, and
 //! `crates/pdfrum/tests/pdfa_oracle.rs` scores every check against it exactly

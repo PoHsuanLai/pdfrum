@@ -104,13 +104,12 @@ impl TinySkiaDevice {
     /// The target and the clip in force, borrowed together.
     ///
     /// `target` and `clip` cannot both be called on `&mut self`, and a draw
-    /// needs both — so every draw used to hand `tiny_skia` a **clone** of the
-    /// clip mask. That clone is device-sized: a letter page's is half a
+    /// needs both. A clip mask is device-sized: a letter page's is half a
     /// megabyte, and a page of annotation appearances draws hundreds of
-    /// objects under one, so it is a `memcpy` per fill, per stroke and per
-    /// image rather than per clip push. `clips` and `layers`/`base` are
-    /// disjoint fields, so splitting the borrow by hand is all that was ever
-    /// needed; nothing about the drawing changes, and `tiny_skia` takes the
+    /// objects under one, so cloning it would be a `memcpy` per fill, per
+    /// stroke and per image rather than per clip push. `clips` and
+    /// `layers`/`base` are disjoint fields, so the two borrows split by
+    /// hand; nothing about the drawing changes, and `tiny_skia` takes the
     /// mask by reference either way.
     fn target_and_clip(&mut self) -> Option<(&mut tiny_skia::Pixmap, Option<&Mask>)> {
         let clip = self.clips.last().and_then(Option::as_ref);
@@ -208,7 +207,7 @@ impl RenderDevice for TinySkiaDevice {
         // stroke outline the *engine's* geometry under both rasterizers rather
         // than each stroker's own — the same argument
         // `pdfrum_render::stroke::outline` already makes for a stroke used as a
-        // clip (design brief §6.1).
+        // clip.
         let Some(paint) = to_paint(brush, aa) else {
             return;
         };

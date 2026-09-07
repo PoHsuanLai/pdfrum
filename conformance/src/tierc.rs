@@ -23,8 +23,8 @@
 //! question, not a verdict.
 //!
 //! Tier B asks whether we match the oracle; Tier C asks whether the *engine*
-//! is the thing that decided the answer. The design brief makes that precise
-//! by splitting every pixel into two populations:
+//! is the thing that decided the answer. Every pixel falls into one of two
+//! populations:
 //!
 //! - **Decisions belong to the engine and must be identical.** Geometry, the
 //!   resolved colours, the shading rasterizers' per-pixel maths, layer
@@ -46,11 +46,10 @@
 //! # The proxy is dilated, because the contract's mask is
 //!
 //! The neighbourhood test alone marks the antialiased pixel and stops. The
-//! design brief's mask is
-//! `dilate(union of primitive edges, 1px)`, so a boundary contributes its own
-//! ramp *and* the ring of pixels around it — and [`edge_mask`] therefore
-//! applies a one-pixel dilation. Skipping it was not a simplification but a
-//! divergence from the contract, and it had a specific consequence.
+//! contract's mask is `dilate(union of primitive edges, 1px)`, so a boundary
+//! contributes its own ramp *and* the ring of pixels around it — and
+//! [`edge_mask`] therefore applies a one-pixel dilation. Skipping it would
+//! be a divergence from the contract, and it has a specific consequence.
 //!
 //! A tiling pattern's cell is rasterized once, antialiased like any other
 //! content, and the finished cell is then blitted at every tile position
@@ -83,8 +82,7 @@
 //! `tests::a_whole_page_colour_divergence_survives_dilation` is it reduced
 //! to sixteen pixels.
 //!
-//! Two absolute failures short-circuit the metric, both from the backend
-//! verification document:
+//! Two absolute failures short-circuit the metric:
 //!
 //! - **One backend painted nothing where the other painted.** `tiny-skia`
 //!   silently drops a path fill thinner than `1/4096`, which is a *silent*
@@ -92,7 +90,7 @@
 //! - **The images differ in size.** That is an engine decision, and there is
 //!   no per-pixel story to tell about it.
 //!
-//! One budget the brief names is deliberately *not* implemented: the
+//! One budget is deliberately *not* implemented: the
 //! three-count allowance for the four non-separable blend modes, whose
 //! `ClipColor` rescaling amplifies a one-count rounding difference. Applying
 //! it needs to know which pixels a non-separable blend touched, which needs
@@ -108,7 +106,7 @@ use crate::ssim::Image;
 ///
 /// # The denominator this budget was written for is not the one measured
 ///
-/// The design brief derives its edge mask from the device-call trace and
+/// The contract's edge mask is derived from the device-call trace and
 /// **dilates every primitive edge by one pixel**, so a glyph stem contributes
 /// its own antialiased column *and* the opaque columns on either side. The
 /// neighbourhood proxy here contributes only the antialiased column itself:
@@ -122,7 +120,7 @@ use crate::ssim::Image;
 /// *interior* count, which is the population the contract actually gates on,
 /// stays at zero.
 ///
-/// The budget is therefore left at the brief's figure and **the measured
+/// The budget is therefore left at one percent and **the measured
 /// rate is reported rather than enforced**: moving the number to fit the
 /// proxy would be fitting the target to the instrument. The instrument
 /// improves when the engine grows its device-call trace, which is what makes
@@ -180,7 +178,7 @@ impl Divergence {
     ///
     /// An interior difference is a hard failure at any count, because the
     /// engine is what decided those pixels; the edge rate is the soft
-    /// measure the milestone target reads.
+    /// measure.
     #[must_use]
     pub fn hard_fail(&self) -> bool {
         self.one_painted_nothing || self.interior_differing > 0
@@ -245,13 +243,13 @@ pub fn compare(a: &Image, b: &Image) -> Option<Divergence> {
 
 /// How far the agreed-boundary mask is grown before the interior is scored.
 ///
-/// One pixel, which is the brief's own figure (`§6.3`'s
-/// `dilate(..., 1px)`), and it is deliberately not tuned past it. Radius two
-/// was measured over the full store: it clears no further *file*, shrinking
-/// only the pixel counts inside files that fail anyway, while moving 32 files
-/// under the soft edge budget by enlarging their denominator. That is fitting
-/// the target to the instrument, which the [`EDGE_BUDGET`] note above rejects
-/// for the same reason. The radius moves when the brief's radius moves.
+/// One pixel, which is the contract's `dilate(..., 1px)`, and it is
+/// deliberately not tuned past it. Radius two was measured over the full
+/// store: it clears no further *file*, shrinking only the pixel counts inside
+/// files that fail anyway, while moving 32 files under the soft edge budget
+/// by enlarging their denominator. That is fitting the target to the
+/// instrument, which the [`EDGE_BUDGET`] note above rejects for the same
+/// reason.
 const EDGE_DILATION: u32 = 1;
 
 /// Which pixels sit on an edge in *either* image.

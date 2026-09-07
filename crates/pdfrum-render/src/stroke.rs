@@ -235,7 +235,7 @@ pub fn resolve_stroke(params: &StrokeParams, matrices: StrokeMatrices) -> Stroke
 /// So the engine expands the stroke itself, through the same matrix split and
 /// the same resolved [`Stroke`] the ordinary draw uses, and hands over the
 /// resulting fill. Expanding it here rather than in a backend is what keeps
-/// the two rasterizers receiving identical geometry (design brief §6.1).
+/// the two rasterizers receiving identical geometry.
 #[must_use]
 pub fn outline(path: &BezPath, to_device: Affine, params: &StrokeParams) -> BezPath {
     let matrices = split_for_stroke(to_device);

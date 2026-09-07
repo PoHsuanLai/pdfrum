@@ -72,9 +72,8 @@ pub use form_session::{
     KeystrokeOutcome, Modifiers, NoScripts, Response, SessionConfig, UpdateKind,
 };
 // The viewer chrome a host draws for itself: an open combo dropdown and a
-// scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
-// and 2026-09-01 ruling for why this is state a caller pulls
-// rather than a seam the library calls back through.
+// scrolled choice widget. Values, not a trait — `FormSession::popup_for_page`
+// is state a caller pulls rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
 #[cfg(feature = "forms")]
 pub use owned_form::OwnedFormSession;

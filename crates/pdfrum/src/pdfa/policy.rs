@@ -3,8 +3,8 @@
 //!
 //! # Why these are types and not a bool and a string
 //!
-//! The roadmap's fourth item for names the failure mode: *silent lossy
-//! conversion*. A conversion that quietly drops a font, rasterizes a page or
+//! The failure mode is *silent lossy conversion*. A conversion that quietly
+//! drops a font, rasterizes a page or
 //! deletes an annotation has produced a file that passes a validator and is
 //! not the document the caller handed in. The only defence is that every
 //! compromise is (a) authorized in advance and (b) reported afterwards in a
@@ -56,10 +56,10 @@ impl Concession {
 /// the strict policy: convert what can be converted losslessly and refuse
 /// anything else. Widening it is an explicit act per axis.
 ///
-/// The axes are the ones the roadmap names, and they are separate because a
-/// caller's answers genuinely differ between them — an archive may accept a
-/// substituted font (the text stays text, and stays searchable) while refusing
-/// a rasterized page (the text stops being text at all).
+/// The axes are separate because a caller's answers genuinely differ between
+/// them — an archive may accept a substituted font (the text stays text, and
+/// stays searchable) while refusing a rasterized page (the text stops being
+/// text at all).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct Policy {
@@ -70,21 +70,21 @@ pub struct Policy {
     /// font is a hard PDF/A failure that no amount of other repair will fix.
     ///
     /// Accepting is meant to substitute a standard font of the same broad
-    /// shape. **That repair is named debt**, so
+    /// shape. That repair is not implemented yet, so
     /// today accepting means "convert as far as you can": every other repair
     /// applies, the font stays unembedded, and no [`Compromise`] is reported
     /// because nothing was compromised. It is the honest reading of `Accept`
     /// until the substitution lands.
     pub unembeddable_font: Concession,
     /// Content the level forbids outright and that cannot be rewritten —
-    /// transparency under A-1b being the case the roadmap names.
+    /// transparency under A-1b being the case.
     ///
     /// Refusing stops the conversion and names the page. Only A-1b can reach
     /// this: A-2b permits transparency, so nothing there is unrepresentable.
     ///
     /// Accepting is meant to rasterize the offending page — faithful to the
     /// *appearance*, and destroying the text, the vectors and the
-    /// selectability. **That repair is named debt**, so accepting reads as "convert as far as you can" exactly as
+    /// selectability. That repair is not implemented yet, so accepting reads as "convert as far as you can" exactly as
     /// [`Policy::unembeddable_font`] does, and
     /// [`Conversion::rasterized_pages`] is always empty for now.
     pub unrepresentable_content: Concession,
@@ -187,11 +187,11 @@ pub enum Compromise {
     /// standard font was substituted. The glyphs the page draws change.
     ///
     /// **Never produced yet**, like [`Compromise::PageRasterized`]: the
-    /// substitution behind [`Policy::unembeddable_font`] is named debt
-    ///. Both are here rather than added with their
-    /// repairs because each completes a triple that *is* live — the policy
-    /// field, the [`Refusal`] a caller gets today, and the compromise they
-    /// will get instead. A caller writes the match arm once.
+    /// substitution behind [`Policy::unembeddable_font`] is not implemented.
+    /// Both are here rather than added with their repairs because each
+    /// completes a triple that *is* live — the policy field, the [`Refusal`]
+    /// a caller gets today, and the compromise they will get instead. A
+    /// caller writes the match arm once.
     FontSubstituted {
         /// The font dictionary that was rewritten.
         font: ObjRef,
@@ -228,10 +228,10 @@ pub enum Compromise {
     /// A page was rendered to an image and rebuilt around it. Its text is no
     /// longer text and its vectors are no longer vectors.
     ///
-    /// **Never produced yet**: the rasterizing repair is named debt
-    ///. The variant is part of the vocabulary
-    /// because [`Conversion::rasterized_pages`] is the roadmap's "say which"
-    /// and a caller writes that match arm once, not when the repair lands.
+    /// **Never produced yet**: the rasterizing repair is not implemented.
+    /// The variant is part of the vocabulary because
+    /// [`Conversion::rasterized_pages`] reports which pages changed, and a
+    /// caller writes that match arm once, not when the repair lands.
     PageRasterized {
         /// The page, zero-based.
         page: u32,
@@ -450,9 +450,9 @@ impl Conversion {
 
     /// The pages that were rendered to images, in page order.
     ///
-    /// The roadmap's "say which": the one compromise whose *extent* a caller
-    /// almost always wants separately from the list, because it is the one
-    /// that changes what a page fundamentally is.
+    /// The one compromise whose *extent* a caller almost always wants
+    /// separately from the list, because it is the one that changes what a
+    /// page fundamentally is.
     #[must_use]
     pub fn rasterized_pages(&self) -> Vec<u32> {
         let mut pages: Vec<u32> = self

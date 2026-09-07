@@ -315,8 +315,8 @@ mod tests {
 
     #[test]
     fn every_name_table_round_trips_through_the_glyph_list() {
-        // The brief's §3.2 verification: wherever an encoding defines both a
-        // name and a unicode for a code, the Adobe Glyph List must agree.
+        // Wherever an encoding defines both a name and a unicode for a code,
+        // the Adobe Glyph List must agree.
         // Disagreements are real in a handful of places where PDFium's tables
         // predate AGL revisions, so this counts rather than asserting zero.
         let mut checked = 0usize;

@@ -10,16 +10,16 @@
 //! false *after* the destination page was created and inserted, and after
 //! earlier pages of the same batch were fully exported. Every destination
 //! mutation here is staged in the [`EditDoc`] overlay and committed only on
-//! success, so a failed import leaves the destination exactly as it was
-//! (divergence D14). The success path is byte-identical; only failure
-//! differs, and no test asserts on the destination after a failed import.
+//! success, so a failed import leaves the destination exactly as it was.
+//! The success path is byte-identical; only failure differs, and no test
+//! asserts on the destination after a failed import.
 //!
 //! # Importing never mutates the source
 //!
 //! PDFium's N-up path writes `/Type /Page` into a source page dictionary that
 //! lacked one, so it is not read-only with respect to what it is copying
 //! from. Our source is a `&Document` over shared bytes and cannot be mutated;
-//! the missing `/Type` is supplied on the *copy* (divergence D15).
+//! the missing `/Type` is supplied on the *copy*.
 //!
 //! # Four keys are flattened, in this order
 //!
@@ -31,11 +31,8 @@
 //! and are lost unless the page stated them itself.
 
 // [oracle-bug] The four import-path defects this module fixes rather than
-// ports, each verified at the line. They were ruled on as escalation E10 —
-// "a departure from this program's usual rule", taken at our discretion; the
-// audit's A73 relabels all four as **oracle bugs**, which
-// makes obligatory rather than optional to fix. Each is pinned by its own
-// test in `tests/import.rs`.
+// ports, each verified at the line. Each is pinned by its own test in
+// `tests/import.rs`.
 //
 // 1. **The hardcoded destination object number.**
 //    `cpdf_pageorganizer.cpp:150-153`: a cloned object whose `/Type` is
@@ -440,9 +437,9 @@ fn copy_viewer_preferences(dest: &mut EditDoc<'_>, prefs: Dict) {
 /// sheet's content stream invokes the forms in slot order.
 ///
 /// A source page used on two different sheets produces **one** form and two
-/// invocations, and the name is registered in both sheets' resources
-/// (divergence D16: the C++ registers it only on the first, so the sub-page
-/// silently renders blank on every later sheet).
+/// invocations, and the name is registered in both sheets' resources.
+/// The C++ registers it only on the first, so the sub-page silently
+/// renders blank on every later sheet.
 ///
 /// # Errors
 ///
@@ -507,7 +504,7 @@ pub fn n_page_to_one(
             let name = format!("X{}", xobjects.len() + 1);
             content.push_str(&sub_page_fragment(&name, edit));
             // Registered on *every* sheet the form appears on, not just the
-            // first — D16's fix.
+            // first.
             xobjects.push(Name::from(name.as_str()), Object::Ref(form));
         }
 

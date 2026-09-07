@@ -6,7 +6,7 @@
 //! scan of a real font directory cannot afford: the oracle's hermetic
 //! `test_fonts` set is 33.8 MB across 31 files, 26 MB of it one CJK face and
 //! one colour-emoji face the substitution ladder rarely picks, and faulting all
-//! of it in cost 20.5 ms of `read` per cold render (measured 2026-09-06).
+//! of it in cost 20.5 ms of `read` per cold render.
 //!
 //! So this module reads the sfnt header and table directory — a few hundred
 //! bytes — and then only the byte ranges of the two tables `describe` consults,

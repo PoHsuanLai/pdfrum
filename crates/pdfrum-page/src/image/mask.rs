@@ -9,8 +9,7 @@
 //!
 //! - A colour-key array shorter than two entries per component still turns
 //!   masking **on**; the C++ then reads uninitialized ranges. We default them
-//!   to `0/0`, so only exactly-zero samples become transparent
-//!   (design brief D19).
+//!   to `0/0`, so only exactly-zero samples become transparent.
 //! - `/Matte` needs **four** conditions at once — an array of exactly the
 //!   image's component count, a colour space that is not a pattern, and that
 //!   space needing no more components than the image has.

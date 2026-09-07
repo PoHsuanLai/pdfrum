@@ -6,8 +6,7 @@
 //! situation: while decoding an image whose caller asked for it. Vector fills
 //! always take the Adobe-table path; some image paths take the naive
 //! `1 - min(1, c + k)` one, which is visibly different. That flag is threaded
-//! here as a plain `bool` rather than the C++'s cascading refcount
-//! (design brief D9).
+//! here as a plain `bool` rather than the C++'s cascading refcount.
 
 // `c`, `m`, `y` and `k` are the specification's names for these four
 // quantities; spelling them out would make the formulas harder to check

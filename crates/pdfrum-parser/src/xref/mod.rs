@@ -93,11 +93,11 @@ impl Default for XEntry {
 /// representation an array indexed by object number, where reading or
 /// writing a slot is an offset computation rather than a tree descent.
 ///
-/// It was a `BTreeMap<u32, XEntry>` until 2026-09-06. Callgrind put
-/// `BTreeMap::insert` at 28% of `Document::from_bytes` and [`Xref::merge_up`]
-/// — which re-inserted every key of every section while walking `/Prev` — at
-/// a further 24%: **52% of open spent in the container alone**, for a load
-/// that writes each object's entry once per section naming it.
+/// Callgrind put the per-entry tree cost at 28% of `Document::from_bytes` and
+/// [`Xref::merge_up`] — which re-inserted every key of every section while
+/// walking `/Prev` — at a further 24%: **52% of open spent in the container
+/// alone**, for a load that writes each object's entry once per section
+/// naming it.
 ///
 /// What the vector removes is the per-entry cost. What it keeps is every
 /// rule about which entry wins, unchanged and applied in the same order.

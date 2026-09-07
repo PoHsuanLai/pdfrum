@@ -3,7 +3,7 @@
 //! `core/fpdftext/` has one unit test, covering link extraction; the embedder
 //! tests cover the character model and a handful of geometry cases. Between
 //! them they leave a dozen numbered constants and branches with *no*
-//! assertion anywhere — the design brief's §5.3 list. Each of these pins one
+//! assertion anywhere. Each of these pins one
 //! of them on a content stream written to provoke it, so a refactor that
 //! moves a bucket edge or drops a short-circuit fails here rather than three
 //! months later on one corpus file.
@@ -124,7 +124,7 @@ fn units(page: &TextPage) -> Vec<u32> {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.3 — base space and its adjustment
+// Base space and its adjustment
 
 #[test]
 fn character_spacing_and_its_adjustment_cancel_when_nothing_is_adjusted() {
@@ -149,7 +149,7 @@ fn two_glyphs_with_one_adjustment_short_circuit_to_no_base_space() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.5 — the duplicate-suppression epsilon
+// The duplicate-suppression epsilon
 
 #[test]
 fn a_glyph_redrawn_at_the_same_place_is_suppressed_once() {
@@ -178,7 +178,7 @@ fn suppression_only_looks_back_seven_characters() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.6 — the object-level lookback skips non-text objects
+// The object-level lookback skips non-text objects
 
 #[test]
 fn non_text_objects_do_not_consume_a_duplicate_lookback_slot() {
@@ -195,7 +195,7 @@ fn non_text_objects_do_not_consume_a_duplicate_lookback_slot() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.10, §5.3.12 — the page-global orientation guess
+// The page-global orientation guess
 
 #[test]
 fn a_page_whose_text_lives_inside_a_form_scans_nothing() {
@@ -207,7 +207,7 @@ fn a_page_whose_text_lives_inside_a_form_scans_nothing() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.13, §5.3.15 — nothing is generated before the first character
+// Nothing is generated before the first character
 
 #[test]
 fn a_page_never_opens_with_a_generated_character() {
@@ -221,7 +221,7 @@ fn a_page_never_opens_with_a_generated_character() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.14 — the hyphen-cancel path
+// The hyphen-cancel path
 
 #[test]
 fn a_hyphen_across_a_line_break_is_a_line_break_not_a_soft_hyphen() {
@@ -249,7 +249,7 @@ fn a_hyphen_across_a_line_break_is_a_line_break_not_a_soft_hyphen() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.16, §5.3.17, §5.3.18 — /ActualText
+// /ActualText
 
 #[test]
 fn a_direct_actual_text_replaces_the_glyphs_it_covers() {
@@ -292,7 +292,7 @@ fn an_empty_actual_text_leaves_the_glyphs_alone() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.19 — the character-code-zero path
+// The character-code-zero path
 
 #[test]
 fn character_code_zero_reaches_the_char_stream_and_not_the_text() {
@@ -308,7 +308,7 @@ fn character_code_zero_reaches_the_char_stream_and_not_the_text() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.21, §5.3.22 — normalization and space collapsing
+// Normalization and space collapsing
 
 #[test]
 fn a_latin_ligature_decomposes_even_outside_a_right_to_left_run() {
@@ -334,7 +334,7 @@ fn a_run_of_generated_spaces_collapses_to_one() {
 }
 
 // ---------------------------------------------------------------------------
-// §5.3.24, §5.3.25 — the query half's index arithmetic
+// The query half's index arithmetic
 
 #[test]
 fn link_extraction_survives_a_page_whose_two_index_spaces_disagree() {

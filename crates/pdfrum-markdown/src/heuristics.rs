@@ -654,7 +654,7 @@ fn ends_ragged(prev: &Line, next: &Line, edge: f64) -> bool {
 /// This is what a page of `text_tcpdf_063.pdf` needs: nine left-aligned
 /// lines break on the ragged-right rule, and the centred, right-aligned
 /// and justified blocks below them, whose every line starts and ends
-/// somewhere else, used to run together into one paragraph because no
+/// somewhere else, would run together into one paragraph if no
 /// column edge could be measured for them.
 fn shares_an_edge(prev: &Line, next: &Line, edge: f64) -> bool {
     let reach = char_width(prev).max(char_width(next)) * ALIGNED_EDGE_CHARS;
@@ -1355,7 +1355,7 @@ mod tests {
 
     /// Defect 1, `text_tcpdf_063.pdf`: nine centred lines at normal
     /// leading, each starting and ending somewhere else. Every one is its
-    /// own paragraph; they used to run together because no rule could
+    /// own paragraph; they would run together if no rule could
     /// measure a column edge for text that is not left-aligned.
     #[test]
     fn centred_lines_that_share_no_edge_are_each_their_own_paragraph() {

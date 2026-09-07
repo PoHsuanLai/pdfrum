@@ -186,9 +186,7 @@ impl Place {
     /// value, spelled for symmetry with [`end_place`], which does need the
     /// layout.
     ///
-    /// This constant used to bake `word: -1` into a public surface, which is
-    /// the purest form of what §C forbids; it now spells the header as the
-    /// `None` it always meant.
+    /// The header is `None`, not a sentinel index.
     ///
     /// ```
     /// use pdfrum_doc::vt::hit::Place;
@@ -563,9 +561,8 @@ fn word_at_x(
     }
     if past_midpoint(mid) {
         // A `mid` too large to be a `u32` cannot be produced by this crate,
-        // and saturating keeps the query total. Note this used to share the
-        // `-1` channel with "before the first character", so an unrepresentable
-        // index answered the header; `Option` keeps the two apart.
+        // and saturating keeps the query total. `Option` keeps an
+        // unrepresentable index apart from "before the first character".
         return Some(u32::try_from(mid).unwrap_or(u32::MAX));
     }
     None
@@ -970,7 +967,7 @@ mod tests {
     };
 
     /// The caret positions of a line holding `n` characters: the header
-    /// first, then each character. Spells what `-1..n` used to.
+    /// first, then each character.
     fn carets(n: u32) -> impl Iterator<Item = Option<u32>> {
         std::iter::once(None).chain((0..n).map(Some))
     }
@@ -1287,8 +1284,8 @@ mod tests {
         }
     }
 
-    /// The round trip brief §4.4's P6 states: every place a layout can name
-    /// survives being turned into an index and back.
+    /// Every place a layout can name survives being turned into an index and
+    /// back.
     #[test]
     fn every_place_survives_the_index_round_trip() {
         let config = Config {

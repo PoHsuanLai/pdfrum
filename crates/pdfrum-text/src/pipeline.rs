@@ -45,15 +45,15 @@ pub(crate) use crate::object::SIZE_EPSILON;
 // `U+00AD` SOFT HYPHEN — what the text buffer carries at a hyphenated line
 // break.
 //
-// `[oracle-bug]` **Audit A41, buffer half.** `cpdf_textpage.cpp:1360-1361`
-// writes the Unicode **noncharacter** `U+FFFE` here (`AppendChar(0xfffe)`),
-// having just recognised the document's real `U+00AD` on input
-// (`IsHyphenCode`, `:1149-1151`) and discarded it. `U+FFFE` is permanently
-// reserved and forbidden in interchange (Unicode §23.7), yet it crosses a
-// public C ABI verbatim (`GetPageText`, `:590`; `FPDFText_GetText`,
-// `fpdf_text.cpp:341-372`) — and reaches our own callers through `TextPage`'s
-// `Display`, `TextPage::slice` and the public `TextPage::search_text` field,
-// where it silently breaks a substring search across a line break.
+// `[oracle-bug]` `cpdf_textpage.cpp:1360-1361` writes the Unicode
+// **noncharacter** `U+FFFE` here (`AppendChar(0xfffe)`), having just
+// recognised the document's real `U+00AD` on input (`IsHyphenCode`,
+// `:1149-1151`) and discarded it. `U+FFFE` is permanently reserved and
+// forbidden in interchange (Unicode §23.7), yet it crosses a public C ABI
+// verbatim (`GetPageText`, `:590`; `FPDFText_GetText`, `fpdf_text.cpp:341-372`)
+// — and reaches our own callers through `TextPage`'s `Display`,
+// `TextPage::slice` and the public `TextPage::search_text` field, where it
+// silently breaks a substring search across a line break.
 //
 // "Matches upstream" is not available as a defence, because **upstream does
 // not match itself**: `cpdf_linkextract.cpp:154-155` repairs this very
@@ -69,39 +69,38 @@ pub(crate) use crate::object::SIZE_EPSILON;
 // lossless — a caller can render it, strip it, or search past it, none of
 // which a noncharacter permits.
 //
-// The **character record** at the same position keeps PDFium's `0x2`: A41's
-// char-list half costs 12 golden rows and stays declined
-// deliberately, so the two outputs now differ in
-// a new, deliberate way.
+// The **character record** at the same position keeps PDFium's `0x2`; that
+// char-list half costs 12 golden rows and stays declined deliberately, so the
+// two outputs differ in a deliberate way.
 pub(crate) const SOFT_HYPHEN: u32 = 0x00AD;
 
 // `U+FFFD` REPLACEMENT CHARACTER — what the text buffer carries where a
 // character code maps to `U+0000`.
 //
-// `[oracle-bug]` The same A41 defect in its second guise, and the one the
-// `bug_583.pdf` assertion pins. `cpdf_textpage.cpp:1462` writes
+// `[oracle-bug]` The same noncharacter defect in its second guise, and the
+// one the `bug_583.pdf` assertion pins. `cpdf_textpage.cpp:1462` writes
 // `AppendChar(c ? c : 0xfffe)`, so a code whose `/ToUnicode` yields `U+0000`
 // puts the noncharacter into the buffer and hands it to a caller — the same
-// violation in the same public channel as `SOFT_HYPHEN`, so the same ruling
-// applies. `U+FFFD` is the Unicode-sanctioned stand-in for a character that
-// cannot be represented, and it is already this workspace's answer for one:
-// an unpaired surrogate becomes `U+FFFD` in `pdfrum_font::tounicode`
-// (divergence D3, audit A54). pdf.js likewise refuses to emit anything in the
-// Specials block (`src/core/unicode.js:51-62` maps `0xFFF0..=0xFFFF` to 0).
+// violation in the same public channel as `SOFT_HYPHEN`. `U+FFFD` is the
+// Unicode-sanctioned stand-in for a character that cannot be represented, and
+// it is already this workspace's answer for one: an unpaired surrogate
+// becomes `U+FFFD` in `pdfrum_font::tounicode`. pdf.js likewise refuses to
+// emit anything in the Specials block (`src/core/unicode.js:51-62` maps
+// `0xFFF0..=0xFFFF` to 0).
 //
 // The character **record** is untouched: it keeps the `0` the oracle writes,
 // so `--txt` stays byte-identical. `U+FFFE` staged for a *character code* of
 // zero (the other arm, `:1433`) is not this: that record is never `normal`,
 // so its placeholder is dropped before the buffer and never reaches a
 // caller — a private sentinel collapsed at the boundary, which is
-// `unicode::mirror_char`'s shape and what §C.1 permits.
+// `unicode::mirror_char`'s shape.
 pub(crate) const UNMAPPABLE: u32 = 0xFFFD;
 
 /// The font size a character with no text object reports.
 const DEFAULT_FONT_SIZE: f32 = 1.0;
 
 /// The `/ActualText` key, read two different ways by the two marked-content
-/// passes — which is the whole point of §1.9.
+/// passes.
 fn actual_text_key() -> Name {
     Name::from("ActualText")
 }
@@ -535,7 +534,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
         // The two per-character recoveries are counted and recorded once for
         // the object: a CJK page with a broken `/ToUnicode` would otherwise
         // record tens of thousands of entries and hide every other
-        // diagnostic behind the sink's bound (design brief Q4).
+        // diagnostic behind the sink's bound.
         let mut unmapped = 0u32;
 
         for index in 0..run.count() {
@@ -646,10 +645,10 @@ impl<'a, R: Resolve> Builder<'a, R> {
                 None,
             );
         }
-        // `[oracle-bug]` A44: nothing is deduplicated any more, so
-        // `DiagKind::TextCharsDeduplicated` has no site. The variant is kept
-        // in `pdfrum-common` because it is a public enum member and a future
-        // opt-in to the oracle's rule would need it back.
+        // [oracle-bug] A44: cpdf_textpage.cpp:1437-1458 deletes real
+        // characters (crbug.com/42270780), so the suppression was retired and
+        // coincident glyphs are composited instead. Nothing is deduplicated,
+        // so nothing is recorded.
 
         // A right-to-left object drawn under a mirroring matrix has already
         // been laid out backwards; the caller reverses what was staged.
@@ -838,8 +837,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
         }
     }
 
-    /// Whether the geometry says this object starts a new line (§1.8's
-    /// `is_newline` block).
+    /// Whether the geometry says this object starts a new line (`is_newline`).
     fn is_newline(&self, previous: &TextRun, run: &TextRun, pos: Point, threshold: f64) -> bool {
         let rect = previous.rect;
         // The height is read **before** the box is normalized, so a box with
@@ -990,28 +988,24 @@ impl<'a, R: Resolve> Builder<'a, R> {
         // the staging buffer is empty, so a crafted file can arrive here with
         // `temp_char_list_` empty and take `back()` on it. That is a `CHECK`
         // failure in debug and undefined behaviour in release. No reading of
-        // §9.10 asks a text extractor to crash, and forbids the
-        // equivalent outright. pdf.js keeps no sentinel and no staging list of
-        // this shape — its soft hyphen is normalised to `-`
+        // ISO 32000-1 §9.10 asks a text extractor to crash. pdf.js keeps no
+        // sentinel and no staging list of this shape — its soft hyphen is
+        // normalised to `-`
         // (`unicode.js:57-58`) and rejoined at query time
         // (`pdf_find_controller.js:290-307`) — so there is nothing there to
-        // dereference. We record a diagnostic and emit no hyphen. This is the
-        // audit's A50, previously recorded as design brief D4 and Q5 — a
-        // divergence flagged in case a release-mode oracle produced something
-        // rather than crashing; the oracle-bug rule settles it without
-        // needing that answer, since a crash writes no golden either way.
+        // dereference. We record a diagnostic and emit no hyphen: a crash
+        // writes no golden either way.
         let Some(last) = self.line.last_char_mut() else {
             // The C++ dereferences an empty list here, which is a crash on a
-            // crafted file. We decline it (design brief D4): a crashing
-            // oracle writes no golden, so there is nothing to match.
+            // crafted file. We decline it: a crashing oracle writes no golden,
+            // so there is nothing to match.
             diags.record(Severity::Suspicious, DiagKind::TextHyphenNoPrevChar, None);
             return true;
         };
         last.char_type = CharType::Hyphen;
         last.unicode = 0x2;
         // The record says 0x2 and the text says U+00AD. Both are read, and
-        // after audit A41's buffer half they no longer say the same thing as
-        // each other — see [`SOFT_HYPHEN`].
+        // they do not say the same thing as each other — see [`SOFT_HYPHEN`].
         self.line.set_last_unit(SOFT_HYPHEN);
         true
     }

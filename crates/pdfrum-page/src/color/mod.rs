@@ -11,7 +11,7 @@
 //!   renders both.
 //! - **`Pattern` has no `to_rgb`.** The C++ makes it an unreachable
 //!   assertion; here the case is simply not representable, and a pattern's
-//!   colour comes from [`PatternValue`] instead (design brief D10).
+//!   colour comes from [`PatternValue`] instead.
 //!
 //! [`to_rgb`]: ColorSpace::to_rgb
 //! [`translate_image_line`]: ColorSpace::translate_image_line

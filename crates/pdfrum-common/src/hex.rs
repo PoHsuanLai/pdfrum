@@ -2,9 +2,8 @@
 //!
 //! Five grammars in this workspace read hex digits — `#xx` name escapes,
 //! `<…>` hex strings, `/ASCIIHexDecode` data, a Type 1 program's hex-encoded
-//! eexec portion and a ToUnicode CMap's `<…>` codes — and each used to carry
-//! its own copy of this six-line function. One copy, at the bottom of the
-//! graph, is the only way to keep them from drifting.
+//! eexec portion and a ToUnicode CMap's `<…>` codes. One copy, at the bottom
+//! of the graph, is the only way to keep them from drifting.
 
 /// The value of one ASCII hexadecimal digit, either case, and `None` for any
 /// other byte.

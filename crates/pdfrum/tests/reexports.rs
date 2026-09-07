@@ -140,7 +140,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<FindOptions>();
     nameable::<WebLink>();
     nameable::<TextError>();
-    // 's two index spaces, and the table that converts between them. Every
+    // Two index spaces, and the table that converts between them. Every
     // one appears in a `TextPage` signature: `CharIndex` in `char`, `rects`,
     // `index_at`, `slice` and `WebLink::range`; `TextIndex` in `find`; and
     // `IndexMap` as the public `runs` field a caller needs to cross from one
@@ -454,9 +454,8 @@ fn the_script_types_are_nameable_from_the_facade() {
 /// the methods can be **called** — that `apply`'s only argument is
 /// constructible, that every wrapper's point is a `pdfrum::Point` a caller can
 /// build, and that no signature reaches for a name the facade does not carry.
-/// It is the gate §'s central method needed and did not have: before 's
-/// re-export, `apply` was a method whose argument type a `cargo add pdfrum`
-/// caller could not write.
+/// `apply`'s argument type is re-exported, so a `cargo add pdfrum` caller
+/// can write the call.
 ///
 /// The assertions are the compiler's. The one runtime claim is the last, and
 /// it is the behaviour a right button must have: consume nothing.

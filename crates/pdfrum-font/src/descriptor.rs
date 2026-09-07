@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn the_two_normalizers_disagree() {
-        // The brief's worked example: they agree at value 1 and differ at 2.
+        // They agree at value 1 and differ at 2.
         assert_eq!(normalize_font_metric(1, 3), 333);
         assert_eq!(em_adjust(1, 3), 333);
         assert_eq!(normalize_font_metric(2, 3), 667); // rounds

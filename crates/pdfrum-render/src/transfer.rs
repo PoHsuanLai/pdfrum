@@ -147,9 +147,8 @@ mod tests {
         stream(dict, b"{ 360 mul sin 2 div }")
     }
 
-    /// Audit item **A9**, at the consuming end. This asserted the oracle's
-    /// reversal; table 58 gives the array as `[red green blue gray]`, so
-    /// element `i` drives channel `i`, and nothing here undoes it.
+    /// Table 58 gives the array as `[red green blue gray]`, so element `i`
+    /// drives channel `i`, and nothing here undoes it.
     #[test]
     fn the_first_array_element_drives_red() {
         let array = Object::Array(Array::of([
@@ -175,14 +174,14 @@ mod tests {
         let tf = TransferFunc::new(&parsed);
         assert!(!tf.is_identity());
 
-        // Audit items **A9** and **A10**, and this table is where both are
-        // visible at once. The upstream expectations are on the left; ours,
-        // on the right, differ in exactly two ways and no others:
+        // `[oracle-bug]`: this table is where both differences from the
+        // oracle are visible at once. The upstream expectations are on the
+        // left; ours, on the right, differ in exactly two ways and no others:
         //
-        // * **A9** swaps red and blue. Upstream `0x00ffffff -> 0x001a0d00`
+        // * Red and blue are swapped upstream. `0x00ffffff -> 0x001a0d00`
         //   makes red `0x00` (the sine, `array[2]`) and blue `0x1a` (the type
         //   0 function, `array[0]`); table 58 puts the type 0 function in red.
-        // * **A10** saturates instead of wrapping. Upstream's `0xcccccc` row
+        // * We saturate instead of wrapping. Upstream's `0xcccccc` row
         //   pins `-121.26` arriving as `0x87` — `size_t o =
         //   FXSYS_roundf(output[0] * 255)` stored into a `uint8_t` with no
         //   clamp, which is also undefined behaviour for a negative float.

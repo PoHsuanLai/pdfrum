@@ -105,11 +105,10 @@ pub fn subject(path: &Path, stem: &str) -> Option<Subject> {
     // and builds with a default `BuildContext`. It therefore does *not* set
     // the per-page decode target the facade's own render path sets, so an
     // image here is decoded at full resolution rather than at its device
-    // footprint. That is deliberate on two counts: the decode target is
-    // P1's live work and this milestone stays out of it, and — the reason it
-    // is sound — **both columns render the identical graph**, so whatever the
-    // decode did, it is not a difference between them. It does mean the
-    // absolute image-class numbers here are not the facade's.
+    // footprint. That is deliberate: **both columns render the identical
+    // graph**, so whatever the decode did, it is not a difference between
+    // them. It does mean the absolute image-class numbers here are not the
+    // facade's.
     let graph = page.objects();
 
     // Identity, like the facade's default: the engine composes the page's own

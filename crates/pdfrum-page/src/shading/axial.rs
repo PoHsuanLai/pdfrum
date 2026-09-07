@@ -6,7 +6,7 @@
 //! unguarded and then casts the resulting infinity or NaN to an integer,
 //! which is undefined behaviour; we treat it as "every pixel is out of range
 //! at the start end", the branch x86 actually lands in, and record a
-//! diagnostic (design brief D17).
+//! diagnostic.
 
 use super::{read_domain, read_extend};
 use crate::names;

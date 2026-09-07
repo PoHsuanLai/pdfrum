@@ -15,11 +15,11 @@
 //! # Who uses it
 //!
 //! The free-text and pop-up annotation generators, the `/NeedAppearances`
-//! form path, and — since the E1 revision of 2026-08-29 — the **widget**
-//! appearance builders in [`crate::ap::field_body`]. There is **no second
-//! implementation**: what the widget path drives is a shell over this engine
-//! whose only observable addition is a vertical alignment offset, which the
-//! builders pass as `edit_ap::generate`'s `offset`.
+//! form path, and the **widget** appearance builders in
+//! [`crate::ap::field_body`]. There is **no second implementation**: what the
+//! widget path drives is a shell over this engine whose only observable
+//! addition is a vertical alignment offset, which the builders pass as
+//! `edit_ap::generate`'s `offset`.
 
 mod autosize;
 mod bidi;

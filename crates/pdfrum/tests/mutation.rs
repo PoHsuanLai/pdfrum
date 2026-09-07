@@ -10,8 +10,7 @@
 //! porting. An edit changes the in-memory graph; a save turns it into bytes;
 //! a reload reads those bytes back. Each phase can be right while the next is
 //! wrong, so each is asserted separately — an object count that is correct in
-//! memory and wrong after a reload is exactly the bug this whole milestone
-//! exists to not have.
+//! memory and wrong after a reload is the bug these tests exist to not have.
 
 // `clippy.toml`'s `allow-expect-in-tests` covers `#[test]` bodies but not the
 // `round_trip` helper these tests factor themselves into — where a save that

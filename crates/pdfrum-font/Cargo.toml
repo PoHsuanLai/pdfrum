@@ -25,11 +25,10 @@ default = []
 # `memmap2`, whatever features it asks for.
 system-fonts = ["dep:fontdb"]
 
-# §3 pins this set. `skrifa` draws outlines,
+# `skrifa` draws outlines,
 # `read-fonts` reads the tables skrifa does not surface (`cmap` subtable
 # platform ids, `GSUB`, `OS/2` code-page ranges) and owns the Adobe Glyph
-# List; `fontdb` is a face *enumerator* only — the matching policy is ours
-# (§3.4, OQ-6).
+# List; `fontdb` is a face *enumerator* only — the matching policy is ours.
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true
