@@ -14,6 +14,9 @@ pdfrum is a modern, thread-safe PDF library — modular stages you compose,
 CPU or GPU backends, no `unsafe` — 99% agreement with PDFium on its suite.
 For your UI, RAG pipeline, or any app that has to open a PDF file.
 
+pdfrum is an independent project, not affiliated with or derived from
+Google's PDFium, which it uses as a read-only conformance oracle.
+
 ```toml
 pdfrum = "0.1"
 ```
@@ -44,9 +47,11 @@ Open a file once. Ask it questions (Rendering is one of them).
 - **Pixels** — name a rasterizer; defaults to [`vello_cpu`](https://crates.io/crates/vello_cpu)
 - **A new file** — edit, stamp, merge, flatten, save full or incremental
 
-A file a browser would open, we open, and tell you where its broken.
+A file a browser would open, we open, and tell you where it's broken.
 
-## ![Pdfrum CLI](docs/assets/cli/pdfrum-cli.gif)
+## Command line
+
+![Pdfrum CLI](docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
 pdfrum preview gradients.pdf
@@ -137,6 +142,32 @@ its backend.
 ```toml
 pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all"] }
 ```
+
+## Alternatives
+
+Columns are what the benchmark harness exercises on the same 44 files;
+`edit` is whether the crate writes a file back.
+
+| crate | C in the build | licence | render | text | edit |
+|---|:---:|---|:---:|:---:|:---:|
+| pdfrum | no | MIT/Apache-2.0 | yes | yes | yes |
+| [`pdfium-render`](https://crates.io/crates/pdfium-render) | yes (`libpdfium.so`) | MIT/Apache-2.0 | yes | yes | yes |
+| [`mupdf`](https://crates.io/crates/mupdf) | yes (vendored C) | AGPL-3.0 | yes | yes | yes |
+| [`hayro`](https://crates.io/crates/hayro) | no | Apache-2.0/MIT | yes | via `hayro-interpret` | no |
+| [`lopdf`](https://crates.io/crates/lopdf) | no | MIT | no | yes | yes |
+| [`pdf-extract`](https://crates.io/crates/pdf-extract) | no | MIT | no | yes | no |
+| [`pdf-rs`](https://crates.io/crates/pdf) | no | MIT | no | no | yes |
+
+`pdfium-render` binds a prebuilt `libpdfium.so`; `mupdf` vendors C through
+`bindgen` and `cc`. Both want a native toolchain or a shipped binary, and
+MuPDF is AGPL-3.0, which a commercial user has to price in. The pure-Rust
+peers cost nothing to build but stop earlier: `lopdf` and `pdf-rs` are
+object-level toolkits that read and write a file without rendering it,
+`pdf-extract` only pulls text, and `hayro` renders and — with a second
+crate — extracts, but writes no file back. Where pdfrum loses is speed:
+warm median render is slower than both `pdfium-render` and `mupdf`.
+Numbers, method, and the files each engine loses on are in
+[`docs/benchmarks/`](docs/benchmarks/).
 
 ## Licence
 
