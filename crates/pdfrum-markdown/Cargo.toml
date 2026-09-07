@@ -26,4 +26,4 @@ kurbo.workspace = true
 # the facade, the way a caller reads them; a dev-dependency on the crate
 # that depends on this one is a cycle Cargo permits, as `pdfrum-text` does
 # for its benches.
-pdfrum.workspace = true
+pdfrum = { path = "../pdfrum" }

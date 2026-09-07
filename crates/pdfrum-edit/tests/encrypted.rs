@@ -313,11 +313,11 @@ fn an_incremental_save_of_an_encrypted_document_appends() {
         let body = doc.bytes();
         assert_eq!(
             out.get(..body.len()),
-            Some(&body[..]),
+            Some(body),
             "{name}: the incremental save rewrote the original bytes"
         );
         let text = String::from_utf8_lossy(&out);
-        let before = String::from_utf8_lossy(&body[..]);
+        let before = String::from_utf8_lossy(body);
         assert!(
             text.matches("startxref").count() > before.matches("startxref").count(),
             "{name}: no appended cross-reference"

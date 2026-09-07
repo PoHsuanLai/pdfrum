@@ -11,7 +11,7 @@
 //!
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
 //! 2. Look those names up as `pub enum` in the member-crate snapshots
-//! (facade error payloads: `OpenError` is `LoadError`,
+//!    (facade error payloads: `OpenError` is `LoadError`,
 //!    `Rotation` is `pdfrum_page::Rotation`, and so on).
 //! 3. Take every `pub Enum::Variant` / `pub Enum::Variant(payload)` line
 //!    (struct-variant fields are `Enum::Variant::field` and are skipped).

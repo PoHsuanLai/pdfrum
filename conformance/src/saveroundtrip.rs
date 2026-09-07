@@ -555,7 +555,7 @@ fn check_incremental(
     // prefix — comparing against `doc.bytes()` rather than the file is what
     // makes a header-offset document pass.
     let body = doc.bytes();
-    if out.get(..body.len()) != Some(&body[..]) {
+    if out.get(..body.len()) != Some(body) {
         return false;
     }
     // R8: the appended section adds its own `startxref`, its own `%%EOF` and
@@ -566,7 +566,7 @@ fn check_incremental(
     // and requiring two `%%EOF`s in the output would then fail a save that
     // did everything right, because the prefix contributed none.
     let text = String::from_utf8_lossy(&out);
-    let before = String::from_utf8_lossy(&body[..]);
+    let before = String::from_utf8_lossy(body);
     if text.matches("startxref").count() <= before.matches("startxref").count() {
         return false;
     }

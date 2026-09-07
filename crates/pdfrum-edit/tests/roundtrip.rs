@@ -442,7 +442,7 @@ fn an_incremental_save_leaves_the_original_bytes_untouched() {
         );
         assert_eq!(
             out.get(..original.len()),
-            Some(&original[..]),
+            Some(original),
             "{name}: the original prefix was rewritten"
         );
     }
@@ -534,7 +534,7 @@ fn a_file_ending_in_a_malformed_eof_still_appends_correctly() {
     save(&edit, &fixed_options(SaveMode::Incremental), &mut out).expect("saves");
 
     let original = doc.bytes();
-    assert_eq!(out.get(..original.len()), Some(&original[..]));
+    assert_eq!(out.get(..original.len()), Some(original));
 
     let after = String::from_utf8_lossy(&out);
     // Ours is the only well-formed marker in the file, and it is there.

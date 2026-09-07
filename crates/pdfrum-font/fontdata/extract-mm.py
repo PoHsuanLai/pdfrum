@@ -3,14 +3,14 @@
 
 The oracle (`$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++`) stores
 the terminal-rung fallback fonts as C++ `std::array<uint8_t, N>` initializers.
-This script turns them back into the PFB byte streams `pdfrum-type1`'s tests
-consume.
+This script turns them back into the PFB byte streams the substitution
+ladder's terminal rung consumes.
 
 Writes `FoxitSansMM.pfb` and `FoxitSerifMM.pfb` next to this file.
 
 Usage:
 
-    uv run crates/pdfrum-type1/tests/fixtures/extract.py [ORACLE_ROOT]
+    uv run crates/pdfrum-font/fontdata/extract-mm.py [ORACLE_ROOT]
 """
 
 import os
