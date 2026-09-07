@@ -9,15 +9,17 @@ repository.workspace = true
 readme = "README.md"
 keywords = ["pdf", "font", "glyph", "encoding", "opentype"]
 categories = ["graphics", "text-processing", "parser-implementations"]
-# The 14 Foxit base-14 blobs are shipped: they are the terminal rung of the
-# substitution ladder, so a build without them cannot draw an unresolvable
-# font at all. See `fontdata/PROVENANCE.md`.
+# The Foxit blobs are shipped — the 14 base-14 CFF faces and the two
+# Multiple-Master `.pfb` fallbacks below them — because they are the bottom
+# of the substitution ladder: a build without them cannot draw an
+# unresolvable font at all. See `fontdata/PROVENANCE.md`.
 # Extensions are named rather than whole directories: `include` globs read
 # the working tree, not git, so a `**` here would ship build residue such as
 # `__pycache__` that `.gitignore` keeps out of the repository.
 include = [
     "src/**",
     "fontdata/*.cff",
+    "fontdata/*.pfb",
     "fontdata/*.md",
     "fontdata/*.py",
     "tests/*.rs",

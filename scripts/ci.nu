@@ -66,11 +66,36 @@ def main [] {
     }
 
     print "==> pure-Rust check (no -sys / cc / cmake / pkg-config / bindgen)"
-    # GPU tree dlopen shims, by name. `linux-raw-sys` is rustix constants.
-    # `js-sys` is wasm-bindgen's JS stdlib.
-    let gpu_sys_exemptions = [renderdoc-sys wayland-sys]
+    # `wayland-sys` is in the GPU tree and carries a build script that links
+    # the C libraries — unless `dlopen` is on, which makes it return before it
+    # probes anything and leaves the crate a set of `extern` declarations
+    # resolved at run time. Exempting it by name alone would keep passing if a
+    # `wgpu` bump ever turned that feature off, so the feature is asserted
+    # rather than assumed.
+    #
+    # `renderdoc-sys` carries no build script and no `links` key at all, and
+    # `linux-raw-sys` (rustix's constants) and `js-sys` (wasm-bindgen's JS
+    # stdlib) are `-sys` by name only. Those three have nothing to assert.
+    let dlopen_sys = [wayland-sys]
+    let no_build_script_sys = [renderdoc-sys]
     let pure_rust_sys = [linux-raw-sys js-sys]
     let native_build_crates = [cc cmake pkg-config bindgen]
+
+    for c in $dlopen_sys {
+        # `cargo tree -e features` prints an enabled feature as its own node,
+        # so the feature the exemption rests on is either in the tree or the
+        # exemption no longer holds.
+        let enabled = (^cargo tree -e features -i $c --workspace
+            | lines
+            | any {|l| $l =~ $'($c) feature "dlopen"' })
+        if not $enabled {
+            print --stderr $"error: ($c) is in the tree without its `dlopen` feature,"
+            print --stderr "       so its build script links C libraries."
+            exit 1
+        }
+    }
+
+    let gpu_sys_exemptions = ($dlopen_sys | append $no_build_script_sys)
 
     let forbidden = (^cargo tree -e normal --workspace --prefix none
         | lines | split column ' ' name | get name | uniq

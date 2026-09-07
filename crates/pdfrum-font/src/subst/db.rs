@@ -664,11 +664,10 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fontdata"),
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benches/fixtures"),
         ];
-        let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++")
-            });
+        let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+            || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+            PathBuf::from,
+        );
         let oracle = checkout.join("third_party/test_fonts");
         if oracle.is_dir() {
             roots.push(oracle);

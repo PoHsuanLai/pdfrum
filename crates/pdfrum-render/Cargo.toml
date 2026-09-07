@@ -37,14 +37,14 @@ smallvec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-pdfrum-raster-tinyskia.workspace = true
-pdfrum-raster-vello-cpu.workspace = true
-pdfrum-raster-agg.workspace = true
+pdfrum-raster-tinyskia = { path = "../pdfrum-raster-tinyskia" }
+pdfrum-raster-vello-cpu = { path = "../pdfrum-raster-vello-cpu" }
+pdfrum-raster-agg = { path = "../pdfrum-raster-agg" }
 pdfrum-parser.workspace = true
 
 # Six render groups over `benches/corpus`. `pdfrum` is a permitted
 # dev-dependency cycle.
-pdfrum.workspace = true
+pdfrum = { path = "../pdfrum" }
 pdfrum-corpus.workspace = true
 criterion.workspace = true
 

@@ -42,7 +42,7 @@ const BUG_377948405: &[u8] = include_bytes!("fixtures/bug_377948405.ttf");
 /// Type 1 path those two cases name is only reachable here with an actual
 /// Type 1 program. `pdfrum-type1`'s fixture is one, and is not duplicated
 /// into this directory.
-const FOXIT_SERIF_MM: &[u8] = include_bytes!("../../pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb");
+const FOXIT_SERIF_MM: &[u8] = include_bytes!("../../pdfrum-font/fontdata/FoxitSerifMM.pfb");
 /// The font `FPDFEditEmbedderTest.LoadCidType2FontCustom` loads: eleven
 /// glyphs, real advances, and no cmap worth speaking of — which is the point,
 /// since the caller's `/CIDToGIDMap` is what reaches its glyphs.

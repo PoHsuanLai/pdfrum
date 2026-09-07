@@ -1,0 +1,42 @@
+# Dependency alerting.
+#
+# Every dependency in this workspace is pinned to an exact version, which is
+# what makes the tree reproducible and what lets `deny.toml` and the pure-Rust
+# check say something definite. It also means nothing moves on its own: a pin
+# with a published advisory stays pinned until someone changes it. These
+# updates are that someone.
+#
+# Grouped into one pull request per ecosystem per week, because a pin here is
+# rarely independent — `wgpu`, `vello` and the raster backends move together,
+# and twenty single-crate pull requests would each fail the gate on their own.
+# Security updates are left ungrouped so they arrive alone and immediately.
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  # The fuzz targets are a second workspace, deliberately outside the members
+  # list, so they need their own entry.
+  - package-ecosystem: cargo
+    directory: /fuzz
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      fuzz:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

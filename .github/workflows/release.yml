@@ -1,0 +1,83 @@
+# Publishing the workspace to crates.io, on a version tag.
+#
+# `scripts/release.nu` is the whole of it; this file is the trigger, the
+# toolchain and the token. Twenty-three crates go up in dependency order, and
+# because crates.io accepts a version once and never again, the script skips a
+# crate whose version is already there rather than failing. A run interrupted
+# halfway is finished by re-running it.
+#
+# `cargo publish` does the uploading, one crate at a time, with verification
+# left on: it builds each packaged crate against the versions it will resolve
+# to on the index, which is the only check that the manifest cargo uploads —
+# not the one in this repository — is coherent. A release tool that batches
+# the workspace would hide exactly that.
+#
+# The dry run packages every crate with its unpublished siblings visible and
+# uploads nothing, which is the one way to exercise this without spending a
+# version number.
+
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Package and verify every crate, but upload nothing.
+        type: boolean
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install the toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Install the prebuilt tools
+        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        with:
+          tool: cargo-binstall
+
+      - name: Install nushell
+        # The scripts are nushell, as in `ci.yml`.
+        run: cargo binstall --no-confirm --locked nu
+
+      # A tag that does not name the version in `Cargo.toml` would publish
+      # something other than what it claims, and the version it publishes is
+      # the one nobody can take back.
+      - name: The tag matches the workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared="$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "pdfrum"))')"
+          if [ "$tagged" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME declares $tagged, Cargo.toml declares $declared" >&2
+            exit 1
+          fi
+
+      - name: Package every crate
+        # A tag run publishes for real; a manual run defaults to the dry run,
+        # which is this same packaging step and nothing else.
+        if: inputs.dry-run
+        run: ./scripts/release.nu --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry-run }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: ./scripts/release.nu

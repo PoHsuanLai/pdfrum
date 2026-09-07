@@ -88,3 +88,70 @@ jobs:
         # dependency-tree check, the C header and C test, the WebAssembly
         # tests, and a cargo check of the fuzz workspace.
         run: ./scripts/ci.nu
+
+  # The gate above is Linux-only in several of its steps — the C test, the
+  # WebAssembly run, cbindgen — and running the whole nushell script three
+  # times would mostly re-run what Linux already covered. This is the part
+  # that is actually operating-system-shaped: `pdfrum-cli` turns on
+  # crossterm's `windows` feature and `system-fonts` reaches for `fontdb`,
+  # and neither of those compiles the same way twice. Build, test, doctest.
+  portable:
+    name: build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing is a fact worth having about the other two.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install the toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Install the prebuilt tools
+        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        with:
+          tool: cargo-nextest
+
+      - name: Build
+        run: cargo build --workspace --locked
+
+      - name: Tests
+        # The same feature set the Linux gate runs, minus `pdfrum-tool`: it is
+        # `publish = false` and its javascript feature adds nothing this is
+        # here to learn about the platform.
+        run: cargo nextest run --workspace --locked --features pdfrum-cli/javascript,pdfrum/svg
+
+      - name: Doctests
+        # nextest skips doctests without saying so.
+        run: cargo test --doc --workspace --locked --features pdfrum/svg
+
+  # The floor the manifests promise. Nothing else pins it, so a dependency
+  # that quietly needs a newer compiler would otherwise be found by whoever
+  # tried to build on the version `rust-version` advertises.
+  #
+  # `--lib` because some test targets want features the libraries do not, and
+  # it is the libraries that carry the promise.
+  msrv:
+    name: minimum supported Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install the toolchain
+        # Read from the workspace manifest so this job and the promise cannot
+        # drift apart.
+        run: |
+          msrv="$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(next(p["rust_version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "pdfrum"))')"
+          echo "pinning rustc $msrv"
+          rustup toolchain install "$msrv" --profile minimal
+          rustup default "$msrv"
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Check
+        run: cargo check --workspace --lib --locked
