@@ -11,6 +11,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "The C ABI for pdfrum: libpdfrum.so, libpdfrum.a and pdfrum.h"
+readme = "README.md"
+keywords = ["pdf", "capi", "ffi", "c-api", "render"]
+categories = ["api-bindings", "external-ffi-bindings", "graphics"]
 # Nothing `cargo add`s a cdylib. The published surface of this crate is
 # `include/pdfrum.h`, which the API-snapshot gate covers instead
 # (scripts/capi-header.nu).

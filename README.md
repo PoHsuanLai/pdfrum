@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
-  <img src="docs/assets/banner-light.svg" alt="pdfrum" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/banner-dark.svg">
+  <img src="https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/banner-light.svg" alt="pdfrum" width="100%">
 </picture>
 
 **A composable PDF library built in Rust.**
@@ -51,7 +51,7 @@ A file a browser would open, we open, and tell you where it's broken.
 
 ## Command line
 
-![Pdfrum CLI](docs/assets/cli/pdfrum-cli.gif)
+![Pdfrum CLI](https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
 pdfrum preview gradients.pdf
@@ -62,7 +62,7 @@ pdfrum search ISO paper.pdf
 ```
 
 The rest of the catalog — `info`, `pages`, `forms`, `render`,
-`serve --stdio` / `--mcp` — is [`pdfrum-cli`](crates/pdfrum-cli/README.md).
+`serve --stdio` / `--mcp` — is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
 
 ```sh
 cargo install pdfrum-cli
@@ -96,8 +96,8 @@ let pixmaps: Vec<_> = pages
 # Ok::<(), pdfrum::Error>(())
 ```
 
-C: [`pdfrum-capi`](crates/pdfrum-capi). WebAssembly:
-[`pdfrum-wasm`](crates/pdfrum-wasm).
+C: [`pdfrum-capi`](https://github.com/PoHsuanLai/pdfrum/blob/main/crates/pdfrum-capi/README.md). WebAssembly:
+[`pdfrum-wasm`](https://github.com/PoHsuanLai/pdfrum/blob/main/crates/pdfrum-wasm/README.md).
 
 ## ISO 32000
 
