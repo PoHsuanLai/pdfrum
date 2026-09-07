@@ -12,7 +12,25 @@ categories = ["graphics", "text-processing", "parser-implementations"]
 # The 14 Foxit base-14 blobs are shipped: they are the terminal rung of the
 # substitution ladder, so a build without them cannot draw an unresolvable
 # font at all. See `fontdata/PROVENANCE.md`.
-include = ["src/**", "fontdata/**", "tests/**", "README*", "LICENSE*"]
+# Extensions are named rather than whole directories: `include` globs read
+# the working tree, not git, so a `**` here would ship build residue such as
+# `__pycache__` that `.gitignore` keeps out of the repository.
+include = [
+    "src/**",
+    "fontdata/*.cff",
+    "fontdata/*.md",
+    "fontdata/*.py",
+    "tests/*.rs",
+    "tests/fixtures/*.ttf",
+    "tests/fixtures/*.md",
+    "tests/fixtures/*.py",
+    "README*",
+    "LICENSE*",
+]
+
+# docs.rs renders the full API, including every optional-feature type.
+[package.metadata.docs.rs]
+all-features = true
 
 [lints]
 workspace = true
