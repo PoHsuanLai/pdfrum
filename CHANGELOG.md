@@ -24,4 +24,14 @@ first crates.io release.
 
 - Warm median render is slower than pdfium-render and mupdf.
 - No public-key (`Adobe.PubSec`) encryption.
-- Spurious spaces in some text extractions.
+- Text extraction keeps one space PDFium drops. A page whose only text
+  object draws nothing but spaces comes back empty from the oracle, because
+  its bounding-box gate discards the object; we keep the space. Reported as
+  `crbug.com/40643656` and written up in
+  [`docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md`](docs/upstream/pdfium/text-object-bbox-gate-drops-spaces.md).
+- Signatures are parsed and reported as written. Nothing verifies the
+  cryptography, the certificate chain, or the byte ranges they cover.
+- OTTO subsetting is skipped: an OpenType/CFF program is embedded whole as
+  `/FontFile3` and passed over by the subsetter.
+- Weakest rendering: vertical text, uncoloured tiling patterns, and image
+  transformers.
