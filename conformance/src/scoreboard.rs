@@ -179,6 +179,10 @@ pub struct FileResult {
 pub struct Scoreboard {
     /// RFC-3339-ish UTC stamp; informational only, never compared.
     pub generated_at: String,
+    /// Which `pdfrum-tool` build produced these rows, when the run recorded
+    /// it. Provenance, so a stale binary's pass rate is attributable rather
+    /// than anonymous; `None` on a board parsed from an older file.
+    pub tool: Option<crate::run::ToolProvenance>,
     /// Rows sorted by `path`.
     pub per_file: Vec<FileResult>,
 }
@@ -227,6 +231,80 @@ impl Totals {
         (self.text.substantive > 0)
             .then(|| f64::from(self.text.substantive_matched) / f64::from(self.text.substantive))
     }
+
+    /// Whether these counts describe a real measurement.
+    ///
+    /// Checked before the board reaches `--out`, so an invalid run leaves the
+    /// previous scoreboard in place.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a corpus file count is far inside f64's exact integer range"
+    )]
+    pub fn validity(&self) -> Result<(), Invalid> {
+        if self.files == 0 {
+            return Err(Invalid::Empty);
+        }
+        let unsupported = self
+            .by_tag
+            .get(tag::UNSUPPORTED_TOOL)
+            .copied()
+            .unwrap_or_default();
+        if unsupported as f64 / self.files as f64 >= UNSUPPORTED_CEILING {
+            return Err(Invalid::UnsupportedTool {
+                unsupported,
+                files: self.files,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// The share of `unsupported-tool` rows above which a board is not a
+/// measurement.
+///
+/// A single unsupported row is legitimate — one file can defeat one
+/// subcommand — but the tag is assigned from a *whole-run* verdict: the probe
+/// decides once, before the walk, and every row inherits it. So the count is
+/// bimodal in practice, near zero or the entire corpus, and any threshold in
+/// between separates the two. Nine tenths is chosen well above the largest
+/// plausible per-file cluster and well below the only value the failure mode
+/// produces, which is all of them.
+const UNSUPPORTED_CEILING: f64 = 0.9;
+
+/// Why a board is not fit to be written.
+///
+/// A run that measured nothing must not overwrite a run that did: the
+/// scoreboard is the project's headline claim, and a zeroed board committed by
+/// a regeneration script reads as a catastrophic regression rather than as the
+/// broken harness it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Invalid {
+    /// The walk produced no rows at all.
+    Empty,
+    /// Effectively every row carries `unsupported-tool`.
+    UnsupportedTool { unsupported: u64, files: u64 },
+}
+
+impl std::fmt::Display for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Invalid::Empty => write!(
+                f,
+                "the run walked no files, so there is no scoreboard to write.\n\
+                 Check that --checkout / PDFRUM_ORACLE_CHECKOUT points at a \
+                 pdfium C++ checkout holding testing/corpus."
+            ),
+            Invalid::UnsupportedTool { unsupported, files } => write!(
+                f,
+                "{unsupported} of {files} rows are `unsupported-tool`, which is \
+                 a broken harness rather than a result.\n\
+                 The tool under test did not answer its probe, so nothing was \
+                 actually compared. Build it with `cargo build -p pdfrum-tool \
+                 --release --features javascript` and pass the path `cargo` \
+                 reports via --tool / PDFRUM_TOOL."
+            ),
+        }
+    }
 }
 
 impl Scoreboard {
@@ -239,8 +317,16 @@ impl Scoreboard {
         per_file.sort_by(|a, b| a.path.cmp(&b.path));
         Scoreboard {
             generated_at,
+            tool: None,
             per_file,
         }
+    }
+
+    /// Records which binary produced these rows.
+    #[must_use]
+    pub fn with_tool(mut self, tool: crate::run::ToolProvenance) -> Scoreboard {
+        self.tool = Some(tool);
+        self
     }
 
     /// Counts, recomputed from the rows.
@@ -288,8 +374,11 @@ impl Scoreboard {
     /// Renders the scoreboard as stable JSON text.
     pub fn to_json(&self) -> Json {
         let totals = self.totals();
-        Json::Obj(vec![
-            ("generated_at".to_owned(), Json::str(&self.generated_at)),
+        let mut fields = vec![("generated_at".to_owned(), Json::str(&self.generated_at))];
+        if let Some(tool) = &self.tool {
+            fields.push(("tool".to_owned(), tool.to_json()));
+        }
+        fields.extend([
             (
                 "totals".to_owned(),
                 Json::Obj(vec![
@@ -314,7 +403,8 @@ impl Scoreboard {
                 "per_file".to_owned(),
                 Json::Arr(self.per_file.iter().map(FileResult::to_json).collect()),
             ),
-        ])
+        ]);
+        Json::Obj(fields)
     }
 
     /// Renders to the exact text written to `scoreboard.json`.
@@ -331,6 +421,9 @@ impl Scoreboard {
             .map(|rows| rows.iter().filter_map(FileResult::from_json).collect())
             .unwrap_or_default();
         Ok(Scoreboard {
+            tool: value
+                .get("tool")
+                .and_then(crate::run::ToolProvenance::from_json),
             generated_at: value
                 .get("generated_at")
                 .and_then(Json::as_str)
@@ -850,5 +943,103 @@ mod tests {
         assert_eq!(Status::from_str("pass"), Status::Pass);
         assert_eq!(Status::from_str("fail"), Status::Fail);
         assert_eq!(Status::from_str("wat"), Status::Fail);
+    }
+
+    fn unsupported_row(path: &str) -> FileResult {
+        FileResult::unsupported_tool(path.to_owned(), "stub".to_owned())
+    }
+
+    fn passing_row(path: &str) -> FileResult {
+        FileResult {
+            path: path.to_owned(),
+            status: Status::Pass,
+            tags: vec![],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: String::new(),
+        }
+    }
+
+    #[test]
+    fn an_all_unsupported_board_is_refused() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            (0..40)
+                .map(|n| unsupported_row(&format!("c/{n}.pdf")))
+                .collect(),
+        );
+        assert_eq!(
+            board.totals().validity(),
+            Err(Invalid::UnsupportedTool {
+                unsupported: 40,
+                files: 40
+            })
+        );
+    }
+
+    #[test]
+    fn the_refusal_names_the_cause_and_the_fix() {
+        let message = Invalid::UnsupportedTool {
+            unsupported: 1677,
+            files: 1677,
+        }
+        .to_string();
+        assert!(message.contains("1677 of 1677"), "{message}");
+        assert!(message.contains("did not answer its probe"), "{message}");
+        assert!(message.contains("cargo build -p pdfrum-tool"), "{message}");
+        assert!(message.contains("PDFRUM_TOOL"), "{message}");
+    }
+
+    #[test]
+    fn an_empty_board_is_refused() {
+        let board = Scoreboard::new("t".to_owned(), vec![]);
+        assert_eq!(board.totals().validity(), Err(Invalid::Empty));
+    }
+
+    #[test]
+    fn one_unsupported_file_among_many_is_still_a_measurement() {
+        // A single file can legitimately defeat a single subcommand; only a
+        // whole-run verdict is the broken harness this guards.
+        let mut rows: Vec<FileResult> = (0..39)
+            .map(|n| passing_row(&format!("c/{n}.pdf")))
+            .collect();
+        rows.push(unsupported_row("c/odd.pdf"));
+        assert_eq!(
+            Scoreboard::new("t".to_owned(), rows).totals().validity(),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_board_that_measured_something_passes_the_guard() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![passing_row("c/a.pdf"), passing_row("c/b.pdf")],
+        );
+        assert_eq!(board.totals().validity(), Ok(()));
+    }
+
+    #[test]
+    fn the_tool_provenance_round_trips_through_the_json() {
+        let board = Scoreboard::new("t".to_owned(), vec![passing_row("c/a.pdf")]).with_tool(
+            crate::run::ToolProvenance {
+                path: "/b/pdfrum-tool".to_owned(),
+                modified: Some("2026-09-02T14:20:00Z".to_owned()),
+                size: Some(78_907_392),
+            },
+        );
+        let text = board.to_text();
+        assert!(text.contains("\"2026-09-02T14:20:00Z\""), "{text}");
+        assert_eq!(Scoreboard::from_text(&text).unwrap(), board);
+    }
+
+    #[test]
+    fn a_board_without_provenance_still_parses() {
+        // Boards written before the tool was recorded stay readable, which is
+        // what keeps `--check-regressions` working against them.
+        let board = Scoreboard::new("t".to_owned(), vec![passing_row("c/a.pdf")]);
+        let parsed = Scoreboard::from_text(&board.to_text()).unwrap();
+        assert_eq!(parsed.tool, None);
+        assert_eq!(parsed, board);
     }
 }
