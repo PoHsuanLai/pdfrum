@@ -30,6 +30,12 @@ pub enum Error {
     /// not survive `SASLprep` (ISO 32000-2 §7.6.4.3.3).
     #[error("a password for encryption must be text")]
     PasswordNotText,
+    /// The operating system's cryptographic generator is unavailable, so the
+    /// file key and AES vectors a new encryption needs cannot be drawn.
+    /// Only an encrypting save can raise this; every other save needs no
+    /// randomness it cannot derive.
+    #[error("the operating system's random generator is unavailable")]
+    NoEntropy,
 
     /// A document with no usable catalog cannot be the destination of an
     /// import: there is nowhere to attach the pages.
