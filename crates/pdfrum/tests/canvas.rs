@@ -20,7 +20,7 @@ fn round_trip(edit: &pdfrum::DocEdit<'_>) -> Document {
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &SaveOptions::default())
         .expect("writes");
-    Document::from_bytes(bytes.into()).expect("reopens")
+    Document::from_bytes(bytes).expect("reopens")
 }
 
 /// The `/Contents` element references of page `index`, in order.

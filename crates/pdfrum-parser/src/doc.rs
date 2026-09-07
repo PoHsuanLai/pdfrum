@@ -35,7 +35,7 @@ use pdfrum_common::{
     DiagKind, Diagnostics, LimitExceeded, Limits, Operation, PageIndex, PdfVersion, Severity,
 };
 use pdfrum_crypt::{Permissions, SecurityHandler};
-use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
+use pdfrum_object::{ByteSpan, Dict, NoResolve, ObjRef, Object, Resolve, names};
 
 use crate::error::Error;
 use crate::store::ObjectStore;
@@ -129,7 +129,7 @@ impl PageDict {
 #[derive(Debug)]
 pub struct Document {
     /// The file from its header onwards; every offset indexes into this.
-    bytes: Arc<[u8]>,
+    bytes: ByteSpan,
     /// The trailer, merged across every section that contributed one.
     trailer: Trailer,
     /// The object store.
@@ -181,17 +181,12 @@ struct PageCache {
 /// let not_a_pdf: Arc<[u8]> = Arc::from(&b"just some bytes"[..]);
 /// assert_eq!(load(not_a_pdf, &LoadOptions::default()).err(), Some(LoadError::NotPdf));
 /// ```
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the caller hands the file over: taking it by value says the \
-              document owns it from here, even though a header offset means \
-              what is stored is a slice of it"
-)]
-pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError> {
+pub fn load(bytes: impl Into<ByteSpan>, opts: &LoadOptions) -> Result<Document, LoadError> {
     opts.limits
         .check_deadline(Operation::Open)
         .map_err(LoadError::Limit)?;
     let mut diags = Diagnostics::default();
+    let bytes: ByteSpan = bytes.into();
     let header_offset = find_header(&bytes, &opts.limits).ok_or(LoadError::NotPdf)?;
     if bytes.len() < header_offset.saturating_add(HEADER_SIZE) {
         return Err(LoadError::NotPdf);
@@ -206,7 +201,12 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
 
     // Everything before the header is invisible: offsets in the file are
     // relative to it, so the reader works on the slice from there on.
-    let body: Arc<[u8]> = Arc::from(bytes.get(header_offset..).unwrap_or_default());
+    //
+    // A window, not a copy: junk before `%PDF` costs a refcount bump like
+    // any other offset. Every stream is then a window into this one.
+    let body = bytes
+        .subspan(header_offset..bytes.len())
+        .unwrap_or_else(|_| ByteSpan::empty());
     let version = read_version(&body);
 
     let (xref, mut trailer, mut xref_shape) =
@@ -322,7 +322,7 @@ fn read_version(body: &[u8]) -> Option<PdfVersion> {
 
 /// Build the security handler the trailer's `/Encrypt` calls for.
 fn build_security(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     opts: &LoadOptions,
@@ -372,7 +372,7 @@ fn build_security(
 /// nothing. That is not a shortcut: the encryption dictionary is the one
 /// object in a document that is always plaintext.
 fn encrypt_dict(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     limits: &Limits,
@@ -388,7 +388,7 @@ fn encrypt_dict(
 /// object before the trailer's `/Encrypt` can name it (ISO 32000-1 §7.6.1
 /// requires `/Encrypt` be indirect).
 fn encrypt_dict_located(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     trailer: &Dict,
     limits: &Limits,
@@ -397,7 +397,7 @@ fn encrypt_dict_located(
         Object::Dict(d) => Some((d.clone(), true)),
         Object::Ref(r) => {
             let plain = ObjectStore::new(
-                Arc::clone(body),
+                body.clone(),
                 Arc::clone(xref),
                 limits.clone(),
                 SecurityHandler::Identity,
@@ -427,14 +427,14 @@ fn exempt_metadata(store: &mut ObjectStore, trailer: &Dict) {
 
 /// Build a store over the table, with the metadata exemption applied.
 fn build_store(
-    body: &Arc<[u8]>,
+    body: &ByteSpan,
     xref: &Arc<Xref>,
     opts: &LoadOptions,
     trailer: &Dict,
     security: SecurityHandler,
 ) -> Arc<ObjectStore> {
     let mut store = ObjectStore::new(
-        Arc::clone(body),
+        body.clone(),
         Arc::clone(xref),
         opts.limits.clone(),
         security,
@@ -896,7 +896,7 @@ impl Document {
 
     /// The file, from its header onwards.
     #[must_use]
-    pub fn bytes(&self) -> &Arc<[u8]> {
+    pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 

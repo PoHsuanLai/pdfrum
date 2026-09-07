@@ -379,7 +379,7 @@ impl DocEdit<'_> {
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
     ///
-    /// let stamped = pdfrum::Document::from_bytes(bytes.into())?;
+    /// let stamped = pdfrum::Document::from_bytes(bytes)?;
     /// assert!(stamped.page(1)?.text().to_string().contains("DRAFT"));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```

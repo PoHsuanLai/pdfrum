@@ -357,7 +357,7 @@ impl DocEdit<'_> {
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
     ///
-    /// let saved = Document::from_bytes(bytes.into())?;
+    /// let saved = Document::from_bytes(bytes)?;
     /// let attachment = &saved.attachments()[0];
     /// assert_eq!(attachment.file_name(), "notes.txt");
     /// assert_eq!(attachment.data().as_deref(), Some(&b"Read me"[..]));

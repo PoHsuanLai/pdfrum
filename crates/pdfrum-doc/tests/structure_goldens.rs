@@ -47,7 +47,7 @@ fn resource(name: &str) -> Option<PathBuf> {
 /// The whole dump for one page, or nothing when the fixture is unavailable.
 fn dump_page(name: &str, index: u32) -> Option<String> {
     let bytes = std::fs::read(resource(name)?).ok()?;
-    let doc = pdfrum_parser::load(bytes.into(), &pdfrum_parser::LoadOptions::default()).ok()?;
+    let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default()).ok()?;
     let catalog = doc.catalog().ok()?;
     let page = doc.page(index).ok()?;
     let obj_num = page.reference.map_or(0, |r| r.num);
