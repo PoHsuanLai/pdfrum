@@ -25,7 +25,7 @@ use tiny_skia::{FilterQuality, Path, PathBuilder, Transform};
     reason = "a/c/d are the Bezier control points and p the endpoint, matching \
               kurbo's own PathEl field naming"
 )]
-pub fn to_path(path: &BezPath) -> Option<Path> {
+pub(crate) fn to_path(path: &BezPath) -> Option<Path> {
     let mut b = PathBuilder::new();
     #[expect(
         clippy::cast_possible_truncation,
@@ -48,7 +48,7 @@ pub fn to_path(path: &BezPath) -> Option<Path> {
 
 /// A rectangle as a closed tiny-skia path.
 #[must_use]
-pub fn rect_path(rect: Rect) -> Option<Path> {
+pub(crate) fn rect_path(rect: Rect) -> Option<Path> {
     #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
     let r = tiny_skia::Rect::from_ltrb(
         rect.x0 as f32,
@@ -66,7 +66,7 @@ pub fn rect_path(rect: Rect) -> Option<Path> {
     reason = "a..f are the six affine matrix coefficients; any other names \
               would obscure the correspondence with the PDF `cm` operands"
 )]
-pub fn to_transform(m: Affine) -> Transform {
+pub(crate) fn to_transform(m: Affine) -> Transform {
     let [a, b, c, d, e, f] = m.as_coeffs();
     #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
     Transform::from_row(a as f32, b as f32, c as f32, d as f32, e as f32, f as f32)
@@ -78,14 +78,14 @@ pub fn to_transform(m: Affine) -> Transform {
     clippy::many_single_char_names,
     reason = "r/g/b/a are the colour channels"
 )]
-pub fn to_color(c: peniko::Color) -> tiny_skia::Color {
+pub(crate) fn to_color(c: peniko::Color) -> tiny_skia::Color {
     let [r, g, b, a] = c.to_rgba8().to_u8_array();
     tiny_skia::Color::from_rgba8(r, g, b, a)
 }
 
 /// The fill rule.
 #[must_use]
-pub fn to_fill_rule(rule: FillRule) -> tiny_skia::FillRule {
+pub(crate) fn to_fill_rule(rule: FillRule) -> tiny_skia::FillRule {
     match rule {
         FillRule::Winding => tiny_skia::FillRule::Winding,
         FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
@@ -103,7 +103,7 @@ pub fn to_fill_rule(rule: FillRule) -> tiny_skia::FillRule {
 /// scratch buffer for the reason §5.3 gives, and against that buffer the
 /// remaining difference is one partial-coverage edge byte rather than a hole.
 #[must_use]
-pub fn to_anti_alias(aa: AntiAlias) -> bool {
+pub(crate) fn to_anti_alias(aa: AntiAlias) -> bool {
     match aa {
         AntiAlias::On | AntiAlias::FullCover => true,
         AntiAlias::Off => false,
@@ -112,7 +112,7 @@ pub fn to_anti_alias(aa: AntiAlias) -> bool {
 
 /// The sampling quality for an image draw.
 #[must_use]
-pub fn to_filter_quality(q: ImageQuality) -> FilterQuality {
+pub(crate) fn to_filter_quality(q: ImageQuality) -> FilterQuality {
     match q {
         ImageQuality::Nearest => FilterQuality::Nearest,
         ImageQuality::Bilinear => FilterQuality::Bilinear,
@@ -125,7 +125,7 @@ pub fn to_filter_quality(q: ImageQuality) -> FilterQuality {
 /// fifteen map one to one, and tiny-skia implements all four non-separable
 /// ones natively.
 #[must_use]
-pub fn to_blend_mode(mode: BlendMode) -> tiny_skia::BlendMode {
+pub(crate) fn to_blend_mode(mode: BlendMode) -> tiny_skia::BlendMode {
     match mode {
         BlendMode::Normal | BlendMode::Compatible => tiny_skia::BlendMode::SourceOver,
         BlendMode::Multiply => tiny_skia::BlendMode::Multiply,

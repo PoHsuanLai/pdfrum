@@ -31,14 +31,7 @@ use pdfrum_doc::nav::Hidden;
 /// does not declare. `pdfrum-doc`'s own table is private, and the emitter no
 /// longer lives there.
 mod names {
-    pub(super) use pdfrum_object::names::{C, CA};
-
-    pdfrum_object::names! {
-        /// An annotation's interior colour (`/IC`).
-        IC = "IC";
-        /// A text-markup annotation's quadrilaterals (`/QuadPoints`).
-        QUAD_POINTS = "QuadPoints";
-    }
+    pub(super) use pdfrum_object::names::{C, CA, IC, QUAD_POINTS};
 }
 
 /// What kind of page object an appearance stream drew, as the dump names it.

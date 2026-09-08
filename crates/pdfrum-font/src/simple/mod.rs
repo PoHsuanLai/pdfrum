@@ -8,16 +8,16 @@
 mod truetype;
 mod type1;
 
+use crate::descriptor::{self, FontDescriptor};
 use crate::encoding::{FontEncoding, adobe_char_name, load_differences};
 use crate::glyphs::{Charmap, Face, GlyphSource};
+use crate::ids::GlyphName;
 use crate::subst::{
     self, CodePage, FontRequest, StandardFont, SubstFont, SubstitutionOptions, strip_subset_prefix,
 };
+use crate::tounicode::{self, ToUnicode};
 use crate::widths::{SimpleWidths, WIDTH_UNSET};
-use crate::{
-    CharCode, CharItem, FontCache, FontDescriptor, FontFlags, FontId, Gid, GlyphName, ToUnicode,
-    descriptor, names, tounicode, widths,
-};
+use crate::{CharCode, CharItem, FontCache, FontFlags, FontId, Gid, names, widths};
 use pdfrum_common::kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Resolve};

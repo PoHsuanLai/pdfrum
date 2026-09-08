@@ -20,7 +20,8 @@ use pdfrum_object::{Dict, Name, Resolve, names};
 use crate::Error;
 use crate::key::SmallKey;
 use crate::primitives::{
-    BLOCK, aes_cbc_decrypt, aes_cbc_encrypt, md5, md5_parts, sha256, sha256_parts, sha384, sha512,
+    BLOCK, aes_cbc_decrypt, aes_cbc_encrypt, ct_eq, md5, md5_parts, sha256, sha256_parts, sha384,
+    sha512,
 };
 use crate::rc4::{rc4, rc4_in_place};
 
@@ -448,7 +449,10 @@ fn check_user_password_r234(
 
     if p.revision == 2 {
         let encrypted = rc4(key.bytes(), &PAD);
-        return (encrypted.get(..16) == Some(stored)).then_some(key);
+        return encrypted
+            .get(..16)
+            .is_some_and(|got| ct_eq(got, stored))
+            .then_some(key);
     }
 
     // Revision 3 and up: undo twenty rounds of RC4 under keys derived by
@@ -472,7 +476,10 @@ fn check_user_password_r234(
     } else {
         md5_parts(&[&PAD, file_id])
     };
-    (test.get(..16) == expected.get(..16)).then_some(key)
+    test.get(..16)
+        .zip(expected.get(..16))
+        .is_some_and(|(got, want)| ct_eq(got, want))
+        .then_some(key)
 }
 
 /// ISO 32000 Algorithm 7 — recover the user password from the owner password.
@@ -545,7 +552,10 @@ fn check_password_aes256(p: &EncryptParams, password: &[u8], owner: bool) -> Opt
         }
     };
 
-    if entry.get(..32) != Some(hash(validation_salt).as_slice()) {
+    if !entry
+        .get(..32)
+        .is_some_and(|got| ct_eq(got, hash(validation_salt).as_slice()))
+    {
         return None;
     }
 

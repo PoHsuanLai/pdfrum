@@ -176,10 +176,7 @@ impl<'a> Page<'a> {
     /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
     ///
     /// // Twice the size, same page.
-    /// let big = page.render(&backend, &RenderOptions {
-    ///     transform: Affine::scale(2.0),
-    ///     ..RenderOptions::default()
-    /// })?;
+    /// let big = page.render(&backend, &RenderOptions::builder().scale(2.0).build())?;
     /// assert_eq!((big.width(), big.height()), (400, 400));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
@@ -1012,6 +1009,7 @@ impl Document {
 
 /// Where a link annotation leads.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LinkTarget {
     /// A page of this document.
     Page(PageIndex),
@@ -1066,6 +1064,7 @@ pub struct RawImage {
 
 /// The codecs whose streams are files in their own right.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ImageEncoding {
     /// `/DCTDecode`.
     Jpeg,

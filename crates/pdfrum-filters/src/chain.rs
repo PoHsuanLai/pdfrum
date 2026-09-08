@@ -37,7 +37,7 @@
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Array, Dict, Name, Object, Resolve, Stream, names};
 
-use crate::{DecodeOutput, Filter, NeedsImageCodec, decode, params_dict};
+use crate::filter::{DecodeOutput, Filter, NeedsImageCodec, decode, params_dict};
 
 /// What a stream's bytes turned out to be.
 #[derive(Debug, Clone, PartialEq)]

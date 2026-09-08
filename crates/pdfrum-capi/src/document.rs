@@ -64,10 +64,8 @@ impl pdfrum_limits {
     ///
     /// `self.cancel` is null or a live `pdfrum_cancel` handle.
     unsafe fn options(&self, password: Option<&str>) -> pdfrum::OpenOptions {
-        let mut options = pdfrum::OpenOptions {
-            password: password.map(|p| p.as_bytes().to_vec()),
-            ..pdfrum::OpenOptions::default()
-        };
+        let mut options = pdfrum::OpenOptions::default();
+        options.password = password.map(|p| p.as_bytes().to_vec());
         if self.max_render_pixels > 0 {
             options.limits.max_render_pixels = Some(self.max_render_pixels);
         }
@@ -116,20 +114,19 @@ const DETERMINISTIC_SEED: [u8; 16] = *b"pdfrum-capi-det\0";
 impl pdfrum_save_options {
     /// The facade options these describe.
     pub(crate) fn to_facade(&self) -> pdfrum::SaveOptions {
-        pdfrum::SaveOptions {
-            // `Fixed` seeds both the file identifier and the font-subset
-            // tag from a constant, which is what makes the same input save
-            // to the same bytes. The seed is this library's, not the
-            // caller's: a C caller who wants determinism wants *a* stable
-            // answer, not a choice of which.
-            id_source: if self.deterministic {
-                pdfrum::IdSource::Fixed(DETERMINISTIC_SEED)
-            } else {
-                pdfrum::IdSource::default()
-            },
-            remove_security: self.remove_security,
-            ..pdfrum::SaveOptions::default()
-        }
+        let mut options = pdfrum::SaveOptions::default();
+        // `Fixed` seeds both the file identifier and the font-subset
+        // tag from a constant, which is what makes the same input save
+        // to the same bytes. The seed is this library's, not the
+        // caller's: a C caller who wants determinism wants *a* stable
+        // answer, not a choice of which.
+        options.id_source = if self.deterministic {
+            pdfrum::IdSource::Fixed(DETERMINISTIC_SEED)
+        } else {
+            pdfrum::IdSource::default()
+        };
+        options.remove_security = self.remove_security;
+        options
     }
 }
 
@@ -229,12 +226,12 @@ pub unsafe extern "C" fn pdfrum_open_with(
                 // readable bytes, and this copies them before returning.
                 Arc::from(core::slice::from_raw_parts(bytes, len))
             };
-            let options = match limits.as_ref() {
-                Some(limits) => limits.options(password),
-                None => pdfrum::OpenOptions {
-                    password: password.map(|p| p.as_bytes().to_vec()),
-                    ..pdfrum::OpenOptions::default()
-                },
+            let options = if let Some(limits) = limits.as_ref() {
+                limits.options(password)
+            } else {
+                let mut options = pdfrum::OpenOptions::default();
+                options.password = password.map(|p| p.as_bytes().to_vec());
+                options
             };
             Ok(pdfrum_document::give(pdfrum::Document::from_bytes_with(
                 copied, &options,
@@ -266,10 +263,8 @@ pub unsafe extern "C" fn pdfrum_open_file(
         catch(error, || {
             let path = borrow_str(path, "null path")?;
             let password = borrow_opt_str(password)?;
-            let options = pdfrum::OpenOptions {
-                password: password.map(|p| p.as_bytes().to_vec()),
-                ..pdfrum::OpenOptions::default()
-            };
+            let mut options = pdfrum::OpenOptions::default();
+            options.password = password.map(|p| p.as_bytes().to_vec());
             Ok(pdfrum_document::give(pdfrum::Document::open_with(
                 path, &options,
             )?))

@@ -30,6 +30,7 @@
 // backend blends and a pixel the engine blends in its own offscreen buffers
 // agree by construction.
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 // Every coordinate reaching this crate came from an untrusted file by way of
 // the engine: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]

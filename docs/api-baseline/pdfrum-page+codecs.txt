@@ -363,7 +363,7 @@ pub fn pdfrum_page::BitImage::pixel(&self, u32, u32) -> bool
 pub struct pdfrum_page::BuildContext
 pub pdfrum_page::BuildContext::colorspaces: pdfrum_page::color::load::ColorSpaceCache
 pub pdfrum_page::BuildContext::decode_target: pdfrum_page::RequestedSize
-pub pdfrum_page::BuildContext::fonts: alloc::sync::Arc<pdfrum_font::FontCache>
+pub pdfrum_page::BuildContext::fonts: alloc::sync::Arc<pdfrum_font::load::FontCache>
 pub pdfrum_page::BuildContext::functions: pdfrum_page::FunctionCache
 pub pdfrum_page::BuildContext::images: pdfrum_page::ImageCache
 pub pdfrum_page::BuildContext::substitution: pdfrum_font::subst::SubstitutionOptions
@@ -717,7 +717,7 @@ pub pdfrum_page::TextClipRun::char_space: f32
 pub pdfrum_page::TextClipRun::object: pdfrum_page::TextObject
 pub pdfrum_page::TextClipRun::word_space: f32
 pub struct pdfrum_page::TextObject
-pub pdfrum_page::TextObject::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::Font>, f32)>
+pub pdfrum_page::TextObject::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::load::Font>, f32)>
 pub pdfrum_page::TextObject::font_source: core::option::Option<pdfrum_object::object::ObjRef>
 pub pdfrum_page::TextObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::TextObject::position: kurbo::point::Point
@@ -731,7 +731,7 @@ pub pdfrum_page::TextSegment::codes: alloc::boxed::Box<[u8]>
 pub pdfrum_page::TextSegment::kerning: f32
 pub struct pdfrum_page::TextState
 pub pdfrum_page::TextState::char_space: f32
-pub pdfrum_page::TextState::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::Font>, f32)>
+pub pdfrum_page::TextState::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::load::Font>, f32)>
 pub pdfrum_page::TextState::font_source: core::option::Option<pdfrum_object::object::ObjRef>
 pub pdfrum_page::TextState::horz_scale: f32
 pub pdfrum_page::TextState::leading: f32
@@ -809,7 +809,7 @@ impl pdfrum_page::Rows for pdfrum_page::Converted<'_>
 pub type pdfrum_page::Converted<'_>::Pixel = pdfrum_page::Rgba8
 pub fn pdfrum_page::Converted<'_>::next(&mut self) -> core::option::Option<pdfrum_page::Row<'_, pdfrum_page::Rgba8>>
 pub fn pdfrum_page::adobe_cmyk_to_srgb(u8, u8, u8, u8) -> [u8; 3]
-pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::load::Font>>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_page::build_form_object<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::PageObject>
 pub fn pdfrum_page::build_form_object_with<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, bool) -> core::option::Option<pdfrum_page::PageObject>
 pub fn pdfrum_page::build_page<R: pdfrum_object::resolve::Resolve>(&[pdfrum_page::Op], &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Page

@@ -18,6 +18,7 @@ pub pdfrum_raster_vello::AdapterReport::max_dimension: u32
 pub pdfrum_raster_vello::AdapterReport::name: alloc::string::String
 impl pdfrum_raster_vello::AdapterReport
 pub fn pdfrum_raster_vello::AdapterReport::is_real_gpu(&self) -> bool
+pub fn pdfrum_raster_vello::AdapterReport::is_software(&self) -> bool
 pub fn pdfrum_raster_vello::AdapterReport::of(&wgpu::api::adapter::Adapter) -> Self
 impl core::fmt::Display for pdfrum_raster_vello::AdapterReport
 pub fn pdfrum_raster_vello::AdapterReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result

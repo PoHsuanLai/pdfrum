@@ -157,7 +157,7 @@ impl SubstFont {
     /// A **prefix** test over the lowercased family with all spaces removed,
     /// which is loose enough to be wrong — the C++'s own comment notes that a
     /// family called `Book` would match `Bookman`. Ported as-is because the
-    /// glyph-spacing heuristic of §1.15 turns on it.
+    /// glyph-spacing heuristic of the former working note turns on it.
     ///
     /// `base_name` is a `/BaseFont` name, so it arrives as bytes and **the
     /// caller lowercases it** — the two sides are lowered separately upstream
@@ -270,7 +270,7 @@ fn weight_level_for_load(index: usize, shift_jis: bool) -> i32 {
     }
 }
 
-/// The facts a font offers the glyph-spacing gate of §1.15.
+/// The facts a font offers the glyph-spacing gate of the former working note.
 ///
 /// A borrowed view rather than owned state: the answer is a property of a
 /// loaded font, and pulling the five inputs out makes each of the gate's
@@ -289,7 +289,7 @@ pub struct GlyphSpacingGate<'a> {
     pub subst: Option<&'a SubstFont>,
 }
 
-/// Whether a font's glyphs take the glyph-spacing correction of §1.15.
+/// Whether a font's glyphs take the glyph-spacing correction of the former working note.
 ///
 /// The correction exists for one situation: a PDF that declares its own
 /// advance widths, does **not** ship the font program, and got substituted

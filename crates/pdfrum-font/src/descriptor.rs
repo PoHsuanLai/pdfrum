@@ -11,7 +11,7 @@ use pdfrum_object::{Dict, Resolve};
 /// What a font says about its own shape and metrics.
 ///
 /// A record: everything here is read straight from the dictionary, then
-/// repaired in place by the two rules of §1.2 and §1.3. Behavior lives in the
+/// repaired in place by the two rules of the former working note and the former working note. Behavior lives in the
 /// free functions below.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FontDescriptor {
@@ -19,7 +19,7 @@ pub struct FontDescriptor {
     /// added.
     pub flags: FontFlags,
     /// The italic angle, **only when negative**. A zero or positive
-    /// `/ItalicAngle` is read and then discarded (§1.2).
+    /// `/ItalicAngle` is read and then discarded.
     pub italic_angle: i32,
     /// `/StemV`, the vertical stem thickness. Feeds the weight estimate when
     /// `/FontWeight` is absent.
@@ -54,7 +54,7 @@ impl FontDescriptor {
     ///
     /// `/FontWeight` when it was positive; otherwise estimated from `/StemV`
     /// by a two-piece linear rule PDFium calibrated empirically
-    /// (`GetFontWeight`, §1.15).
+    /// (`GetFontWeight`, the former working note).
     #[must_use]
     pub fn weight(&self) -> Option<i32> {
         if let Some(w) = self.font_weight {
@@ -136,7 +136,7 @@ pub fn load(desc: &Dict, r: &impl Resolve) -> FontDescriptor {
     }
 
     // The single most consequential flag downstream: without it, substitution
-    // throws away the caller's weight and slant entirely (§1.12 step 0).
+    // throws away the caller's weight and slant entirely.
     let has_cap_height = desc.raw(names::CAP_HEIGHT).is_some();
     if has_italic_angle
         && has_ascent
@@ -170,7 +170,7 @@ pub fn load(desc: &Dict, r: &impl Resolve) -> FontDescriptor {
 /// Note `upem / 2` is **integer** division before the float divide, and that
 /// this rounds where its sibling [`em_adjust`](crate::em_adjust) truncates —
 /// the two disagree for half the inputs and both are live
-/// (`NormalizeFontMetric`, §1.3).
+/// (`NormalizeFontMetric`, the former working note).
 #[must_use]
 pub fn normalize_font_metric(value: i64, upem: u16) -> i32 {
     if upem == 0 {
@@ -181,7 +181,7 @@ pub fn normalize_font_metric(value: i64, upem: u16) -> i32 {
 }
 
 /// The *other* 1000/em normalizer: truncating integer division, no rounding
-/// and no saturation. Used only for a glyph's advance width (§1.3).
+/// and no saturation. Used only for a glyph's advance width.
 #[must_use]
 pub fn em_adjust(value: i32, upem: u16) -> i32 {
     if upem == 0 {
@@ -207,7 +207,7 @@ fn saturating_cast_i32(v: f64) -> i32 {
 /// The bbox assignment is **deliberately flipped**: the face's box arrives in
 /// a y-down convention and the swap is what makes the result y-up in text
 /// space. The C++ carries a comment saying so, and the assignment is ported
-/// literally rather than reasoned about (`CheckFontMetrics`, §1.3).
+/// literally rather than reasoned about (`CheckFontMetrics`, the former working note).
 pub fn check_font_metrics(
     d: &mut FontDescriptor,
     face: Option<FaceMetrics>,

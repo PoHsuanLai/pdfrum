@@ -6,11 +6,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
 keywords = ["pdf", "render", "vello", "wgpu", "gpu"]
 categories = ["graphics", "rendering"]
 # Not part of the core ring; nothing in that ring depends on it.
 # Published so `pdfrum --features vello-gpu` resolves on crates.io.
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

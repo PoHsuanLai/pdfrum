@@ -7,9 +7,11 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 
 /// Everything a render is parameterised by.
 ///
-/// A config struct with [`Default`], filled in with struct-update syntax. The
-/// defaults render a page at one pixel per PDF point, in colour, with
-/// antialiased text — what a viewer shows.
+/// A config struct with [`Default`]. The defaults render a page at one
+/// pixel per PDF point, in colour, with antialiased text — what a viewer
+/// shows. `#[non_exhaustive]` so a field added later is not a major break;
+/// fill one in with [`RenderOptions::builder`] (struct-update syntax from
+/// another crate cannot name every field).
 ///
 /// It says nothing about *which* rasterizer draws the page: that is an
 /// argument to [`Page::render_on`](crate::Page::render_on). Nor about how
@@ -21,6 +23,7 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 /// own. This one's flags are positive and default to the common case, so
 /// `smooth_paths` here is the engine's `no_path_smooth` inverted.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct RenderOptions {
     /// Page space to device space — what sizes the output.
     ///
@@ -76,10 +79,10 @@ impl Default for RenderOptions {
 
 /// Builds a [`RenderOptions`] a setting at a time.
 ///
-/// The alternative to struct-update syntax, which still works and is still
-/// the shorter way to change one field. This reads better when several
-/// settings are chosen, when they are chosen conditionally, or from a
-/// language binding where `..Default::default()` has no equivalent.
+/// The way to change one field from outside this crate: the type is
+/// `#[non_exhaustive]`, so struct-update syntax is a same-crate spelling.
+/// This also reads better when several settings are chosen, when they are
+/// chosen conditionally, or from a language binding.
 ///
 /// Every method consumes and returns the builder; [`build`](Self::build)
 /// hands back the options.
@@ -95,14 +98,6 @@ impl Default for RenderOptions {
 ///
 /// assert_eq!(options.color_mode, ColorMode::Gray);
 /// assert!(!options.annotations);
-///
-/// // The same thing, written the way it always could be.
-/// assert_eq!(options, RenderOptions {
-///     transform: kurbo::Affine::scale(2.0),
-///     color_mode: ColorMode::Gray,
-///     annotations: false,
-///     ..RenderOptions::default()
-/// });
 /// ```
 #[derive(Debug, Clone, PartialEq, Default)]
 #[must_use]

@@ -10,7 +10,7 @@ use read_fonts::ps::agl;
 
 /// The Unicode a glyph name stands for, or **0** when the name is unknown.
 ///
-/// Zero rather than `Option` because the whole ladder in §1.8 and §1.9 tests
+/// Zero rather than `Option` because the whole ladder in the former working note and the former working note tests
 /// `!= 0` and stores the result in a `[u16; 256]` table where 0 is already the
 /// "unmapped" value; introducing an `Option` here would only be unwrapped
 /// immediately at every call site.

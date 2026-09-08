@@ -15,9 +15,11 @@ cargo +nightly fuzz run parser_load corpus/parser_load -- -max_total_time=60
 A crash is a library bug. Fix it with a regression test and keep the input
 under `fuzz/seeds/<target>/`.
 
-CI typechecks (`cargo check --manifest-path fuzz/Cargo.toml`); it does not
-run. `scripts/fuzz-gate.nu` runs the parser-facing 18. `page_*`, `text_*`,
-`edit_*` are extra — `cargo +nightly fuzz run` them, or pass `--targets`.
+CI typechecks (`cargo check --manifest-path fuzz/Cargo.toml`) on every PR.
+A weekly workflow runs `scripts/fuzz-gate.nu`. The default set is the
+parser/filters/crypt ring plus every `page_*` target. `text_*`, `edit_*`
+and `doc_pdfa_check` are extra — `cargo +nightly fuzz run` them, or pass
+`--targets`.
 
 ```sh
 scripts/fuzz-gate.nu                 # 10 min smoke
@@ -36,18 +38,18 @@ Stream-decoding targets run under `Limits` with `max_decoded_stream_len` =
 | `object_name_decode` | `name_decode` / `name_encode` | yes | committed |
 | `crypt_encrypt_dict` | `SecurityHandler::from_encrypt_dict` | yes | committed |
 | `crypt_decrypt` | `SecurityHandler::decrypt` | yes | committed |
-| `filters_flate` / `_lzw` / `_a85` / `_ahx` / `_rle` / `_predictor` / `_chain` | the named decoder | yes | committed |
+| `filters_flate` / `_lzw` / `_a85` / `_ahx` / `_rle` / `_predictor` / `_ccitt` / `_chain` | the named decoder | yes | committed |
 | `cmap_embedded` / `_predefined` | CMap parse / lookup | yes | committed |
 | `parser_lexer` / `_xref` / `_load` / `_load_password` | lexer, xref, `load` | yes | committed; also take oracle PDFs |
 | `parser_object` | object grammar | yes | committed |
-| `page_parse_content` | `parse_content` | | |
-| `page_inline_image` | `BI … ID … EI` | | |
-| `page_colorspace` | `load_colorspace` | | |
-| `page_psengine` | type 4 PostScript calculator | | |
-| `page_mesh_stream` | mesh shading types 4–7 | | |
-| `page_decode_image` | `decode_image` | | |
-| `page_jbig2` | `decode_jbig2` | | |
-| `page_jpx` | `decode_jpx` | | |
+| `page_parse_content` | `parse_content` | yes | committed |
+| `page_inline_image` | `BI … ID … EI` | yes | committed |
+| `page_colorspace` | `load_colorspace` | yes | committed |
+| `page_psengine` | type 4 PostScript calculator | yes | committed |
+| `page_mesh_stream` | mesh shading types 4–7 | yes | committed |
+| `page_decode_image` | `decode_image` | yes | committed |
+| `page_jbig2` | `decode_jbig2` | yes | committed |
+| `page_jpx` | `decode_jpx` | yes | committed |
 | `text_extract` | `extract` | | |
 | `text_links` | web / mail link scan | | |
 | `edit_save_roundtrip` | `save` then `load` | | oracle PDFs |

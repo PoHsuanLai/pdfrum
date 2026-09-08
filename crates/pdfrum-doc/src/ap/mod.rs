@@ -1448,7 +1448,7 @@ pub(crate) fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) ->
         1.0
     };
     let blend = if multiply {
-        names::MULTIPLY_BLEND
+        names::MULTIPLY
     } else {
         obj_names::NORMAL
     };

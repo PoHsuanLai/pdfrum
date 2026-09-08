@@ -104,7 +104,54 @@ pub fn request_adapter() -> Result<VelloBackend<'static>, Error> {
     Ok(backend)
 }
 
-/// Enumerate an adapter, refuse a software one, and open the process's device.
+/// Whether tests may accept a software adapter (lavapipe, `SwiftShader`).
+///
+/// Off by default: a benchmark that cannot name its hardware must not claim
+/// to have measured a GPU. Set `PDFRUM_ALLOW_SOFTWARE_GPU=1` in CI so the
+/// conversion and readback paths actually run on a hosted runner.
+fn software_gpu_allowed() -> bool {
+    matches!(
+        std::env::var("PDFRUM_ALLOW_SOFTWARE_GPU").as_deref(),
+        Ok("1" | "true" | "TRUE")
+    )
+}
+
+fn request_adapter_raw(instance: &wgpu::Instance, fallback: bool) -> Option<wgpu::Adapter> {
+    block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        // High performance rather than default: on a machine with both a
+        // discrete card and integrated graphics, measuring the integrated one
+        // and calling it "the GPU" would be the same class of mistake as
+        // measuring llvmpipe.
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        force_fallback_adapter: fallback,
+    }))
+    .and_then(Result::ok)
+}
+
+fn pick_adapter(instance: &wgpu::Instance) -> Result<(wgpu::Adapter, AdapterReport), Error> {
+    if let Some(adapter) = request_adapter_raw(instance, false) {
+        let report = AdapterReport::of(&adapter);
+        if report.is_real_gpu() {
+            return Ok((adapter, report));
+        }
+        if software_gpu_allowed() && report.is_software() {
+            return Ok((adapter, report));
+        }
+    }
+    if software_gpu_allowed()
+        && let Some(adapter) = request_adapter_raw(instance, true)
+    {
+        let report = AdapterReport::of(&adapter);
+        if report.is_software() || report.is_real_gpu() {
+            return Ok((adapter, report));
+        }
+    }
+    Err(Error::NoAdapter)
+}
+
+/// Enumerate an adapter, refuse a software one unless opted in, and open
+/// the process's device.
 ///
 /// Runs at most once; [`SHARED`] holds whatever it decided, success or
 /// failure. The failure is cached too, because a machine with no GPU still has
@@ -113,30 +160,12 @@ pub fn request_adapter() -> Result<VelloBackend<'static>, Error> {
 fn open_shared_device() -> Result<Opened, Error> {
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        // High performance rather than default: on a machine with both a
-        // discrete card and integrated graphics, measuring the integrated one
-        // and calling it "the GPU" would be the same class of mistake as
-        // measuring llvmpipe.
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: None,
-        // Never: a fallback adapter *is* the software rasterizer, and this
-        // backend would rather report `NoAdapter` and be skipped than return
-        // CPU numbers under a GPU label. It is not sufficient on its own —
-        // see the `is_real_gpu` check below.
-        force_fallback_adapter: false,
-    }))
-    .ok_or(Error::NoAdapter)?
-    .map_err(|_| Error::NoAdapter)?;
-
     // Before the device, and the ordering is the point: `AdapterReport` is
     // built from the adapter, which allocates nothing on the GPU, so a
     // software adapter is refused without a device ever having been opened —
-    // and therefore without one having been leaked.
-    let report = AdapterReport::of(&adapter);
-    if !report.is_real_gpu() {
-        return Err(Error::NoAdapter);
-    }
+    // and therefore without one having been leaked. The env opt-in is the
+    // exception that lets CI run the suite on lavapipe.
+    let (adapter, report) = pick_adapter(&instance)?;
 
     let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("pdfrum-raster-vello"),
@@ -173,9 +202,10 @@ fn open_shared_device() -> Result<Opened, Error> {
 /// skipping side of that a one-liner at each call site.
 ///
 /// A software adapter is refused as firmly as no adapter at all — see
-/// [`AdapterReport::is_real_gpu`] — and [`request_adapter`] refuses it
-/// *before* opening a device, so the skip path allocates no device and leaks
-/// nothing.
+/// [`AdapterReport::is_real_gpu`] — unless `PDFRUM_ALLOW_SOFTWARE_GPU=1` is
+/// set, which is how CI runs this suite on lavapipe. [`request_adapter`]
+/// refuses a software adapter *before* opening a device, so the skip path
+/// allocates no device and leaks nothing.
 #[must_use]
 pub fn try_real_gpu() -> Option<VelloBackend<'static>> {
     request_adapter().ok()

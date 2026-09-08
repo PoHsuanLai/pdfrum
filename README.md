@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
 
 pdfrum is a modern, thread-safe PDF library — modular stages you compose,
-CPU or GPU backends, no `unsafe` — 1,675 of 1,759 files on a PDFium suite
+CPU or GPU backends, no `unsafe` — 1,679 of 1,759 files on a PDFium suite
 pass outright, at a median page SSIM of 0.99999.
 For your UI, RAG pipeline, or any app that has to open a PDF file.
 
@@ -50,24 +50,18 @@ Open a file once. Ask it questions (Rendering is one of them).
 
 A file a browser would open, we open, and tell you where it's broken.
 
-## Command line
+## Quick start
 
 ![Pdfrum CLI](https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
-pdfrum preview gradients.pdf
-pdfrum stamp text gradients.pdf DRAFT --angle 30 --opacity 0.4 --size 72 -o stamped.pdf
-pdfrum preview stamped.pdf
-pdfrum view stamped.pdf
-pdfrum search ISO paper.pdf
-```
-
-The rest of the catalog — `info`, `pages`, `forms`, `render`,
-`serve --stdio` / `--mcp` — is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
-
-```sh
 cargo install pdfrum-cli
+pdfrum preview report.pdf
+pdfrum search -i "total due" invoice.pdf
+pdfrum extract markdown paper.pdf
 ```
+
+The rest of the catalog is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
 
 ## Attributes
 
@@ -171,6 +165,38 @@ crate — extracts, but writes no file back. Where pdfrum loses is speed:
 warm median render is slower than both `pdfium-render` and `mupdf`.
 Numbers, method, and the files each engine loses on are in
 [`docs/benchmarks/`](docs/benchmarks/).
+
+## Crate map
+
+Twenty-three crates publish. `pdfrum` is the API; the rest are stages a
+caller who wants a thinner tree can name directly. Three more are public
+surfaces that do not publish (`pdfrum-capi`, `pdfrum-wasm`, `pdfrum-tool`).
+
+| crate | duty |
+|---|---|
+| [`pdfrum`](https://docs.rs/pdfrum) | facade: `Document`, `Page`, `Form`, `Canvas` |
+| [`pdfrum-common`](https://docs.rs/pdfrum-common) | diagnostics, limits, `kurbo` re-export |
+| [`pdfrum-object`](https://docs.rs/pdfrum-object) | PDF objects, names, strings, dictionaries |
+| [`pdfrum-crypt`](https://docs.rs/pdfrum-crypt) | standard security handler, revisions 2–6 |
+| [`pdfrum-filters`](https://docs.rs/pdfrum-filters) | Flate, LZW, ASCIIHex/85, RunLength, CCITT |
+| [`pdfrum-parser`](https://docs.rs/pdfrum-parser) | lexer, xref, `load` |
+| [`pdfrum-page`](https://docs.rs/pdfrum-page) | content streams, colour, images, shadings |
+| [`pdfrum-cmap`](https://docs.rs/pdfrum-cmap) | CMap parse and lookup |
+| [`pdfrum-type1`](https://docs.rs/pdfrum-type1) | Type 1 charstrings |
+| [`pdfrum-font`](https://docs.rs/pdfrum-font) | font programs, encodings, ToUnicode |
+| [`pdfrum-text`](https://docs.rs/pdfrum-text) | text extraction, search, links |
+| [`pdfrum-render`](https://docs.rs/pdfrum-render) | page-object walk, `RasterBackend` |
+| [`pdfrum-raster-vello-cpu`](https://docs.rs/pdfrum-raster-vello-cpu) | default CPU rasterizer |
+| [`pdfrum-raster-tinyskia`](https://docs.rs/pdfrum-raster-tinyskia) | tiny-skia backend |
+| [`pdfrum-raster-agg`](https://docs.rs/pdfrum-raster-agg) | AGG-parity backend |
+| [`pdfrum-raster-vello`](https://docs.rs/pdfrum-raster-vello) | GPU rasterizer over `wgpu` |
+| [`pdfrum-doc`](https://docs.rs/pdfrum-doc) | annotations, structure tree, PDF/A check |
+| [`pdfrum-form`](https://docs.rs/pdfrum-form) | AcroForm reader and session |
+| [`pdfrum-script`](https://docs.rs/pdfrum-script) | document JavaScript (behind `javascript`) |
+| [`pdfrum-edit`](https://docs.rs/pdfrum-edit) | save, page import, subsetting |
+| [`pdfrum-markdown`](https://docs.rs/pdfrum-markdown) | `Page::markdown` |
+| [`pdfrum-svg`](https://docs.rs/pdfrum-svg) | SVG export |
+| [`pdfrum-cli`](https://docs.rs/pdfrum-cli) | command line |
 
 ## Licence
 

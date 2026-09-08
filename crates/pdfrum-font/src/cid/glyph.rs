@@ -10,7 +10,8 @@
 use super::{CidFontKind, CidToGid, Type0Font, cid_charmap};
 use crate::encoding::{FaceEncoding, FontEncoding, adobe_char_name, unicode_from_adobe_name};
 use crate::glyphs::Charmap;
-use crate::{CharCode, Gid, GlyphName};
+use crate::ids::GlyphName;
+use crate::{CharCode, Gid};
 
 /// The Adobe CourierStd rescue offset. Its CIDs sit exactly this far below
 /// the standard encoding's codes.

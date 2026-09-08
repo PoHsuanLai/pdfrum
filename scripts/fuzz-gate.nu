@@ -1,6 +1,7 @@
 #!/usr/bin/env nu
-# Run the parser-facing fuzz targets for a time budget. Not part of
-# scripts/ci.nu — that gate only typechecks fuzz/.
+# Run the default fuzz targets for a time budget. Not part of
+# scripts/ci.nu — that gate only typechecks fuzz/. The weekly workflow
+# is what actually executes this.
 #
 #   scripts/fuzz-gate.nu                 # 10 min total, sequential
 #   scripts/fuzz-gate.nu 86400           # 24 h sequential
@@ -17,6 +18,8 @@ const DEFAULT_TARGETS = [
     crypt_encrypt_dict crypt_decrypt
     cmap_embedded cmap_predefined
     object_decode_text object_name_decode
+    page_parse_content page_inline_image page_colorspace page_psengine
+    page_mesh_stream page_decode_image page_jbig2 page_jpx
 ]
 
 # RSS cap for a whole document; hang timeout is a parser bug.

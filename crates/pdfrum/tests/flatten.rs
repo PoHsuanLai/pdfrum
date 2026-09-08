@@ -17,10 +17,9 @@ fn saved(edit: &pdfrum::DocEdit<'_>) -> pdfrum::Result<(Vec<u8>, Document)> {
 }
 
 fn with_annotations() -> RenderOptions {
-    RenderOptions {
-        annotations: true,
-        ..RenderOptions::default()
-    }
+    let mut options = RenderOptions::default();
+    options.annotations = true;
+    options
 }
 
 /// Flattens page 0 for print and asserts the saved page, drawn without

@@ -14,6 +14,8 @@
 
 use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
 
+use zeroize::Zeroize;
+
 use crate::Error;
 use crate::SecurityHandler;
 use crate::permissions::Permissions;
@@ -22,22 +24,24 @@ use crate::standard::{r6_prepared, revision6_hash};
 
 /// The bytes of a new file's secrets: the 32-byte file key, then the
 /// user validation salt, user key salt, owner validation salt and owner key
-/// salt, 8 bytes each.
-pub const ENTROPY_LEN: usize = 64;
+/// salt, 8 bytes each, then four random bytes for `/Perms` (ISO 32000-2
+/// Algorithm 10).
+pub const ENTROPY_LEN: usize = 68;
 
-/// The secret bytes behind one encrypted file: the AES-256 file key and the
-/// four revision-6 salts (ISO 32000-2 §7.6.4.4.7, algorithms 8 and 9).
+/// The secret bytes behind one encrypted file: the AES-256 file key, the
+/// four revision-6 salts (ISO 32000-2 §7.6.4.4.7, algorithms 8 and 9), and
+/// four random bytes for `/Perms` (Algorithm 10).
 ///
 /// The bytes come from the operating system's cryptographic generator and
 /// from nowhere else. There is no constructor taking a seed, a slice or a
 /// byte array, so a caller cannot substitute a derived sequence: an
 /// unguessable file key is a property of the type, not of the call site.
 /// Neither `Clone` nor `Debug`, so the bytes are neither duplicated across
-/// two files nor printed.
+/// two files nor printed. `Drop` wipes them.
 pub struct KeyMaterial([u8; ENTROPY_LEN]);
 
 impl KeyMaterial {
-    /// Sixty-four fresh bytes from the operating system.
+    /// Sixty-eight fresh bytes from the operating system.
     ///
     /// # Errors
     ///
@@ -48,6 +52,12 @@ impl KeyMaterial {
         let mut bytes = [0u8; ENTROPY_LEN];
         getrandom::fill(&mut bytes).map_err(|_| Error::NoEntropy)?;
         Ok(Self(bytes))
+    }
+}
+
+impl Drop for KeyMaterial {
+    fn drop(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -79,11 +89,12 @@ pub fn standard_r6(
     let user_prepared = r6_prepared(6, user).ok_or(Error::WrongPassword)?;
     let owner_prepared = r6_prepared(6, owner).ok_or(Error::WrongPassword)?;
 
-    let file_key: [u8; 32] = slice(entropy, 0)?;
+    let mut file_key: [u8; 32] = slice(entropy, 0)?;
     let user_validation: [u8; 8] = slice(entropy, 32)?;
     let user_key_salt: [u8; 8] = slice(entropy, 40)?;
     let owner_validation: [u8; 8] = slice(entropy, 48)?;
     let owner_key_salt: [u8; 8] = slice(entropy, 56)?;
+    let perms_random: [u8; 4] = slice(entropy, 64)?;
 
     // Algorithm 8: /U is the hash of the user password and its validation
     // salt, then the two salts; /UE is the file key enciphered under the hash
@@ -108,15 +119,20 @@ pub fn standard_r6(
     )?;
 
     // Algorithm 10: /Perms is the permissions word, four 0xFF bytes, T or F
-    // for metadata, "adb", and four bytes of anything, under the file key.
+    // for metadata, "adb", and four random bytes, under the file key.
+    // The four bytes are their own slice of entropy, not a prefix of the
+    // file key: ISO 32000-2 asks for random bytes, and putting key material
+    // in the plaintext (then encrypting it under that key with a zero IV)
+    // would hand four key bytes to anyone who recovered the block.
     let p = permissions.bits() | !NAMED_PERMISSION_BITS;
     let mut perms = [0u8; 16];
     perms[..4].copy_from_slice(&p.to_le_bytes());
     perms[4..8].copy_from_slice(&[0xFF; 4]);
     perms[8] = if encrypt_metadata { b'T' } else { b'F' };
     perms[9..12].copy_from_slice(b"adb");
-    perms[12..16].copy_from_slice(&entropy[..4]);
+    perms[12..16].copy_from_slice(&perms_random);
     aes_cbc_encrypt(&file_key, &[0u8; 16], &mut perms).map_err(|_| Error::WrongPassword)?;
+    file_key.zeroize();
 
     let name = |s: &str| Object::Name(Name::from(s));
     let bytes = |b: &[u8]| Object::Str(PdfString::hex(b));
@@ -225,5 +241,28 @@ mod tests {
         let opened = SecurityHandler::from_encrypt_dict(&dict, &[], b"pw", &NoResolve).unwrap();
         assert!(opened.owner_unlocked());
         assert!(!opened.encrypt_metadata());
+    }
+
+    #[test]
+    fn perms_random_bytes_are_not_the_file_key_prefix() {
+        let mut bytes = [0u8; super::ENTROPY_LEN];
+        bytes[..32].fill(0xAA);
+        bytes[32..64].fill(0x11);
+        bytes[64..68].fill(0xBB);
+        let material = super::KeyMaterial(bytes);
+        let (dict, _) = standard_r6(b"user", b"owner", Permissions::ALL, true, &material).unwrap();
+        let perms = dict
+            .string(&pdfrum_object::Name::from("Perms"))
+            .expect("standard_r6 writes /Perms");
+        let mut block = [0u8; 16];
+        block.copy_from_slice(perms.bytes.as_ref());
+        crate::primitives::aes_cbc_decrypt(&[0xAA; 32], &[0u8; 16], &mut block)
+            .expect("the file key decrypts /Perms");
+        assert_eq!(&block[12..16], &[0xBB; 4], "Algorithm 10's four bytes");
+        assert_ne!(
+            &block[12..16],
+            &bytes[..4],
+            "must not reuse the file-key prefix"
+        );
     }
 }

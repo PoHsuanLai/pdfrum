@@ -17,7 +17,3 @@ pub fn pdfrum_raster_tinyskia::TinySkiaDevice::push_clip(&mut self, &kurbo::bezp
 pub fn pdfrum_raster_tinyskia::TinySkiaDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
 pub fn pdfrum_raster_tinyskia::TinySkiaDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
 pub fn pdfrum_raster_tinyskia::TinySkiaDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
-pub fn pdfrum_raster_tinyskia::to_blend_mode(pdfrum_page::state::general::BlendMode) -> tiny_skia::blend_mode::BlendMode
-pub fn pdfrum_raster_tinyskia::to_color(peniko::Color) -> tiny_skia::color::Color
-pub fn pdfrum_raster_tinyskia::to_path(&kurbo::bezpath::BezPath) -> core::option::Option<tiny_skia_path::path::Path>
-pub fn pdfrum_raster_tinyskia::to_transform(kurbo::affine::Affine) -> tiny_skia_path::transform::Transform
