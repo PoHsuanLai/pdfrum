@@ -1318,6 +1318,14 @@ fn load_mask_image<R: Resolve>(
     })
 }
 
+/// Largest mask plane this will build, in pixels.
+///
+/// Matches `pdfrum_render::stretch`'s gigapixel bound: a 600 dpi A0 scan is
+/// 0.56 Gpx, so nothing a document legitimately carries reaches this. A mask
+/// is never resolution-reduced, so without a product cap the dictionary's
+/// per-axis limit of 131071 would still ask for 17 GB.
+const MAX_MASK_PIXELS: u64 = 1 << 30;
+
 /// A decoded mask image's samples as the one-byte-per-pixel coverage plane an
 /// [`ImageMask::Alpha`] carries.
 ///
@@ -1336,16 +1344,24 @@ fn load_mask_image<R: Resolve>(
 /// goes through the rows, which is the same answer:
 /// `the_mask_planes_fast_arms_are_the_general_one` pins the equality.
 ///
-/// `None` only when the dimensions do not multiply inside a `usize`.
+/// `None` when the dimensions overflow a `usize`, the area is above
+/// [`MAX_MASK_PIXELS`], or the allocator will not meet the buffer.
 fn mask_plane(samples: &Samples, width: u32, height: u32) -> Option<Box<[u8]>> {
+    // Same gigapixel bound the render path uses for reduction and `to_pixmap`.
+    // `try_reserve_exact` is not enough on its own: Linux overcommit lets a
+    // 17 GB reserve succeed, and the `resize` below then zeros 17 GB — which
+    // OOMs a 16 GB CI runner instead of returning `None`. The cap is the
+    // refusal that does not depend on the host's overcommit heuristic.
+    if u64::from(width).saturating_mul(u64::from(height)) > MAX_MASK_PIXELS {
+        return None;
+    }
     let len = usize::try_from(width)
         .ok()?
         .checked_mul(usize::try_from(height).ok()?)?;
-    // Fallibly: `len` is the mask's own `/Width` x `/Height`, and the largest
-    // pair the dictionary gate accepts is 131071 square — a 17 GB request that
-    // `handle_alloc_error` would answer by aborting the process, with no
-    // unwind for a caller to catch. `None` here is the mask being dropped,
-    // which is what this function's contract already says a failure means.
+    // Second line, for a size inside the cap that this allocator still cannot
+    // meet. `handle_alloc_error` would abort with no unwind; `None` here is
+    // the mask being dropped, which is what this function's contract already
+    // says a failure means.
     let mut alpha = Vec::new();
     alpha.try_reserve_exact(len).ok()?;
     if let Samples::Whole(Pixels::Gray8(data)) = samples {
@@ -2075,17 +2091,23 @@ mod tests {
         assert_eq!(&got[..], &general(&rgb, 4, 2)[..]);
     }
 
-    /// A mask plane no allocator can meet drops the mask, it does not abort.
+    /// A mask plane past the area cap is dropped, it does not abort or hang.
     ///
     /// `mask_plane`'s buffer is the mask's own `/Width` x `/Height` at one
     /// byte a pixel, and the dictionary gate accepts each axis up to 131071 —
     /// a 17 GB `Vec` reached from a base image of any size, because a mask is
-    /// never resolution-reduced. `handle_alloc_error` does not unwind, so the
-    /// reserve has to be the fallible one.
+    /// never resolution-reduced. `try_reserve_exact` is not a reliable refusal
+    /// for that: Linux overcommit lets the reserve succeed, and zeroing the
+    /// buffer then OOMs the host. The gigapixel cap is what turns it into
+    /// `None` without touching the allocator.
     #[test]
     fn a_mask_plane_too_large_to_allocate_is_dropped_rather_than_aborting() {
         let pixels = Samples::Whole(Pixels::Gray8(Box::new([0u8; 4])));
         assert_eq!(super::mask_plane(&pixels, 131_071, 131_071), None);
+        // 65536 square is inside each axis cap and is 4.3 Gpx — the hang the
+        // render path already refuses, and the size that would still pass a
+        // reserve-only check on an overcommit host.
+        assert_eq!(super::mask_plane(&pixels, 65_536, 65_536), None);
         // The same samples at a size that fits still produce a plane.
         assert!(super::mask_plane(&pixels, 2, 2).is_some());
     }
