@@ -1,0 +1,42 @@
+# What a checkout may rewrite, and what it may not.
+#
+# Git decides text-versus-binary by looking for a NUL byte in the first 8 KB.
+# A PDF is mostly ASCII and a small one often carries no NUL at all, so the
+# guess lands on "text" and a checkout with `core.autocrlf` turns every LF
+# into CRLF. That shifts every byte offset in the file, and a PDF names its
+# objects by offset: the cross-reference table stops matching and the reader
+# rebuilds it. The same goes for a font program, an ICC profile and a fuzz
+# seed, each of which is a byte string with a length its own header records.
+#
+# So the rule is the opposite of the guess: declare the formats binary, and
+# let the text formats normalise.
+
+* text=auto
+
+*.pdf binary
+*.in binary
+*.jp2 binary
+*.jbig2 binary
+*.jpx binary
+
+*.ttf binary
+*.otf binary
+*.ttc binary
+*.cff binary
+*.pfb binary
+*.icc binary
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.mp4 binary
+*.bin binary
+
+# Fuzz seeds and corpora are raw byte strings, and most carry no extension.
+fuzz/seeds/** binary
+fuzz/artifacts/** binary
+
+# Golden dumps are compared byte for byte against a tool's output, so the
+# bytes have to survive a round trip through a checkout unchanged.
+*.txt -text
