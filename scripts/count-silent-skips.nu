@@ -5,32 +5,37 @@
 # `#[ignore]`, so nextest counts them as passes. The GPU job on Linux runs
 # the suite for real (lavapipe). This script is the source-level ratchet:
 # a new skip site has to bump the pin below, so it cannot join silently.
+#
+# Walks `crates/*/tests/*.rs` in nushell so the gate does not need `rg`.
 
 const PINNED = 33
+const NEEDLE = 'else { return'
 
 def main [] {
     let root = ($env.FILE_PWD | path dirname)
-    let hits = (^rg --glob '**/tests/*.rs' --count-matches 'else \{ return' $root
-        | complete)
-    if $hits.exit_code == 1 and ($hits.stdout | str trim | is-empty) {
-        print --stderr "error: silent-skip search matched nothing; is rg installed?"
+    cd $root
+    let files = (glob 'crates/*/tests/*.rs' | sort)
+    if ($files | is-empty) {
+        print --stderr "error: silent-skip search matched no test files"
         exit 1
     }
-    if $hits.exit_code not-in [0 1] {
-        print --stderr $hits.stderr
-        exit $hits.exit_code
-    }
-    let total = ($hits.stdout
-        | lines
-        | where {|l| $l != ""}
-        | each {|l| $l | split row ':' | last | into int }
-        | math sum)
+    let hits = (
+        $files
+        | each {|path|
+            {
+                path: $path
+                n: ((open --raw $path | split row $NEEDLE | length) - 1)
+            }
+        }
+        | where {|h| $h.n > 0 }
+    )
+    let total = (if ($hits | is-empty) { 0 } else { $hits | get n | math sum })
     if $total != $PINNED {
         print --stderr $"error: silent-skip sites are ($total), pin is ($PINNED)"
         print --stderr "       GPU and oracle tests skip with `else { return }`,"
         print --stderr "       which nextest counts as a pass. Bump PINNED in"
         print --stderr "       scripts/count-silent-skips.nu only with a reason."
-        print --stderr $hits.stdout
+        $hits | each {|h| print --stderr $"($h.path):($h.n)" } | ignore
         exit 1
     }
     print $"silent-skip floor: ($total) sites, pinned"
