@@ -65,17 +65,22 @@ rest of the workspace is public; [`Document::parser`], [`Page::objects`],
 | feature | default | adds |
 |---|:---:|---|
 | `vello-cpu` | on | default rasterizer |
-| `tinyskia`, `agg` | off | extra CPU rasterizers |
+| `tiny-skia`, `agg` | off | extra CPU rasterizers |
 | `vello-gpu` | off | GPU rasterizer over `wgpu` |
 | `edit` | on | save, edit, subsetting |
 | `forms` | on | form reader and session |
 | `javascript` | off | run the document's own scripts |
-| `codecs-all` | on | JPX, JBIG2, CCITT |
+| `codecs-all` | on | `jpeg2000`, `jbig2`, `ccitt` |
+| `jpeg2000` | via `codecs-all` | JPEG 2000 images |
+| `jbig2` | via `codecs-all` | JBIG2 images |
+| `ccitt` | via `codecs-all` | CCITT fax images |
 | `system-fonts` | on | host font fallback (not on wasm32) |
 | `markdown` | off | `Page::markdown` |
-| `svg` | off | SVG export |
-| `svg-ingest` | off | draw an SVG into a page |
+| `svg-export` | off | SVG export |
+| `svg-import` | off | draw an SVG into a page |
+| `svg-text` | off | `<text>` in an imported SVG |
 | `png` | off | `Pixmap::encode_png` |
+| `full` | off | every published capability except `vello-gpu` |
 
 `default-features = false` is a parser and extractor. A render always names
 its backend.

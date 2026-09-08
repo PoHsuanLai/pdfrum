@@ -35,11 +35,11 @@ const FEATURED = [
     {file: 'pdfrum+javascript', crate: 'pdfrum', features: 'javascript'}
     {file: 'pdfrum+png', crate: 'pdfrum', features: 'png'}
     {file: 'pdfrum+markdown', crate: 'pdfrum', features: 'markdown'}
-    {file: 'pdfrum+svg', crate: 'pdfrum', features: 'svg'}
-    {file: 'pdfrum+svg-ingest', crate: 'pdfrum', features: 'svg-ingest'}
+    {file: 'pdfrum+svg-export', crate: 'pdfrum', features: 'svg-export'}
+    {file: 'pdfrum+svg-import', crate: 'pdfrum', features: 'svg-import'}
     {file: 'pdfrum+svg-text', crate: 'pdfrum', features: 'svg-text'}
-    {file: 'pdfrum+tinyskia+agg', crate: 'pdfrum', features: 'tinyskia,agg'}
-    {file: 'pdfrum-page+codecs', crate: 'pdfrum-page', features: 'jpx,jbig2,ccitt'}
+    {file: 'pdfrum+tiny-skia+agg', crate: 'pdfrum', features: 'tiny-skia,agg'}
+    {file: 'pdfrum-page+codecs', crate: 'pdfrum-page', features: 'jpeg2000,jbig2,ccitt'}
     {file: 'pdfrum-filters+ccitt', crate: 'pdfrum-filters', features: 'ccitt'}
     {file: 'pdfrum-font+system-fonts', crate: 'pdfrum-font', features: 'system-fonts'}
     {file: 'pdfrum-render+png', crate: 'pdfrum-render', features: 'png'}

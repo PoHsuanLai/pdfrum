@@ -1,4 +1,4 @@
-//! The `svg` feature's facade path: a page opened through [`pdfrum::Document`]
+//! The `svg-export` feature's facade path: a page opened through [`pdfrum::Document`]
 //! and exported with nothing named but `pdfrum::*`.
 //!
 //! What is asserted is the conversion's output, not that it compiles: the

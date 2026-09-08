@@ -96,7 +96,7 @@ pub enum Backend {
 impl Backend {
     /// The backend a name selects, or `None` when it names none of them.
     ///
-    /// `"agg"` is [`Self::Agg`], `"tiny-skia"` / `"tinyskia"` is [`Self::TinySkia`],
+    /// `"agg"` is [`Self::Agg`], `"tiny-skia"` is [`Self::TinySkia`],
     /// `"vello-cpu"` / `"vello_cpu"` / `"vello"` is [`Self::VelloCpu`].
     /// [`Backend::resolve`] falls back to the default rather than erroring, so
     /// an unrecognised name is a silent switch.
@@ -104,7 +104,7 @@ impl Backend {
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "agg" => Some(Self::Agg),
-            "tiny-skia" | "tinyskia" => Some(Self::TinySkia),
+            "tiny-skia" => Some(Self::TinySkia),
             "vello-cpu" | "vello_cpu" | "vello" => Some(Self::VelloCpu),
             _ => None,
         }

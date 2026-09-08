@@ -5,7 +5,7 @@ The surface `cargo add` sees, as `cargo public-api` prints it. CI runs
 
 One file per published library crate. Featured surfaces (the same crate with
 a feature that adds public items a caller is told to turn on) get a second
-file: `pdfrum+javascript.txt`, `pdfrum+png.txt`, `pdfrum+tinyskia+agg.txt`,
+file: `pdfrum+javascript.txt`, `pdfrum+png.txt`, `pdfrum+tiny-skia+agg.txt`,
 and the codec / `system-fonts` / `png` files for the member crates.
 
 Not here: `publish = false` crates (`pdfrum-raster-vello`, `pdfrum-script`),

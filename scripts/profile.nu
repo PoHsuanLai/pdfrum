@@ -4,7 +4,7 @@
 # scripts/profile.nu <op> <file.pdf> [iterations] [backend] [--walk] [--warm]
 #
 # op render | text | open | save | forms
-# backend agg | tinyskia | vello-cpu (render only; default agg)
+# backend agg | tiny-skia | vello-cpu (render only; default agg)
 # --warm hold one RenderSession across iterations (matches
 # pdfium_test --render-repeats). Use this for oracle-relative
 # figures.

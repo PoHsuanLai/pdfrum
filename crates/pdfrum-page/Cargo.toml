@@ -35,7 +35,7 @@ default = []
 # JBIG2, and CCITT fax (which lives in `pdfrum-filters`). Flate and JPEG
 # are always present. A stream in a codec this build left out decodes to a
 # recorded failure, and the rest of the page still draws.
-jpx = ["dep:hayro-jpeg2000"]
+jpeg2000 = ["dep:hayro-jpeg2000"]
 jbig2 = ["dep:hayro-jbig2"]
 ccitt = ["pdfrum-filters/ccitt"]
 profiling = []

@@ -21,7 +21,7 @@ pdfrum-crypt = { path = "../crates/pdfrum-crypt" }
 pdfrum-filters = { path = "../crates/pdfrum-filters", features = ["ccitt"] }
 pdfrum-cmap = { path = "../crates/pdfrum-cmap" }
 pdfrum-parser = { path = "../crates/pdfrum-parser" }
-pdfrum-page = { path = "../crates/pdfrum-page", features = ["jpx", "jbig2", "ccitt"] }
+pdfrum-page = { path = "../crates/pdfrum-page", features = ["jpeg2000", "jbig2", "ccitt"] }
 pdfrum-text = { path = "../crates/pdfrum-text" }
 pdfrum-edit = { path = "../crates/pdfrum-edit" }
 pdfrum-doc = { path = "../crates/pdfrum-doc" }

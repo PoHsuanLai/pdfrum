@@ -38,13 +38,14 @@ pdfrum-raster-tinyskia.workspace = true
 resvg.workspace = true
 # The round trip opens the corpus the way the board does — through the facade,
 # so the page it converts is the page the board renders, and the `convert`
-# example shows the facade path a caller actually has. `svg` and `tinyskia`
-# are both off in the facade's default set and both are what that path needs.
+# example shows the facade path a caller actually has. `svg-export` and
+# `tiny-skia` are both off in the facade's default set and both are what that
+# path needs.
 #
-# The facade depends on this crate under its own `svg` feature, so this is a
-# *dev*-dependency cycle. Cargo permits that and it appears in no published
-# normal tree.
-pdfrum = { path = "../pdfrum", features = ["svg", "tinyskia"] }
+# The facade depends on this crate under its own `svg-export` feature, so this
+# is a *dev*-dependency cycle. Cargo permits that and it appears in no
+# published normal tree.
+pdfrum = { path = "../pdfrum", features = ["svg-export", "tiny-skia"] }
 pdfrum-corpus.workspace = true
 # The golden store keys a PDF by the first sixteen hex digits of its SHA-256,
 # so finding the oracle's PNG means computing one.
