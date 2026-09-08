@@ -10,7 +10,15 @@ def main [] {
     ^cargo fmt --all -- --check
 
     print "==> cargo clippy (deny warnings)"
-    ^cargo clippy --workspace --all-targets -- -D warnings
+    ^cargo clippy --workspace --all-targets --locked -- -D warnings
+
+    # Default features leave whole subsystems unlinted — `pdfrum-form`'s boa
+    # binding (the code that runs a document's own JavaScript), the facade's
+    # SVG ingestion, and `pdfrum-render`'s png. The workspace's
+    # `unwrap_used`/`expect_used`/`panic` denials are the guarantee
+    # SECURITY.md rests on, so they have to reach that code too.
+    print "==> cargo clippy --all-features (deny warnings)"
+    ^cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
     # Default features are clippy and nextest. This is the rest: headless,
     # each default-off flag, the advertised named-backend build, and
@@ -41,10 +49,20 @@ def main [] {
     ^cargo check -p pdfrum --tests --all-features --quiet
 
     print "==> cargo nextest run (with the tool's and the CLI's javascript features and pdfrum/svg-export)"
-    ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg-export
+    ^cargo nextest run --workspace --locked --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg-export
+
+    # `svg-import` and `svg-text` are off in the run above, and the two test
+    # targets that need them (`svg_ingest`, `svg_form`) declare
+    # `required-features`, so nextest silently builds neither. Compiling them
+    # under `--all-features` is not running them: the whole ingest pipeline
+    # and its 21 fixtures were being typechecked and discarded.
+    print "==> cargo nextest run (the svg-import targets)"
+    ^cargo nextest run -p pdfrum --locked --features 'svg-import,svg-text,tiny-skia'
 
     print "==> cargo test --doc (nextest silently skips doctests)"
-    ^cargo test --doc --workspace --features pdfrum/svg-export
+    # `--all-features`, not `pdfrum/svg-export`: a doctest behind a default-off
+    # flag is an uncompiled claim, and half the facade's features have some.
+    ^cargo test --doc --workspace --locked --all-features
 
     print "==> cargo doc --no-deps (deny warnings)"
     with-env { RUSTDOCFLAGS: '-D warnings' } {

@@ -2,7 +2,7 @@ pub mod pdfrum_filters
 pub enum pdfrum_filters::DecodeOutput
 pub pdfrum_filters::DecodeOutput::Bytes(alloc::vec::Vec<u8>)
 pub pdfrum_filters::DecodeOutput::Image(pdfrum_filters::NeedsImageCodec)
-pub enum pdfrum_filters::Error
+#[non_exhaustive] pub enum pdfrum_filters::Error
 pub pdfrum_filters::Error::BadCcittParams(&'static str)
 pub pdfrum_filters::Error::BadPredictorParams(&'static str)
 pub pdfrum_filters::Error::LzwMalformed(&'static str)

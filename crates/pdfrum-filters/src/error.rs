@@ -7,6 +7,7 @@
 
 /// Why a filter could not produce any bytes at all.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// Decoding would produce more than `Limits::max_decoded_stream_len`
     /// bytes. PDFium has no such cap; see the crate docs.

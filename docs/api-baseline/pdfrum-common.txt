@@ -145,6 +145,7 @@ pub fn pdfrum_common::Deadline::check(&self, pdfrum_common::Operation) -> core::
 pub fn pdfrum_common::Deadline::manual() -> pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::passed(&self) -> bool
 pub fn pdfrum_common::Deadline::stop(&self)
+pub fn pdfrum_common::Deadline::with_budget(&self, core::time::Duration) -> pdfrum_common::Deadline
 impl core::cmp::Eq for pdfrum_common::Deadline
 impl core::cmp::PartialEq for pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::eq(&self, &pdfrum_common::Deadline) -> bool

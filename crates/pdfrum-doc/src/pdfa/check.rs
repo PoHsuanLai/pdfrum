@@ -15,8 +15,8 @@
 //!
 //! What that misses is the operand form: a colour set by `1 0 0 rg` rather
 //! than through a named `/ColorSpace`, and a `gs`-less inline transparency.
-//! §4 records this as the checker's largest known gap,
-//! and it is the source of most of the clauses veraPDF reports that we do not.
+//! That is the checker's largest known gap, and the source of most of the
+//! clauses veraPDF reports and this module does not.
 //!
 //! It cuts the other way in exactly one place, and that place is worth
 //! knowing about: both ISO parts scope font embedding to fonts *used within*
@@ -40,8 +40,7 @@ use crate::annot::AnnotFlags;
 /// the encryption check needs `/Encrypt`, which lives there and nowhere else.
 /// The report lists every requirement the document fails. An empty report
 /// means the checks this engine runs all passed, which is a weaker claim than
-/// ISO 19005 conformance; the module docs and say how
-/// much weaker.
+/// ISO 19005 conformance; the module docs say how much weaker.
 #[must_use]
 pub fn check<R: Resolve>(
     level: Level,
@@ -673,9 +672,8 @@ fn check_resources<R: Resolve>(
 /// merely listed in `/Resources`, and it reports every unembedded font in the
 /// resource dictionary. veraPDF makes the distinction, which is why a corpus
 /// file with a listed-but-unused unembedded font is a **known over-report**
-/// on our side rather than a disagreement about the font — recorded in
-/// §6 as the one place the checker is not strictly
-/// under-reporting.
+/// on our side rather than a disagreement about the font, and the one place
+/// this checker is not strictly under-reporting.
 fn check_font<R: Resolve>(ctx: &mut Ctx<'_>, font: &Dict, subject: Subject, r: &R) {
     let subtype = font.name(names::SUBTYPE).map_or(&b""[..], Name::as_bytes);
     if subtype == b"Type3" {

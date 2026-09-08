@@ -40,7 +40,7 @@ use core::time::Duration;
 ///
 /// The set is closed and the stages are **disjoint**, which is the property
 /// that lets them be summed: no stage's span contains another's. That is not
-/// true of [`Phase`](pdfrum_render_phase), whose buckets nest deliberately, and
+/// true of [`Phase`][pdfrum_render_phase], whose buckets nest deliberately, and
 /// it is the reason this is a separate set rather than more variants there.
 ///
 /// [pdfrum_render_phase]: https://docs.rs/pdfrum-render

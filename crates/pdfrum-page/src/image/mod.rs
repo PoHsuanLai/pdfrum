@@ -61,6 +61,27 @@ use pdfrum_filters::{CcittParams, decode_ccitt};
 use pdfrum_filters::{Filter, decode_chain};
 use pdfrum_object::{Dict, Object, Resolve, Stream};
 
+/// Largest pixel grid (`width × height`) this crate will materialize from
+/// file-declared dimensions.
+///
+/// The dictionary gate bounds each axis at 131071; 131071 square is inside
+/// that bound and is 17 gigapixels. A gigapixel is roughly twice the largest
+/// image anything real produces (a 600 dpi A0 scan is 0.56 Gpx). Above it a
+/// mask is dropped and a pixmap is not built — see [`image_area_is_workable`].
+///
+/// The reduction pre-pass and `to_pixmap` use this same predicate, so a size
+/// one path refuses the other does not walk.
+pub const MAX_IMAGE_PIXELS: u64 = 1 << 30;
+
+/// Whether a file-declared width and height are small enough to convert,
+/// reduce, or unpack into a dense plane.
+///
+/// Both axes come from the file. The product is what has to be asked about.
+#[must_use]
+pub fn image_area_is_workable(width: u32, height: u32) -> bool {
+    u64::from(width).saturating_mul(u64::from(height)) <= MAX_IMAGE_PIXELS
+}
+
 /// Decoded pixels, in whichever shape the source produced.
 ///
 /// Keeping the shape rather than always widening to RGB matters: an indexed
@@ -1306,7 +1327,10 @@ fn load_mask_image<R: Resolve>(
         diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
         return None;
     };
-    let alpha = mask_plane(&image.samples, image.width, image.height)?;
+    let Some(alpha) = mask_plane(&image.samples, image.width, image.height) else {
+        diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
+        return None;
+    };
     Some(ImageMask::Alpha {
         width: image.width,
         height: image.height,
@@ -1333,12 +1357,26 @@ fn load_mask_image<R: Resolve>(
 /// goes through the rows, which is the same answer:
 /// `the_mask_planes_fast_arms_are_the_general_one` pins the equality.
 ///
-/// `None` only when the dimensions do not multiply inside a `usize`.
+/// `None` when the dimensions overflow a `usize`, the area is above
+/// [`MAX_IMAGE_PIXELS`], or the allocator will not meet the buffer.
 fn mask_plane(samples: &Samples, width: u32, height: u32) -> Option<Box<[u8]>> {
+    // Same predicate `to_pixmap` and the reduction pre-pass use. A mask is
+    // never resolution-reduced, so without it the dictionary's per-axis
+    // limit of 131071 would still ask for 17 GB. `try_reserve_exact` is not
+    // a refusal on an overcommit host: Linux lets that reserve succeed, and
+    // the `resize` below then zeros 17 GB.
+    if !image_area_is_workable(width, height) {
+        return None;
+    }
     let len = usize::try_from(width)
         .ok()?
         .checked_mul(usize::try_from(height).ok()?)?;
-    let mut alpha = Vec::with_capacity(len);
+    // Second line, for a size inside the cap that this allocator still cannot
+    // meet. `handle_alloc_error` would abort with no unwind; `None` here is
+    // the mask being dropped, which is what this function's contract already
+    // says a failure means.
+    let mut alpha = Vec::new();
+    alpha.try_reserve_exact(len).ok()?;
     if let Samples::Whole(Pixels::Gray8(data)) = samples {
         alpha.extend(data.iter().take(len).copied());
     } else {
@@ -2064,6 +2102,40 @@ mod tests {
         let rgb = Samples::Whole(Pixels::Rgb8((0..24u8).collect()));
         let got = super::mask_plane(&rgb, 4, 2).expect("dimensions multiply");
         assert_eq!(&got[..], &general(&rgb, 4, 2)[..]);
+    }
+
+    /// The product cap, not each axis: 65536 square sits inside the
+    /// dictionary gate and is 4.3 Gpx.
+    #[test]
+    fn a_gigapixel_image_is_not_a_workable_area() {
+        assert!(
+            super::image_area_is_workable(20_000, 28_000),
+            "A0 at 600dpi"
+        );
+        assert!(!super::image_area_is_workable(65_536, 65_536), "4.3 Gpx");
+        assert!(!super::image_area_is_workable(131_071, 131_071), "17 Gpx");
+        assert!(super::image_area_is_workable(2, 2));
+    }
+
+    /// A mask plane past the area cap is dropped, it does not abort or hang.
+    ///
+    /// `mask_plane`'s buffer is the mask's own `/Width` x `/Height` at one
+    /// byte a pixel, and the dictionary gate accepts each axis up to 131071 —
+    /// a 17 GB `Vec` reached from a base image of any size, because a mask is
+    /// never resolution-reduced. `try_reserve_exact` is not a reliable refusal
+    /// for that: Linux overcommit lets the reserve succeed, and zeroing the
+    /// buffer then OOMs the host. [`super::image_area_is_workable`] is what
+    /// turns it into `None` without touching the allocator.
+    #[test]
+    fn a_mask_plane_too_large_to_allocate_is_dropped_rather_than_aborting() {
+        let pixels = Samples::Whole(Pixels::Gray8(Box::new([0u8; 4])));
+        assert_eq!(super::mask_plane(&pixels, 131_071, 131_071), None);
+        // 65536 square is inside each axis cap and is 4.3 Gpx — the hang the
+        // render path already refuses, and the size that would still pass a
+        // reserve-only check on an overcommit host.
+        assert_eq!(super::mask_plane(&pixels, 65_536, 65_536), None);
+        // The same samples at a size that fits still produce a plane.
+        assert!(super::mask_plane(&pixels, 2, 2).is_some());
     }
 
     #[test]

@@ -800,6 +800,7 @@ pub const pdfrum_page::CHANNEL_SAMPLES: usize
 pub const pdfrum_page::DEFAULT_MEDIA_BOX: kurbo::rect::Rect
 pub const pdfrum_page::MAX_BYTES: usize
 pub const pdfrum_page::MAX_FORM_LEVEL: usize
+pub const pdfrum_page::MAX_IMAGE_PIXELS: u64
 pub const pdfrum_page::MAX_TEXT_OBJECTS: usize
 pub trait pdfrum_page::Rows
 pub type pdfrum_page::Rows::Pixel
@@ -822,6 +823,7 @@ pub fn pdfrum_page::decode_jpx(&[u8], core::option::Option<&pdfrum_page::ColorSp
 pub fn pdfrum_page::derive_boxes<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> (kurbo::rect::Rect, kurbo::rect::Rect)
 pub fn pdfrum_page::display_size_from_dict<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> (f64, f64)
 pub fn pdfrum_page::eliminate_redundant_clips(&mut [pdfrum_page::PageObject], impl core::ops::function::Fn(&pdfrum_page::PageObject) -> kurbo::rect::Rect)
+pub fn pdfrum_page::image_area_is_workable(u32, u32) -> bool
 pub fn pdfrum_page::load_colorspace<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::ColorSpace>
 pub fn pdfrum_page::load_pattern<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::name::Name, &pdfrum_page::Resources, kurbo::affine::Affine, &pdfrum_page::GeneralState, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::FoundPattern
 pub fn pdfrum_page::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::Page, &mut pdfrum_page::OcContext, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Visibility

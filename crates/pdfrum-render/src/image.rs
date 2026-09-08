@@ -210,7 +210,23 @@ pub fn to_pixmap(
     stencil_color: Argb,
     transfer: Option<&crate::transfer::TransferFunc<'_>>,
 ) -> Pixmap {
-    let mut out = Pixmap::new(image.width, image.height);
+    // Two refusals, and both return here rather than falling through: the
+    // loop below is one pass per *source* row, so either failure would
+    // otherwise trade its problem for a walk over as many pixels as the file
+    // declared. `/Width` and `/Height` are the file's and cost two integers
+    // each, with no samples required behind them.
+    //
+    // The area first, because a machine large enough to satisfy the
+    // allocation would still spend minutes filling it. Same predicate
+    // `mask_plane` uses, so a size refused there is not walked here. Then
+    // the allocation, because inside the area cap a buffer can still be one
+    // no allocator will give — 1 Gpx is 4 GiB of pixmap.
+    if !pdfrum_page::image_area_is_workable(image.width, image.height) {
+        return Pixmap::new(0, 0);
+    }
+    let Some(mut out) = Pixmap::try_new(image.width, image.height) else {
+        return Pixmap::new(0, 0);
+    };
     let finish = RowFinish::new(image, stencil_color, transfer);
     let mut rows = converted_rows(image);
     let width = image.width as usize;

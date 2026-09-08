@@ -8,8 +8,9 @@ a feature that adds public items a caller is told to turn on) get a second
 file: `pdfrum+javascript.txt`, `pdfrum+png.txt`, `pdfrum+tiny-skia+agg.txt`,
 and the codec / `system-fonts` / `png` files for the member crates.
 
-Not here: `publish = false` crates (`pdfrum-raster-vello`, `pdfrum-script`),
-binaries (`pdfrum-tool`), `#[doc(hidden)]` items, auto-trait impls (`-sss`).
+Not here: `publish = false` crates — the C ABI (`pdfrum-capi`), the
+WebAssembly binding (`pdfrum-wasm`) and the internal tool (`pdfrum-tool`) —
+`#[doc(hidden)]` items, and auto-trait impls (`-sss`).
 `Send + Sync` is asserted by a unit test on the facade, not by these files.
 
 ```

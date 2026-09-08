@@ -58,6 +58,7 @@ use pdfrum_object::{Dict, Name, ObjRef, Resolve, names};
 /// caller tell "this needs a password" from "we cannot do this document's
 /// cryptography".
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// The password is neither the user nor the owner password.
     #[error("the supplied password is not the user or owner password")]
