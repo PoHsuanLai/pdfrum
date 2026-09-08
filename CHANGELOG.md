@@ -5,7 +5,7 @@ first crates.io release.
 
 ## [Unreleased]
 
-`pdfrum` is `0.1.0` in the manifests and has not been published.
+## [0.1.0] - 2026-09-09
 
 ### Added
 
@@ -50,3 +50,6 @@ first crates.io release.
   pixel-count limit is not among the knobs yet.
 - Weakest rendering: vertical text, uncoloured tiling patterns, and image
   transformers.
+
+[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/PoHsuanLai/pdfrum/releases/tag/v0.1.0
