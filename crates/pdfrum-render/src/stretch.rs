@@ -1022,7 +1022,7 @@ pub fn snapped_reduction(
 ) -> Option<SnappedReduction> {
     if src_width > MAX_SOURCE_AXIS
         || src_height > MAX_SOURCE_AXIS
-        || !source_area_is_workable(src_width, src_height)
+        || !pdfrum_page::image_area_is_workable(src_width, src_height)
     {
         return None;
     }
@@ -1165,29 +1165,6 @@ pub fn reduction(
 /// quality loss on a file that has other problems, never a failure.
 const MAX_SOURCE_AXIS: u32 = 1 << 16;
 
-/// The largest source *area* this pre-pass will process.
-///
-/// [`MAX_SOURCE_AXIS`] bounds each axis, which is not the same as bounding the
-/// work: 65536 square is inside it on both axes and is 4.3 **giga**pixels, so
-/// a reduction over it runs for minutes on a file of a few hundred bytes —
-/// `/Width` and `/Height` cost two integers each and need no samples behind
-/// them.
-///
-/// A gigapixel is roughly twice the largest image anything real produces (a
-/// 600 dpi A0 scan is 0.56 Gpx), so nothing a document legitimately carries
-/// reaches this. Above it there is no reduction and no full-size pixmap
-/// either — see `crate::image::to_pixmap`, which refuses the same area rather
-/// than trading the pre-pass for a walk of the same size.
-pub(crate) const MAX_SOURCE_PIXELS: u64 = 1 << 30;
-
-/// Whether an image is small enough to convert or reduce a pixel at a time.
-///
-/// Both axes come from the file and are bounded only by `ImageDict`'s
-/// per-axis cap, so the product is what has to be asked about.
-pub(crate) fn source_area_is_workable(width: u32, height: u32) -> bool {
-    u64::from(width).saturating_mul(u64::from(height)) <= MAX_SOURCE_PIXELS
-}
-
 /// The pixel dimensions [`prescale`] would reduce a `src_width` x `src_height`
 /// image to for the device footprint `dest_width` x `dest_height`, or `None`
 /// when it would not reduce at all.
@@ -1214,7 +1191,7 @@ pub fn reduction_for(
 ) -> Option<(u32, u32)> {
     if src_width > MAX_SOURCE_AXIS
         || src_height > MAX_SOURCE_AXIS
-        || !source_area_is_workable(src_width, src_height)
+        || !pdfrum_page::image_area_is_workable(src_width, src_height)
     {
         return None;
     }
@@ -1281,19 +1258,12 @@ pub fn prescale(
 mod tests {
     /// A gigapixel source is refused by the pre-pass, not ground through it.
     ///
-    /// `MAX_SOURCE_AXIS` bounds each axis and 65536 square sits inside it on
-    /// both — 4.3 Gpx, which took minutes to reduce on a sub-kilobyte file.
-    /// Nothing real comes close: a 600 dpi A0 scan is 0.56 Gpx.
+    /// The area cap is [`pdfrum_page::image_area_is_workable`]; both reduction
+    /// entry points consult it so neither runs the pass. 65536 square sits
+    /// inside `MAX_SOURCE_AXIS` on both axes — 4.3 Gpx — which took minutes
+    /// to reduce on a sub-kilobyte file.
     #[test]
     fn a_source_larger_than_a_gigapixel_is_not_reduced() {
-        assert!(
-            super::source_area_is_workable(20_000, 28_000),
-            "A0 at 600dpi"
-        );
-        assert!(!super::source_area_is_workable(65_536, 65_536), "4.3 Gpx");
-        assert!(!super::source_area_is_workable(131_071, 131_071), "17 Gpx");
-
-        // Both reduction entry points refuse it, so neither runs the pass.
         assert_eq!(super::reduction_for(65_536, 65_536, 100.0, 100.0), None);
         assert_eq!(
             super::snapped_reduction(kurbo::Affine::scale(0.001), 65_536, 65_536),

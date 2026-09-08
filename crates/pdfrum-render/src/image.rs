@@ -217,10 +217,11 @@ pub fn to_pixmap(
     // each, with no samples required behind them.
     //
     // The area first, because a machine large enough to satisfy the
-    // allocation would still spend minutes filling it. Then the allocation,
-    // because inside the area cap a buffer can still be one no allocator will
-    // give — 1 Gpx is 4 GiB of pixmap.
-    if !crate::stretch::source_area_is_workable(image.width, image.height) {
+    // allocation would still spend minutes filling it. Same predicate
+    // `mask_plane` uses, so a size refused there is not walked here. Then
+    // the allocation, because inside the area cap a buffer can still be one
+    // no allocator will give — 1 Gpx is 4 GiB of pixmap.
+    if !pdfrum_page::image_area_is_workable(image.width, image.height) {
         return Pixmap::new(0, 0);
     }
     let Some(mut out) = Pixmap::try_new(image.width, image.height) else {
