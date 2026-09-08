@@ -1306,7 +1306,10 @@ fn load_mask_image<R: Resolve>(
         diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
         return None;
     };
-    let alpha = mask_plane(&image.samples, image.width, image.height)?;
+    let Some(alpha) = mask_plane(&image.samples, image.width, image.height) else {
+        diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
+        return None;
+    };
     Some(ImageMask::Alpha {
         width: image.width,
         height: image.height,
@@ -1338,7 +1341,13 @@ fn mask_plane(samples: &Samples, width: u32, height: u32) -> Option<Box<[u8]>> {
     let len = usize::try_from(width)
         .ok()?
         .checked_mul(usize::try_from(height).ok()?)?;
-    let mut alpha = Vec::with_capacity(len);
+    // Fallibly: `len` is the mask's own `/Width` x `/Height`, and the largest
+    // pair the dictionary gate accepts is 131071 square — a 17 GB request that
+    // `handle_alloc_error` would answer by aborting the process, with no
+    // unwind for a caller to catch. `None` here is the mask being dropped,
+    // which is what this function's contract already says a failure means.
+    let mut alpha = Vec::new();
+    alpha.try_reserve_exact(len).ok()?;
     if let Samples::Whole(Pixels::Gray8(data)) = samples {
         alpha.extend(data.iter().take(len).copied());
     } else {
@@ -2064,6 +2073,21 @@ mod tests {
         let rgb = Samples::Whole(Pixels::Rgb8((0..24u8).collect()));
         let got = super::mask_plane(&rgb, 4, 2).expect("dimensions multiply");
         assert_eq!(&got[..], &general(&rgb, 4, 2)[..]);
+    }
+
+    /// A mask plane no allocator can meet drops the mask, it does not abort.
+    ///
+    /// `mask_plane`'s buffer is the mask's own `/Width` x `/Height` at one
+    /// byte a pixel, and the dictionary gate accepts each axis up to 131071 —
+    /// a 17 GB `Vec` reached from a base image of any size, because a mask is
+    /// never resolution-reduced. `handle_alloc_error` does not unwind, so the
+    /// reserve has to be the fallible one.
+    #[test]
+    fn a_mask_plane_too_large_to_allocate_is_dropped_rather_than_aborting() {
+        let pixels = Samples::Whole(Pixels::Gray8(Box::new([0u8; 4])));
+        assert_eq!(super::mask_plane(&pixels, 131_071, 131_071), None);
+        // The same samples at a size that fits still produce a plane.
+        assert!(super::mask_plane(&pixels, 2, 2).is_some());
     }
 
     #[test]

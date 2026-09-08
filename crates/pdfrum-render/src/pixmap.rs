@@ -43,6 +43,11 @@ impl Pixmap {
     /// A zero in either axis is legal and yields an empty buffer, because the
     /// engine reaches this with clipped-away geometry all the time.
     ///
+    /// A size whose buffer cannot be allocated yields an **empty** pixmap
+    /// rather than ending the process — see [`Pixmap::try_new`], which is this
+    /// without the fallback. Check [`Pixmap::width`] rather than assuming the
+    /// size you asked for.
+    ///
     /// ```
     /// use pdfrum_render::Pixmap;
     ///
@@ -50,17 +55,53 @@ impl Pixmap {
     /// assert_eq!(empty.pixel(0, 0), Some([0, 0, 0, 0]));
     /// // A zero in either axis is legal: clipped-away geometry reaches this.
     /// assert!(Pixmap::new(0, 5).data().is_empty());
+    /// // So is a size no allocator can meet; it comes back empty.
+    /// assert_eq!(Pixmap::new(131_071, 131_071).width(), 0);
     /// ```
     #[must_use]
     pub fn new(width: u32, height: u32) -> Self {
+        Self::try_new(width, height).unwrap_or(Self {
+            width: 0,
+            height: 0,
+            data: Vec::new(),
+        })
+    }
+
+    /// A fully transparent pixmap of the given size, or `None` when the buffer
+    /// it needs cannot be allocated.
+    ///
+    /// `width * height * 4` is the whole of the request, and both axes can
+    /// come from a file: an image declares its own `/Width` and `/Height`, and
+    /// the largest pair the sample unpacker accepts asks for 68 GB. A `Vec`
+    /// that cannot be grown calls `handle_alloc_error`, which **aborts** — no
+    /// unwind, so no `catch_unwind` above it helps and no `Result` can carry
+    /// it. Reserving fallibly is what turns that into an answer a caller can
+    /// act on.
+    ///
+    /// [`Pixmap::new`] is this with the answer taken as an empty pixmap, which
+    /// is what a caller that has no way to report the failure wants.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// assert!(Pixmap::try_new(2, 2).is_some());
+    /// // Nothing has this much memory, and asking for it must not end the
+    /// // process.
+    /// assert!(Pixmap::try_new(131_071, 131_071).is_none());
+    /// ```
+    #[must_use]
+    pub fn try_new(width: u32, height: u32) -> Option<Self> {
         let len = (width as usize)
             .saturating_mul(height as usize)
             .saturating_mul(4);
-        Self {
+        let mut data = Vec::new();
+        data.try_reserve_exact(len).ok()?;
+        data.resize(len, 0);
+        Some(Self {
             width,
             height,
-            data: vec![0; len],
-        }
+            data,
+        })
     }
 
     /// A pixmap of the given size, every pixel set to `color`.
@@ -83,7 +124,16 @@ impl Pixmap {
             .saturating_mul(height as usize)
             .saturating_mul(4);
         let px = premultiply(color);
-        let mut data = Vec::with_capacity(len);
+        let mut data = Vec::new();
+        if data.try_reserve_exact(len).is_err() {
+            // As `new`: a buffer the allocator cannot meet comes back empty
+            // rather than aborting. Both axes can come from a file.
+            return Self {
+                width: 0,
+                height: 0,
+                data,
+            };
+        }
         if len >= 4 {
             data.extend_from_slice(&px);
             while data.len() * 2 <= len {
@@ -982,6 +1032,30 @@ pub(crate) fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A buffer no allocator can meet is an answer, not an abort.
+    ///
+    /// `/Width` and `/Height` are the file's, and `ImageDict` accepts each up
+    /// to 131071 — so `to_pixmap` reached `vec![0; 131071 * 131071 * 4]`, and
+    /// `handle_alloc_error` ends the process without unwinding. Nothing above
+    /// it can catch that, which is why the allocation has to be fallible here
+    /// rather than guarded by a limit somewhere else.
+    #[test]
+    fn a_size_no_allocator_can_meet_comes_back_empty_rather_than_aborting() {
+        // 68 GB at four bytes a pixel, from a dictionary that fits in 700
+        // bytes of PDF.
+        assert_eq!(Pixmap::try_new(131_071, 131_071), None);
+        assert_eq!(Pixmap::new(131_071, 131_071).width(), 0);
+        assert!(Pixmap::new(131_071, 131_071).data().is_empty());
+        assert_eq!(
+            Pixmap::filled(131_071, 131_071, peniko::Color::BLACK).width(),
+            0
+        );
+
+        // A size that *can* be met is untouched by any of it.
+        assert_eq!(Pixmap::try_new(3, 2).map(|p| p.data().len()), Some(24));
+        assert_eq!(Pixmap::new(3, 2).data().len(), 24);
+    }
 
     /// Knockout composition, stated pixel-wise: where a
     /// later object has coverage it *replaces* the earlier one rather than

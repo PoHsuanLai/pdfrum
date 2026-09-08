@@ -210,7 +210,13 @@ pub fn to_pixmap(
     stencil_color: Argb,
     transfer: Option<&crate::transfer::TransferFunc<'_>>,
 ) -> Pixmap {
-    let mut out = Pixmap::new(image.width, image.height);
+    // Fallibly, and returning here rather than falling through: the loop
+    // below is one pass per *source* row, so an image whose buffer could not
+    // be allocated would otherwise trade an abort for a walk over as many
+    // pixels as it declared. Both are file-controlled.
+    let Some(mut out) = Pixmap::try_new(image.width, image.height) else {
+        return Pixmap::new(0, 0);
+    };
     let finish = RowFinish::new(image, stencil_color, transfer);
     let mut rows = converted_rows(image);
     let width = image.width as usize;
