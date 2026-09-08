@@ -347,17 +347,14 @@ fn scratch(name: &str) -> std::io::Result<std::path::PathBuf> {
 
 /// The trailer's `/ID` array, which a seeded save pins even when the
 /// encryption key does not come from the seed.
-fn file_id(bytes: &[u8]) -> Vec<u8> {
-    let at = bytes
-        .windows(4)
-        .rposition(|w| w == b"/ID[")
-        .expect("an encrypted save writes a trailer /ID");
-    let tail = &bytes[at..];
-    let end = tail
-        .iter()
-        .position(|&b| b == b']')
-        .expect("the /ID array closes");
-    tail[..=end].to_vec()
+///
+/// Returns `None` when the bytes have no closed `/ID[…]`. The caller is a
+/// `#[test]`, where `expect` is allowed; this helper is not.
+fn file_id(bytes: &[u8]) -> Option<Vec<u8>> {
+    let at = bytes.windows(4).rposition(|w| w == b"/ID[")?;
+    let tail = bytes.get(at..)?;
+    let end = tail.iter().position(|&b| b == b']')?;
+    Some(tail.get(..=end)?.to_vec())
 }
 
 fn pages_of(path: &Path) -> Result<serde_json::Value, String> {
@@ -1023,8 +1020,8 @@ fn encrypt_locks_the_file_with_the_permissions_asked_for() {
     let again = encrypt_hello(&dir, "again.pdf").unwrap();
     let second = std::fs::read(&again).unwrap();
     assert_eq!(
-        file_id(&bytes),
-        file_id(&second),
+        file_id(&bytes).expect("an encrypted save writes a trailer /ID"),
+        file_id(&second).expect("the second save writes a trailer /ID"),
         "--deterministic pins the trailer /ID"
     );
     assert_ne!(second, bytes, "the key is fresh, so the ciphertext moves");
