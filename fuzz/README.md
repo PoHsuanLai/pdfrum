@@ -1,6 +1,6 @@
 # Fuzz ring
 
-31 `cargo-fuzz` targets. Own workspace: `libfuzzer-sys` links C++, which the
+33 `cargo-fuzz` targets. Own workspace: `libfuzzer-sys` links C++, which the
 root `cargo tree` check forbids.
 
 ```sh

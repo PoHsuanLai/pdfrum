@@ -19,8 +19,14 @@
 //!
 //! ```text
 //! grep -vE '^pub use pdfrum::' docs/api-baseline/pdfrum.txt \
-//!   | grep -oE 'pdfrum_[a-z0-9_]+::[A-Za-z0-9_:]*[A-Za-z0-9_]' | sort -u
+//!   | grep -oE '\b[a-z][a-z0-9_]*::[A-Za-z0-9_:]*[A-Za-z0-9_]' | sort -u
 //! ```
+//!
+//! The crate half of that pattern is `[a-z][a-z0-9_]*`, not `pdfrum_[a-z0-9_]+`.
+//! A third-party type in a signature is exactly as unnameable to a caller as a
+//! member-crate one, and the narrower pattern is how `kurbo::Shape` (the bound
+//! on four `Canvas` methods) and `usvg::Error` (the payload of `Error::Svg`)
+//! both reached a release candidate without a re-export.
 //!
 //! When that command grows a row, this file grows a line — or the row is a
 //! documented escape hatch and is listed in
@@ -38,6 +44,15 @@ use pdfrum::*;
 /// because three of the names below are traits, and a trait a caller cannot
 /// name is a bound they cannot write.
 fn nameable<T: ?Sized>() {}
+
+/// The `Shape` bound, written from outside the crate.
+///
+/// [`Canvas::clip`], [`Canvas::draw`], [`Canvas::fill`] and [`Canvas::stroke`]
+/// are generic over it, so a caller factoring a helper out of a sequence of
+/// draws needs the name. It is a bound rather than a `nameable` row because
+/// `Shape`'s associated iterator type is generic, which rules out `dyn Shape`.
+#[cfg(feature = "edit")]
+fn shape_bound_is_writable<S: Shape>(_: S) {}
 
 fn inspect_error_payload(error: Error) {
     match error {
@@ -182,6 +197,17 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<Rect>();
     nameable::<Size>();
     nameable::<Color>();
+    // `Shape` is the bound on `Canvas::{clip, draw, fill, stroke}`, so it is
+    // a name a caller has to *write*, not just receive. Asserted as a bound
+    // rather than through `nameable`: `Shape` has a generic associated type,
+    // so `dyn Shape` does not exist to hand to it.
+    #[cfg(feature = "edit")]
+    shape_bound_is_writable(Rect::ZERO);
+    // `usvg`, through the one variant that carries its error. Checked by the
+    // gate's `cargo check -p pdfrum --tests --all-features` step, since
+    // `svg-import` is default-off.
+    #[cfg(feature = "svg-import")]
+    nameable::<SvgError>();
 
     // pdfrum-object
     nameable::<Dict>();

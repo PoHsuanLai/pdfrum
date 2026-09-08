@@ -1020,7 +1020,10 @@ pub fn snapped_reduction(
     src_width: u32,
     src_height: u32,
 ) -> Option<SnappedReduction> {
-    if src_width > MAX_SOURCE_AXIS || src_height > MAX_SOURCE_AXIS {
+    if src_width > MAX_SOURCE_AXIS
+        || src_height > MAX_SOURCE_AXIS
+        || !pdfrum_page::image_area_is_workable(src_width, src_height)
+    {
         return None;
     }
     let [a, b, c, d, _, _] = to_device.as_coeffs();
@@ -1186,7 +1189,10 @@ pub fn reduction_for(
     dest_width: f64,
     dest_height: f64,
 ) -> Option<(u32, u32)> {
-    if src_width > MAX_SOURCE_AXIS || src_height > MAX_SOURCE_AXIS {
+    if src_width > MAX_SOURCE_AXIS
+        || src_height > MAX_SOURCE_AXIS
+        || !pdfrum_page::image_area_is_workable(src_width, src_height)
+    {
         return None;
     }
     let new_w = reduced_len(src_width, dest_width);
@@ -1250,6 +1256,23 @@ pub fn prescale(
 
 #[cfg(test)]
 mod tests {
+    /// A gigapixel source is refused by the pre-pass, not ground through it.
+    ///
+    /// The area cap is [`pdfrum_page::image_area_is_workable`]; both reduction
+    /// entry points consult it so neither runs the pass. 65536 square sits
+    /// inside `MAX_SOURCE_AXIS` on both axes — 4.3 Gpx — which took minutes
+    /// to reduce on a sub-kilobyte file.
+    #[test]
+    fn a_source_larger_than_a_gigapixel_is_not_reduced() {
+        assert_eq!(super::reduction_for(65_536, 65_536, 100.0, 100.0), None);
+        assert_eq!(
+            super::snapped_reduction(kurbo::Affine::scale(0.001), 65_536, 65_536),
+            None
+        );
+        // A size inside the cap still reduces exactly as before.
+        assert!(super::reduction_for(4_000, 4_000, 100.0, 100.0).is_some());
+    }
+
     use kurbo::Affine;
 
     use super::*;

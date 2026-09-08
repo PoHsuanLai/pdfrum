@@ -11,6 +11,7 @@ use pdfrum_common::PageIndex;
 /// recovery is recorded as a [`pdfrum_common::Diagnostic`]. `Err` is reserved
 /// for "cannot continue".
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// The sink refused the bytes.
     #[error("write failed: {0}")]

@@ -94,7 +94,7 @@ pub enum Error {
     /// document survives is a diagnostic rather than an error.
     #[error("cannot read svg: {0}")]
     #[cfg(feature = "svg-import")]
-    Svg(#[source] usvg::Error),
+    Svg(#[source] crate::SvgError),
 
     /// The filesystem refused a read or a write. Only the path-taking
     /// convenience methods ([`Document::open`](crate::Document::open),

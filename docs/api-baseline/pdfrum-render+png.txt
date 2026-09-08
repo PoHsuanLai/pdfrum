@@ -47,6 +47,7 @@ pub fn pdfrum_render::pixmap::Pixmap::set_pixel(&mut self, u32, u32, [u8; 4])
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_bgra(&self, bool) -> alloc::vec::Vec<u8>
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgb(&self) -> alloc::vec::Vec<u8>
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgba(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::try_new(u32, u32) -> core::option::Option<Self>
 pub fn pdfrum_render::pixmap::Pixmap::width(&self) -> u32
 impl pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::pixmap::Pixmap::encode_png(&self) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_render::Error>
@@ -167,6 +168,7 @@ pub fn pdfrum_render::pixmap::Pixmap::set_pixel(&mut self, u32, u32, [u8; 4])
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_bgra(&self, bool) -> alloc::vec::Vec<u8>
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgb(&self) -> alloc::vec::Vec<u8>
 pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgba(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::try_new(u32, u32) -> core::option::Option<Self>
 pub fn pdfrum_render::pixmap::Pixmap::width(&self) -> u32
 impl pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::pixmap::Pixmap::encode_png(&self) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_render::Error>
