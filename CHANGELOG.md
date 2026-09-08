@@ -7,15 +7,7 @@ first crates.io release.
 
 `pdfrum` is `0.1.0` in the manifests and has not been published.
 
-### Changed
-
-- Cargo feature names: `tinyskia` → `tiny-skia`, `svg` → `svg-export`,
-  `svg-ingest` → `svg-import`, `jpx` → `jpeg2000`. No aliases.
-
 ### Added
-
-- `full` cargo feature: every published capability except `vello-gpu` and
-  the internal `profiling` timers.
 
 - Parse, recover, render, extract text, forms, JavaScript, edit and save.
 - Four raster backends: `vello_cpu` (default), `tiny-skia`, AGG, GPU `wgpu`

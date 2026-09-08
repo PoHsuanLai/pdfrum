@@ -116,11 +116,20 @@ fontdb = { version = "=0.24.0", default-features = false }
 subsetter = { version = "=0.2.6", default-features = false }
 
 # codecs & color
+# 0.9, matching `flate2` (which png 0.18 also pulls). png itself still
+# depends on miniz_oxide 0.8 as well; that extra copy is png's, not ours.
 miniz_oxide = "=0.9.1"
-weezl = "=0.2.1"
+# 0.1, not 0.2: gif 0.14 (resvg's `raster-images`) requires weezl 0.1.
+# The TIFF/MSB `Configuration` API LZW uses is in both; staying on 0.1
+# keeps one copy in the lockfile.
+weezl = "=0.1.12"
 zune-jpeg = "=0.5.15"
-hayro-jpeg2000 = "=0.4.0"
-hayro-jbig2 = "=0.3.0"
+# `image` (on by default) is the `image` crate integration plus a second
+# moxcms 0.8. We decode with `Image::new` and convert colour ourselves.
+hayro-jpeg2000 = { version = "=0.4.0", default-features = false, features = ["std", "simd"] }
+# `image` (on by default) is only the `image` crate encoder the crate's
+# example uses. We consume `Image::new_embedded`.
+hayro-jbig2 = { version = "=0.3.0", default-features = false, features = ["std", "simd"] }
 hayro-ccitt = "=0.3.0"
 moxcms = "=0.9.0"
 
