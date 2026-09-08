@@ -158,15 +158,7 @@ Columns are what the benchmark harness exercises on the same 44 files;
 | [`pdf-extract`](https://crates.io/crates/pdf-extract) | no | MIT | no | yes | no |
 | [`pdf-rs`](https://crates.io/crates/pdf) | no | MIT | no | no | yes |
 
-`pdfium-render` binds a prebuilt `libpdfium.so`; `mupdf` vendors C through
-`bindgen` and `cc`. Both want a native toolchain or a shipped binary, and
-MuPDF is AGPL-3.0, which a commercial user has to price in. The pure-Rust
-peers cost nothing to build but stop earlier: `lopdf` and `pdf-rs` are
-object-level toolkits that read and write a file without rendering it,
-`pdf-extract` only pulls text, and `hayro` renders and — with a second
-crate — extracts, but writes no file back. Where pdfrum loses is speed:
-warm median render is slower than both `pdfium-render` and `mupdf`.
-Numbers, method, and the files each engine loses on are in
+Dedicated benchmarks against these crates live in
 [`docs/benchmarks/`](docs/benchmarks/).
 
 ## Crate map
@@ -200,6 +192,9 @@ surfaces that do not publish (`pdfrum-capi`, `pdfrum-wasm`, `pdfrum-tool`).
 | [`pdfrum-markdown`](https://docs.rs/pdfrum-markdown) | `Page::markdown` |
 | [`pdfrum-svg`](https://docs.rs/pdfrum-svg) | SVG export |
 | [`pdfrum-cli`](https://docs.rs/pdfrum-cli) | command line |
+| [`pdfrum-capi`](crates/pdfrum-capi/README.md) | C ABI: `libpdfrum.so`, `pdfrum.h` |
+| [`pdfrum-wasm`](crates/pdfrum-wasm/README.md) | WebAssembly binding |
+| [`pdfrum-tool`](crates/pdfrum-tool/README.md) | `pdfium_test` oracle-mirror |
 
 ## Licence
 
