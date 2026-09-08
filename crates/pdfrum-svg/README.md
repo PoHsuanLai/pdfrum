@@ -41,7 +41,7 @@ outputs are in one coordinate system and can be diffed pixel for pixel.
 [`SvgPage::svg`] is a `String`, not a file — this crate has no opinion about
 where it goes.
 
-From the facade: `Page::to_svg`, feature `svg`.
+From the facade: `Page::to_svg`, feature `svg-export`.
 
 Part of [pdfrum](https://crates.io/crates/pdfrum). `#![forbid(unsafe_code)]`.
 

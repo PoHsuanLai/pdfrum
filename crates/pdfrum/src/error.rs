@@ -85,7 +85,7 @@ pub enum Error {
 
     /// An SVG would not resolve — malformed XML, or an `<svg>` with no
     /// usable size. Only [`Canvas::draw_svg`](crate::Canvas::draw_svg)
-    /// produces it, behind the `svg-ingest` feature.
+    /// produces it, behind the `svg-import` feature.
     ///
     /// An SVG construct that resolves but has no PDF spelling is **not** an
     /// error: it is an
@@ -93,7 +93,7 @@ pub enum Error {
     /// [`SvgIngestReport`](crate::SvgIngestReport), the same way damage a
     /// document survives is a diagnostic rather than an error.
     #[error("cannot read svg: {0}")]
-    #[cfg(feature = "svg-ingest")]
+    #[cfg(feature = "svg-import")]
     Svg(#[source] usvg::Error),
 
     /// The filesystem refused a read or a write. Only the path-taking
@@ -151,7 +151,7 @@ pub enum ErrorCode {
     /// [`Error::Limit`]: a ceiling the caller set was exceeded.
     Limit = 9,
     /// `Error::Svg`: an SVG would not resolve. Only produced with the
-    /// `svg-ingest` feature; the number is reserved either way.
+    /// `svg-import` feature; the number is reserved either way.
     Svg = 10,
 }
 
@@ -258,7 +258,7 @@ impl Error {
             Error::Save(_) => ErrorCode::Save,
             Error::Text(_) => ErrorCode::Text,
             Error::Limit(_) => ErrorCode::Limit,
-            #[cfg(feature = "svg-ingest")]
+            #[cfg(feature = "svg-import")]
             Error::Svg(_) => ErrorCode::Svg,
             Error::Io(_) => ErrorCode::Io,
         }

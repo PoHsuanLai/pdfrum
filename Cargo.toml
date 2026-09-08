@@ -177,7 +177,7 @@ png = "=0.18.1"
 # glyph is already a filled outline. `raster-images` kept for `<image>`.
 resvg = { version = "=0.48.1", default-features = false, features = ["raster-images"] }
 # SVG ingestion: the resolved tree `Canvas::draw_svg` compiles into page
-# operators. Default-off behind `pdfrum/svg-ingest`.
+# operators. Default-off behind `pdfrum/svg-import`.
 #
 # Defaults dropped so SVG text maps through `pdfrum-font`, not a second font
 # stack. Without `text`, `usvg` drops `<text>` from the tree.

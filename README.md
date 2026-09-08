@@ -110,7 +110,7 @@ are on by default.
 | Standard security handler, revisions 2–6 | §7.6 | yes | |
 | Public-key security handlers (`Adobe.PubSec`) | §7.6.4 | no | |
 | Flate, LZW, RunLength, ASCIIHex/85, DCT | §7.4 | yes | |
-| CCITT, JBIG2, JPX | §7.4 | yes | `codecs-all` |
+| CCITT, JBIG2, JPX | §7.4 | yes | `codecs-all` (`jpeg2000`, `jbig2`, `ccitt`) |
 | Paths, colour spaces, functions, shadings 1–7, transparency | §8 | yes | |
 | Type 1, TrueType, Type 0, Type 3, CID; encodings, ToUnicode | §9 | yes | |
 | File attachments | §7.11 | yes | `edit` to write |
@@ -128,11 +128,13 @@ are on by default.
 |---|:---:|---|
 | Host font fallback | yes | `system-fonts` ([`fontdb`](https://crates.io/crates/fontdb); not on wasm32) |
 | Markdown | yes | `markdown` |
-| SVG export | yes | `svg` |
-| Draw an SVG into a page | yes | `svg-ingest` ([`usvg`](https://crates.io/crates/usvg)) |
-| Extra CPU rasterizers | yes | `tinyskia` ([`tiny-skia`](https://crates.io/crates/tiny-skia)), `agg` |
+| SVG export | yes | `svg-export` |
+| Draw an SVG into a page | yes | `svg-import` ([`usvg`](https://crates.io/crates/usvg)) |
+| SVG `<text>` on import | yes | `svg-text` |
+| Extra CPU rasterizers | yes | `tiny-skia` ([`tiny-skia`](https://crates.io/crates/tiny-skia)), `agg` |
 | GPU rasterizer | yes | `vello-gpu` ([`vello`](https://crates.io/crates/vello)) |
-| `Pixmap` → PNG | yes | [`png`](https://crates.io/crates/png) |
+| `Pixmap` → PNG | yes | `png` |
+| Every published capability except GPU | yes | `full` |
 | XFA | no | |
 | Viewer (window, caret, chrome) | no | |
 
@@ -140,7 +142,7 @@ are on by default.
 its backend.
 
 ```toml
-pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all"] }
+pdfrum = { version = "0.1", default-features = false, features = ["tiny-skia", "codecs-all"] }
 ```
 
 ## Alternatives

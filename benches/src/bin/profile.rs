@@ -66,7 +66,7 @@ impl Op {
 fn backend(s: &str) -> Option<Backend> {
     match s {
         "agg" => Some(Backend::Agg),
-        "tinyskia" | "tiny-skia" => Some(Backend::TinySkia),
+        "tiny-skia" => Some(Backend::TinySkia),
         "vello-cpu" | "vello_cpu" | "vello" => Some(Backend::VelloCpu),
         _ => None,
     }
@@ -137,7 +137,7 @@ fn parse_args() -> Result<Args, String> {
 /// The `--help` text.
 fn usage() -> String {
     "profile --op <open|render|text|save|forms> --file <pdf> \
-     [--iterations N] [--backend agg|tinyskia|vello-cpu] [--sample] [--warm]"
+     [--iterations N] [--backend agg|tiny-skia|vello-cpu] [--sample] [--warm]"
         .to_owned()
 }
 

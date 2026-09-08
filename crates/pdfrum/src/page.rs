@@ -146,7 +146,7 @@ impl<'a> Page<'a> {
     ///
     /// The backend is an argument, never a default: `VelloCpuBackend` is
     /// the one the `vello-cpu` feature (on by default) provides, and the
-    /// `tinyskia`, `agg` and `vello-gpu` features provide the others. For a
+    /// `tiny-skia`, `agg` and `vello-gpu` features provide the others. For a
     /// run over many pages, use [`Page::render_on`] with one
     /// [`RenderSession`].
     ///
@@ -209,7 +209,7 @@ impl<'a> Page<'a> {
     }
 
     /// The page as an SVG document, rasterizing with `backend` only what SVG
-    /// cannot say — behind the default-off `svg` feature.
+    /// cannot say — behind the default-off `svg-export` feature.
     ///
     /// The result carries the document *and* a [`RasterReport`](crate::svg::RasterReport)
     /// naming every region that had to become pixels, because a vector export
@@ -220,7 +220,7 @@ impl<'a> Page<'a> {
     /// # Errors
     ///
     /// As [`Page::render`].
-    #[cfg(feature = "svg")]
+    #[cfg(feature = "svg-export")]
     pub fn to_svg<B: RasterBackend>(
         &self,
         backend: &B,
@@ -234,7 +234,7 @@ impl<'a> Page<'a> {
     /// # Errors
     ///
     /// As [`Page::render`].
-    #[cfg(feature = "svg")]
+    #[cfg(feature = "svg-export")]
     pub fn to_svg_on<B: RasterBackend>(
         &self,
         backend: &B,
@@ -818,7 +818,7 @@ impl PreparedPage<'_> {
     /// # Errors
     ///
     /// As [`Page::render`].
-    #[cfg(feature = "svg")]
+    #[cfg(feature = "svg-export")]
     pub fn to_svg<B: RasterBackend>(&self, backend: &B) -> Result<crate::svg::SvgPage> {
         self.to_svg_on(backend, &mut RenderSession::default())
     }
@@ -833,7 +833,7 @@ impl PreparedPage<'_> {
     /// # Errors
     ///
     /// As [`Page::render`].
-    #[cfg(feature = "svg")]
+    #[cfg(feature = "svg-export")]
     pub fn to_svg_on<B: RasterBackend>(
         &self,
         backend: &B,

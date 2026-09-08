@@ -73,7 +73,7 @@ pub use image::{
     BitImage, Converted, Depth, ImageCache, ImageData, ImageMask, MAX_BYTES, Packed, Palette,
     Pixels, RequestedSize, Rgb8, Rgba8, Row, Rows, Samples, Source, Unpacked, decode_image,
 };
-#[cfg(feature = "jpx")]
+#[cfg(feature = "jpeg2000")]
 pub use image::{JpxImage, decode_jpx};
 pub use mutate::IndexOutOfRange;
 pub use ops::{

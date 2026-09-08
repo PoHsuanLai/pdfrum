@@ -37,7 +37,7 @@ it would mean refusing to draw pages that every viewer draws.
 
 | feature | adds |
 |---|---|
-| `jpx` | JPEG 2000 images ([`hayro-jpeg2000`](https://crates.io/crates/hayro-jpeg2000)) |
+| `jpeg2000` | JPEG 2000 images ([`hayro-jpeg2000`](https://crates.io/crates/hayro-jpeg2000)) |
 | `jbig2` | JBIG2 images ([`hayro-jbig2`](https://crates.io/crates/hayro-jbig2)) |
 | `ccitt` | CCITT Group 3/4 fax images |
 
