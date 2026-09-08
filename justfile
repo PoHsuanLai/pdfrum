@@ -44,3 +44,7 @@ api-update:
 # The whole CI gate (nushell). Long; a maintainer runs it before landing.
 ci:
     ./scripts/ci.nu
+
+# Cut CHANGELOG.md and bump the workspace version if given (nushell).
+prepare-release *args:
+    ./scripts/prepare-release.nu {{args}}

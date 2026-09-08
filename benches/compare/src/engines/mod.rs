@@ -108,6 +108,59 @@ impl Support {
     }
 }
 
+/// pdfrum's work row. Shared by every rasterizer: `RenderOptions` is the
+/// same type, and `--parity` moves the same three knobs on each of them.
+fn pdfrum_work(parity: bool) -> Vec<(WorkItem, Support)> {
+    use Support::{No, Yes};
+    use WorkItem::{Annotations, FormFields, ImageInterpolation, PathAntialias, TextAntialias};
+
+    // crates/pdfrum/src/render.rs:69-72 — RenderOptions::default has
+    // smooth_paths, interpolate_images and annotations all true; --parity
+    // clears three of them.
+    let src = "crates/pdfrum/src/render.rs RenderOptions::default";
+    vec![
+        (
+            PathAntialias,
+            if parity {
+                No { source: src }
+            } else {
+                Yes { source: src }
+            },
+        ),
+        // The parity profile deliberately leaves text antialiasing
+        // on: every peer antialiases glyphs and none offers a knob,
+        // so turning ours off would swap one asymmetry for another.
+        (TextAntialias, Yes { source: src }),
+        (
+            ImageInterpolation,
+            if parity {
+                No { source: src }
+            } else {
+                Yes { source: src }
+            },
+        ),
+        (
+            Annotations,
+            if parity {
+                No { source: src }
+            } else {
+                Yes { source: src }
+            },
+        ),
+        // Widget appearances reach the raster through the page's
+        // generated appearance streams, which `annotations: false`
+        // also suppresses.
+        (
+            FormFields,
+            if parity {
+                No { source: src }
+            } else {
+                Yes { source: src }
+            },
+        ),
+    ]
+}
+
 /// What engine `name`'s benchmark configuration computes under `profile`.
 ///
 /// Every cell was read out of the named crate's own source in the local
@@ -115,59 +168,16 @@ impl Support {
 /// answer and appears wherever the source did not settle the question.
 #[must_use]
 pub fn work(name: &str, profile: RenderProfile) -> Vec<(WorkItem, Support)> {
-    use Support::{No, NoKnob, NotDetermined, Yes};
+    use Support::{NoKnob, NotDetermined, Yes};
     use WorkItem::{Annotations, FormFields, ImageInterpolation, PathAntialias, TextAntialias};
 
     // Only render engines have a row; the text-only peers never rasterize.
     let parity = profile == RenderProfile::Parity;
     match name {
-        "pdfrum" => {
-            // crates/pdfrum/src/render.rs:69-72 — RenderOptions::default has
-            // smooth_paths, smooth_text and interpolate_images and
-            // annotations all true; --parity clears three of them.
-            let src = "crates/pdfrum/src/render.rs RenderOptions::default";
-            vec![
-                (
-                    PathAntialias,
-                    if parity {
-                        No { source: src }
-                    } else {
-                        Yes { source: src }
-                    },
-                ),
-                // The parity profile deliberately leaves text antialiasing
-                // on: every peer antialiases glyphs and none offers a knob,
-                // so turning ours off would swap one asymmetry for another.
-                (TextAntialias, Yes { source: src }),
-                (
-                    ImageInterpolation,
-                    if parity {
-                        No { source: src }
-                    } else {
-                        Yes { source: src }
-                    },
-                ),
-                (
-                    Annotations,
-                    if parity {
-                        No { source: src }
-                    } else {
-                        Yes { source: src }
-                    },
-                ),
-                // Widget appearances reach the raster through the page's
-                // generated appearance streams, which `annotations: false`
-                // also suppresses.
-                (
-                    FormFields,
-                    if parity {
-                        No { source: src }
-                    } else {
-                        Yes { source: src }
-                    },
-                ),
-            ]
-        }
+        // Every pdfrum rasterizer takes the same RenderOptions; the backend
+        // is an argument, not a flag. A work-row split would pretend --parity
+        // reached one of them and not the others.
+        "pdfrum" | "pdfrum-agg" | "pdfrum-tinyskia" | "pdfrum-vello-gpu" => pdfrum_work(parity),
         "hayro" => {
             // hayro-0.7.1/src/lib.rs:141-145 fixes vello_cpu's RenderSettings
             // (RenderMode::OptimizeSpeed — still analytic coverage AA, only
@@ -242,6 +252,7 @@ const OPEN_RENDER: &[Op] = &[Op::Open, Op::Render];
 const OPEN_TEXT: &[Op] = &[Op::Open, Op::Text];
 const OPEN_ONLY: &[Op] = &[Op::Open];
 const TEXT_ONLY: &[Op] = &[Op::Text];
+const RENDER_ONLY: &[Op] = &[Op::Render];
 
 /// Every engine this harness knows, compiled in or not, in table order.
 pub fn all() -> Vec<EngineInfo> {
@@ -253,6 +264,30 @@ pub fn all() -> Vec<EngineInfo> {
             compiled: true,
             c_in_build: false,
             note: "the facade with default features: Document::open, Page::render_on with VelloCpuBackend, Page::text_on",
+        },
+        EngineInfo {
+            name: "pdfrum-agg",
+            version: env!("CARGO_PKG_VERSION"),
+            ops: RENDER_ONLY,
+            compiled: true,
+            c_in_build: false,
+            note: "same facade, Page::render_on with AggBackend (feature agg); open and text are the pdfrum row",
+        },
+        EngineInfo {
+            name: "pdfrum-tinyskia",
+            version: env!("CARGO_PKG_VERSION"),
+            ops: RENDER_ONLY,
+            compiled: true,
+            c_in_build: false,
+            note: "same facade, Page::render_on with TinySkiaBackend (feature tiny-skia); open and text are the pdfrum row",
+        },
+        EngineInfo {
+            name: "pdfrum-vello-gpu",
+            version: env!("CARGO_PKG_VERSION"),
+            ops: RENDER_ONLY,
+            compiled: cfg!(feature = "gpu"),
+            c_in_build: false,
+            note: "same facade, Page::render_on with VelloGpuBackend; --features gpu; skipped when no adapter",
         },
         EngineInfo {
             name: "hayro",
@@ -326,10 +361,26 @@ pub fn info(name: &str) -> Option<EngineInfo> {
     all().into_iter().find(|engine| engine.name == name)
 }
 
+/// Why this engine cannot run on this machine, even though it compiled in.
+///
+/// `None` means it can. Used for a GPU with no adapter, matching
+/// `pdfium-render` without `libpdfium.so`: the row stays in the table as
+/// "not run" rather than 44 errors.
+#[must_use]
+pub fn unavailable_reason(name: &str) -> Option<String> {
+    match name {
+        #[cfg(feature = "gpu")]
+        "pdfrum-vello-gpu" => pdfrum::gpu_unavailable(),
+        _ => None,
+    }
+}
+
 /// Runs `op` on `path` with engine `name`, in this process.
 pub fn run(name: &str, op: Op, path: &Path, ctx: &Ctx<'_>) -> Result<Timed> {
+    if let Some(backend) = pdfrum::Backend::of(name) {
+        return pdfrum::run(backend, op, path, ctx);
+    }
     match name {
-        "pdfrum" => pdfrum::run(op, path, ctx),
         #[cfg(feature = "hayro")]
         "hayro" => hayro::run(op, path, ctx),
         #[cfg(feature = "hayro")]
@@ -390,6 +441,9 @@ pub fn sharing(name: &str) -> Sharing {
         "pdfium-render" => Sharing::SingleThread {
             why: "PDFium keeps one global state; every call must be on one thread",
         },
+        "pdfrum-vello-gpu" => Sharing::SingleThread {
+            why: "one wgpu device and one vello Renderer; finish try_locks, concurrent raster is refused",
+        },
         "mupdf" => Sharing::DisplayLists,
         _ => Sharing::Document,
     }
@@ -399,8 +453,10 @@ pub fn sharing(name: &str) -> Sharing {
 /// sharing whatever [`sharing`] says this engine shares; returns the page
 /// count.
 pub fn render_all(name: &str, path: &Path, ctx: &Ctx<'_>, threads: usize) -> Result<usize> {
+    if let Some(backend) = pdfrum::Backend::of(name) {
+        return pdfrum::render_all(backend, path, ctx, threads);
+    }
     match name {
-        "pdfrum" => pdfrum::render_all(path, ctx, threads),
         #[cfg(feature = "hayro")]
         "hayro" => hayro::render_all(path, ctx, threads),
         #[cfg(feature = "pdf_oxide")]
@@ -420,7 +476,7 @@ pub fn unsupported(engine: &str, op: Op) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{Op, RenderProfile, Support, WorkItem, all, work};
+    use super::{Op, RenderProfile, Support, WorkItem, all, pdfrum, work};
 
     /// The profile must move exactly the three items pdfrum has a knob for,
     /// and leave glyph antialiasing alone — the parity columns claim that,
@@ -472,6 +528,29 @@ mod tests {
         for engine in all() {
             let has_row = !work(engine.name, RenderProfile::Default).is_empty();
             assert_eq!(has_row, engine.ops.contains(&Op::Render), "{}", engine.name);
+        }
+    }
+
+    /// The dispatch table and the engine list must agree, or a new backend
+    /// would sit in `all()` and never run.
+    #[test]
+    fn every_pdfrum_engine_has_a_backend() {
+        for engine in all().into_iter().filter(|e| e.name.starts_with("pdfrum")) {
+            let backend = pdfrum::Backend::of(engine.name)
+                .unwrap_or_else(|| panic!("no backend for {}", engine.name));
+            assert_eq!(backend.engine(), engine.name);
+        }
+    }
+
+    /// `--parity` must move the same knobs on every pdfrum rasterizer, or
+    /// the matrix would claim the GPU (or AGG) was doing different work.
+    #[test]
+    fn pdfrum_backends_share_the_work_row() {
+        let base = work("pdfrum", RenderProfile::Default);
+        let parity = work("pdfrum", RenderProfile::Parity);
+        for name in ["pdfrum-agg", "pdfrum-tinyskia", "pdfrum-vello-gpu"] {
+            assert_eq!(base, work(name, RenderProfile::Default), "{name}");
+            assert_eq!(parity, work(name, RenderProfile::Parity), "{name} parity");
         }
     }
 }
