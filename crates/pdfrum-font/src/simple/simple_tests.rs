@@ -208,7 +208,7 @@ fn the_three_font_file_keys_are_interchangeable() {
 }
 
 // ---------------------------------------------------------------------------
-// The `/Encoding` decision table (§1.7).
+// The `/Encoding` decision table.
 // ---------------------------------------------------------------------------
 
 use crate::encoding::FontEncoding as E;

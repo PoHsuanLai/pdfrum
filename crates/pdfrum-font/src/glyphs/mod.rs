@@ -14,7 +14,8 @@ pub use face::{Charmap, CharmapId, Face};
 pub use crate::descriptor::em_adjust;
 pub(crate) use crate::descriptor::normalize_font_metric;
 
-use crate::{Gid, GlyphName};
+use crate::Gid;
+use crate::ids::GlyphName;
 use pdfrum_common::kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::{Diagnostics, Limits};
 use std::sync::Arc;
@@ -104,8 +105,8 @@ impl GlyphSource {
     /// The glyph a character code selects through the face's *currently
     /// selected* charmap.
     ///
-    /// Returns 0 rather than `None` on a miss, because every ladder in §1.8
-    /// and §1.9 tests `!= 0` and 0 is `.notdef` either way.
+    /// Returns 0 rather than `None` on a miss, because every ladder in the former working note
+    /// and the former working note tests `!= 0` and 0 is `.notdef` either way.
     #[must_use]
     pub fn char_index(&self, charmap: Charmap, code: u32) -> u16 {
         match self {
@@ -243,7 +244,7 @@ impl GlyphSource {
     ///
     /// Uses the **truncating** normalizer [`em_adjust`], not the rounding
     /// `normalize_font_metric` — the two disagree for half the inputs, and an
-    /// advance takes the truncating one (§1.3).
+    /// advance takes the truncating one.
     #[must_use]
     pub(crate) fn advance(&self, gid: Gid, params: GlyphParams) -> i32 {
         let upem = self.units_per_em();
@@ -266,7 +267,7 @@ impl GlyphSource {
     }
 
     /// A glyph's advance through the **rounding** normalizer, which is what
-    /// `LoadCharMetrics` uses when filling in a width the PDF omitted (§1.3).
+    /// `LoadCharMetrics` uses when filling in a width the PDF omitted.
     #[must_use]
     pub(crate) fn advance_tt(&self, gid: Gid) -> i32 {
         let upem = self.units_per_em();
@@ -297,7 +298,7 @@ impl GlyphSource {
     }
 
     /// The design-space instance to draw a Multiple-Master glyph at, solving
-    /// the width axis for `dest_width` (`AdjustVariationParams`, §1.14).
+    /// the width axis for `dest_width` (`AdjustVariationParams`, the former working note).
     ///
     /// Axis 0 is weight, taken **directly** as a design coordinate. Axis 1 is
     /// width, found by probing the advance at both ends of the axis and

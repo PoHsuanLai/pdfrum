@@ -212,14 +212,11 @@ fn embed_composite_writes_hello_extracts_and_renders() {
     );
     let subset_path = dir.join("hello_roboto_subset.pdf");
     edit_first
-        .save_pages(
-            &subset_path,
-            &[page],
-            &SaveOptions {
-                subset_new_fonts: true,
-                ..SaveOptions::default()
-            },
-        )
+        .save_pages(&subset_path, &[page], &{
+            let mut __o = SaveOptions::default();
+            __o.subset_new_fonts = true;
+            __o
+        })
         .expect("subset save");
     let subset_bytes = std::fs::read(&subset_path).expect("reads subset");
     let after = length1_of(&subset_bytes);
@@ -1936,7 +1933,7 @@ fn load_cid_type2_font_custom() {
     // The CMap's five ranges overlap at their endpoints, so CID 3 is named
     // twice — U+2F00 by the first block and U+4E00 by the second. The
     // lowest-value-wins collision policy (`InsertIntoMaps`,
-    // §1.6.1) keeps U+2F00 forward, while the
+    // the former working note) keeps U+2F00 forward, while the
     // *reverse* map keeps CID 3 for U+4E00, which is why `encode` above wrote
     // CID 3 for it and extraction reads U+2F00 back. That asymmetry is the
     // oracle's, and it is the caller's CMap that produces it.

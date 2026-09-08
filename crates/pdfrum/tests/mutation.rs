@@ -605,14 +605,11 @@ fn an_incremental_save_of_an_edited_page_appends_and_still_reflects_the_edit() {
     assert!(page.remove(0).is_some());
 
     let out = temp_dir("incremental").join("out.pdf");
-    doc.save_pages(
-        &out,
-        &[page],
-        &SaveOptions {
-            update: Update::Incremental,
-            ..SaveOptions::default()
-        },
-    )
+    doc.save_pages(&out, &[page], &{
+        let mut __o = SaveOptions::default();
+        __o.update = Update::Incremental;
+        __o
+    })
     .expect("saves");
 
     let written = std::fs::read(&out).expect("read");

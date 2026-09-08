@@ -196,10 +196,10 @@ pub fn open_bytes_with(
 /// The facade's options for one open: the password, and the run's or the
 /// caller's limits.
 fn options(password: Option<&str>, limits: &Limits) -> OpenOptions {
-    OpenOptions {
-        password: password.map(|p| p.as_bytes().to_vec()),
-        limits: limits.clone(),
-    }
+    let mut options = OpenOptions::default();
+    options.password = password.map(|p| p.as_bytes().to_vec());
+    options.limits = limits.clone();
+    options
 }
 
 /// The input's name without directory or extension, for the files a command

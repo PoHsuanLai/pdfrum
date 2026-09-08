@@ -85,24 +85,25 @@ impl std::str::FromStr for StampPosition {
 
 /// How a stamp is drawn.
 ///
-/// A config struct with [`Default`], filled in with struct-update syntax.
+/// A config struct with [`Default`]. `#[non_exhaustive]` so a field added
+/// later is not a major break; fill one in with [`StampOptions::builder`].
 /// The three font fields are read by [`DocEdit::stamp_text`] only; the
 /// rest apply to an image stamp too.
 ///
 /// ```
 /// use pdfrum::{Color, StampOptions, StampPosition};
 ///
-/// let draft = StampOptions {
-///     position: StampPosition::Center,
-///     angle: 45.0,
-///     opacity: 0.3,
-///     font_size: 96.0,
-///     color: Color::from_rgb8(200, 0, 0),
-///     ..StampOptions::default()
-/// };
+/// let draft = StampOptions::builder()
+///     .position(StampPosition::Center)
+///     .angle(45.0)
+///     .opacity(0.3)
+///     .font_size(96.0)
+///     .color(Color::from_rgb8(200, 0, 0))
+///     .build();
 /// assert_eq!(draft.margin, 36.0);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct StampOptions {
     /// Where the stamp's box sits. [`StampPosition::Center`] by default.
     pub position: StampPosition,
@@ -142,9 +143,10 @@ impl Default for StampOptions {
 
 /// Builds a [`StampOptions`] a setting at a time.
 ///
-/// Sugar over the struct-update syntax, which still works. Every method
-/// consumes and returns the builder; [`build`](Self::build) hands back the
-/// options.
+/// The way to change one field from outside this crate: the type is
+/// `#[non_exhaustive]`, so struct-update syntax is a same-crate spelling.
+/// Every method consumes and returns the builder; [`build`](Self::build)
+/// hands back the options.
 ///
 /// ```
 /// use pdfrum::{Color, StampOptions, StampPosition};
@@ -370,11 +372,10 @@ impl DocEdit<'_> {
     /// let mut edit = doc.edit();
     /// edit.stamp_text(
     ///     "DRAFT",
-    ///     &StampOptions {
-    ///         position: StampPosition::BottomRight,
-    ///         opacity: 0.5,
-    ///         ..StampOptions::default()
-    ///     },
+    ///     &StampOptions::builder()
+    ///         .position(StampPosition::BottomRight)
+    ///         .opacity(0.5)
+    ///         .build(),
     /// )?;
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
@@ -431,7 +432,7 @@ impl DocEdit<'_> {
     /// let mut edit = doc.edit();
     /// // A two-by-one image: red, then blue.
     /// let image = edit.embed_image(&[255, 0, 0, 0, 0, 255], 2, 1, PixelFormat::Rgb8)?;
-    /// edit.stamp_image(&image, 200.0, &StampOptions { opacity: 0.5, ..StampOptions::default() })?;
+    /// edit.stamp_image(&image, 200.0, &StampOptions::builder().opacity(0.5).build())?;
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
     /// assert!(bytes.starts_with(b"%PDF-"));

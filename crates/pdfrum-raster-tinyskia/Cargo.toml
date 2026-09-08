@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["pdf", "render", "tiny-skia", "rasterizer"]
 categories = ["graphics", "rendering"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

@@ -7,9 +7,9 @@
 //! matrix and widths that place it.
 
 use crate::encoding::{FontEncoding, adobe_char_name};
-use crate::{
-    CharCode, CharItem, FontCache, FontId, GlyphName, ToUnicode, names, simple, tounicode,
-};
+use crate::ids::GlyphName;
+use crate::tounicode::{self, ToUnicode};
+use crate::{CharCode, CharItem, FontCache, FontId, names, simple};
 use pdfrum_common::kurbo::{Affine, Rect};
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Resolve, Stream};
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(f.char_proc_name(CharCode(97)), Some(&b"square"[..]));
         assert_eq!(f.char_proc_name(CharCode(98)), Some(&b"triangle"[..]));
         // An `/Encoding` **dictionary** promotes the encoding from `Builtin`
-        // to `Standard` (§1.7), so an uncovered code falls through to the
+        // to `Standard`, so an uncovered code falls through to the
         // predefined set rather than naming nothing — which is a different
         // outcome from a font with no `/Encoding` at all.
         assert_eq!(f.encoding_kind, FontEncoding::Standard);

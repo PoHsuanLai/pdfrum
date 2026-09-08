@@ -67,15 +67,14 @@ pub fn add_bytes(doc: &Document, items: &[NewAttachment], deterministic: bool) -
     }
     let mut edit = doc.edit();
     for item in items {
-        let options = AttachmentOptions {
-            description: item.description.clone(),
-            mime_type: Some(
-                item.mime
-                    .clone()
-                    .unwrap_or_else(|| guess_mime(&item.name).to_owned()),
-            ),
-            modified: item.modified.clone(),
-        };
+        let mut options = AttachmentOptions::default();
+        options.description.clone_from(&item.description);
+        options.mime_type = Some(
+            item.mime
+                .clone()
+                .unwrap_or_else(|| guess_mime(&item.name).to_owned()),
+        );
+        options.modified.clone_from(&item.modified);
         edit.add_attachment(&item.name, &item.bytes, &options)?;
     }
     let mut bytes = Vec::new();

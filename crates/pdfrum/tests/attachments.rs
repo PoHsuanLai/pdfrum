@@ -101,11 +101,11 @@ fn plain() -> AttachmentOptions {
 }
 
 fn described() -> AttachmentOptions {
-    AttachmentOptions {
-        description: Some("The notes".into()),
-        mime_type: Some("text/plain".into()),
-        modified: Some("D:20260905120000Z00'00'".into()),
-    }
+    AttachmentOptions::builder()
+        .description("The notes")
+        .mime_type("text/plain")
+        .modified("D:20260905120000Z00'00'")
+        .build()
 }
 
 #[test]
@@ -205,14 +205,11 @@ fn removing_every_attachment_leaves_an_empty_tree_that_reads_as_none() {
 fn a_non_ascii_name_and_description_round_trip() {
     let doc = open("hello_world").unwrap();
     let mut edit = doc.edit();
-    edit.add_attachment(
-        "\u{7f51}\u{9875}.txt",
-        b"x",
-        &AttachmentOptions {
-            description: Some("\u{fc}ber \u{1F3A8}".into()),
-            ..plain()
-        },
-    )
+    edit.add_attachment("\u{7f51}\u{9875}.txt", b"x", &{
+        let mut o = plain();
+        o.description = Some("\u{fc}ber \u{1F3A8}".into());
+        o
+    })
     .unwrap();
     let doc = saved(&edit).unwrap();
     let attachment = &doc.attachments()[0];
@@ -274,14 +271,11 @@ fn the_oracle_saves_the_attachments_we_added() {
     ] {
         let doc = open(fixture).unwrap();
         let mut edit = doc.edit();
-        edit.add_attachment(
-            "bytes.bin",
-            &every_byte,
-            &AttachmentOptions {
-                mime_type: Some("application/octet-stream".into()),
-                ..described()
-            },
-        )
+        edit.add_attachment("bytes.bin", &every_byte, &{
+            let mut o = described();
+            o.mime_type = Some("application/octet-stream".into());
+            o
+        })
         .unwrap();
         if fixture == "hello_world" {
             edit.add_attachment("notes.txt", b"Read me", &described())

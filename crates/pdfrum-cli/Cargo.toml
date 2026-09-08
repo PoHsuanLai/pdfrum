@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "graphics", "text-processing"]
 # docs.rs renders the full API, including every optional-feature type.
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [[bin]]
 name = "pdfrum"

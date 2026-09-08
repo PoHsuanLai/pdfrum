@@ -18,12 +18,41 @@
 # crate visible at once.
 
 const REGISTRY = "https://crates.io/api/v1/crates"
+const USER_AGENT = "pdfrum-release (https://github.com/PoHsuanLai/pdfrum)"
 
 # Whether this exact name and version is already on crates.io.
+#
+# Only 200 means published and 404 means not. crates.io 403s unidentified
+# clients and 429s a burst; treating those as "not published" would
+# re-upload a crate that already landed, or spin the 300s wait and exit 1
+# on one that did.
 def published [name: string, version: string]: nothing -> bool {
     let url = $"($REGISTRY)/($name)/($version)"
-    let res = (http get --allow-errors --full $url | default {status: 0})
-    $res.status == 200
+    mut attempt = 0
+    loop {
+        let res = (try {
+            http get --headers [User-Agent $USER_AGENT] --max-time 30sec --allow-errors --full $url
+        } catch {
+            {status: 0}
+        } | default {status: 0})
+        match $res.status {
+            200 => { return true }
+            404 => { return false }
+            429 | 403 => {
+                if $attempt >= 6 {
+                    print --stderr $"error: crates.io returned ($res.status) for ($name) ($version)"
+                    print --stderr "       identify the client (User-Agent is set) or wait out the rate limit"
+                    exit 1
+                }
+                sleep 10sec
+                $attempt = $attempt + 1
+            }
+            _ => {
+                print --stderr $"error: unexpected HTTP ($res.status) from ($url)"
+                exit 1
+            }
+        }
+    }
 }
 
 def main [

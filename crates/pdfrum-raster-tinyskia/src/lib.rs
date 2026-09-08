@@ -9,6 +9,7 @@
 // removes the bulk of the cases, and the harness turns a residual drop into a
 // hard failure rather than a quiet drift.
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod convert;
 
@@ -19,8 +20,6 @@ use pdfrum_render::{
     RasterBackend, RasterImage, RenderDevice,
 };
 use tiny_skia::{Mask, Paint, PixmapPaint, PixmapRef, Shader, Transform};
-
-pub use convert::{to_blend_mode, to_color, to_path, to_transform};
 
 /// The flattening tolerance the stroke expansion in `stroke_path` uses, in
 /// device pixels.

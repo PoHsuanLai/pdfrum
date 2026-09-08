@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["pdf", "markdown", "text-extraction", "rag"]
 categories = ["text-processing", "parser-implementations"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

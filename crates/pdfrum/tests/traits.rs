@@ -139,12 +139,13 @@ fn builders_agree_with_struct_update() {
         .annotations(false)
         .smooth_paths(false)
         .build();
-    let written = RenderOptions {
-        transform: kurbo::Affine::scale(2.0),
-        color_mode: ColorMode::Gray,
-        annotations: false,
-        smooth_paths: false,
-        ..RenderOptions::default()
+    let written = {
+        let mut __o = RenderOptions::default();
+        __o.transform = kurbo::Affine::scale(2.0);
+        __o.color_mode = ColorMode::Gray;
+        __o.annotations = false;
+        __o.smooth_paths = false;
+        __o
     };
     assert_eq!(built, written);
 
@@ -160,26 +161,23 @@ fn builders_agree_with_struct_update() {
 fn edit_builders_agree_with_struct_update() {
     use pdfrum::{AttachmentOptions, SaveOptions, StampOptions, Update};
 
-    assert_eq!(
-        SaveOptions::builder().incremental().build(),
-        SaveOptions {
-            update: Update::Incremental,
-            ..SaveOptions::default()
-        }
-    );
-    assert_eq!(
-        StampOptions::builder().angle(45.0).margin(18.0).build(),
-        StampOptions {
-            angle: 45.0,
-            margin: 18.0,
-            ..StampOptions::default()
-        }
-    );
+    assert_eq!(SaveOptions::builder().incremental().build(), {
+        let mut __o = SaveOptions::default();
+        __o.update = Update::Incremental;
+        __o
+    });
+    assert_eq!(StampOptions::builder().angle(45.0).margin(18.0).build(), {
+        let mut __o = StampOptions::default();
+        __o.angle = 45.0;
+        __o.margin = 18.0;
+        __o
+    });
     assert_eq!(
         AttachmentOptions::builder().mime_type("text/csv").build(),
-        AttachmentOptions {
-            mime_type: Some("text/csv".into()),
-            ..AttachmentOptions::default()
+        {
+            let mut __o = AttachmentOptions::default();
+            __o.mime_type = Some("text/csv".into());
+            __o
         }
     );
 }

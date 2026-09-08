@@ -292,7 +292,7 @@ pub fn link_rows(doc: &Document, spec: Option<&str>) -> Result<Vec<LinkRow>> {
             let (kind, target_page, uri) = match link.target {
                 LinkTarget::Page(p) => ("page", Some(out::page_number(p)), None),
                 LinkTarget::Uri(u) => ("uri", None, Some(u)),
-                LinkTarget::Other => ("other", None, None),
+                _ => ("other", None, None),
             };
             rows.push(LinkRow {
                 page: number,

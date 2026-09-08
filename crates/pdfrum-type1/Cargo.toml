@@ -10,6 +10,10 @@ readme = "README.md"
 keywords = ["type1", "font", "charstring", "cff", "postscript"]
 categories = ["parser-implementations", "graphics"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true
 

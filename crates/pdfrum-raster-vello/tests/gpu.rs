@@ -22,6 +22,11 @@ fn gpu() -> Option<VelloBackend<'static>> {
     let found = try_real_gpu();
     if found.is_none() {
         println!("skipping: no hardware wgpu adapter on this machine");
+        assert!(
+            std::env::var_os("PDFRUM_REQUIRE_GPU").is_none(),
+            "PDFRUM_REQUIRE_GPU is set but no adapter was found; \
+             install a Vulkan ICD (lavapipe) and set PDFRUM_ALLOW_SOFTWARE_GPU=1"
+        );
     }
     found
 }

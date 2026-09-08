@@ -5,11 +5,14 @@
 
 #[allow(unused_imports)]
 pub(crate) use pdfrum_object::names::{
-    AA, ACRO_FORM, ANNOTS, AP, AS, BBOX, BC, BG, BORDER, C, CA, CONTENTS, COUNT, CROP_BOX, DA,
-    DESTS, DV, EMBEDDED_FILES, EXT_G_STATE, F, FF, FIRST, FONT, FT, I, ID, INK_LIST, IX,
-    JAVA_SCRIPT, K, KIDS, L, LENGTH, MATRIX, MEDIA_BOX, METADATA, NAMES, NORMAL, OUTLINES, P, PAGE,
-    PAGE_LABELS, PARENT, Q, R, RECT, RESOURCES, RI, ROTATE, S, SUBTYPE, T, TITLE, TU, TYPE, V,
-    VIEWER_PREFERENCES, W, XML, XOBJECT,
+    AA, ACRO_FORM, AIS, ANNOTS, AP, AS, BASE_ENCODING, BASE_FONT, BBOX, BC, BG, BM, BORDER, C, CA,
+    CA_LOWER, COLOR_SPACE, CONTENTS, COUNT, CROP_BOX, D, DA, DESTS, DIFFERENCES, DV, E,
+    EMBEDDED_FILES, ENCODING, ENCRYPT, EXT_G_STATE, F, FF, FILTER, FIRST, FLAGS, FONT,
+    FONT_DESCRIPTOR, FORM, FORM_TYPE, FT, H, I, IC, ID, INK_LIST, IX, JAVA_SCRIPT, K, KIDS, L,
+    LENGTH, MATRIX, MEDIA_BOX, METADATA, MULTIPLY, N, NAMES, NORMAL, OUTLINES, P, PAGE,
+    PAGE_LABELS, PAGES, PARENT, Q, QUAD_POINTS, R, RECT, RESOURCES, RI, ROTATE, S, SIZE, SMASK,
+    SUBTYPE, T, TITLE, TRUE_TYPE, TU, TYPE, TYPE1, V, VIEWER_PREFERENCES, W, WIN_ANSI_ENCODING,
+    XML, XOBJECT,
 };
 
 pdfrum_object::names! {
@@ -31,9 +34,6 @@ pdfrum_object::names! {
     LIMITS = "Limits";
     /// A number tree leaf's key/value pairs (`/Nums`).
     NUMS = "Nums";
-    /// A destination indirection inside a dictionary-valued name-tree entry
-    /// (`/D`), also an action's destination.
-    D = "D";
 
     // ---- Actions ----
 
@@ -44,13 +44,6 @@ pdfrum_object::names! {
     URI = "URI";
     /// The base against which a relative `/URI` resolves (`/Base`).
     BASE = "Base";
-    /// Whether a Hide action hides or shows (`/H`), also a widget's
-    /// highlighting mode.
-    H = "H";
-    /// A named action's name (`/N`), also the normal appearance stream.
-    N = "N";
-    /// A submit-form or reset-form action's flag word (`/Flags`).
-    FLAGS = "Flags";
     /// The fields a form action applies to (`/Fields`).
     FIELDS = "Fields";
     /// The order a recalculation visits fields in (`/AcroForm /CO`).
@@ -115,8 +108,6 @@ pdfrum_object::names! {
     ALT = "Alt";
     /// The exact text a structure element replaces (`/ActualText`).
     ACTUAL_TEXT = "ActualText";
-    /// An abbreviation's expansion (`/E`).
-    E = "E";
     /// A natural-language identifier (`/Lang`).
     LANG = "Lang";
 
@@ -141,10 +132,6 @@ pdfrum_object::names! {
 
     // ---- Annotations ----
 
-    /// A text markup annotation's quadrilaterals (`/QuadPoints`).
-    QUAD_POINTS = "QuadPoints";
-    /// An annotation's interior colour (`/IC`).
-    IC = "IC";
     /// A border style dictionary (`/BS`).
     BS = "BS";
     /// The marker key PDFium writes on an annotation whose appearance it
@@ -157,39 +144,9 @@ pdfrum_object::names! {
 
     // ---- Appearance streams and their resources ----
 
-    /// The form XObject subtype (`/Form`).
-    FORM = "Form";
-    /// The form XObject generation number (`/FormType`).
-    FORM_TYPE = "FormType";
     /// The single graphics state entry every generated appearance uses
     /// (`/GS`).
     GS = "GS";
-    /// Stroking alpha in a graphics state dictionary (`/CA`); the fill alpha
-    /// is the lowercase `/ca`.
-    CA_LOWER = "ca";
-    /// Whether alpha is a shape or an opacity (`/AIS`).
-    AIS = "AIS";
-    /// The blend mode (`/BM`).
-    BM = "BM";
-    /// The one blend mode a generated appearance ever asks for beyond normal
-    /// (`/Multiply`), used by the highlight generator so the text below shows
-    /// through.
-    MULTIPLY_BLEND = "Multiply";
-    /// A Type 1 font subtype (`/Type1`).
-    TYPE1 = "Type1";
-    /// A TrueType font subtype (`/TrueType`), which is what a face added for
-    /// a charset the `/DA` font cannot write is written as.
-    TRUE_TYPE = "TrueType";
-    /// A simple font's encoding (`/Encoding`).
-    ENCODING = "Encoding";
-    /// The encoding a `/Differences` array modifies (`/BaseEncoding`).
-    BASE_ENCODING = "BaseEncoding";
-    /// Per-code overrides on the base encoding (`/Differences`).
-    DIFFERENCES = "Differences";
-    /// The PostScript name of a font (`/BaseFont`).
-    BASE_FONT = "BaseFont";
-    /// A font's descriptor (`/FontDescriptor`).
-    FONT_DESCRIPTOR = "FontDescriptor";
 
     // ---- Form fields ----
 
@@ -213,9 +170,6 @@ pdfrum_object::names! {
     IF = "IF";
     /// How an icon scales (`/SW`).
     SW = "SW";
-    /// Whether an icon scales proportionally (`/S`), also a border style —
-    /// the meaning follows the dictionary.
-    S_ICON = "S";
     /// Whether an icon's bounding box is fitted (`/FB`).
     FB = "FB";
     /// A caption's position relative to its icon (`/TP`).

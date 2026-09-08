@@ -10,20 +10,21 @@ use pdfrum_object::{
 
 /// What an attachment carries besides its name and bytes.
 ///
-/// A config struct with [`Default`], filled in with struct-update syntax;
-/// every field is optional and an absent one writes no key.
+/// A config struct with [`Default`]. `#[non_exhaustive]` so a field added
+/// later is not a major break; fill one in with [`AttachmentOptions::builder`].
+/// Every field is optional and an absent one writes no key.
 ///
 /// ```
 /// use pdfrum::AttachmentOptions;
 ///
-/// let options = AttachmentOptions {
-///     description: Some("The source data".into()),
-///     mime_type: Some("text/csv".into()),
-///     ..AttachmentOptions::default()
-/// };
+/// let options = AttachmentOptions::builder()
+///     .description("The source data")
+///     .mime_type("text/csv")
+///     .build();
 /// assert!(options.modified.is_none());
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct AttachmentOptions {
     /// The file specification's `/Desc`, the text a viewer shows beside the
     /// name. Read back by [`Attachment::description`](crate::Attachment::description).
@@ -41,9 +42,10 @@ pub struct AttachmentOptions {
 
 /// Builds an [`AttachmentOptions`] a setting at a time.
 ///
-/// Sugar over the struct-update syntax, which still works. Each method takes
-/// an `impl Into<String>`, so the `Some(…into())` the fields need is written
-/// once here rather than at every call site.
+/// The way to change one field from outside this crate: the type is
+/// `#[non_exhaustive]`, so struct-update syntax is a same-crate spelling.
+/// Each method takes an `impl Into<String>`, so the `Some(…into())` the
+/// fields need is written once here rather than at every call site.
 ///
 /// ```
 /// use pdfrum::AttachmentOptions;
@@ -349,10 +351,7 @@ impl DocEdit<'_> {
     /// edit.add_attachment(
     ///     "notes.txt",
     ///     b"Read me",
-    ///     &AttachmentOptions {
-    ///         mime_type: Some("text/plain".into()),
-    ///         ..AttachmentOptions::default()
-    ///     },
+    ///     &AttachmentOptions::builder().mime_type("text/plain").build(),
     /// )?;
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;

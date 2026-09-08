@@ -427,6 +427,16 @@ pub struct Canvas<'a, 'b> {
     failed: Option<Error>,
 }
 
+impl std::fmt::Debug for Canvas<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Canvas")
+            .field("size", &self.size)
+            .field("surface", &self.surface)
+            .field("failed", &self.failed)
+            .finish_non_exhaustive()
+    }
+}
+
 /// What a canvas's operators are being written into.
 ///
 /// An enum rather than an `Option<PageIndex>`, because the two destinations

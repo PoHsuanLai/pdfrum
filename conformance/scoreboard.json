@@ -1,14 +1,20 @@
 {
-  "generated_at": "2026-09-06T14:26:52Z",
+  "generated_at": "2026-09-08T16:22:27Z",
+  "tool": {
+    "path": "/mnt/data2/r13921098/cargo-target/dawai/release/pdfrum-tool",
+    "modified": "2026-09-08T16:19:18Z",
+    "size": 141234112
+  },
   "totals": {
-    "files": 1759,
-    "pass": 1675,
-    "fail": 84,
+    "files": 1749,
+    "pass": 1679,
+    "diverged": 10,
+    "fail": 70,
     "by_tag": {
       "form-events": 8,
       "js-transcript": 7,
       "page-count": 2,
-      "pixel-fail": 28,
+      "pixel-fail": 24,
       "tierA-mismatch": 46
     },
     "text": {
@@ -10976,9 +10982,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999250,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 187,
+        "max_channel_diff": 7,
         "pages": 1
       },
       "notes": ""
@@ -11006,9 +11012,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999211,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 159,
+        "max_channel_diff": 6,
         "pages": 1
       },
       "notes": ""
@@ -11036,9 +11042,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999250,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 187,
+        "max_channel_diff": 7,
         "pages": 1
       },
       "notes": ""
@@ -11096,9 +11102,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999210,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 190,
+        "max_channel_diff": 7,
         "pages": 1
       },
       "notes": ""
@@ -11126,9 +11132,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999190,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 190,
+        "max_channel_diff": 5,
         "pages": 1
       },
       "notes": ""
@@ -13323,9 +13329,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.993782,
+        "ssim": 0.998849,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 131,
         "pages": 1
       },
       "notes": ""
@@ -13599,12 +13605,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.932492,
+        "ssim": 0.989261,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 99,
         "pages": 1
       },
-      "notes": "ssim 0.932492 below floor 0.990000"
+      "notes": "ssim 0.989261 below floor 0.990000"
     },
     {
       "path": "corpus/fx/shading/2_shading_type1.pdf",
@@ -13839,9 +13845,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999240,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 204,
+        "max_channel_diff": 3,
         "pages": 1
       },
       "notes": ""
@@ -14443,9 +14449,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998934,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 247,
+        "max_channel_diff": 14,
         "pages": 1
       },
       "notes": ""
@@ -29890,7 +29896,7 @@
     },
     {
       "path": "resources/bug_921.in",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "tierA-mismatch"
       ],
@@ -29920,11 +29926,11 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": "dumps differ: input.pdf.0.txt; diverges deliberately: the empty-box gate drops real letters here, not whitespace, so the oracle's text dump loses running prose the page draws"
     },
     {
       "path": "resources/bug_921.pdf",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "tierA-mismatch"
       ],
@@ -29954,7 +29960,7 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": "dumps differ: input.pdf.0.txt; diverges deliberately: the empty-box gate drops real letters here, not whitespace, so the oracle's text dump loses running prose the page draws"
     },
     {
       "path": "resources/bug_925981.in",
@@ -33043,7 +33049,7 @@
     },
     {
       "path": "resources/javascript/array_buffer.in#js-transcript",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "js-transcript"
       ],
@@ -33060,7 +33066,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 5: expected \"Alert: Caught error RangeError: Array buffer allocation failed\", got \"Alert: Caught error RangeError: cannot allocate a buffer that exceeds the maximum buffer size\""
+      "notes": "line 5: expected \"Alert: Caught error RangeError: Array buffer allocation failed\", got \"Alert: Caught error RangeError: cannot allocate a buffer that exceeds the maximum buffer size\"; diverges deliberately: the golden pins V8's `Array buffer allocation failed` wording for an allocation both engines refuse"
     },
     {
       "path": "resources/javascript/array_buffer.pdf",
@@ -35338,7 +35344,7 @@
     },
     {
       "path": "resources/javascript/foreground_task.in#js-transcript",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "js-transcript"
       ],
@@ -35355,7 +35361,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Posted\", got \"Alert: Error: ReferenceError: gc is not defined\""
+      "notes": "line 1: expected \"Alert: Posted\", got \"Alert: Error: ReferenceError: gc is not defined\"; diverges deliberately: the fixture calls `gc`, a V8 debug builtin that is not a language feature and reaches nothing the PDF scripting model defines"
     },
     {
       "path": "resources/javascript/foreground_task.pdf",
@@ -36386,7 +36392,7 @@
     },
     {
       "path": "resources/javascript/v8_features.in#js-transcript",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "js-transcript"
       ],
@@ -36403,7 +36409,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: PASS: typeof gc = function\", got \"Alert: FAIL: typeof gc = undefined, expected = function\""
+      "notes": "line 1: expected \"Alert: PASS: typeof gc = function\", got \"Alert: FAIL: typeof gc = undefined, expected = function\"; diverges deliberately: the golden asserts `typeof gc = function`, which holds only inside V8"
     },
     {
       "path": "resources/javascript/v8_features.pdf",
@@ -41266,10 +41272,8 @@
     },
     {
       "path": "resources/pixel/bug_1772.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -41289,19 +41293,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.870977,
+        "ssim": 0.999696,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 21,
         "pages": 1
       },
-      "notes": "ssim 0.870977 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1772.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -41321,12 +41323,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.870977,
+        "ssim": 0.999696,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 21,
         "pages": 1
       },
-      "notes": "ssim 0.870977 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1774.in",
@@ -44698,7 +44700,7 @@
     },
     {
       "path": "resources/pixel/bug_665467.in",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "pixel-fail",
         "tierA-mismatch"
@@ -44729,11 +44731,11 @@
         "max_channel_diff": 245,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt; ssim 0.969283 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.txt; ssim 0.969283 below floor 0.990000; diverges deliberately: the empty-box gate drops the page's text, which moves both the text dump and the glyphs the render puts down"
     },
     {
       "path": "resources/pixel/bug_665467.pdf",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "pixel-fail",
         "tierA-mismatch"
@@ -44764,7 +44766,7 @@
         "max_channel_diff": 245,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt; ssim 0.969283 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.txt; ssim 0.969283 below floor 0.990000; diverges deliberately: the empty-box gate drops the page's text, which moves both the text dump and the glyphs the render puts down"
     },
     {
       "path": "resources/pixel/bug_71.in",
@@ -48498,7 +48500,7 @@
     },
     {
       "path": "resources/pixel/same_color_knockout_fill.in",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "pixel-fail"
       ],
@@ -48526,11 +48528,11 @@
         "max_channel_diff": 64,
         "pages": 1
       },
-      "notes": "ssim 0.951941 below floor 0.990000"
+      "notes": "ssim 0.951941 below floor 0.990000; diverges deliberately: the oracle renders the knockout group as an ordinary transparency group, so its fills accumulate where §11.6.6 says the later one replaces the earlier"
     },
     {
       "path": "resources/pixel/same_color_knockout_fill.pdf",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "pixel-fail"
       ],
@@ -48558,7 +48560,7 @@
         "max_channel_diff": 64,
         "pages": 1
       },
-      "notes": "ssim 0.951941 below floor 0.990000"
+      "notes": "ssim 0.951941 below floor 0.990000; diverges deliberately: the oracle renders the knockout group as an ordinary transparency group, so its fills accumulate where §11.6.6 says the later one replaces the earlier"
     },
     {
       "path": "resources/pixel/scrollable_widgets1.in",
@@ -52482,10 +52484,8 @@
     },
     {
       "path": "resources/vertical_text.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -52505,19 +52505,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.922381,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 249,
+        "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "ssim 0.922381 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/vertical_text.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -52537,12 +52535,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.922381,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 249,
+        "max_channel_diff": 6,
         "pages": 1
       },
-      "notes": "ssim 0.922381 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/viewer_pref_types.in",
@@ -52794,7 +52792,7 @@
     },
     {
       "path": "resources/whitespace.pdf",
-      "status": "fail",
+      "status": "diverged",
       "tags": [
         "tierA-mismatch"
       ],
@@ -52824,7 +52822,7 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt"
+      "notes": "dumps differ: input.pdf.0.txt; diverges deliberately: the page's only text object draws a space, and the oracle's empty-box gate discards it, so `--txt` comes back empty where the page plainly draws one"
     },
     {
       "path": "resources/zero_length_stream.in",

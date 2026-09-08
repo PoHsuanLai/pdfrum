@@ -112,13 +112,11 @@ pub fn process_file(
         // `/AA` scripts hang off. A file the facade refuses — which cannot
         // happen when the parser accepted it, since both call the same loader
         // — leaves the document-level scripts to run on their own.
-        let facade = pdfrum::Document::from_bytes_with(
-            Arc::clone(&bytes),
-            &pdfrum::OpenOptions {
-                password: load.password.clone(),
-                ..pdfrum::OpenOptions::default()
-            },
-        )
+        let facade = pdfrum::Document::from_bytes_with(Arc::clone(&bytes), &{
+            let mut options = pdfrum::OpenOptions::default();
+            options.password.clone_from(&load.password);
+            options
+        })
         .ok();
         crate::jstranscript::write_transcript(
             &doc,
@@ -155,13 +153,11 @@ pub fn process_file(
     // session absent, and the events then parse and count exactly as before.
     let facade = (!parsed_events.is_empty())
         .then(|| {
-            pdfrum::Document::from_bytes_with(
-                Arc::clone(&bytes),
-                &pdfrum::OpenOptions {
-                    password: load.password.clone(),
-                    ..pdfrum::OpenOptions::default()
-                },
-            )
+            pdfrum::Document::from_bytes_with(Arc::clone(&bytes), &{
+                let mut options = pdfrum::OpenOptions::default();
+                options.password.clone_from(&load.password);
+                options
+            })
             .ok()
         })
         .flatten();

@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 // The crate docs link to `Form`, `PageEdit`, `Document::save` and their
 // kin, which only exist with `forms` and `edit` on. A headless build
 // (`--no-default-features`) still has the prose; the links become plain
@@ -327,15 +328,14 @@ pub use pdfrum_text::Error as TextError;
 /// let black = Argb { a: 255, r: 0, g: 0, b: 0 };
 /// let white = Argb { a: 255, r: 255, g: 255, b: 255 };
 ///
-/// let options = RenderOptions {
-///     color_mode: ColorMode::Forced(ColorScheme {
+/// let options = RenderOptions::builder()
+///     .color_mode(ColorMode::Forced(ColorScheme {
 ///         path_fill: black,
 ///         path_stroke: black,
 ///         text_fill: black,
 ///         text_stroke: white,
-///     }),
-///     ..RenderOptions::default()
-/// };
+///     }))
+///     .build();
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 /// let pixmap = doc.page(0)?.render(&VelloCpuBackend::new(), &options)?;
