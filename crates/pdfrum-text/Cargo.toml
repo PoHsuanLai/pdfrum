@@ -6,7 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
 keywords = ["pdf", "text", "extraction", "search"]
 categories = ["text-processing", "parser-implementations"]
 # The generated `unicode.bin` is committed and shipped — `src/unicode.rs`

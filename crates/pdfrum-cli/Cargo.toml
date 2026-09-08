@@ -6,7 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
 keywords = ["pdf", "cli", "render", "text-extraction"]
 categories = ["command-line-utilities", "graphics", "text-processing"]
 
