@@ -1,6 +1,8 @@
 # Own workspace: two peers wrap C and must not enter the library tree.
 # Do not delete `[workspace]`, and do not add this dir to root `members`.
-# pdfrum is default features (`cargo add pdfrum`). C engines: `--features c-engines`.
+# The `pdfrum` row is default features (`cargo add pdfrum`). Extra CPU
+# rasterizers (`pdfrum-agg`, `pdfrum-tinyskia`) are always compiled. GPU
+# (`pdfrum-vello-gpu`) is `--features gpu`, same shape as `--features c-engines`.
 [workspace]
 
 [package]
@@ -44,10 +46,16 @@ pdf_oxide = ["dep:pdf_oxide"]
 pdfium-render = ["dep:pdfium-render"]
 mupdf = ["dep:mupdf"]
 c-engines = ["pdfium-render", "mupdf"]
+# wgpu / vello. Off by default: every compare child would otherwise compile
+# pipelines, and the default `cargo build --release` would pull naga.
+gpu = ["dep:pdfrum-raster-vello", "pdfrum/vello-gpu"]
 
 [dependencies]
-# The subject. Default features, no more and no less than `cargo add pdfrum`.
-pdfrum = { path = "../../crates/pdfrum" }
+# The `pdfrum` row is still `cargo add pdfrum` — VelloCpuBackend. `tiny-skia`
+# and `agg` compile the extra CPU rasterizer rows. `vello-gpu` is behind `gpu`.
+pdfrum = { path = "../../crates/pdfrum", features = ["tiny-skia", "agg"] }
+# Headless GPU constructor. Optional: not re-exported from the facade.
+pdfrum-raster-vello = { path = "../../crates/pdfrum-raster-vello", optional = true }
 
 # Harness plumbing — the same pins the root workspace uses, so the lock here agrees with the one there.
 anyhow = "=1.0.104"

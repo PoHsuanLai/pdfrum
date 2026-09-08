@@ -15,7 +15,16 @@ use crate::engines::{self, Sharing};
 use crate::model::Ctx;
 
 /// The engines that render, in table order.
-pub const ENGINES: &[&str] = &["pdfrum", "hayro", "pdf_oxide", "pdfium-render", "mupdf"];
+pub const ENGINES: &[&str] = &[
+    "pdfrum",
+    "pdfrum-agg",
+    "pdfrum-tinyskia",
+    "pdfrum-vello-gpu",
+    "hayro",
+    "pdf_oxide",
+    "pdfium-render",
+    "mupdf",
+];
 
 /// What became of one measurement — and, when it succeeded, which
 /// parallelism model produced it. The JSON spellings are the ones run 1
@@ -129,7 +138,11 @@ pub fn run(
                 Sharing::Document | Sharing::DisplayLists => None,
             };
             for &threads in thread_counts {
-                let (status, detail, pages, secs) = if info.compiled {
+                let (status, detail, pages, secs) = if !info.compiled {
+                    (Status::NotRun, Some("not compiled in".to_owned()), 0, 0.0)
+                } else if let Some(why) = engines::unavailable_reason(engine) {
+                    (Status::NotRun, Some(why), 0, 0.0)
+                } else {
                     match render_all(engine, file, ctx, sharing.threads(threads)) {
                         Ok((pages, elapsed)) => (
                             Status::of(sharing),
@@ -139,8 +152,6 @@ pub fn run(
                         ),
                         Err(err) => (Status::Error, Some(format!("{err:#}")), 0, 0.0),
                     }
-                } else {
-                    (Status::NotRun, Some("not compiled in".to_owned()), 0, 0.0)
                 };
                 rows.push(ThroughputRow {
                     file: relative.clone(),
