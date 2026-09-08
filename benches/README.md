@@ -6,9 +6,11 @@ Three jobs.
 |---|---|
 | Is this commit slower? | Criterion groups on the crate they measure. `ratchet` vs `baseline.json`. |
 | Where does the time go? | `profile` binary (`scripts/profile.nu`). |
-| How do we compare to peers? | `compare/` — own workspace. Engines, tables, numbers: [`docs/benchmarks/`](../docs/benchmarks/). |
+| How do we compare to peers? | `compare/` — own workspace. Engines (including pdfrum's CPU rasterizers; GPU is `--features gpu`), tables, numbers: [`docs/benchmarks/`](../docs/benchmarks/). |
 
 The 44 PDFs are `corpus/`. One list (`pdfrum-corpus`) so every number is the same files. `fixtures/` is a smaller set, not the ratchet.
+
+These are three questions, not one tool. The ratchet is in-process Criterion with noise bands; profile is one file under `perf`; compare is child processes against an oracle and against peers. Collapsing them would make each worse. Backend vs peer belongs in compare, which is why `pdfrum-agg` / `pdfrum-tinyskia` / `pdfrum-vello-gpu` live there.
 
 Criterion groups live with the code:
 

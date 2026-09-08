@@ -1,7 +1,9 @@
 # Compare
 
 pdfrum (`cargo add pdfrum`, default features) against other Rust PDF
-crates, on the same 44 files, scored against `pdfium_test`.
+crates, on the same 44 files, scored against `pdfium_test`. Extra pdfrum
+rows are the same facade with a different rasterizer — speed and SSIM sit
+in the same tables.
 
 Not the ratchet. The ratchet asks “did this commit get slower?” Compare
 asks “where do we stand?” Harness: [`benches/compare/`](../../benches/compare/).
@@ -10,7 +12,10 @@ asks “where do we stand?” Harness: [`benches/compare/`](../../benches/compar
 
 | engine | C in the build | ops |
 |---|---|---|
-| **pdfrum** | no | open, render, text |
+| **pdfrum** | no | open, render, text (`VelloCpuBackend`, default) |
+| pdfrum-agg | no | render (`AggBackend`) |
+| pdfrum-tinyskia | no | render (`TinySkiaBackend`) |
+| pdfrum-vello-gpu | no | render (`VelloGpuBackend`; `--features gpu`, skipped if no adapter) |
 | hayro | no | open, render |
 | hayro-interpret | no | text (harness-assembled from `draw_glyph`) |
 | pdf (`pdf-rs`) | no | open |
@@ -20,8 +25,14 @@ asks “where do we stand?” Harness: [`benches/compare/`](../../benches/compar
 | pdfium-render | yes (`libpdfium.so`) | open, render, text |
 | mupdf | yes (vendored C) | open, render, text |
 
+`pdfrum` is `cargo add pdfrum`. `pdfrum-agg` and `pdfrum-tinyskia` compile
+with the default compare build; they do not change the default engine's
+code path. Open and text do not go through a rasterizer, so they stay on
+`pdfrum`. The GPU row needs `--features gpu` (wgpu) and is "not run" when
+no adapter is present (`PDFRUM_ALLOW_SOFTWARE_GPU=1` accepts lavapipe).
+
 Pure-Rust peers are the default feature set. C engines need
-`--features c-engines`.
+`--features c-engines`. GPU needs `--features gpu`.
 
 ## Operations
 
@@ -76,8 +87,9 @@ warm. Time is wall. `RAYON_NUM_THREADS=1` except throughput.
 
 ```sh
 cd benches/compare
-cargo build --release                       # pdfrum + pure-Rust peers
+cargo build --release                       # pdfrum + CPU backends + pure-Rust peers
 cargo build --release --features c-engines  # + pdfium-render, mupdf
+cargo build --release --features gpu        # + pdfrum-vello-gpu (wgpu)
 cargo run --release -- run --label corpus44 --corpus ../../benches/corpus \
     --checkout /path/to/pdfium-c++ --pdfium-lib /path/to/libpdfium.so \
     --out ../../docs/benchmarks/data/<date>-<commit>-corpus44.json
