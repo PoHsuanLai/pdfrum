@@ -3,20 +3,15 @@
   <img src="https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/banner-light.svg" alt="pdfrum" width="100%">
 </picture>
 
-**A composable PDF library and CLI built in Rust.**
+**A pure-Rust, composable PDF library.**
 
 [![crates.io](https://img.shields.io/crates/v/pdfrum.svg)](https://crates.io/crates/pdfrum)
 [![docs.rs](https://docs.rs/pdfrum/badge.svg)](https://docs.rs/pdfrum)
 [![CI](https://github.com/PoHsuanLai/pdfrum/actions/workflows/ci.yml/badge.svg)](https://github.com/PoHsuanLai/pdfrum/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
 
-pdfrum is a modern, thread-safe PDF library — modular stages you compose,
-CPU or GPU backends, no `unsafe` — 1,679 of 1,759 files on a PDFium suite
-pass outright, at a median page SSIM of 0.99999.
-For your UI, RAG pipeline, or any app that has to open a PDF file.
-
-pdfrum is an independent project, not affiliated with or derived from
-Google's PDFium, which it uses as a read-only conformance oracle.
+pdfrum is an independent project, not affiliated with Google's PDFium,
+which it uses as a read-only conformance oracle.
 
 ```toml
 pdfrum = "0.1"
@@ -158,7 +153,8 @@ Columns are what the benchmark harness exercises on the same 44 files;
 | [`pdf-extract`](https://crates.io/crates/pdf-extract) | no | MIT | no | yes | no |
 | [`pdf-rs`](https://crates.io/crates/pdf) | no | MIT | no | no | yes |
 
-Dedicated benchmarks against these crates live in
+1,679 of 1,759 files on a PDFium suite pass, at a median page SSIM of
+0.99999. Dedicated benchmarks against these crates live in
 [`docs/benchmarks/`](docs/benchmarks/).
 
 ## Crate map
