@@ -10,7 +10,7 @@ pub fn pdfrum_edit::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum
 pub fn pdfrum_edit::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
 pub fn pdfrum_edit::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
 pub fn pdfrum_edit::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<usize, usize>)
-pub enum pdfrum_edit::Error
+#[non_exhaustive] pub enum pdfrum_edit::Error
 pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange

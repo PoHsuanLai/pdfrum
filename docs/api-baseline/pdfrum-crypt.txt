@@ -7,7 +7,7 @@ pub enum pdfrum_crypt::CryptClass
 pub pdfrum_crypt::CryptClass::Embedded
 pub pdfrum_crypt::CryptClass::Stream
 pub pdfrum_crypt::CryptClass::String
-pub enum pdfrum_crypt::Error
+#[non_exhaustive] pub enum pdfrum_crypt::Error
 pub pdfrum_crypt::Error::CipherKeyLength
 pub pdfrum_crypt::Error::CipherKeyLength::cipher: &'static str
 pub pdfrum_crypt::Error::CipherKeyLength::len: usize
