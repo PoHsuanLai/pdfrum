@@ -1033,16 +1033,42 @@ mod tests {
         }
     }
 
+    /// Writes a runnable stub under `dir`: it accepts any arguments, prints
+    /// nothing and exits zero.
+    ///
+    /// Built here rather than borrowed from the system so the test asserts the
+    /// same thing on every platform. A system `true` is not portable — the
+    /// path differs, and where it is absent the probe answers "not found",
+    /// which is a different rejection than the one under test.
+    fn silent_stub(dir: &Path) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        if cfg!(windows) {
+            let path = dir.join("stub.bat");
+            std::fs::write(&path, "@echo off\r\nexit /b 0\r\n").unwrap();
+            path
+        } else {
+            let path = dir.join("stub.sh");
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            path
+        }
+    }
+
     #[test]
     fn a_binary_that_answers_nothing_useful_is_unsupported() {
-        // `true` runs, exits zero and prints nothing -- the shape of a stub.
-        // The probe must reject it on what it did not say, not on what it did:
-        // a real tool legitimately reports flags it has not implemented, and
-        // reading that as a stub marker would tag a working tool's whole
-        // corpus `unsupported-tool`.
+        // A stub runs, exits zero and prints nothing. The probe must reject it
+        // on what it did not say, not on what it did: a real tool
+        // legitimately reports flags it has not implemented, and reading that
+        // as a stub marker would tag a working tool's whole corpus
+        // `unsupported-tool`.
+        let (root, _store) = temp_store("silent-stub");
         let state = probe_tool(&ToolPaths {
-            binary: PathBuf::from("/bin/true"),
-            font_dir: PathBuf::from("/fonts"),
+            binary: silent_stub(&root),
+            font_dir: root.join("fonts"),
         });
         match state {
             ToolState::Unsupported(reason) => {
@@ -1050,6 +1076,7 @@ mod tests {
             }
             ToolState::Ready => panic!("a silent binary must not probe as ready"),
         }
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

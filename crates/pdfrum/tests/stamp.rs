@@ -428,8 +428,10 @@ fn oracle_md5_and_text(bin: &Path, dir: &Path, name: &str) -> (String, String) {
         .to_owned();
     let raw = std::fs::read(dir.join(format!("{name}.0.txt"))).unwrap();
     let text: String = raw
-        .chunks_exact(4)
-        .map(|unit| u32::from_le_bytes([unit[0], unit[1], unit[2], unit[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&unit| u32::from_le_bytes(unit))
         .map(|cp| char::from_u32(cp).unwrap_or('\u{FFFD}'))
         .collect();
     (md5, text)

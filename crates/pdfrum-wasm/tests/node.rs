@@ -98,7 +98,9 @@ fn renders_a_page_with_ink_on_it() {
     // drew nothing at all, which is the failure this test exists to catch.
     let inked = rendered
         .data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .any(|pixel| pixel[0] < 250 || pixel[1] < 250 || pixel[2] < 250);
     assert!(inked, "the rendered page has a non-white pixel");
 }

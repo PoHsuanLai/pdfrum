@@ -116,18 +116,19 @@ fn split_blocks(data: &[u8]) -> Result<Vec<cipher::Block<Aes128>>, CipherError> 
     if !data.len().is_multiple_of(BLOCK) {
         return Err(CipherError::NotBlockAligned(data.len()));
     }
-    // `chunks_exact` over a block-aligned buffer yields whole blocks, so the
-    // conversion never drops one.
+    // A block-aligned buffer splits into whole blocks, so the remainder the
+    // split also yields is empty and no block is dropped.
     Ok(data
-        .chunks_exact(BLOCK)
-        .filter_map(|c| <[u8; BLOCK]>::try_from(c).ok())
-        .map(Into::into)
+        .as_chunks::<BLOCK>()
+        .0
+        .iter()
+        .map(|block| (*block).into())
         .collect())
 }
 
 /// Write processed blocks back over the buffer they came from.
 fn join_blocks(blocks: &[cipher::Block<Aes128>], data: &mut [u8]) {
-    for (chunk, block) in data.chunks_exact_mut(BLOCK).zip(blocks) {
+    for (chunk, block) in data.as_chunks_mut::<BLOCK>().0.iter_mut().zip(blocks) {
         chunk.copy_from_slice(block);
     }
 }

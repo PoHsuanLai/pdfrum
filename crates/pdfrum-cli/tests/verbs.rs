@@ -771,8 +771,10 @@ fn stamp_image_draws_the_picture_on_every_page_at_the_width_asked_for() {
 fn oracle_text(dir: &Path, name: &str) -> std::io::Result<String> {
     let raw = std::fs::read(dir.join(format!("{name}.0.txt")))?;
     Ok(raw
-        .chunks_exact(4)
-        .map(|unit| u32::from_le_bytes([unit[0], unit[1], unit[2], unit[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&unit| u32::from_le_bytes(unit))
         .map(|cp| char::from_u32(cp).unwrap_or('\u{FFFD}'))
         .collect())
 }

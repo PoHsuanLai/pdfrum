@@ -228,8 +228,8 @@ pub fn to_pixmap(
         else {
             continue;
         };
-        for (slot, px) in dest.chunks_exact_mut(4).zip(row.pixels()) {
-            slot.copy_from_slice(&px.0);
+        for (slot, px) in dest.as_chunks_mut::<4>().0.iter_mut().zip(row.pixels()) {
+            *slot = px.0;
         }
     }
     out
@@ -448,8 +448,14 @@ pub fn mask_pixmap(plane: &[u8], width: u32, height: u32) -> Pixmap {
     if plane.len() != (width as usize).saturating_mul(height as usize) {
         return out;
     }
-    for (slot, &a) in out.data_mut().chunks_exact_mut(4).zip(plane.iter()) {
-        slot.copy_from_slice(&[a, a, a, a]);
+    for (slot, &a) in out
+        .data_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(plane.iter())
+    {
+        *slot = [a, a, a, a];
     }
     out
 }

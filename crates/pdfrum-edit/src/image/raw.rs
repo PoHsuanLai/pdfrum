@@ -149,9 +149,9 @@ fn split_alpha(pixels: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let count = pixels.len() / 4;
     let mut colour = Vec::with_capacity(count * 3);
     let mut alpha = Vec::with_capacity(count);
-    for px in pixels.chunks_exact(4) {
-        colour.extend_from_slice(px.get(..3).unwrap_or_default());
-        alpha.push(px.get(3).copied().unwrap_or(0xFF));
+    for [red, green, blue, opacity] in pixels.as_chunks::<4>().0 {
+        colour.extend_from_slice(&[*red, *green, *blue]);
+        alpha.push(*opacity);
     }
     (colour, alpha)
 }

@@ -572,6 +572,72 @@ pub fn place_glyphs(
     out
 }
 
+/// Where and how one glyph of a run is placed, the parts of
+/// [`place_glyphs_into`]'s state a single glyph needs.
+///
+/// `pen` is in the text space the advances accumulate in; `vertical` and
+/// `spacing` are the font's writing mode and whether it applies the
+/// `/Widths`-versus-face glyph squeeze.
+struct Placement {
+    pen: kurbo::Point,
+    size: f32,
+    text_to_device: Affine,
+    vertical: bool,
+    spacing: bool,
+}
+
+/// One decoded glyph, placed against the pen.
+///
+/// Both per-glyph corrections move and reshape the glyph *within* its em box
+/// without touching the advance, so they apply to this glyph's origin and
+/// matrix and the caller's pen walks on as if neither were there.
+fn place_one_glyph(
+    outline: std::sync::Arc<BezPath>,
+    key: GlyphKey,
+    font: &Font,
+    item: &CharItem,
+    gid: pdfrum_font::Gid,
+    at: &Placement,
+) -> PlacedGlyph {
+    let japan1 = japan1_adjust(font, item, at.size);
+    // The position vector `v` carries the glyph from its horizontal origin to
+    // its vertical one, so it is *subtracted* to place the outline against the
+    // vertical pen (ISO 32000-1 §9.7.4.3). It moves the glyph alone: the pen
+    // has already taken `w1` and walks on regardless.
+    let vert_origin = if at.vertical {
+        let (vx, vy) = font.vert_origin(item.code).unwrap_or((0.0, 880.0));
+        let scale = f64::from(at.size) / 1000.0;
+        Vec2::new(-f64::from(vx) * scale, -f64::from(vy) * scale)
+    } else {
+        Vec2::ZERO
+    };
+    let space = if at.spacing {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a /Widths entry is a small integer on the C++ side too; \
+                      the f32 is this crate's own carrier"
+        )]
+        let declared = item.width as i32;
+        glyph_spacing_adjust(declared, font.glyph_advance(gid), at.size)
+    } else {
+        GlyphAdjust::NONE
+    };
+    // The spacing squeeze is a *glyph-space* horizontal scale, so it sits
+    // innermost — to the right of the Japan1 reshaping, which is what carries
+    // the factor into that transform's `a` and `b` alone.
+    PlacedGlyph {
+        outline,
+        matrix: glyph_matrix(
+            at.size,
+            at.pen + japan1.origin + space.origin + vert_origin,
+            at.text_to_device,
+        ) * japan1.matrix
+            * space.matrix,
+        key,
+        bitmap: None,
+    }
+}
+
 /// [`place_glyphs`] into a buffer the caller owns.
 ///
 /// `out` is cleared first and refilled; a caller that walks many text objects
@@ -662,50 +728,20 @@ pub fn place_glyphs_into(
                     vertical: item.vertical_glyph,
                 };
                 if let Some(outline) = cache.shared(font, key) {
-                    // Both per-glyph corrections move and reshape the glyph
-                    // *within* its em box without touching the advance, so
-                    // they apply to this glyph's origin and matrix and the pen
-                    // walks on as if neither were there.
-                    let japan1 = japan1_adjust(font, &item, *size);
-                    // The position vector `v` carries the glyph from its
-                    // horizontal origin to its vertical one, so it is
-                    // *subtracted* to place the outline against the vertical
-                    // pen (ISO 32000-1 §9.7.4.3). It moves the glyph alone:
-                    // the pen has already taken `w1` and walks on regardless.
-                    let vert_origin = if vertical {
-                        let (vx, vy) = font.vert_origin(item.code).unwrap_or((0.0, 880.0));
-                        let scale = f64::from(*size) / 1000.0;
-                        Vec2::new(-f64::from(vx) * scale, -f64::from(vy) * scale)
-                    } else {
-                        Vec2::ZERO
-                    };
-                    let space = if spacing {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "a /Widths entry is a small integer on the \
-                                      C++ side too; the f32 is this crate's \
-                                      own carrier"
-                        )]
-                        let declared = item.width as i32;
-                        glyph_spacing_adjust(declared, font.glyph_advance(gid), *size)
-                    } else {
-                        GlyphAdjust::NONE
-                    };
-                    // The spacing squeeze is a *glyph-space* horizontal scale,
-                    // so it sits innermost — to the right of the Japan1
-                    // reshaping, which is what carries the factor into that
-                    // transform's `a` and `b` alone.
-                    out.push(PlacedGlyph {
+                    out.push(place_one_glyph(
                         outline,
-                        matrix: glyph_matrix(
-                            *size,
-                            pen + japan1.origin + space.origin + vert_origin,
-                            text_to_device,
-                        ) * japan1.matrix
-                            * space.matrix,
                         key,
-                        bitmap: None,
-                    });
+                        font,
+                        &item,
+                        gid,
+                        &Placement {
+                            pen,
+                            size: *size,
+                            text_to_device,
+                            vertical,
+                            spacing,
+                        },
+                    ));
                 }
             }
             if vertical {

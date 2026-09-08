@@ -691,10 +691,8 @@ fn revision6_hash_counted(
 /// argument sits between the specification and the code.
 fn big_order_64_bits_mod3(data: &[u8]) -> u64 {
     let mut acc = 0u64;
-    for chunk in data.chunks_exact(4).take(4) {
-        let word = chunk
-            .try_into()
-            .map_or(0, |bytes: [u8; 4]| u32::from_be_bytes(bytes));
+    for chunk in data.as_chunks::<4>().0.iter().take(4) {
+        let word = u32::from_be_bytes(*chunk);
         acc = ((acc << 32) | u64::from(word)) % 3;
     }
     acc

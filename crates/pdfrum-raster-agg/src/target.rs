@@ -170,7 +170,7 @@ impl Target {
             return;
         };
         if let Some(clip) = clip {
-            for (dest, &mask) in pixels.chunks_exact_mut(4).zip(clip.iter()) {
+            for (dest, &mask) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(clip.iter()) {
                 let cov = pixmap::mul255(coverage, mask);
                 if cov == 0 {
                     continue;
@@ -181,7 +181,7 @@ impl Target {
             if coverage == 0 {
                 return;
             }
-            for dest in pixels.chunks_exact_mut(4) {
+            for dest in pixels.as_chunks_mut::<4>().0 {
                 blend_into(dest, src, coverage, mode);
             }
         }
@@ -222,7 +222,7 @@ impl Target {
         else {
             return;
         };
-        for (i, dest) in pixels.chunks_exact_mut(4).enumerate() {
+        for (i, dest) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let cov = match &clip {
                 Some(clip) => match clip.get(i) {
                     Some(&mask) => pixmap::mul255(coverage, mask),
@@ -348,10 +348,12 @@ impl Target {
             };
             match clip {
                 None => {
-                    for (dest, src) in dest.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
-                        let Ok(px) = <[u8; 4]>::try_from(src) else {
-                            continue;
-                        };
+                    for (dest, &px) in dest
+                        .as_chunks_mut::<4>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<4>().0)
+                    {
                         let px = if opaque { px } else { scale_alpha(px, alpha) };
                         blend_into(dest, Source::Premultiplied(px), 255, BlendMode::Normal);
                     }
@@ -371,17 +373,16 @@ impl Target {
                     else {
                         continue;
                     };
-                    for ((dest, src), &cov) in dest
-                        .chunks_exact_mut(4)
-                        .zip(src.chunks_exact(4))
+                    for ((dest, &px), &cov) in dest
+                        .as_chunks_mut::<4>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<4>().0)
                         .zip(band.iter())
                     {
                         if cov == 0 {
                             continue;
                         }
-                        let Ok(px) = <[u8; 4]>::try_from(src) else {
-                            continue;
-                        };
                         let px = if opaque { px } else { scale_alpha(px, alpha) };
                         blend_into(dest, Source::Premultiplied(px), cov, BlendMode::Normal);
                     }
@@ -449,10 +450,12 @@ impl Target {
             ) else {
                 continue;
             };
-            for (dest, src) in dest.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
-                let Ok(px) = <[u8; 4]>::try_from(src) else {
-                    continue;
-                };
+            for (dest, &px) in dest
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<4>().0)
+            {
                 if px[3] == 0 {
                     continue;
                 }

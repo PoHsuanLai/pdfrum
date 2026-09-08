@@ -500,7 +500,12 @@ impl<'a> Shortened<'a> {
             else {
                 continue;
             };
-            for (slot, acc) in dest_row.chunks_exact_mut(4).zip(self.acc.iter()) {
+            for (slot, acc) in dest_row
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(self.acc.iter())
+            {
                 for (byte, &a) in slot.iter_mut().zip(acc.0.iter()) {
                     #[expect(
                         clippy::cast_possible_truncation,
@@ -600,7 +605,10 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
         else {
             continue;
         };
-        for (taps, out) in x_taps.iter().zip(inter_row.chunks_exact_mut(4)) {
+        for (taps, out) in x_taps
+            .iter()
+            .zip(inter_row.as_chunks_mut::<4>().0.iter_mut())
+        {
             let mut acc = [0_u32; 4];
             for (i, weight) in taps.weights.iter().enumerate() {
                 let weight = weight.get();
@@ -661,7 +669,7 @@ pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
                 Some((weight, row))
             })
             .collect();
-        for (x, out) in dest_row.chunks_exact_mut(4).enumerate() {
+        for (x, out) in dest_row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let at = x.saturating_mul(4);
             let mut acc = [0_u32; 4];
             for &(weight, row) in &rows {
@@ -1790,7 +1798,13 @@ mod tests {
                 .map(|i| u8::try_from(i * 37 % 251).unwrap_or(0))
                 .collect();
             let mut rgba = Pixmap::new(w, h);
-            for (slot, &v) in rgba.data_mut().chunks_exact_mut(4).zip(plane.iter()) {
+            for (slot, &v) in rgba
+                .data_mut()
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(plane.iter())
+            {
                 slot.copy_from_slice(&[v, v, v, v]);
             }
 

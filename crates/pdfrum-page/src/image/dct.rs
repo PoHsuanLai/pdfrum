@@ -238,10 +238,7 @@ const CENTER_SAMPLE: i32 = 128;
 fn ycck_to_cmyk(samples: &mut [u8]) {
     // A slice pattern rather than four indices: the chunk's length is the
     // pattern's, so the K channel being untouched is visible in the binding.
-    for [c, m, y_channel, _k] in samples
-        .chunks_exact_mut(4)
-        .filter_map(|chunk| <&mut [u8; 4]>::try_from(chunk).ok())
-    {
+    for [c, m, y_channel, _k] in samples.as_chunks_mut::<4>().0 {
         let (y, cb, cr) = (
             i32::from(*c),
             i32::from(*m) - CENTER_SAMPLE,

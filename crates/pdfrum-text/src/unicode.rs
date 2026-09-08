@@ -162,7 +162,7 @@ impl RleTable {
     fn get(&self, index: usize) -> u16 {
         let table = self.expanded.get_or_init(|| {
             let mut out = Vec::with_capacity(0x1_0000);
-            for run in self.payload.chunks_exact(4) {
+            for run in self.payload.as_chunks::<4>().0 {
                 let (Some(value), Some(len)) = (word_at(run, 0), word_at(run, 1)) else {
                     continue;
                 };
@@ -472,13 +472,17 @@ mod tests {
         // gap silently returns kON.
         let payload = section(*b"UCDR");
         let total: usize = payload
-            .chunks_exact(4)
-            .map(|run| usize::from(u16::from_le_bytes([run[2], run[3]])))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|&[_, _, lo, hi]| usize::from(u16::from_le_bytes([lo, hi])))
             .sum();
         assert_eq!(total, 65536);
         let norm: usize = section(*b"NRMR")
-            .chunks_exact(4)
-            .map(|run| usize::from(u16::from_le_bytes([run[2], run[3]])))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|&[_, _, lo, hi]| usize::from(u16::from_le_bytes([lo, hi])))
             .sum();
         assert_eq!(norm, 65536);
     }
@@ -612,9 +616,9 @@ mod tests {
     fn the_expanded_tables_agree_with_a_linear_decode() {
         let linear = |tag: [u8; 4]| {
             let mut out = Vec::with_capacity(65536);
-            for run in section(tag).chunks_exact(4) {
-                let value = u16::from_le_bytes([run[0], run[1]]);
-                let len = usize::from(u16::from_le_bytes([run[2], run[3]]));
+            for &[v0, v1, l0, l1] in section(tag).as_chunks::<4>().0 {
+                let value = u16::from_le_bytes([v0, v1]);
+                let len = usize::from(u16::from_le_bytes([l0, l1]));
                 out.extend(std::iter::repeat_n(value, len));
             }
             out

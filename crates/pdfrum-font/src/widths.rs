@@ -149,10 +149,7 @@ impl CidWidths {
             .and_then(|v| i32::try_from(v).ok())
             .unwrap_or(1000);
         let records = match cid_dict.array(names::W, r) {
-            Some(a) => parse_metrics(&a, 1, r, diags)
-                .chunks_exact(3)
-                .filter_map(|c| Some([*c.first()?, *c.get(1)?, *c.get(2)?]))
-                .collect(),
+            Some(a) => parse_metrics(&a, 1, r, diags).as_chunks::<3>().0.to_vec(),
             None => Vec::new(),
         };
         Self {
@@ -237,10 +234,7 @@ impl VerticalMetrics {
     pub fn load(cid_dict: &Dict, r: &impl Resolve, diags: &mut Diagnostics) -> Self {
         let mut v = Self::default();
         if let Some(a) = cid_dict.array(names::W2, r) {
-            v.records = parse_metrics(&a, 3, r, diags)
-                .chunks_exact(5)
-                .filter_map(|c| Some([*c.first()?, *c.get(1)?, *c.get(2)?, *c.get(3)?, *c.get(4)?]))
-                .collect();
+            v.records = parse_metrics(&a, 3, r, diags).as_chunks::<5>().0.to_vec();
         }
         if let Some(dw2) = cid_dict.array(names::DW2, r) {
             if let Some(vy) = dw2.int_at(0).and_then(|v| i32::try_from(v).ok()) {
