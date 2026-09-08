@@ -48,7 +48,7 @@ one-based index as a decimal.
 | [`ap`] | §12.5.5 | appearance streams and the generated overlay |
 | [`form`] | §12.7 | the AcroForm field tree, as data |
 | [`structure`] | §14.7 | the tagged structure tree |
-| [`page_label`] | §12.4.2 | the page numbers a reader sees |
+| [`page_label`](mod@page_label) | §12.4.2 | the page numbers a reader sees |
 | [`pdfa`] | ISO 19005 | conformance level and failed clauses |
 
 Part of [pdfrum](https://crates.io/crates/pdfrum). `#![forbid(unsafe_code)]`.
