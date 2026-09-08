@@ -3,7 +3,7 @@
   <img src="https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/banner-light.svg" alt="pdfrum" width="100%">
 </picture>
 
-**A composable PDF library built in Rust.**
+**A composable PDF library and CLI built in Rust.**
 
 [![crates.io](https://img.shields.io/crates/v/pdfrum.svg)](https://crates.io/crates/pdfrum)
 [![docs.rs](https://docs.rs/pdfrum/badge.svg)](https://docs.rs/pdfrum)
