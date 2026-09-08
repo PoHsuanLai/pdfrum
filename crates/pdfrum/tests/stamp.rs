@@ -23,10 +23,9 @@ const HELLO: &str = "tests/fixtures/hello_world.pdf";
 const TWO_PAGES: &str = "tests/fixtures/hello_world_2_pages.pdf";
 
 fn reproducible() -> SaveOptions {
-    SaveOptions {
-        id_source: IdSource::Fixed([0x55; 16]),
-        ..SaveOptions::default()
-    }
+    let mut options = SaveOptions::default();
+    options.id_source = IdSource::Fixed([0x55; 16]);
+    options
 }
 
 fn saved(edit: &pdfrum::DocEdit<'_>) -> Vec<u8> {
@@ -160,11 +159,12 @@ fn the_centre_position_centres_the_word_on_the_crop_box() {
 
 #[test]
 fn a_corner_position_sits_inside_the_margin() {
-    let options = StampOptions {
-        position: StampPosition::BottomRight,
-        margin: 20.0,
-        font_size: 12.0,
-        ..StampOptions::default()
+    let options = {
+        let mut __o = StampOptions::default();
+        __o.position = StampPosition::BottomRight;
+        __o.margin = 20.0;
+        __o.font_size = 12.0;
+        __o
     };
     let doc = stamped(HELLO, "CORNER", &options);
     let page = doc.page(0).unwrap();
@@ -179,10 +179,8 @@ fn a_corner_position_sits_inside_the_margin() {
         "{word:?} vs {crop:?}"
     );
 
-    let options = StampOptions {
-        position: StampPosition::TopLeft,
-        ..options
-    };
+    let mut options = options;
+    options.position = StampPosition::TopLeft;
     let doc = stamped(HELLO, "CORNER", &options);
     let page = doc.page(0).unwrap();
     let word = word_box(&page, "CORNER");
@@ -198,14 +196,11 @@ fn a_corner_position_sits_inside_the_margin() {
 
 #[test]
 fn an_angle_turns_the_text_matrix_about_the_centre() {
-    let doc = stamped(
-        HELLO,
-        "TILT",
-        &StampOptions {
-            angle: 90.0,
-            ..StampOptions::default()
-        },
-    );
+    let doc = stamped(HELLO, "TILT", &{
+        let mut __o = StampOptions::default();
+        __o.angle = 90.0;
+        __o
+    });
     let page = doc.page(0).unwrap();
     let objects = page.objects();
     let PageObject::Text(text) = objects.objects.last().unwrap() else {
@@ -224,15 +219,12 @@ fn an_angle_turns_the_text_matrix_about_the_centre() {
 
 #[test]
 fn opacity_and_colour_reach_the_saved_state() {
-    let doc = stamped(
-        HELLO,
-        "FAINT",
-        &StampOptions {
-            opacity: 0.5,
-            color: Color::from_rgb8(255, 0, 0),
-            ..StampOptions::default()
-        },
-    );
+    let doc = stamped(HELLO, "FAINT", &{
+        let mut __o = StampOptions::default();
+        __o.opacity = 0.5;
+        __o.color = Color::from_rgb8(255, 0, 0);
+        __o
+    });
     let page = doc.page(0).unwrap();
     let objects = page.objects();
     let PageObject::Text(text) = objects.objects.last().unwrap() else {
@@ -255,15 +247,13 @@ fn a_rotated_page_places_the_stamp_as_displayed() {
     assert_eq!(turned.page(0).unwrap().rotation().degrees(), 90);
 
     let mut edit = turned.edit();
-    edit.stamp_text(
-        "UP",
-        &StampOptions {
-            position: StampPosition::BottomRight,
-            margin: 10.0,
-            font_size: 12.0,
-            ..StampOptions::default()
-        },
-    )
+    edit.stamp_text("UP", &{
+        let mut __o = StampOptions::default();
+        __o.position = StampPosition::BottomRight;
+        __o.margin = 10.0;
+        __o.font_size = 12.0;
+        __o
+    })
     .unwrap();
     let doc = reopen(saved(&edit));
     let page = doc.page(0).unwrap();
@@ -290,13 +280,11 @@ fn two_stamps_accumulate_and_each_keeps_its_font() {
     let doc = Document::open(TWO_PAGES).unwrap();
     let mut edit = doc.edit();
     edit.stamp_text("ONE", &StampOptions::default()).unwrap();
-    edit.stamp_text(
-        "TWO",
-        &StampOptions {
-            position: StampPosition::TopLeft,
-            ..StampOptions::default()
-        },
-    )
+    edit.stamp_text("TWO", &{
+        let mut __o = StampOptions::default();
+        __o.position = StampPosition::TopLeft;
+        __o
+    })
     .unwrap();
     let saved = reopen(saved(&edit));
     for index in 0..2 {
@@ -323,16 +311,13 @@ fn an_image_stamp_keeps_its_aspect_and_carries_its_opacity() {
     let image = edit
         .embed_image(&[255, 0, 0].repeat(8), 4, 2, PixelFormat::Rgb8)
         .unwrap();
-    edit.stamp_image(
-        &image,
-        200.0,
-        &StampOptions {
-            position: StampPosition::TopRight,
-            margin: 10.0,
-            opacity: 0.25,
-            ..StampOptions::default()
-        },
-    )
+    edit.stamp_image(&image, 200.0, &{
+        let mut __o = StampOptions::default();
+        __o.position = StampPosition::TopRight;
+        __o.margin = 10.0;
+        __o.opacity = 0.25;
+        __o
+    })
     .unwrap();
     let saved = reopen(saved(&edit));
     for index in 0..2 {
@@ -450,16 +435,14 @@ fn the_oracle_extracts_the_stamp_and_renders_it() {
 
     let doc = Document::open(HELLO).unwrap();
     let mut edit = doc.edit();
-    edit.stamp_text(
-        "CONFIDENTIAL",
-        &StampOptions {
-            angle: 30.0,
-            opacity: 0.4,
-            font_size: 48.0,
-            color: Color::from_rgb8(200, 0, 0),
-            ..StampOptions::default()
-        },
-    )
+    edit.stamp_text("CONFIDENTIAL", &{
+        let mut __o = StampOptions::default();
+        __o.angle = 30.0;
+        __o.opacity = 0.4;
+        __o.font_size = 48.0;
+        __o.color = Color::from_rgb8(200, 0, 0);
+        __o
+    })
     .unwrap();
     std::fs::write(dir.join("stamped.pdf"), saved(&edit)).unwrap();
 

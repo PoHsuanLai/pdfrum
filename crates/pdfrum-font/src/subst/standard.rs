@@ -13,7 +13,7 @@ use super::tables::{ALT_FONT_NAMES, BASE14_FONT_NAMES};
 /// The discriminants are load-bearing, not cosmetic. Within a family the order
 /// is **Regular, Bold, BoldOblique, Oblique** — so `index % 4` decides the
 /// style and `index + 1` / `+2` / `+3` is how a style is *applied* to a family
-/// (§1.12 steps 4 and 10). Changing the order silently changes substitution.
+///. Changing the order silently changes substitution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum StandardFont {
@@ -55,7 +55,7 @@ impl StandardFont {
         self as usize
     }
 
-    /// Build from an index, for the arithmetic of §1.12 step 10.
+    /// Build from an index, for the arithmetic of the former working note step 10.
     #[must_use]
     pub fn from_index(i: usize) -> Option<Self> {
         Some(match i {

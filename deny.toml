@@ -36,8 +36,9 @@ deny = [
 ]
 
 [advisories]
-# Every dependency is an exact pin, so a yank is not routed around by
+# Most dependencies are an exact pin, so a yank is not routed around by
 # resolution — it is a decision to make, not a warning to scroll past.
+# `kurbo` and `peniko` are the exception (caret): their types are public.
 yanked = "deny"
 
 [sources]

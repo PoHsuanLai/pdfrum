@@ -75,7 +75,7 @@ impl CharmapId {
     }
 
     /// The `fxge`-level encoding this charmap reports, for the reverse lookups
-    /// of §1.7.
+    /// of the former working note.
     #[must_use]
     pub(crate) fn face_encoding(self) -> crate::encoding::FaceEncoding {
         use crate::encoding::FaceEncoding as E;

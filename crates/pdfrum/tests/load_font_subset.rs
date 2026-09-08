@@ -137,14 +137,11 @@ fn subset_standard_font_produces_no_font_file() {
 
     let dir = scratch_dir();
     let out = dir.join("subset_standard.pdf");
-    edit.save_pages(
-        &out,
-        &[page],
-        &SaveOptions {
-            subset_new_fonts: true,
-            ..SaveOptions::default()
-        },
-    )
+    edit.save_pages(&out, &[page], &{
+        let mut __o = SaveOptions::default();
+        __o.subset_new_fonts = true;
+        __o
+    })
     .expect("saves");
     let saved = std::fs::read(&out).expect("reads");
 
@@ -187,21 +184,17 @@ fn subset_without_new_fonts_leaves_file_unchanged() {
     let out_plain = dir.join("without_subset_no_new.pdf");
     let out_subset = dir.join("with_subset_no_new.pdf");
 
-    doc.save_with(
-        &out_plain,
-        &SaveOptions {
-            subset_new_fonts: false,
-            ..SaveOptions::default()
-        },
-    )
+    doc.save_with(&out_plain, &{
+        let mut __o = SaveOptions::default();
+        __o.subset_new_fonts = false;
+        __o
+    })
     .expect("plain save");
-    doc.save_with(
-        &out_subset,
-        &SaveOptions {
-            subset_new_fonts: true,
-            ..SaveOptions::default()
-        },
-    )
+    doc.save_with(&out_subset, &{
+        let mut __o = SaveOptions::default();
+        __o.subset_new_fonts = true;
+        __o
+    })
     .expect("subset save");
 
     let bytes_plain = std::fs::read(&out_plain).expect("reads plain");
@@ -246,14 +239,11 @@ fn subset_single_font_multiple_texts_preserves_all_runs() {
 
     let dir = scratch_dir();
     let out = dir.join("single_font_multiple_texts.pdf");
-    edit.save_pages(
-        &out,
-        &[page],
-        &SaveOptions {
-            subset_new_fonts: true,
-            ..SaveOptions::default()
-        },
-    )
+    edit.save_pages(&out, &[page], &{
+        let mut __o = SaveOptions::default();
+        __o.subset_new_fonts = true;
+        __o
+    })
     .expect("saves");
     let saved = std::fs::read(&out).expect("reads");
 
@@ -420,14 +410,11 @@ fn subset_multiple_fonts_multiple_texts_shrinks_both() {
 
     let dir = scratch_dir();
     let out = dir.join("multiple_fonts_multiple_texts.pdf");
-    edit.save_pages(
-        &out,
-        &[page],
-        &SaveOptions {
-            subset_new_fonts: true,
-            ..SaveOptions::default()
-        },
-    )
+    edit.save_pages(&out, &[page], &{
+        let mut __o = SaveOptions::default();
+        __o.subset_new_fonts = true;
+        __o
+    })
     .expect("saves");
     let saved = std::fs::read(&out).expect("reads");
 
@@ -497,14 +484,11 @@ fn subset_embedded_truetype_shrinks_program_and_preserves_extraction() {
     );
     let out_sub = dir.join("truetype_subset.pdf");
     edit_subset
-        .save_pages(
-            &out_sub,
-            &[page_sub],
-            &SaveOptions {
-                subset_new_fonts: true,
-                ..SaveOptions::default()
-            },
-        )
+        .save_pages(&out_sub, &[page_sub], &{
+            let mut __o = SaveOptions::default();
+            __o.subset_new_fonts = true;
+            __o
+        })
         .expect("saves subset");
     let saved_sub = std::fs::read(&out_sub).expect("reads sub");
     let after_len = length1_of(&saved_sub);

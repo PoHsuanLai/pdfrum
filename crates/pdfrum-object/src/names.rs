@@ -395,6 +395,86 @@ names! {
     TR = "TR";
     /// A group's colour space (`/CS`).
     CS = "CS";
+
+    // ---- Form and image XObject subtypes (tables 89 and 95) ----
+
+    /// A form external object's `/Subtype` value (`/Form`).
+    FORM = "Form";
+    /// An image external object's `/Subtype` value (`/Image`).
+    IMAGE = "Image";
+    /// A form `XObject`'s generation number, always 1 (`/FormType`).
+    FORM_TYPE = "FormType";
+
+    // ---- Graphics state parameter dictionaries (table 58) ----
+
+    /// Blend mode (`/BM`).
+    BM = "BM";
+    /// Non-stroking alpha (`/ca`); stroking alpha is `/CA`.
+    CA_LOWER = "ca";
+    /// Whether alpha is a shape or an opacity (`/AIS`).
+    AIS = "AIS";
+
+    // ---- Font dictionaries (tables 111, 117, 120, 122) ----
+
+    /// A simple font's encoding or a Type0 font's CMap (`/Encoding`).
+    ENCODING = "Encoding";
+    /// The encoding a `/Differences` array modifies (`/BaseEncoding`).
+    BASE_ENCODING = "BaseEncoding";
+    /// Per-code overrides on the base encoding (`/Differences`).
+    DIFFERENCES = "Differences";
+    /// The PostScript name of a font (`/BaseFont`).
+    BASE_FONT = "BaseFont";
+    /// A font's metrics and embedded program (`/FontDescriptor`).
+    FONT_DESCRIPTOR = "FontDescriptor";
+    /// An embedded Type 1 program (`/FontFile`).
+    FONT_FILE = "FontFile";
+    /// An embedded TrueType program (`/FontFile2`).
+    FONT_FILE2 = "FontFile2";
+    /// An embedded program in some other format, CFF included (`/FontFile3`).
+    FONT_FILE3 = "FontFile3";
+    /// Per-code advance widths of a simple font (`/Widths`).
+    WIDTHS = "Widths";
+    /// First code a simple font's `/Widths` covers (`/FirstChar`).
+    FIRST_CHAR = "FirstChar";
+    /// Last code a simple font's `/Widths` covers (`/LastChar`).
+    LAST_CHAR = "LastChar";
+    /// The character-code-to-Unicode CMap (`/ToUnicode`).
+    TO_UNICODE = "ToUnicode";
+    /// Descriptor flags, and a form-action flag word (`/Flags`).
+    FLAGS = "Flags";
+    /// Glyph extents (`/FontBBox`).
+    FONT_BBOX = "FontBBox";
+    /// Degrees clockwise from vertical (`/ItalicAngle`).
+    ITALIC_ANGLE = "ItalicAngle";
+    /// Vertical stem thickness (`/StemV`).
+    STEM_V = "StemV";
+    /// Maximum height above the baseline (`/Ascent`).
+    ASCENT = "Ascent";
+    /// Maximum depth below the baseline (`/Descent`).
+    DESCENT = "Descent";
+    /// Height of a capital letter (`/CapHeight`).
+    CAP_HEIGHT = "CapHeight";
+    /// The descendant `CIDFont` of a Type 0 font (`/DescendantFonts`).
+    DESCENDANT_FONTS = "DescendantFonts";
+    /// The CID collection this font is keyed to (`/CIDSystemInfo`).
+    CID_SYSTEM_INFO = "CIDSystemInfo";
+    /// Ordering name inside `/CIDSystemInfo` (`/Ordering`).
+    ORDERING = "Ordering";
+    /// Maps a CID to a glyph index (`/CIDToGIDMap`).
+    CID_TO_GID_MAP = "CIDToGIDMap";
+    /// A Type 1 font's `/Subtype` value (`/Type1`).
+    TYPE1 = "Type1";
+    /// A TrueType font's `/Subtype` value (`/TrueType`).
+    TRUE_TYPE = "TrueType";
+
+    // ---- Extra annotation keys (tables 168 and 179) ----
+
+    /// An annotation's interior colour (`/IC`).
+    IC = "IC";
+    /// A text-markup annotation's quadrilaterals (`/QuadPoints`).
+    QUAD_POINTS = "QuadPoints";
+    /// A destination, an appearance's down state, and a dash pattern (`/D`).
+    D = "D";
 }
 
 #[cfg(test)]

@@ -63,6 +63,8 @@ pub fn pdfrum_crypt::SecurityHandler::password_encoding(&self) -> pdfrum_crypt::
 pub fn pdfrum_crypt::SecurityHandler::permissions(&self) -> pdfrum_crypt::Permissions
 pub fn pdfrum_crypt::SecurityHandler::revision(&self) -> u8
 pub const fn pdfrum_crypt::SecurityHandler::strings_identity(&self) -> bool
+impl core::ops::drop::Drop for pdfrum_crypt::SecurityHandler
+pub fn pdfrum_crypt::SecurityHandler::drop(&mut self)
 pub struct pdfrum_crypt::EncryptParams
 pub pdfrum_crypt::EncryptParams::cipher: pdfrum_crypt::Cipher
 pub pdfrum_crypt::EncryptParams::embedded_cipher: core::option::Option<pdfrum_crypt::Cipher>
@@ -83,6 +85,8 @@ pub const fn pdfrum_crypt::Iv::bytes(&self) -> &[u8; 16]
 pub struct pdfrum_crypt::KeyMaterial(_)
 impl pdfrum_crypt::KeyMaterial
 pub fn pdfrum_crypt::KeyMaterial::from_os() -> core::result::Result<Self, pdfrum_crypt::Error>
+impl core::ops::drop::Drop for pdfrum_crypt::KeyMaterial
+pub fn pdfrum_crypt::KeyMaterial::drop(&mut self)
 pub struct pdfrum_crypt::Permissions
 pub pdfrum_crypt::Permissions::annotate: bool
 pub pdfrum_crypt::Permissions::assemble: bool
@@ -105,6 +109,8 @@ pub fn pdfrum_crypt::SmallKey::is_empty(&self) -> bool
 pub fn pdfrum_crypt::SmallKey::len(&self) -> usize
 impl core::fmt::Debug for pdfrum_crypt::SmallKey
 pub fn pdfrum_crypt::SmallKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for pdfrum_crypt::SmallKey
+pub fn pdfrum_crypt::SmallKey::drop(&mut self)
 pub const pdfrum_crypt::ENTROPY_LEN: usize
 pub const pdfrum_crypt::PAD: [u8; 32]
 pub fn pdfrum_crypt::is_signature_dict(&pdfrum_object::dict::Dict) -> bool

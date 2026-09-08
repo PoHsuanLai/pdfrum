@@ -5,11 +5,15 @@
 
 #[expect(unused_imports, reason = "the shared keys are re-exported as one set")]
 pub(crate) use pdfrum_object::names::{
-    ART_BOX, BBOX, BITS_PER_COMPONENT, BLEED_BOX, COLOR_SPACE, CONTENTS, COUNT, CROP_BOX,
-    DCT_DECODE, DECODE, DECODE_PARMS, ENCRYPT, EXT_G_STATE, FILTER, FIRST, FLATE_DECODE, FONT,
-    HEIGHT, ID, IMAGE_MASK, INDEX, INFO, JPX_DECODE, KIDS, LENGTH, MATRIX, MEDIA_BOX, METADATA,
-    PAGE, PAGES, PARENT, PREV, PROPERTIES, RESOURCES, ROOT, ROTATE, SIZE, SMASK, SUBTYPE, TRIM_BOX,
-    TYPE, VIEWER_PREFERENCES, W, WIDTH, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
+    ART_BOX, ASCENT, AUTHOR, BASE_FONT, BBOX, BITS_PER_COMPONENT, BLEED_BOX, BM, CA, CA_LOWER,
+    CAP_HEIGHT, CID_SYSTEM_INFO, CID_TO_GID_MAP, COLOR_SPACE, COLUMNS, CONTENTS, COUNT, CREATOR,
+    CROP_BOX, DCT_DECODE, DECODE, DECODE_PARMS, DESCENDANT_FONTS, DESCENT, ENCODING, ENCRYPT,
+    EXT_G_STATE, FILTER, FIRST, FIRST_CHAR, FLAGS, FLATE_DECODE, FONT, FONT_BBOX, FONT_DESCRIPTOR,
+    FONT_FILE, FONT_FILE2, FONT_FILE3, FORM, FORM_TYPE, FT, HEIGHT, ID, IMAGE, IMAGE_MASK, INDEX,
+    INFO, ITALIC_ANGLE, JPX_DECODE, KEYWORDS, KIDS, LAST_CHAR, LENGTH, MATRIX, MEDIA_BOX, METADATA,
+    N, NORMAL, ORDERING, PAGE, PAGES, PARENT, PREV, PROPERTIES, R, RESOURCES, ROOT, ROTATE, SIZE,
+    SMASK, STANDARD, STEM_V, SUBJECT, SUBTYPE, TITLE, TO_UNICODE, TRIM_BOX, TRUE_TYPE, TYPE, TYPE1,
+    VIEWER_PREFERENCES, W, WIDTH, WIDTHS, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -17,17 +21,6 @@ pdfrum_object::names! {
 
     /// The document catalog's own `/Type` value (`/Catalog`).
     CATALOG = "Catalog";
-    /// The producing application (`/Producer`), stamped on import.
-    PRODUCER = "Producer";
-
-    // ---- Form XObjects (table 95) ----
-
-    /// Always 1 (`/FormType`).
-    FORM_TYPE = "FormType";
-    /// A form external object's `/Subtype` value (`/Form`).
-    FORM = "Form";
-    /// An image external object's `/Subtype` value (`/Image`).
-    IMAGE = "Image";
 
     // ---- Image XObjects (table 89) ----
 
@@ -41,79 +34,26 @@ pdfrum_object::names! {
     /// Four subtractive components per sample (`/DeviceCMYK`).
     DEVICE_CMYK = "DeviceCMYK";
 
-    // ---- Graphics state parameters the generator emits (table 58) ----
-
-    /// Non-stroking alpha (`/ca`).
-    CA_LOWER = "ca";
-    /// Blend mode (`/BM`).
-    BM = "BM";
-
     // ---- Fonts and subsetting (tables 111, 117, 120, 122) ----
 
-    /// The PostScript name of the font (`/BaseFont`).
-    BASE_FONT = "BaseFont";
-    /// The descendant CIDFont of a Type 0 font (`/DescendantFonts`).
-    DESCENDANT_FONTS = "DescendantFonts";
-    /// The font descriptor (`/FontDescriptor`).
-    FONT_DESCRIPTOR = "FontDescriptor";
     /// The descriptor's own name for the font (`/FontName`).
     FONT_NAME = "FontName";
-    /// The descriptor's characteristic flags (`/Flags`).
-    FLAGS = "Flags";
-    /// An embedded Type 1 program (`/FontFile`).
-    FONT_FILE = "FontFile";
-    /// An embedded TrueType program (`/FontFile2`).
-    FONT_FILE2 = "FontFile2";
-    /// An embedded program in some other format, CFF included (`/FontFile3`).
-    FONT_FILE3 = "FontFile3";
     /// Length of an uncompressed TrueType program (`/Length1`).
     LENGTH1 = "Length1";
-    /// The code-to-Unicode CMap (`/ToUnicode`).
-    TO_UNICODE = "ToUnicode";
-    /// The character encoding or CMap (`/Encoding`).
-    ENCODING = "Encoding";
     /// The identity-mapping horizontal CMap (`/Identity-H`).
     IDENTITY_H = "Identity-H";
     /// A Type 0 (composite) font's `/Subtype` value (`/Type0`).
     TYPE0 = "Type0";
-    /// A simple font with a Type 1 program (`/Type1`).
-    TYPE1 = "Type1";
-    /// A simple font with a TrueType program (`/TrueType`).
-    TRUE_TYPE = "TrueType";
     /// A CIDFont with CFF glyphs (`/CIDFontType0`).
     CID_FONT_TYPE0 = "CIDFontType0";
     /// A CIDFont with TrueType glyphs (`/CIDFontType2`).
     CID_FONT_TYPE2 = "CIDFontType2";
     /// An OpenType-wrapped program (`/OpenType`).
     OPEN_TYPE = "OpenType";
-    /// Maps a CID to a glyph index (`/CIDToGIDMap`).
-    CID_TO_GID_MAP = "CIDToGIDMap";
     /// The CMap's own type, always 2 for a ToUnicode map (`/CMapType`).
     CMAP_TYPE = "CMapType";
-    /// First code a simple font's `/Widths` covers (`/FirstChar`).
-    FIRST_CHAR = "FirstChar";
-    /// Last code a simple font's `/Widths` covers (`/LastChar`).
-    LAST_CHAR = "LastChar";
-    /// Per-code advances of a simple font (`/Widths`).
-    WIDTHS = "Widths";
-    /// Glyph extents (`/FontBBox`).
-    FONT_BBOX = "FontBBox";
-    /// Degrees clockwise from vertical (`/ItalicAngle`).
-    ITALIC_ANGLE = "ItalicAngle";
-    /// Maximum height above the baseline (`/Ascent`).
-    ASCENT = "Ascent";
-    /// Maximum depth below the baseline (`/Descent`).
-    DESCENT = "Descent";
-    /// Height of a capital letter (`/CapHeight`).
-    CAP_HEIGHT = "CapHeight";
-    /// Vertical stem thickness (`/StemV`).
-    STEM_V = "StemV";
-    /// The CID collection (`/CIDSystemInfo`).
-    CID_SYSTEM_INFO = "CIDSystemInfo";
     /// Registry name inside `/CIDSystemInfo` (`/Registry`).
     REGISTRY = "Registry";
-    /// Ordering name inside `/CIDSystemInfo` (`/Ordering`).
-    ORDERING = "Ordering";
     /// Supplement number inside `/CIDSystemInfo` (`/Supplement`).
     SUPPLEMENT = "Supplement";
     /// Encrypted portion of a Type 1 program (`/Length2`).

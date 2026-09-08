@@ -82,7 +82,7 @@ pub fn rearrange_char_array(section: &mut Section, config: &Config, metrics: &Me
             // Not a midpoint: the half is the share of the two cells this
             // gap spans, subtracted from the node to leave the space after
             // the word.
-            #[expect(clippy::manual_midpoint, reason = "a gap, not a mean")]
+            #[allow(clippy::manual_midpoint, reason = "a gap, not a mean")]
             {
                 word.tail = if index + 1 == count {
                     0.0

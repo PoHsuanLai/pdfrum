@@ -385,7 +385,8 @@ mod tests {
     #![allow(clippy::indexing_slicing)]
     use super::*;
     use crate::glyphs::Face;
-    use crate::{FontFlags, GlyphName, GlyphSource};
+    use crate::ids::GlyphName;
+    use crate::{FontFlags, GlyphSource};
     use std::sync::Arc;
 
     const NO_DIFFS: [Option<GlyphName>; 256] = [const { None }; 256];
@@ -426,7 +427,7 @@ mod tests {
         // U+002E to glyph 1. Both must reach glyph 1.
         for name in ["tt_unicode_31.ttf", "tt_unicode_03.ttf"] {
             let glyphs = tt(name);
-            let mut to_unicode = crate::ToUnicode::default();
+            let mut to_unicode = crate::tounicode::ToUnicode::default();
             let _ = &mut to_unicode;
             let c = ctx(
                 &glyphs,

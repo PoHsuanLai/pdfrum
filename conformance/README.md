@@ -43,7 +43,8 @@ no goldens reports `missing-golden` and still exits 0 — write trials to
 `run` refuses to write a board that measured nothing — no rows at all, or
 effectively every row `unsupported-tool` — and exits non-zero leaving `--out`
 untouched, so a regeneration script cannot commit a zeroed scoreboard. It also
-warns when the row count drifts far from the reference board's 1759.
+warns when the row count drifts far from the reference board's 1749
+scored files (diverged rows sit beside that count).
 
 The checkout is read-only: commands refuse if any tracked file is dirty
 (`--allow-dirty-oracle` to override). `pdfium_test` writes beside its

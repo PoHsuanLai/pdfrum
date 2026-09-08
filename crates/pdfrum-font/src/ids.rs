@@ -207,13 +207,13 @@ impl FontFlags {
         self.contains(Self::FIXED_PITCH)
     }
 
-    /// The descriptor's metrics are complete enough to trust (§1.2).
+    /// The descriptor's metrics are complete enough to trust.
     #[must_use]
     pub const fn uses_extern_attr(self) -> bool {
         self.contains(Self::USE_EXTERN_ATTR)
     }
 
-    /// No lowercase letters — triggers the all-caps glyph aliasing of §1.4.
+    /// No lowercase letters — triggers the all-caps glyph aliasing of the former working note.
     #[must_use]
     pub const fn is_all_cap(self) -> bool {
         self.contains(Self::ALL_CAP)

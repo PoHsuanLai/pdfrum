@@ -14,9 +14,11 @@ targets=(
     object_decode_text object_name_decode
     crypt_encrypt_dict crypt_decrypt
     filters_flate filters_lzw filters_a85 filters_ahx filters_rle
-    filters_predictor filters_chain
+    filters_predictor filters_chain filters_ccitt
     cmap_embedded cmap_predefined
     parser_lexer parser_object parser_xref parser_load parser_load_password
+    page_parse_content page_inline_image page_colorspace page_psengine
+    page_mesh_stream page_decode_image page_jbig2 page_jpx
     edit_save_roundtrip edit_subset edit_import
 )
 for t in "${targets[@]}"; do

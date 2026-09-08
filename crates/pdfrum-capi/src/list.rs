@@ -321,7 +321,7 @@ impl pdfrum_links {
             let (uri, page_index) = match &link.target {
                 pdfrum::LinkTarget::Uri(uri) => (list.intern(uri), NO_PAGE),
                 pdfrum::LinkTarget::Page(index) => (core::ptr::null(), index.get()),
-                pdfrum::LinkTarget::Other => (core::ptr::null(), NO_PAGE),
+                _ => (core::ptr::null(), NO_PAGE),
             };
             list.items.push(pdfrum_link {
                 x0: link.rect.x0,

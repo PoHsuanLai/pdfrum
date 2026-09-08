@@ -2,9 +2,12 @@
 
 ## Build
 
-Stable Rust. No system libraries. The manifest's `rust-version` field
-(`[workspace.package]` in the root `Cargo.toml`) is the minimum; there is no
-`rust-toolchain.toml`, so a current stable toolchain is what to use.
+The CI gate's toolchain is `rust-toolchain.toml` (currently 1.98.1). Bump
+that file on purpose when clippy or rustc behaviour should change — an
+unpinned `stable` makes `#[expect(lint)]` a landmine under `-D warnings`.
+The manifest's `rust-version` field (`[workspace.package]` in the root
+`Cargo.toml`) is the minimum, checked by a dedicated MSRV job. No system
+libraries.
 
 Three commands are enough for a first patch:
 
@@ -34,7 +37,10 @@ defaults, then pdfrum `--all-features`) and its coverage floor, the API
 snapshot, `cargo deny`, the no-`-sys` check, the C header and C test, WASM
 tests, and `cargo check` of `fuzz/`.
 
-CI does not run the conformance board or the bench ratchet.
+CI does not run the conformance board or the bench ratchet. The GPU suite
+runs on Linux with lavapipe (`PDFRUM_ALLOW_SOFTWARE_GPU=1`); without that
+env the tests skip rather than fail. A weekly workflow runs
+`scripts/fuzz-gate.nu`.
 
 The gate is long and its tools are several. A maintainer runs it before
 landing, so a first patch can skip it. Run it yourself once a change touches
@@ -46,7 +52,7 @@ first.
 The scripts are nushell:
 
 ```bash
-cargo binstall nu        # >= 0.110
+cargo binstall nu@0.110.0
 ```
 
 The gate also wants:
@@ -88,7 +94,9 @@ the file; `ratchet update` and say by how much. Comparative numbers:
 - Three trait seams: `RenderDevice` / `RasterBackend`, `Resolve`, `Cascade`.
   A fourth needs review.
 - New code: impossible states do not compile.
-- No panics in library crates. Damage goes to `Diagnostics`; `Err` means stop.
+- No panics on untrusted input. Damage goes to `Diagnostics`; `Err` means
+  stop. An API-contract panic (`Array::insert` with `index > len()`, the
+  same shape as `Vec::insert`) is documented at the call site.
 - `unsafe_code = "forbid"` except `pdfrum-capi` (see that crate's rustdoc).
 - No `-sys`, no C in a library build. Write thirty lines instead of a helper
   crate. GPU is the one exemption: `pdfrum-raster-vello`, never a default dep.
@@ -107,6 +115,21 @@ own commit, from `./scripts/api-snapshot.nu update` (`just api-update`).
 That one is not skippable: an API change without a matching baseline fails
 the gate. It needs nushell, `cargo-public-api` and nightly — the install
 lines are under CI.
+
+Config structs that will grow (`RenderOptions`, `SaveOptions`, `OpenOptions`,
+`StampOptions`, `AttachmentOptions`) are `#[non_exhaustive]`. Fill them in
+with the builder; `..Default::default()` is a same-crate spelling only.
+Closed value types (`Stroke`, `Revision`) stay exhaustive. Enums that may
+grow (`LinkTarget`, `ImageEncoding`, `FontFileKind`) are `#[non_exhaustive]`.
+Do not mix the two policies on a new type.
+
+## Versions
+
+Internal workspace members depend on each other with a caret on `0.1.0`, so
+a patch of one crate is usable with siblings still at 0.1.0. Releases still
+bump the workspace together. `kurbo` and `peniko` are carets because their
+types are in public signatures; every other external crate is an exact pin.
+`Cargo.lock` is what reproduces our own builds. Keep `--locked` in CI.
 
 ## Paths
 

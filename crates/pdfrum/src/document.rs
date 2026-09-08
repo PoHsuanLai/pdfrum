@@ -13,8 +13,10 @@ use crate::{Outline, Page, RenderSession, Result};
 
 /// How to open a document.
 ///
-/// A config struct with [`Default`], filled in with struct-update syntax:
+/// A config struct with [`Default`]. `#[non_exhaustive]` so a field added
+/// later is not a major break; fill one in with [`OpenOptions::builder`].
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct OpenOptions {
     /// The password to try, as raw bytes rather than a `str`: PDF passwords
     /// are byte strings and need not be UTF-8.
@@ -32,10 +34,11 @@ pub struct OpenOptions {
 
 /// Builds an [`OpenOptions`] a setting at a time.
 ///
-/// Sugar over the struct-update syntax, which still works. It earns its place
-/// on a two-field struct because of the password: `.password("secret")` takes
-/// anything byte-shaped, where the field itself is the `Option<Vec<u8>>` the
-/// format actually calls for.
+/// The way to change one field from outside this crate: the type is
+/// `#[non_exhaustive]`, so struct-update syntax is a same-crate spelling.
+/// It earns its place on a two-field struct because of the password:
+/// `.password("secret")` takes anything byte-shaped, where the field itself
+/// is the `Option<Vec<u8>>` the format actually calls for.
 ///
 /// ```
 /// use pdfrum::{Limits, OpenOptions};
@@ -894,6 +897,7 @@ pub struct EmbeddedFontFile {
 /// The kind of an embedded font program, by the key that carried it and
 /// the bytes' own signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FontFileKind {
     /// `/FontFile`: Type 1.
     Type1,

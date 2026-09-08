@@ -13,6 +13,7 @@
 // wrapped call does not panic, so a future `vello_cpu` that implements the
 // field cannot silently change our rounding.
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod convert;
 
@@ -22,14 +23,11 @@ use pdfrum_render::{
     AlphaMask, AntiAlias, Brush, FillRule, ImageQuality, MAX_TARGET_DIMENSION, Pixmap,
     RasterBackend, RasterImage, RenderDevice,
 };
-use vello_cpu::color::palette::css::TRANSPARENT;
 use vello_cpu::peniko::{ImageBrush, ImageSampler};
 use vello_cpu::{
     CompositeMode, Level, Mask, PixelFormat, PixmapMut, RasterizerSettings, RenderContext,
     RenderMode, RenderSettings, Resources,
 };
-
-pub use convert::{to_blend_mode, to_mix};
 
 /// The SIMD level every target is rasterized at.
 ///
@@ -37,13 +35,13 @@ pub use convert::{to_blend_mode, to_mix};
 /// machine-dependent by one count on a few pixels, and reproducibility across
 /// machines is worth more than the throughput.
 #[must_use]
-pub fn pinned_level() -> Level {
+fn pinned_level() -> Level {
     Level::baseline()
 }
 
 /// The rasterization mode every target uses: the f32 pipeline, which
 /// `vello_cpu`'s own documentation recommends for test snapshots.
-pub const PINNED_RENDER_MODE: RenderMode = RenderMode::OptimizeQuality;
+const PINNED_RENDER_MODE: RenderMode = RenderMode::OptimizeQuality;
 
 /// The `vello_cpu` backend.
 #[derive(Debug, Clone, Copy, Default)]
@@ -357,12 +355,6 @@ impl RasterBackend for VelloCpuBackend {
         }
         d.rasterize()
     }
-}
-
-/// Whether a colour is fully transparent, so the caller can skip a clear.
-#[must_use]
-pub fn is_transparent(c: peniko::Color) -> bool {
-    c == peniko::Color::TRANSPARENT || to_vello_color(c) == TRANSPARENT
 }
 
 #[cfg(test)]

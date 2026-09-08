@@ -152,7 +152,7 @@ impl Page {
                 let (uri, page_index) = match link.target {
                     pdfrum::LinkTarget::Uri(uri) => (Some(uri), None),
                     pdfrum::LinkTarget::Page(index) => (None, Some(index.get())),
-                    pdfrum::LinkTarget::Other => (None, None),
+                    _ => (None, None),
                 };
                 Link {
                     x0: link.rect.x0,

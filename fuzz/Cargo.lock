@@ -356,6 +356,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "unicode-normalization",
+ "zeroize",
 ]
 
 [[package]]
@@ -388,6 +389,7 @@ dependencies = [
  "sha2",
  "subsetter",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -687,6 +689,12 @@ name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+
+[[package]]
+name = "zeroize"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
 
 [[package]]
 name = "zune-core"

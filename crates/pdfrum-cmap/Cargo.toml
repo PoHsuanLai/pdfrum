@@ -6,7 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
 keywords = ["pdf", "cmap", "cjk", "encoding", "cid"]
 categories = ["text-processing", "encoding", "internationalization"]
 # The generated table blob is committed and shipped; build.rs only regenerates
@@ -24,6 +23,10 @@ include = [
     "README*",
     "LICENSE*",
 ]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

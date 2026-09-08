@@ -38,7 +38,7 @@ fn text(map: &ToUnicode, code: u32) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// StringToCode — all 18 rows of the oracle's table (§1.6.3).
+// StringToCode — all 18 rows of the oracle's table.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -76,7 +76,7 @@ fn string_to_code_matches_the_oracle() {
 }
 
 // ---------------------------------------------------------------------------
-// StringToWideString — all 14 rows (§1.6.4).
+// StringToWideString — all 14 rows.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -104,7 +104,7 @@ fn string_to_units_matches_the_oracle() {
 }
 
 // ---------------------------------------------------------------------------
-// bfchar (§1.6.5).
+// bfchar.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -180,7 +180,7 @@ fn a_garbage_count_token_reads_as_zero_and_any_entry_then_invalidates() {
 }
 
 // ---------------------------------------------------------------------------
-// bfrange — the high-code mask, all six cases (§1.6.6).
+// bfrange — the high-code mask, all six cases.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -347,7 +347,7 @@ fn the_incrementing_bfrange_form_is_plain_for_ordinary_values() {
 }
 
 // ---------------------------------------------------------------------------
-// InsertIntoMaps — the three collision scenarios (§1.6.6).
+// InsertIntoMaps — the three collision scenarios.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -473,7 +473,7 @@ fn an_unpaired_surrogate_becomes_the_replacement_character() {
 }
 
 // ---------------------------------------------------------------------------
-// Multi-character accumulation and index shifting (§1.6.1).
+// Multi-character accumulation and index shifting.
 // ---------------------------------------------------------------------------
 
 #[test]

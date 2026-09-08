@@ -11,13 +11,12 @@ mod transform;
 
 pub use transform::{CidTransform, cid_transform_to_float, japan1_transform};
 
+use crate::descriptor::{self, FontDescriptor};
 use crate::glyphs::{Charmap, Face, GlyphSource};
 use crate::subst::{self, CodePage, FontRequest, SubstFont, SubstitutionOptions};
+use crate::tounicode::ToUnicode;
 use crate::widths::CidWidths;
-use crate::{
-    CharCode, CharItem, Cid, Error, FontCache, FontDescriptor, FontId, Gid, ToUnicode, descriptor,
-    names, widths,
-};
+use crate::{CharCode, CharItem, Cid, Error, FontCache, FontId, Gid, names, widths};
 use pdfrum_cmap::{CMap, CidCoding, CidSet};
 use pdfrum_common::kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};

@@ -55,6 +55,7 @@ use std::cell::Cell;
 use pdfrum_crypt::{CryptClass, Iv, SecurityHandler};
 use pdfrum_object::ObjRef;
 use sha2::{Digest, Sha256};
+use zeroize::Zeroize;
 
 use crate::Error;
 
@@ -76,6 +77,12 @@ impl std::fmt::Debug for IvSource {
         f.debug_struct("IvSource")
             .field("counter", &self.counter.get())
             .finish_non_exhaustive()
+    }
+}
+
+impl Drop for IvSource {
+    fn drop(&mut self) {
+        self.secret.zeroize();
     }
 }
 
@@ -124,7 +131,7 @@ impl IvSource {
 ///
 /// Per ISO 32000-1 §7.6.2 the key is derived per object from its number and
 /// generation; the generation is always 0 here because that is what the
-/// writer emits (§1.9), which is also what the C++ passes.
+/// writer emits, which is also what the C++ passes.
 ///
 /// Borrowed rather than owned so one handler and one vector source serve a
 /// whole save, with only the object number changing per object.

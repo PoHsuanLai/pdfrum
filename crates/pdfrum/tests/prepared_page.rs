@@ -10,10 +10,9 @@ const FIXTURES: [&str; 4] = [
 ];
 
 fn with_annotations() -> RenderOptions {
-    RenderOptions {
-        annotations: true,
-        ..RenderOptions::default()
-    }
+    let mut options = RenderOptions::default();
+    options.annotations = true;
+    options
 }
 
 #[test]
@@ -54,9 +53,10 @@ fn a_prepared_page_is_prepared_for_its_options() {
 
     let one_to_one = page.prepare(&RenderOptions::default(), &mut session);
     let doubled = page.prepare(
-        &RenderOptions {
-            transform: Affine::scale(2.0),
-            ..RenderOptions::default()
+        &{
+            let mut __o = RenderOptions::default();
+            __o.transform = Affine::scale(2.0);
+            __o
         },
         &mut session,
     );

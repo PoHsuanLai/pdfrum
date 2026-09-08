@@ -12,7 +12,7 @@
 use pdfrum_cmap::{CharCode, CidSet, Words};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity, hex_digit};
 use smallvec::SmallVec;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// A code above this invalidates the whole `bfchar`/`bfrange` block it
 /// appears in — not just that entry (`kCidLimit`).
@@ -287,7 +287,7 @@ impl ToUnicode {
     /// How many reverse-map entries point at `charcode`.
     ///
     /// The oracle's `GetUnicodeCountByCharcodeForTesting`, kept because the
-    /// collision tests of §1.6 are stated in terms of it and no other function
+    /// collision tests of the former working note are stated in terms of it and no other function
     /// exposes the reverse map's multiplicity.
     #[cfg(test)]
     fn unicode_count(&self, charcode: u32) -> usize {
@@ -297,7 +297,7 @@ impl ToUnicode {
     }
 
     /// Insert one code with the **lowest-value-wins** collision policy, in
-    /// both directions (`InsertIntoMaps`, §1.6.1).
+    /// both directions (`InsertIntoMaps`, the former working note).
     ///
     /// Only the *forward* half is recorded eagerly here; the cross-store
     /// minimum against the runs is taken on read, which is the same value
@@ -339,7 +339,7 @@ impl ToUnicode {
             .unwrap_or(0)
     }
 
-    /// Commit one destination string for one code (`SetCode`, §1.6.1).
+    /// Commit one destination string for one code (`SetCode`, the former working note).
     fn set_code(&mut self, srccode: u32, dest: &[u32]) {
         match dest {
             [] => {}
@@ -445,7 +445,7 @@ pub fn parse(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) -> ToUnicod
 ///
 /// Different from the embedded-CMap parser's code reader, which is
 /// deliberately lax: this one rejects a non-hex byte and a `u32` overflow
-/// outright, and those rejections invalidate whole blocks (§1.6.3).
+/// outright, and those rejections invalidate whole blocks.
 fn string_to_code(word: &[u8]) -> Option<u32> {
     if word.len() <= 2 || word.first() != Some(&b'<') || word.last() != Some(&b'>') {
         return None;
@@ -466,7 +466,7 @@ fn string_to_code(word: &[u8]) -> Option<u32> {
 /// **Never fails**; it returns whatever complete groups of four hex digits it
 /// read before running out or hitting a non-hex byte. A trailing partial group
 /// is discarded, so every unit this produces is at most `0xFFFF` — a UTF-16
-/// code unit, even though the storage is wider (§1.6.4).
+/// code unit, even though the storage is wider.
 fn string_to_units(word: &[u8]) -> Vec<u32> {
     if word.len() <= 2 || word.first() != Some(&b'<') || word.last() != Some(&b'>') {
         return Vec::new();
@@ -540,7 +540,7 @@ fn parse_int(word: &[u8]) -> i64 {
 /// `beginbfchar` … `endbfchar`, with the two-phase count check.
 ///
 /// Nothing is committed unless the collected count equals the declared one
-/// **exactly** — too few is as fatal as too many (§1.6.5).
+/// **exactly** — too few is as fatal as too many.
 fn handle_bfchar(
     words: &mut Words<'_>,
     previous: &[u8],
@@ -597,7 +597,7 @@ enum Range {
     Incremented { low: u32, dests: Vec<Vec<u32>> },
 }
 
-/// `beginbfrange` … `endbfrange` (§1.6.6).
+/// `beginbfrange` … `endbfrange`.
 fn handle_bfrange(
     words: &mut Words<'_>,
     previous: &[u8],
@@ -765,3 +765,29 @@ fn string_data_add(units: &[u32]) -> Vec<u32> {
 #[cfg(test)]
 #[path = "tounicode_tests.rs"]
 mod tests;
+
+/// Invert a `/ToUnicode` CMap: Unicode scalar → the character code that maps
+/// to it, for every code the program reaches.
+///
+/// The whole map is built once, rather than a reverse lookup per character.
+/// A writer that embeds a font with a *caller-supplied* `/ToUnicode` needs
+/// exactly this to turn text into codes: the caller's CMap is the only
+/// statement of what its codes mean, and the font program's own cmap is not
+/// it.
+///
+/// Where several codes map to one Unicode value the **numerically smallest**
+/// code wins, the same collision policy the forward direction uses.
+/// Multi-character destinations are unreachable — the reverse map is keyed on
+/// the packed stored value, and a multi-character entry's key is an indicator
+/// rather than any real character.
+#[must_use]
+pub fn invert_to_unicode(
+    bytes: &[u8],
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> HashMap<char, u32> {
+    parse(bytes, limits, diags)
+        .reverse_pairs()
+        .filter(|(_, code)| *code != 0)
+        .collect()
+}

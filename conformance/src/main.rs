@@ -639,14 +639,15 @@ fn inert_divergences(
         .collect()
 }
 
-/// The corpus size a healthy run walks.
+/// Scored rows a healthy run produces (`pass + fail` on the committed board).
 ///
-/// Derived from the committed scoreboard rather than hardcoded independently:
-/// that board is the reference measurement, and a run that walks materially
-/// fewer files than it did is looking at a different corpus — a partial
-/// checkout, a suppression list that grew, a `--checkout` pointing somewhere
+/// Diverged files sit beside that denominator, not inside it. Derived from
+/// the committed scoreboard rather than hardcoded independently: that board
+/// is the reference measurement, and a run that scores materially fewer
+/// files than it did is looking at a different corpus — a partial checkout,
+/// a suppression list that grew, a `--checkout` pointing somewhere
 /// unexpected.
-const EXPECTED_ROWS: u64 = 1759;
+const EXPECTED_ROWS: u64 = 1749;
 
 /// How far the row count may drift before it is worth saying so.
 ///

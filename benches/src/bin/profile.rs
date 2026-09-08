@@ -218,10 +218,8 @@ fn forms_split(args: &Args, bytes: &Arc<[u8]>) {
     };
 
     let with = RenderOptions::default();
-    let without = RenderOptions {
-        annotations: false,
-        ..RenderOptions::default()
-    };
+    let mut without = RenderOptions::default();
+    without.annotations = false;
 
     let mut best_with = f64::INFINITY;
     let mut best_without = f64::INFINITY;

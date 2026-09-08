@@ -121,11 +121,12 @@ pub fn options(mark: Mark, text: Option<Type<'_>>) -> Result<StampOptions> {
     if !mark.angle.is_finite() {
         bail!("--angle must be a number of degrees");
     }
-    let mut options = StampOptions {
-        position: mark.position.into(),
-        opacity: mark.opacity,
-        angle: mark.angle,
-        ..StampOptions::default()
+    let mut options = {
+        let mut __o = StampOptions::default();
+        __o.position = mark.position.into();
+        __o.opacity = mark.opacity;
+        __o.angle = mark.angle;
+        __o
     };
     if let Some(text) = text {
         if !(text.size.is_finite() && text.size > 0.0) {

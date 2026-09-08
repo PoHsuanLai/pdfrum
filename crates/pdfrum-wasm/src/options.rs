@@ -104,10 +104,8 @@ impl OpenOptions {
 impl OpenOptions {
     /// The facade options these describe.
     pub(crate) fn to_facade(&self, password: Option<&str>) -> pdfrum::OpenOptions {
-        let mut options = pdfrum::OpenOptions {
-            password: password.map(|password| password.as_bytes().to_vec()),
-            ..pdfrum::OpenOptions::default()
-        };
+        let mut options = pdfrum::OpenOptions::default();
+        options.password = password.map(|password| password.as_bytes().to_vec());
         // `as` on a checked finite non-negative `f64` truncates toward zero,
         // and the guard keeps it in `u64`. A caller who passes a fraction or a
         // negative gets the facade's own default rather than a saturating
@@ -183,14 +181,13 @@ impl SaveOptions {
 impl SaveOptions {
     /// The facade options these describe.
     pub(crate) fn to_facade(&self) -> pdfrum::SaveOptions {
-        pdfrum::SaveOptions {
-            id_source: if self.deterministic {
-                pdfrum::IdSource::Fixed(DETERMINISTIC_SEED)
-            } else {
-                pdfrum::IdSource::default()
-            },
-            remove_security: self.remove_security,
-            ..pdfrum::SaveOptions::default()
-        }
+        let mut options = pdfrum::SaveOptions::default();
+        options.id_source = if self.deterministic {
+            pdfrum::IdSource::Fixed(DETERMINISTIC_SEED)
+        } else {
+            pdfrum::IdSource::default()
+        };
+        options.remove_security = self.remove_security;
+        options
     }
 }

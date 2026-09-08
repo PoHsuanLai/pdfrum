@@ -73,7 +73,7 @@ pub fn pdfrum_parser::Document::owner_permissions(&self) -> pdfrum_crypt::permis
 pub fn pdfrum_parser::Document::page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_parser::PageDict, pdfrum_parser::Error>
 pub fn pdfrum_parser::Document::page_count(&self) -> u32
 pub fn pdfrum_parser::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
-pub fn pdfrum_parser::Document::security_handler(&self) -> &pdfrum_crypt::SecurityHandler
+pub fn pdfrum_parser::Document::security_handler(&self) -> &pdfrum_crypt::handler::SecurityHandler
 pub fn pdfrum_parser::Document::store(&self) -> &alloc::sync::Arc<pdfrum_parser::ObjectStore>
 pub fn pdfrum_parser::Document::trailer(&self) -> &pdfrum_object::dict::Dict
 pub fn pdfrum_parser::Document::trailer_object_number(&self) -> u32

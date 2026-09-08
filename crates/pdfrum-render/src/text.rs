@@ -1579,7 +1579,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // The glyph-spacing correction (§1.15).
+    // The glyph-spacing correction.
     // -----------------------------------------------------------------------
 
     /// A document advance wider than the face's centres the glyph in it, by

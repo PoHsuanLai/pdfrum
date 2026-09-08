@@ -94,7 +94,7 @@ pub struct pdfrum_edit::Encryptor<'a>
 impl<'a> pdfrum_edit::Encryptor<'a>
 pub fn pdfrum_edit::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_edit::Encryptor<'a>::encrypts_metadata(&self) -> bool
-pub const fn pdfrum_edit::Encryptor<'a>::new(&'a pdfrum_crypt::SecurityHandler, &'a pdfrum_edit::IvSource, u32) -> Self
+pub const fn pdfrum_edit::Encryptor<'a>::new(&'a pdfrum_crypt::handler::SecurityHandler, &'a pdfrum_edit::IvSource, u32) -> Self
 pub struct pdfrum_edit::FileId
 pub pdfrum_edit::FileId::array: pdfrum_object::array::Array
 pub pdfrum_edit::FileId::rekeyed: bool
@@ -113,6 +113,8 @@ impl pdfrum_edit::IvSource
 pub fn pdfrum_edit::IvSource::from_os() -> core::result::Result<Self, pdfrum_edit::Error>
 impl core::fmt::Debug for pdfrum_edit::IvSource
 pub fn pdfrum_edit::IvSource::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::drop::Drop for pdfrum_edit::IvSource
+pub fn pdfrum_edit::IvSource::drop(&mut self)
 pub struct pdfrum_edit::MissingGlyph
 pub pdfrum_edit::MissingGlyph::character: char
 pub pdfrum_edit::MissingGlyph::offset: usize

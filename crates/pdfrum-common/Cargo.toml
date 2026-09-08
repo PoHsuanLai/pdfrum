@@ -6,9 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "README.md"
 keywords = ["pdf", "diagnostics", "limits"]
 categories = ["parser-implementations", "data-structures"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

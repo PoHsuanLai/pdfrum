@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the toolchain
-        run: rustup toolchain install stable --profile minimal && rustup default stable
+        run: rustup toolchain install 1.98.1 --profile minimal && rustup default 1.98.1
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
@@ -67,8 +67,8 @@ jobs:
           tool: cargo-binstall
 
       - name: Install nushell
-        # The scripts are nushell, as in `ci.yml`.
-        run: cargo binstall --no-confirm --locked nu
+        # Pin the minor: this is the workflow that uploads write-once crates.
+        run: cargo binstall --no-confirm --locked nu@0.110.0
 
       # A tag that does not name the version in `Cargo.toml` would publish
       # something other than what it claims, and the version it publishes is

@@ -10,7 +10,7 @@
 //! Four behaviours here are pixel-visible and none is obvious:
 //!
 //! - **A shading pattern's alpha is rounded, not truncated.** Every other
-//!   alpha in the engine truncates (§1.3); `DrawShadingPattern` alone spells
+//!   alpha in the engine truncates; `DrawShadingPattern` alone spells
 //!   rounds, so `/ca 0.5` is 128 here and 127 everywhere else.
 //! - **A pattern clips by the object's own geometry.** `ClipPattern` fills or
 //!   strokes the path into the clip; an image clips by its transformed bbox;

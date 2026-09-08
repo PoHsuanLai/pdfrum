@@ -26,7 +26,7 @@ pub enum Charset {
     ChineseSimplified,
     /// Traditional Chinese.
     ChineseTraditional,
-    /// Korean (Johab). Notably **not** CJK for the purpose of §1.12 step 8.
+    /// Korean (Johab). Notably **not** CJK for the purpose of the former working note step 8.
     Johab,
     /// Greek.
     Greek,
@@ -55,7 +55,7 @@ impl Charset {
     ///
     /// **Johab is excluded**, even though it is Korean, and so are the
     /// Macintosh CJK charsets. The set is exactly what `FX_CharSetIsCJK`
-    /// names, and it decides whether Branch A of §1.12 takes its CJK arm.
+    /// names, and it decides whether Branch A of the former working note takes its CJK arm.
     #[must_use]
     pub(crate) fn is_cjk(self) -> bool {
         matches!(

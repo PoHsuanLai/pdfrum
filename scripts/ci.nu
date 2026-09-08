@@ -168,8 +168,12 @@ def main [] {
         cd ../..
     }
 
+    print "==> silent-skip floor"
+    ^./scripts/count-silent-skips.nu
+
     # fuzz/ is its own workspace (libfuzzer-sys / cc). Do not add it to
-    # members. This only typechecks; running is scripts/fuzz-gate.nu.
+    # members. This only typechecks; running is scripts/fuzz-gate.nu (weekly
+    # workflow, not this gate).
     print "==> cargo check (fuzz workspace)"
     ^cargo check --manifest-path fuzz/Cargo.toml --all-targets
 

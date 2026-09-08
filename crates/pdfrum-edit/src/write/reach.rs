@@ -176,7 +176,7 @@ fn count_reference(
 }
 
 /// The trailer keys the writer never copies forward, because it recomputes
-/// each of them (§1.12).
+/// each of them.
 ///
 /// Eleven keys, and the list is exact rather than a category: `/Type` is here
 /// because an xref-stream document's trailer *is* the stream dictionary and

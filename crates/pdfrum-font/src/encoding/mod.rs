@@ -33,7 +33,7 @@ pub enum FontEncoding {
     /// `/MacRomanEncoding`.
     MacRoman,
     /// `/MacExpertEncoding`. Reachable only through a non-TrueType font's
-    /// `/BaseEncoding`; the name form rewrites it to WinAnsi (§1.7).
+    /// `/BaseEncoding`; the name form rewrites it to WinAnsi.
     MacExpert,
     /// Adobe standard encoding, the default for a non-symbolic font.
     Standard,
@@ -52,7 +52,7 @@ impl FontEncoding {
     /// The 256-entry code→Unicode table, when this encoding has one.
     ///
     /// `Builtin` is the only encoding without one — PDFium returns an empty
-    /// span for it, and every caller tests emptiness (§1.7).
+    /// span for it, and every caller tests emptiness.
     #[must_use]
     pub fn unicodes(self) -> Option<&'static [u16; 256]> {
         Some(match self {
@@ -74,7 +74,7 @@ impl FontEncoding {
     /// The tables are offset: they start at code 32 for every encoding but
     /// `PdfDoc`, which starts at 24, so a code below the start has no name.
     /// `MsSymbol` and `Builtin` have no name table at all
-    /// (`CharNameFromPredefinedCharSet`, §1.7).
+    /// (`CharNameFromPredefinedCharSet`, the former working note).
     #[must_use]
     pub fn char_name(self, code: u8) -> Option<&'static str> {
         let (table, first): (&[Option<&'static str>], u8) = match self {
@@ -95,7 +95,7 @@ impl FontEncoding {
     ///
     /// Anything else — including `/StandardEncoding` — leaves the encoding
     /// unchanged, which is why this returns `Option` rather than a default
-    /// (`GetPredefinedEncoding`, §1.7).
+    /// (`GetPredefinedEncoding`, the former working note).
     #[must_use]
     pub fn from_pdf_name(name: &[u8]) -> Option<Self> {
         Some(match name {
@@ -110,7 +110,7 @@ impl FontEncoding {
 
 /// The `fxge`-level encodings a font *face*'s charmap may declare, which are a
 /// different set from `FontEncoding` and are reverse-mapped through the raw
-/// tables (`CharCodeFromUnicodeForEncoding`, §1.7).
+/// tables (`CharCodeFromUnicodeForEncoding`, the former working note).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FaceEncoding {
     /// The charmap is Unicode: a code *is* its character.
@@ -155,7 +155,7 @@ impl FaceEncoding {
 }
 
 /// The Unicode an Apple Roman character code stands for
-/// (`UnicodeFromAppleRomanCharCode`, §1.7).
+/// (`UnicodeFromAppleRomanCharCode`, the former working note).
 #[must_use]
 pub fn unicode_from_apple_roman(code: u8) -> u16 {
     tables::MAC_ROMAN_ENCODING
@@ -169,11 +169,11 @@ pub fn unicode_from_apple_roman(code: u8) -> u16 {
 ///
 /// **`/Differences` always wins**, including over a symbolic font's own set,
 /// and including when the base encoding is `Builtin` — which is the only way a
-/// `Builtin` font names a glyph at all (`GetAdobeCharName`, §1.7).
+/// `Builtin` font names a glyph at all (`GetAdobeCharName`, the former working note).
 #[must_use]
 pub fn adobe_char_name(
     base: FontEncoding,
-    differences: &[Option<crate::GlyphName>; 256],
+    differences: &[Option<crate::ids::GlyphName>; 256],
     charcode: u32,
 ) -> Option<&[u8]> {
     let code = u8::try_from(charcode).ok()?;
@@ -191,7 +191,7 @@ mod tests {
     // Test fixtures are fixed-size arrays with known contents.
     #![allow(clippy::indexing_slicing)]
     use super::*;
-    use crate::GlyphName;
+    use crate::ids::GlyphName;
 
     const NO_DIFFS: [Option<GlyphName>; 256] = [const { None }; 256];
 
@@ -251,7 +251,7 @@ mod tests {
             Some(FontEncoding::PdfDoc)
         );
         // `/StandardEncoding` is deliberately NOT in the table: naming it is a
-        // no-op that leaves the encoding at whatever it already was (§1.7).
+        // no-op that leaves the encoding at whatever it already was.
         assert_eq!(FontEncoding::from_pdf_name(b"StandardEncoding"), None);
         assert_eq!(FontEncoding::from_pdf_name(b"Identity-H"), None);
         assert_eq!(FontEncoding::from_pdf_name(b""), None);

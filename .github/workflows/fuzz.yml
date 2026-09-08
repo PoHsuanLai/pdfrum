@@ -1,0 +1,55 @@
+# Run the fuzz gate on a schedule. CI on every PR only typechecks fuzz/;
+# this is what actually executes the targets.
+#
+# A crash is a library bug. Artifacts upload so a failing run is reproducible
+# with `cd fuzz && cargo +nightly fuzz run <target> artifacts/<target>/<file>`.
+
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: fuzz-gate.nu
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup toolchain install 1.98.1 --profile minimal
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install the prebuilt tools
+        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        with:
+          tool: cargo-binstall
+
+      - name: Install cargo-fuzz and nushell
+        run: |
+          cargo install cargo-fuzz --locked
+          cargo binstall --no-confirm --locked nu@0.110.0
+
+      - name: Fuzz gate
+        run: ./scripts/fuzz-gate.nu 1800
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
