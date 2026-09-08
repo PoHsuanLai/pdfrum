@@ -123,11 +123,11 @@ jobs:
         # The same feature set the Linux gate runs, minus `pdfrum-tool`: it is
         # `publish = false` and its javascript feature adds nothing this is
         # here to learn about the platform.
-        run: cargo nextest run --workspace --locked --features pdfrum-cli/javascript,pdfrum/svg
+        run: cargo nextest run --workspace --locked --features pdfrum-cli/javascript,pdfrum/svg-export
 
       - name: Doctests
         # nextest skips doctests without saying so.
-        run: cargo test --doc --workspace --locked --features pdfrum/svg
+        run: cargo test --doc --workspace --locked --features pdfrum/svg-export
 
   # The floor the manifests promise. Nothing else pins it, so a dependency
   # that quietly needs a newer compiler would otherwise be found by whoever
