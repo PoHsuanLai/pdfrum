@@ -382,14 +382,15 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
         b: 0,
     };
 
-    let options = RenderOptions {
-        color_mode: ColorMode::Forced(ColorScheme {
+    let options = {
+        let mut __o = RenderOptions::default();
+        __o.color_mode = ColorMode::Forced(ColorScheme {
             path_fill: black,
             path_stroke: black,
             text_fill: black,
             text_stroke: white,
-        }),
-        ..RenderOptions::default()
+        });
+        __o
     };
 
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture opens");

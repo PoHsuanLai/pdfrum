@@ -90,7 +90,7 @@ pub fn pdfrum_text::TextPage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 pub struct pdfrum_text::TextRun
 pub pdfrum_text::TextRun::advance: f64
 pub pdfrum_text::TextRun::char_space: f32
-pub pdfrum_text::TextRun::font: alloc::sync::Arc<pdfrum_font::Font>
+pub pdfrum_text::TextRun::font: alloc::sync::Arc<pdfrum_font::load::Font>
 pub pdfrum_text::TextRun::font_size: f32
 pub pdfrum_text::TextRun::font_size_h: f32
 pub pdfrum_text::TextRun::index: pdfrum_text::ObjectIndex

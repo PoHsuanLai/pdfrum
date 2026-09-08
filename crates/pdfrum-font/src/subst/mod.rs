@@ -303,7 +303,7 @@ fn resolve_inner(
 
     // Step 0 — normalize. Without `USE_EXTERN_ATTR` the caller's weight and
     // slant are *discarded entirely*, which is why that flag's five-term
-    // conjunction in §1.2 matters so much.
+    // conjunction in the former working note matters so much.
     let mut weight = if req.weight == 0 { 400 } else { req.weight };
     let mut italic_angle = req.italic_angle;
     if !req.flags.uses_extern_attr() {

@@ -16,10 +16,9 @@ use pdfrum::{Document, IdSource, Metadata, SaveOptions};
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 
 fn reproducible() -> SaveOptions {
-    SaveOptions {
-        id_source: IdSource::Fixed([0x44; 16]),
-        ..SaveOptions::default()
-    }
+    let mut options = SaveOptions::default();
+    options.id_source = IdSource::Fixed([0x44; 16]);
+    options
 }
 
 fn saved(edit: &pdfrum::DocEdit<'_>, options: &SaveOptions) -> Vec<u8> {

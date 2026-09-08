@@ -21,6 +21,7 @@
 // Tier C only: the CPU backends stay the oracle-compared ones and this is
 // compared against them. It never joins the conformance scoreboard.
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod adapter;
 mod block;

@@ -244,7 +244,7 @@ mod tests {
     fn ctx_for<'a>(
         glyphs: &'a GlyphSource,
         encoding: FontEncoding,
-        differences: &'a [Option<crate::GlyphName>; 256],
+        differences: &'a [Option<crate::ids::GlyphName>; 256],
         flags: crate::FontFlags,
         embedded: bool,
     ) -> LadderContext<'a> {
@@ -260,7 +260,7 @@ mod tests {
         }
     }
 
-    const NO_DIFFS: [Option<crate::GlyphName>; 256] = [const { None }; 256];
+    const NO_DIFFS: [Option<crate::ids::GlyphName>; 256] = [const { None }; 256];
 
     #[test]
     fn the_non_symbolic_branch_prefers_a_name_over_a_charmap() {
@@ -291,8 +291,8 @@ mod tests {
     fn notdef_and_space_take_the_sentinel_rather_than_a_second_lookup() {
         let (glyphs, _) = builtin_generic(false);
         let mut diffs = NO_DIFFS;
-        diffs[10] = Some(crate::GlyphName::from(".notdef"));
-        diffs[11] = Some(crate::GlyphName::from("nosuchglyphname"));
+        diffs[10] = Some(crate::ids::GlyphName::from(".notdef"));
+        diffs[11] = Some(crate::ids::GlyphName::from("nosuchglyphname"));
         let ctx = ctx_for(
             &glyphs,
             FontEncoding::Standard,
@@ -369,7 +369,7 @@ mod tests {
         let (glyphs, _) = builtin_generic(false);
         let mut diffs = NO_DIFFS;
         // Code 39 is `quoteright` in StandardEncoding; name it `A` instead.
-        diffs[39] = Some(crate::GlyphName::from("A"));
+        diffs[39] = Some(crate::ids::GlyphName::from("A"));
         let ctx = ctx_for(
             &glyphs,
             FontEncoding::Standard,

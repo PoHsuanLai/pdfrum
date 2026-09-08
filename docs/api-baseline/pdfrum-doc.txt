@@ -115,9 +115,9 @@ pub fn pdfrum_doc::ap::field_body::field_value<R: pdfrum_object::resolve::Resolv
 pub fn pdfrum_doc::ap::field_body::options<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<pdfrum_doc::ap::field_body::Choice>
 pub mod pdfrum_doc::ap::font_map
 pub const pdfrum_doc::ap::font_map::SUBSTITUTABLE_CHARSETS: &[pdfrum_font::subst::charset::Charset]
-pub fn pdfrum_doc::ap::font_map::da_font_writes(&pdfrum_font::Font, pdfrum_font::subst::charset::Charset, u32) -> bool
-pub fn pdfrum_doc::ap::font_map::font_charset(&pdfrum_font::Font) -> pdfrum_font::subst::charset::Charset
-pub fn pdfrum_doc::ap::font_map::substitute_width(&pdfrum_font::Font, u32) -> i32
+pub fn pdfrum_doc::ap::font_map::da_font_writes(&pdfrum_font::load::Font, pdfrum_font::subst::charset::Charset, u32) -> bool
+pub fn pdfrum_doc::ap::font_map::font_charset(&pdfrum_font::load::Font) -> pdfrum_font::subst::charset::Charset
+pub fn pdfrum_doc::ap::font_map::substitute_width(&pdfrum_font::load::Font, u32) -> i32
 pub mod pdfrum_doc::ap::freetext
 pub struct pdfrum_doc::ap::freetext::Appearance
 pub pdfrum_doc::ap::freetext::Appearance::color: pdfrum_doc::color::Color
@@ -166,7 +166,7 @@ impl pdfrum_doc::ap::Focus
 pub fn pdfrum_doc::ap::Focus::at(usize) -> pdfrum_doc::ap::Focus
 pub struct pdfrum_doc::ap::FormFonts
 impl pdfrum_doc::ap::FormFonts
-pub fn pdfrum_doc::ap::FormFonts::face(&self, &[u8]) -> core::option::Option<&pdfrum_font::Font>
+pub fn pdfrum_doc::ap::FormFonts::face(&self, &[u8]) -> core::option::Option<&pdfrum_font::load::Font>
 pub fn pdfrum_doc::ap::FormFonts::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext) -> alloc::sync::Arc<pdfrum_doc::ap::FormFonts>
 pub fn pdfrum_doc::ap::FormFonts::substitute(&self, pdfrum_font::subst::charset::Charset) -> core::option::Option<pdfrum_doc::ap::Substitute<'_>>
 pub fn pdfrum_doc::ap::FormFonts::text_font<'a>(&'a self, &[u8], &'a dyn core::ops::function::Fn(u32) -> i32) -> core::option::Option<pdfrum_doc::ap::TextFont<'a>>
@@ -182,14 +182,14 @@ pub pdfrum_doc::ap::GeneratedAp::stream: alloc::vec::Vec<u8>
 pub struct pdfrum_doc::ap::Substitute<'a>
 pub pdfrum_doc::ap::Substitute::alias: &'a pdfrum_object::name::Name
 pub pdfrum_doc::ap::Substitute::dict: &'a pdfrum_object::dict::Dict
-pub pdfrum_doc::ap::Substitute::font: &'a pdfrum_font::Font
+pub pdfrum_doc::ap::Substitute::font: &'a pdfrum_font::load::Font
 pub struct pdfrum_doc::ap::TextFont<'a>
-pub pdfrum_doc::ap::TextFont::font: &'a pdfrum_font::Font
+pub pdfrum_doc::ap::TextFont::font: &'a pdfrum_font::load::Font
 pub pdfrum_doc::ap::TextFont::metrics: pdfrum_doc::vt::Metrics<'a>
 impl pdfrum_doc::ap::TextFont<'_>
-pub fn pdfrum_doc::ap::TextFont<'_>::char_width(&pdfrum_font::Font, u32) -> i32
+pub fn pdfrum_doc::ap::TextFont<'_>::char_width(&pdfrum_font::load::Font, u32) -> i32
 pub fn pdfrum_doc::ap::TextFont<'_>::encode(&self, u32) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::TextFont<'_>::metrics_of<'a>(&'a pdfrum_font::Font, &'a dyn core::ops::function::Fn(u32) -> i32) -> pdfrum_doc::vt::Metrics<'a>
+pub fn pdfrum_doc::ap::TextFont<'_>::metrics_of<'a>(&'a pdfrum_font::load::Font, &'a dyn core::ops::function::Fn(u32) -> i32) -> pdfrum_doc::vt::Metrics<'a>
 impl core::fmt::Debug for pdfrum_doc::ap::TextFont<'_>
 pub fn pdfrum_doc::ap::TextFont<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn pdfrum_doc::ap::generate_appearances<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::ap::AnnotOverlay

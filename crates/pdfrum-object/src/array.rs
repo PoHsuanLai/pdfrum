@@ -65,6 +65,11 @@ impl Array {
     /// Inserts `value` at `index`, shifting later items; `index == len()`
     /// appends.
     ///
+    /// This is the same contract as [`Vec::insert`]: a panic here is a
+    /// caller bug, not a response to untrusted PDF bytes. [`Array::remove`]
+    /// returns [`None`] out of range because absence is a normal outcome
+    /// there.
+    ///
     /// # Panics
     ///
     /// When `index > len()`.

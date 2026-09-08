@@ -4,7 +4,7 @@
 //! consecutive codes from there). Its damage behavior is specific and
 //! load-bearing.
 
-use crate::GlyphName;
+use crate::ids::GlyphName;
 use pdfrum_object::{Array, Object, Resolve};
 
 /// Read a `/Differences` array into a 256-entry name table.

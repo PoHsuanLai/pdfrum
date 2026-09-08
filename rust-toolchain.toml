@@ -1,0 +1,7 @@
+# The CI gate's toolchain. MSRV stays `rust-version = "1.92"` in Cargo.toml
+# and is checked by the dedicated `msrv` job. Bump this file on purpose
+# when clippy or rustc behaviour should change; an unpinned `stable` makes
+# `#[expect(lint)]` a landmine under `-D warnings`.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]

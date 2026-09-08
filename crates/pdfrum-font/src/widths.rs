@@ -54,7 +54,7 @@ impl SimpleWidths {
     }
 
     /// Whether the PDF declared widths, which is what the glyph-spacing
-    /// heuristic of §1.15 gates on.
+    /// heuristic of the former working note gates on.
     #[must_use]
     pub fn has_declared_widths(&self) -> bool {
         !self.use_face_widths
@@ -160,7 +160,7 @@ impl CidWidths {
     }
 
     /// Mark this font as taking fixed widths for ASCII, which the GB2312
-    /// rescue path of §1.10.1 sets.
+    /// rescue path of the former working note sets.
     pub fn set_ansi_widths_fixed(&mut self) {
         self.ansi_widths_fixed = true;
     }
@@ -305,7 +305,7 @@ impl VerticalMetrics {
     }
 }
 
-/// The shared `/W` and `/W2` reader (`LoadMetricsArray`, §1.10.2).
+/// The shared `/W` and `/W2` reader (`LoadMetricsArray`, the former working note).
 ///
 /// One state machine over two interleaved forms — `c [w …]` and `c1 c2 w …` —
 /// distinguished purely by whether the current element is an array. Three

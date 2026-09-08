@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use zeroize::Zeroize;
+
 /// A file encryption key of at most 32 bytes.
 ///
 /// Inline storage, because every key in this crate is between 5 and 32 bytes
@@ -67,6 +69,13 @@ impl SmallKey {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+}
+
+impl Drop for SmallKey {
+    fn drop(&mut self) {
+        self.bytes.zeroize();
+        self.len = 0;
     }
 }
 

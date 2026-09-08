@@ -11,7 +11,7 @@ use vello_cpu::peniko as vpeniko;
 
 /// The fill rule.
 #[must_use]
-pub fn to_fill(rule: FillRule) -> vpeniko::Fill {
+pub(crate) fn to_fill(rule: FillRule) -> vpeniko::Fill {
     match rule {
         FillRule::Winding => vpeniko::Fill::NonZero,
         FillRule::EvenOdd => vpeniko::Fill::EvenOdd,
@@ -33,7 +33,7 @@ pub fn to_fill(rule: FillRule) -> vpeniko::Fill {
 /// pixel for *both* cells, which is only harmless when both write the same
 /// opaque colour.
 #[must_use]
-pub fn to_aliasing_threshold(aa: AntiAlias) -> Option<u8> {
+pub(crate) fn to_aliasing_threshold(aa: AntiAlias) -> Option<u8> {
     match aa {
         AntiAlias::On => None,
         AntiAlias::Off => Some(128),
@@ -48,7 +48,7 @@ pub fn to_aliasing_threshold(aa: AntiAlias) -> Option<u8> {
 /// [`ImageQuality::Nearest`] itself, so the downgrade becomes a no-op and
 /// both backends receive the same value.
 #[must_use]
-pub fn to_image_quality(q: ImageQuality) -> vpeniko::ImageQuality {
+pub(crate) fn to_image_quality(q: ImageQuality) -> vpeniko::ImageQuality {
     match q {
         ImageQuality::Nearest => vpeniko::ImageQuality::Low,
         ImageQuality::Bilinear => vpeniko::ImageQuality::Medium,
@@ -57,7 +57,7 @@ pub fn to_image_quality(q: ImageQuality) -> vpeniko::ImageQuality {
 
 /// A PDF blend mode as peniko's mix mode.
 #[must_use]
-pub fn to_mix(mode: BlendMode) -> vpeniko::Mix {
+pub(crate) fn to_mix(mode: BlendMode) -> vpeniko::Mix {
     match mode {
         BlendMode::Normal | BlendMode::Compatible => vpeniko::Mix::Normal,
         BlendMode::Multiply => vpeniko::Mix::Multiply,
@@ -80,13 +80,13 @@ pub fn to_mix(mode: BlendMode) -> vpeniko::Mix {
 
 /// A blend mode as the full `peniko::BlendMode` a layer takes.
 #[must_use]
-pub fn to_blend_mode(mode: BlendMode) -> vpeniko::BlendMode {
+pub(crate) fn to_blend_mode(mode: BlendMode) -> vpeniko::BlendMode {
     vpeniko::BlendMode::new(to_mix(mode), vpeniko::Compose::SrcOver)
 }
 
 /// An engine `Pixmap` as a vello one, keeping the premultiplied bytes.
 #[must_use]
-pub fn to_vello_pixmap(p: &Pixmap) -> Option<vello_cpu::Pixmap> {
+pub(crate) fn to_vello_pixmap(p: &Pixmap) -> Option<vello_cpu::Pixmap> {
     let (w, h) = (
         u16::try_from(p.width()).ok()?,
         u16::try_from(p.height()).ok()?,

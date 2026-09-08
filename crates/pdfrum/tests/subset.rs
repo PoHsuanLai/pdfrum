@@ -1,4 +1,4 @@
-//! `SaveOptions::subset_new_fonts`, end to end (ISO 32000-1 §9.9, ).
+//! `SaveOptions::subset_new_fonts`, end to end (ISO 32000-1 §9.9).
 //!
 //! The option only ever fires on fonts a save writes as **new**, so every
 //! test here imports a page carrying an embedded CID TrueType font into a

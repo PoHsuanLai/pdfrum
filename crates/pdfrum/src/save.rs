@@ -20,8 +20,10 @@ use crate::{
 
 /// How a document is written back out.
 ///
-/// A config struct with [`Default`], filled in with struct-update syntax.
+/// A config struct with [`Default`]. `#[non_exhaustive]` so a field added
+/// later is not a major break; fill one in with [`SaveOptions::builder`].
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct SaveOptions {
     /// Whether to rewrite the file or append to it.
     pub update: Update,
@@ -76,9 +78,10 @@ pub enum Update {
 
 /// Builds a [`SaveOptions`] a setting at a time.
 ///
-/// Sugar over the struct-update syntax, which still works. Every method
-/// consumes and returns the builder; [`build`](Self::build) hands back the
-/// options.
+/// The way to change one field from outside this crate: the type is
+/// `#[non_exhaustive]`, so struct-update syntax is a same-crate spelling.
+/// Every method consumes and returns the builder; [`build`](Self::build)
+/// hands back the options.
 ///
 /// ```
 /// use pdfrum::{SaveOptions, Update};
@@ -88,11 +91,8 @@ pub enum Update {
 ///     .subset_new_fonts(true)
 ///     .build();
 ///
-/// assert_eq!(options, SaveOptions {
-///     update: Update::Incremental,
-///     subset_new_fonts: true,
-///     ..SaveOptions::default()
-/// });
+/// assert_eq!(options.update, Update::Incremental);
+/// assert!(options.subset_new_fonts);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[must_use]

@@ -68,6 +68,15 @@ impl AdapterReport {
         )
     }
 
+    /// A software rasterizer (`llvmpipe`, `SwiftShader`, the wgpu fallback).
+    ///
+    /// Refused by default so a benchmark cannot report CPU numbers under a
+    /// GPU label. Tests may opt in with `PDFRUM_ALLOW_SOFTWARE_GPU=1`.
+    #[must_use]
+    pub fn is_software(&self) -> bool {
+        self.device_type == "Cpu"
+    }
+
     /// Build a report from an adapter.
     #[must_use]
     pub fn of(adapter: &wgpu::Adapter) -> Self {

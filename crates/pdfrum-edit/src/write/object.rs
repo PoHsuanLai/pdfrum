@@ -64,7 +64,7 @@ pub(crate) fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encrypt
         Object::Dict(d) => write_dict(out, d, enc),
         Object::Stream(s) => write_stream(out, s, enc),
         // Generation is always 0 on output: every object is renumbered to
-        // generation 0 by the writer, so every reference must name it (§1.9).
+        // generation 0 by the writer, so every reference must name it.
         Object::Ref(r) => {
             out.push(b' ');
             out.extend_from_slice(r.num.to_string().as_bytes());
@@ -150,7 +150,7 @@ fn write_stream(out: &mut Vec<u8>, s: &Stream, enc: Option<&Encryptor<'_>>) {
 /// The generation is the literal `0` for every object the writer emits: the
 /// xref entries say `00000` to match, and every reference written says
 /// `N 0 R`. Generations are read from a file and never written back — the
-/// single most important round-trip simplification (§1.9, invariant R9).
+/// single most important round-trip simplification.
 pub(crate) fn write_indirect(
     out: &mut Vec<u8>,
     num: u32,

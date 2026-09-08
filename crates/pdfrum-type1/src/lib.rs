@@ -18,6 +18,7 @@
 // mid-byte, a charstring that runs off its end, a Multiple-Master declaration
 // whose parts disagree.
 #![forbid(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 // Every byte here came from an untrusted `/FontFile` stream: index with
 // `get()`, never with `[]`.
 #![warn(clippy::indexing_slicing)]

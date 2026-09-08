@@ -20,27 +20,23 @@ const HELLO: &str = "tests/fixtures/hello_world.pdf";
 const GUIDE: &str = "../../benches/corpus/text_quick_start.pdf";
 
 fn open_with(limits: Limits) -> Document {
-    Document::open_with(
-        HELLO,
-        &OpenOptions {
-            limits,
-            ..OpenOptions::default()
-        },
-    )
+    Document::open_with(HELLO, &{
+        let mut __o = OpenOptions::default();
+        __o.limits = limits;
+        __o
+    })
     .expect("open")
 }
 
 fn open_guide(deadline: Deadline) -> pdfrum::Result<Document> {
-    Document::open_with(
-        GUIDE,
-        &OpenOptions {
-            limits: Limits {
-                deadline: Some(deadline),
-                ..Limits::default()
-            },
-            ..OpenOptions::default()
-        },
-    )
+    Document::open_with(GUIDE, &{
+        let mut __o = OpenOptions::default();
+        __o.limits = Limits {
+            deadline: Some(deadline),
+            ..Limits::default()
+        };
+        __o
+    })
 }
 
 fn capped(max_render_pixels: u64) -> Document {
@@ -51,10 +47,9 @@ fn capped(max_render_pixels: u64) -> Document {
 }
 
 fn huge() -> RenderOptions {
-    RenderOptions {
-        transform: Affine::scale(100.0),
-        ..RenderOptions::default()
-    }
+    let mut options = RenderOptions::default();
+    options.transform = Affine::scale(100.0);
+    options
 }
 
 #[test]

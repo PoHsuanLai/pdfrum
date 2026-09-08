@@ -11,7 +11,6 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "The WebAssembly binding for pdfrum: open, render, extract and fill PDFs in a browser or Node"
-readme = "README.md"
 keywords = ["pdf", "wasm", "webassembly", "render", "browser"]
 categories = ["api-bindings", "wasm", "graphics"]
 # Nothing `cargo add`s a cdylib. The published surface of this crate is the

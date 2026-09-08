@@ -45,10 +45,12 @@ jobs:
 
       - name: Install the toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          # Channel comes from rust-toolchain.toml. Nightly is only for
+          # cargo-public-api (rustdoc JSON) and the fuzz workspace check.
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
           rustup toolchain install nightly --profile minimal
           rustup target add wasm32-unknown-unknown
-          rustup default stable
+          rustup default 1.98.1
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
@@ -76,9 +78,9 @@ jobs:
           tool: cargo-nextest,cargo-deny,wasm-bindgen@0.2.128,cargo-binstall
 
       - name: Install nushell
-        # The scripts are nushell. `install-action` does not carry it, but
-        # nushell publishes x86-64 Linux binaries and `binstall` takes them.
-        run: cargo binstall --no-confirm --locked nu
+        # The scripts are nushell. Pin the minor: Nushell changes syntax
+        # between releases, and this is the workflow that defines done.
+        run: cargo binstall --no-confirm --locked nu@0.110.0
 
       - name: Install the tools that publish no binary
         # Source builds, because there is nothing to fetch. `--locked` so a
@@ -113,7 +115,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the toolchain
-        run: rustup toolchain install stable --profile minimal && rustup default stable
+        run: rustup toolchain install 1.98.1 --profile minimal && rustup default 1.98.1
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
@@ -150,15 +152,48 @@ jobs:
 
       - name: Install the toolchain
         # Read from the workspace manifest so this job and the promise cannot
-        # drift apart.
+        # drift apart. `cargo +$msrv` overrides rust-toolchain.toml, which
+        # pins the lint/test gate rather than the minimum.
         run: |
           msrv="$(cargo metadata --no-deps --format-version 1 \
             | python3 -c 'import json,sys; print(next(p["rust_version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "pdfrum"))')"
           echo "pinning rustc $msrv"
+          echo "MSRV=$msrv" >> "$GITHUB_ENV"
           rustup toolchain install "$msrv" --profile minimal
-          rustup default "$msrv"
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Check
-        run: cargo check --workspace --lib --locked
+        run: cargo +${{ env.MSRV }} check --workspace --lib --locked
+
+  # The GPU backend's tests skip cleanly without an adapter, which is the
+  # ordinary hosted-runner case and would otherwise be a vacuous green.
+  # lavapipe is a software Vulkan ICD; PDFRUM_ALLOW_SOFTWARE_GPU lets the
+  # suite accept it, and PDFRUM_REQUIRE_GPU fails the job if even that is
+  # missing so a skip cannot hide as a pass.
+  gpu:
+    name: GPU suite (lavapipe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal && rustup default 1.98.1
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install lavapipe
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Install the prebuilt tools
+        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        with:
+          tool: cargo-nextest
+
+      - name: GPU tests
+        env:
+          PDFRUM_ALLOW_SOFTWARE_GPU: "1"
+          PDFRUM_REQUIRE_GPU: "1"
+          WGPU_BACKEND: vulkan
+        run: cargo nextest run -p pdfrum-raster-vello --test gpu --locked

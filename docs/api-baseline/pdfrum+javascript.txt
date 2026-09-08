@@ -168,7 +168,7 @@ pub pdfrum::Flattened::Done
 pub pdfrum::Flattened::NothingToDo
 impl core::fmt::Display for pdfrum::Flattened
 pub fn pdfrum::Flattened::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub enum pdfrum::FontFileKind
+#[non_exhaustive] pub enum pdfrum::FontFileKind
 pub pdfrum::FontFileKind::Cff
 pub pdfrum::FontFileKind::OpenType
 pub pdfrum::FontFileKind::TrueType
@@ -181,7 +181,7 @@ pub fn pdfrum::FontFileKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::
 impl core::str::traits::FromStr for pdfrum::FontFileKind
 pub type pdfrum::FontFileKind::Err = pdfrum::UnknownFontFileKind
 pub fn pdfrum::FontFileKind::from_str(&str) -> core::result::Result<pdfrum::FontFileKind, pdfrum::UnknownFontFileKind>
-pub enum pdfrum::ImageEncoding
+#[non_exhaustive] pub enum pdfrum::ImageEncoding
 pub pdfrum::ImageEncoding::CcittFax
 pub pdfrum::ImageEncoding::Jbig2
 pub pdfrum::ImageEncoding::Jpeg
@@ -202,7 +202,7 @@ pub enum pdfrum::LineJoin
 pub pdfrum::LineJoin::Bevel
 pub pdfrum::LineJoin::Miter
 pub pdfrum::LineJoin::Round
-pub enum pdfrum::LinkTarget
+#[non_exhaustive] pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
 pub pdfrum::LinkTarget::Uri(alloc::string::String)
@@ -306,7 +306,7 @@ pub fn pdfrum::Attachment<'_>::file_name(&self) -> alloc::string::String
 pub fn pdfrum::Attachment<'_>::has_param(&self, &str) -> bool
 pub fn pdfrum::Attachment<'_>::param(&self, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Attachment<'_>::subtype(&self) -> core::option::Option<alloc::string::String>
-pub struct pdfrum::AttachmentOptions
+#[non_exhaustive] pub struct pdfrum::AttachmentOptions
 pub pdfrum::AttachmentOptions::description: core::option::Option<alloc::string::String>
 pub pdfrum::AttachmentOptions::mime_type: core::option::Option<alloc::string::String>
 pub pdfrum::AttachmentOptions::modified: core::option::Option<alloc::string::String>
@@ -344,6 +344,8 @@ pub fn pdfrum::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, pdfru
 pub fn pdfrum::Canvas<'_, '_>::text(&mut self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64, kurbo::point::Point, peniko::Color)
 pub fn pdfrum::Canvas<'_, '_>::text_width(&self, &str, &pdfrum_edit::font::embed::EmbeddedFont, f64) -> f64
 pub fn pdfrum::Canvas<'_, '_>::transform(&mut self, kurbo::affine::Affine)
+impl core::fmt::Debug for pdfrum::Canvas<'_, '_>
+pub fn pdfrum::Canvas<'_, '_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum::Dash
 impl pdfrum::Dash
 pub fn pdfrum::Dash::lengths(&self) -> &[f64]
@@ -534,7 +536,7 @@ pub fn pdfrum::MiterLimit::get(self) -> f64
 pub fn pdfrum::MiterLimit::new(f64) -> Self
 impl core::default::Default for pdfrum::MiterLimit
 pub fn pdfrum::MiterLimit::default() -> Self
-pub struct pdfrum::OpenOptions
+#[non_exhaustive] pub struct pdfrum::OpenOptions
 pub pdfrum::OpenOptions::limits: pdfrum_common::limits::Limits
 pub pdfrum::OpenOptions::password: core::option::Option<alloc::vec::Vec<u8>>
 impl pdfrum::OpenOptions
@@ -722,7 +724,7 @@ pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBacke
 pub struct pdfrum::RawImage
 pub pdfrum::RawImage::data: alloc::vec::Vec<u8>
 pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding
-pub struct pdfrum::RenderOptions
+#[non_exhaustive] pub struct pdfrum::RenderOptions
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
 pub pdfrum::RenderOptions::color_mode: pdfrum_render::options::ColorMode
@@ -760,7 +762,7 @@ pub pdfrum::Revision::end: usize
 pub pdfrum::Revision::index: usize
 pub pdfrum::Revision::is_stream: bool
 pub pdfrum::Revision::xref_offset: u64
-pub struct pdfrum::SaveOptions
+#[non_exhaustive] pub struct pdfrum::SaveOptions
 pub pdfrum::SaveOptions::encrypt: core::option::Option<pdfrum_edit::write::Encryption>
 pub pdfrum::SaveOptions::id_source: pdfrum_edit::write::id::IdSource
 pub pdfrum::SaveOptions::remove_security: bool
@@ -789,7 +791,7 @@ pub fn pdfrum::Signature<'_>::doc_mdp_permission(&self) -> u32
 pub fn pdfrum::Signature<'_>::reason(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Signature<'_>::sub_filter(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Signature<'_>::time(&self) -> core::option::Option<alloc::string::String>
-pub struct pdfrum::StampOptions
+#[non_exhaustive] pub struct pdfrum::StampOptions
 pub pdfrum::StampOptions::angle: f64
 pub pdfrum::StampOptions::color: peniko::Color
 pub pdfrum::StampOptions::font: pdfrum_font::subst::standard::StandardFont

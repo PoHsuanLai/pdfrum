@@ -17,6 +17,24 @@ use sha2::{Sha256, Sha384, Sha512};
 /// One AES block, in bytes.
 pub(crate) const BLOCK: usize = 16;
 
+/// Byte equality that does not return on the first mismatch.
+///
+/// Length mismatch still returns immediately: the revision-2/3 `/U` compare
+/// and the AES-256 validation hash are fixed-size, and a truncated `/U` is
+/// already rejected before we get here. This is hygiene against a
+/// byte-by-byte leak of a stored hash, not a claim about the password
+/// check's overall timing.
+pub(crate) fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 /// A key or buffer length AES cannot accept.
 ///
 /// The C++ `CHECK`s these and aborts; we report them (Divergence D4).
@@ -164,8 +182,8 @@ pub(crate) fn aes_cbc_decrypt(
 #[cfg(test)]
 mod tests {
     use super::{
-        BLOCK, CipherError, aes_cbc_decrypt, aes_cbc_encrypt, md5, md5_parts, sha1, sha256, sha384,
-        sha512,
+        BLOCK, CipherError, aes_cbc_decrypt, aes_cbc_encrypt, ct_eq, md5, md5_parts, sha1, sha256,
+        sha384, sha512,
     };
 
     fn hex(bytes: &[u8]) -> String {
@@ -422,5 +440,13 @@ mod tests {
         }
         // An empty buffer is block-aligned and is a no-op.
         assert_eq!(aes_cbc_decrypt(&key, &iv, &mut []), Ok(()));
+    }
+
+    #[test]
+    fn ct_eq_is_length_sensitive_and_agrees_with_eq() {
+        assert!(ct_eq(b"abcd", b"abcd"));
+        assert!(!ct_eq(b"abcd", b"abce"));
+        assert!(!ct_eq(b"abc", b"abcd"));
+        assert!(ct_eq(&[], &[]));
     }
 }

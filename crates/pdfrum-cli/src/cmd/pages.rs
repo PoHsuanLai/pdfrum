@@ -17,14 +17,13 @@ use crate::{out, pages};
 
 /// Save options shared by every writing command.
 pub fn save_options(deterministic: bool, input: &[u8]) -> SaveOptions {
-    SaveOptions {
-        id_source: if deterministic {
-            IdSource::Fixed(seed(input))
-        } else {
-            IdSource::Random
-        },
-        ..SaveOptions::default()
-    }
+    let mut options = SaveOptions::default();
+    options.id_source = if deterministic {
+        IdSource::Fixed(seed(input))
+    } else {
+        IdSource::Random
+    };
+    options
 }
 
 /// Sixteen bytes that depend on the input's content and nothing else, so

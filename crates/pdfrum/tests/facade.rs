@@ -79,13 +79,11 @@ fn an_unencrypted_document_ignores_a_password_rather_than_refusing_it() {
 
 #[test]
 fn open_options_carry_the_password_and_the_limits() {
-    let doc = Document::open_with(
-        HELLO,
-        &OpenOptions {
-            password: None,
-            ..OpenOptions::default()
-        },
-    )
+    let doc = Document::open_with(HELLO, &{
+        let mut __o = OpenOptions::default();
+        __o.password = None;
+        __o
+    })
     .expect("open");
     assert_eq!(doc.page_count(), 1);
     // Everything is permitted on a file with no security handler.
@@ -270,13 +268,11 @@ fn a_forced_background_replaces_the_pages_own() {
     let pixmap = doc
         .page(0)
         .expect("page")
-        .render(
-            &VelloCpuBackend::new(),
-            &RenderOptions {
-                background: Some(peniko::Color::from_rgba8(0, 0, 255, 255)),
-                ..RenderOptions::default()
-            },
-        )
+        .render(&VelloCpuBackend::new(), &{
+            let mut __o = RenderOptions::default();
+            __o.background = Some(peniko::Color::from_rgba8(0, 0, 255, 255));
+            __o
+        })
         .expect("render");
     // A corner the glyphs do not reach is the background we asked for.
     let corner = pixmap.pixel(0, 0).expect("in bounds");
@@ -292,13 +288,11 @@ fn a_render_can_leave_the_annotations_out() {
         .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("render");
     let without = page
-        .render(
-            &VelloCpuBackend::new(),
-            &RenderOptions {
-                annotations: false,
-                ..RenderOptions::default()
-            },
-        )
+        .render(&VelloCpuBackend::new(), &{
+            let mut __o = RenderOptions::default();
+            __o.annotations = false;
+            __o
+        })
         .expect("render");
     // Same size either way; the flag changes what is drawn, not the target.
     assert_eq!(
@@ -861,13 +855,11 @@ fn a_full_save_is_smaller_than_the_incremental_one_it_replaces() {
     let incremental = dir.join("incremental.pdf");
 
     let doc = Document::open(BOOKMARKS).expect("open");
-    doc.save_with(
-        &full,
-        &SaveOptions {
-            update: Update::Rewrite,
-            ..SaveOptions::default()
-        },
-    )
+    doc.save_with(&full, &{
+        let mut __o = SaveOptions::default();
+        __o.update = Update::Rewrite;
+        __o
+    })
     .expect("save");
     doc.save_incremental(&incremental).expect("save");
 
@@ -906,13 +898,11 @@ fn the_declared_version_can_be_overridden_on_save() {
     let out = dir.join("v14.pdf");
 
     let doc = Document::open(HELLO).expect("open");
-    doc.save_with(
-        &out,
-        &SaveOptions {
-            version: Some(PdfVersion::PDF_1_4),
-            ..SaveOptions::default()
-        },
-    )
+    doc.save_with(&out, &{
+        let mut __o = SaveOptions::default();
+        __o.version = Some(PdfVersion::PDF_1_4);
+        __o
+    })
     .expect("save");
 
     assert_eq!(
@@ -1355,14 +1345,12 @@ fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
     let page = doc.page(0).expect("page");
 
     let via_facade = page
-        .render(
-            &VelloCpuBackend::new(),
-            &RenderOptions {
-                smooth_paths: false,
-                annotations: false,
-                ..RenderOptions::default()
-            },
-        )
+        .render(&VelloCpuBackend::new(), &{
+            let mut __o = RenderOptions::default();
+            __o.smooth_paths = false;
+            __o.annotations = false;
+            __o
+        })
         .expect("render");
 
     // The engine, driven directly with the oracle's own flag name. The page
@@ -1393,13 +1381,11 @@ fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
 
     // And the flag is not inert: the default (smoothed) render differs.
     let smoothed = page
-        .render(
-            &VelloCpuBackend::new(),
-            &RenderOptions {
-                annotations: false,
-                ..RenderOptions::default()
-            },
-        )
+        .render(&VelloCpuBackend::new(), &{
+            let mut __o = RenderOptions::default();
+            __o.annotations = false;
+            __o
+        })
         .expect("render");
     assert_ne!(via_facade, smoothed, "the flag has to change something");
 }

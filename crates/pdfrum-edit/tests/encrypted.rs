@@ -93,7 +93,8 @@ fn open(name: &str, password: &[u8]) -> Option<Document> {
     Some(load(bytes, &opts).unwrap_or_else(|e| unreachable!("{name} failed to open: {e}")))
 }
 
-/// A save whose output is reproducible, so a test can compare two of them.
+/// A save whose identifiers come from a seed, so two runs share `/ID`.
+/// Encrypted payloads are not pinned: AES vectors come from the OS.
 fn fixed(mode: SaveMode) -> SaveOptions {
     SaveOptions {
         mode,
@@ -350,18 +351,34 @@ fn remove_security_still_writes_a_decrypted_document() {
     }
 }
 
-// Determinism: the initialisation vectors come from the document's own bytes
-// and a counter, so two saves of one document are byte-identical. The C++
-// cannot do this — its vectors come from a process-global Mersenne Twister.
+// Encrypted saves are not byte-reproducible: AES vectors come from the OS
+// (see `encrypt.rs`). `IdSource::Fixed` still pins `/ID`, and two saves of
+// one document still decipher to the same objects.
 #[test]
-fn two_saves_of_one_encrypted_document_agree_byte_for_byte() {
+fn two_saves_share_an_id_and_the_plaintext() {
     for (name, password) in FIXTURES {
         let Some(doc) = open(name, password) else {
             return;
         };
         let first = saved(&doc, &fixed(SaveMode::Full));
         let second = saved(&doc, &fixed(SaveMode::Full));
-        assert_eq!(first, second, "{name} did not save reproducibly");
+
+        let a = reload(&first, Some(password))
+            .unwrap_or_else(|| unreachable!("{name}: first save unreadably"));
+        let b = reload(&second, Some(password))
+            .unwrap_or_else(|| unreachable!("{name}: second save unreadably"));
+
+        let id = |d: &Document| d.trailer().raw(names::ID).cloned();
+        assert_eq!(
+            id(&a),
+            id(&b),
+            "{name}: /ID changed between two seeded saves"
+        );
+        assert_eq!(
+            contents(&a),
+            contents(&b),
+            "{name}: two saves deciphered to different objects"
+        );
     }
 }
 

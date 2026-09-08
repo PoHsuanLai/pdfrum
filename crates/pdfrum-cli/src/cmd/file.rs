@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
-use pdfrum::{Encryption, Permissions, SaveOptions, Update};
+use pdfrum::{Encryption, Permissions, Update};
 
 use crate::cmd::pages::save_options;
 use crate::out;
@@ -29,10 +29,8 @@ pub fn rewrite(
     let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open_quietly(file, password)?;
     let before = doc.bytes().len();
-    let options = SaveOptions {
-        update: Update::Rewrite,
-        ..save_options(deterministic, doc.bytes())
-    };
+    let mut options = save_options(deterministic, doc.bytes());
+    options.update = Update::Rewrite;
     let mut bytes = Vec::new();
     doc.write_to(&mut bytes, &options)?;
     let notices = doc.all_diagnostics().len();
@@ -112,16 +110,14 @@ pub fn encrypt(req: &EncryptRequest<'_>, term: Term) -> Result<ExitCode> {
         Some(list) => parse_allow(list)?,
         None => Permissions::ALL,
     };
-    let options = SaveOptions {
-        update: Update::Rewrite,
-        encrypt: Some(Encryption {
-            user_password: req.user_password.as_bytes().to_vec(),
-            owner_password: req.owner_password.as_bytes().to_vec(),
-            permissions,
-            encrypt_metadata: req.encrypt_metadata,
-        }),
-        ..save_options(req.deterministic, doc.bytes())
-    };
+    let mut options = save_options(req.deterministic, doc.bytes());
+    options.update = Update::Rewrite;
+    options.encrypt = Some(Encryption {
+        user_password: req.user_password.as_bytes().to_vec(),
+        owner_password: req.owner_password.as_bytes().to_vec(),
+        permissions,
+        encrypt_metadata: req.encrypt_metadata,
+    });
     let mut bytes = Vec::new();
     doc.write_to(&mut bytes, &options)?;
     sink.finish(
@@ -150,11 +146,9 @@ pub fn decrypt(
     if !doc.is_encrypted() {
         bail!("{} is not encrypted", file.display());
     }
-    let options = SaveOptions {
-        update: Update::Rewrite,
-        remove_security: true,
-        ..save_options(deterministic, doc.bytes())
-    };
+    let mut options = save_options(deterministic, doc.bytes());
+    options.update = Update::Rewrite;
+    options.remove_security = true;
     let mut bytes = Vec::new();
     doc.write_to(&mut bytes, &options)?;
     sink.finish(term, &bytes, "decrypted", None)?;
