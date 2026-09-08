@@ -61,7 +61,7 @@ enum pdfrum_code
     // reached. A cancelled operation reports this code.
     PDFRUM_CODE_LIMIT = 9,
     // An SVG handed to the library would not resolve. Only reachable in a
-    // build whose facade carries the `svg-ingest` feature; the number is the
+    // build whose facade carries the `svg-import` feature; the number is the
     // facade's either way.
     PDFRUM_CODE_SVG = 10,
     // A pointer this library requires was null, an index was out of range, or
