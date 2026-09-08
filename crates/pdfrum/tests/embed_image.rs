@@ -67,14 +67,10 @@ fn int_of(dict: &Dict, key: &str) -> Option<i64> {
 }
 
 fn dark_pixels(data: &[u8]) -> usize {
-    data.chunks_exact(4)
-        .filter(|px| {
-            let r = px.first().copied().unwrap_or(255);
-            let g = px.get(1).copied().unwrap_or(255);
-            let b = px.get(2).copied().unwrap_or(255);
-            let a = px.get(3).copied().unwrap_or(0);
-            a > 0 && (u16::from(r) + u16::from(g) + u16::from(b)) < 600
-        })
+    data.as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|&&[r, g, b, a]| a > 0 && (u16::from(r) + u16::from(g) + u16::from(b)) < 600)
         .count()
 }
 

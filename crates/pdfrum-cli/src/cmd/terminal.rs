@@ -568,8 +568,7 @@ fn find_from(doc: &Document, needle: &str, from: u32, count: u32) -> Option<u32>
     };
     (0..count).map(|i| (from + i) % count).find(|&i| {
         doc.page(i)
-            .ok()
-            .is_some_and(|page| page.text().find(needle, options).next().is_some())
+            .is_ok_and(|page| page.text().find(needle, options).next().is_some())
     })
 }
 

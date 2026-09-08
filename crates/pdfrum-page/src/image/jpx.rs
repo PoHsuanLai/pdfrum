@@ -246,8 +246,10 @@ fn components_agree(data: &[u8]) -> bool {
         return true;
     };
     fields
-        .chunks_exact(3)
-        .all(|c| fields.first_chunk::<3>().is_some_and(|f| c == f))
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .all(|c| fields.first_chunk::<3>() == Some(c))
 }
 
 /// Decode a JPEG 2000 codestream or JP2 file.

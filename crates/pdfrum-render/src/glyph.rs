@@ -572,7 +572,7 @@ impl LcdBitmap {
                 // that says which.
                 *cell = gamma_of_mean(head.iter().map(|v| u32::from(*v)).sum());
             }
-            for (cell, taps) in cells.zip(body.chunks_exact(3)) {
+            for (cell, taps) in cells.zip(body.as_chunks::<3>().0) {
                 *cell = gamma_of_mean(taps.iter().map(|v| u32::from(*v)).sum());
             }
         }
@@ -841,7 +841,7 @@ pub(crate) fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
         return None;
     }
     let mut coverage = Vec::with_capacity(bitmap.channels.len() / 3);
-    for triple in bitmap.channels.chunks_exact(3) {
+    for triple in bitmap.channels.as_chunks::<3>().0 {
         let sum: u32 = triple.iter().map(|&v| u32::from(v)).sum();
         #[expect(
             clippy::cast_possible_truncation,
@@ -983,7 +983,7 @@ fn recolour_ref_into(
         .chunks_exact_mut(stride * 4)
         .zip(bitmap.coverage.chunks_exact(stride))
     {
-        for (dest, coverage) in dst_row.chunks_exact_mut(4).zip(cov_row) {
+        for (dest, coverage) in dst_row.as_chunks_mut::<4>().0.iter_mut().zip(cov_row) {
             // `CalcAlpha(TextGammaAdjust(src), bgra.alpha)`, whose product is
             // the truncating one the whole engine uses.
             let a = crate::pixmap::mul255(*coverage, alpha);
@@ -1480,12 +1480,12 @@ mod tests {
             };
             let mut out = crate::Pixmap::new(0, 0);
             assert!(recolour_ref_into(bitmap, colour, &mut out));
-            for (i, dest) in out.data().chunks_exact(4).enumerate() {
+            for (i, dest) in out.data().as_chunks::<4>().0.iter().enumerate() {
                 #[expect(clippy::cast_possible_truncation, reason = "the index runs 0..256")]
                 let cov = i as u8;
                 let a = crate::pixmap::mul255(cov, alpha);
                 assert_eq!(
-                    dest,
+                    *dest,
                     [
                         crate::pixmap::mul255(r, a),
                         crate::pixmap::mul255(g, a),

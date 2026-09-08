@@ -189,14 +189,18 @@ fn decode_utf16(units: impl Iterator<Item = u16>) -> String {
 pub fn decode_text(bytes: &[u8]) -> Cow<'_, str> {
     if let Some(payload) = bytes.strip_prefix(b"\xFE\xFF") {
         let units = payload
-            .chunks_exact(2)
-            .filter_map(|p| Some(u16::from_be_bytes([*p.first()?, *p.get(1)?])));
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| u16::from_be_bytes(*p));
         return Cow::Owned(strip_language_codes(&decode_utf16(units)).into_owned());
     }
     if let Some(payload) = bytes.strip_prefix(b"\xFF\xFE") {
         let units = payload
-            .chunks_exact(2)
-            .filter_map(|p| Some(u16::from_le_bytes([*p.first()?, *p.get(1)?])));
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| u16::from_le_bytes(*p));
         return Cow::Owned(strip_language_codes(&decode_utf16(units)).into_owned());
     }
     if let Some(payload) = bytes.strip_prefix(b"\xEF\xBB\xBF") {

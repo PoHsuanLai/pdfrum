@@ -499,11 +499,8 @@ fn embed_custom_composite(
     let descriptor = load_font_desc(doc, &name, program, ProgramKind::TrueType, glyphs);
 
     let mut widths: BTreeMap<u32, u32> = BTreeMap::new();
-    for (cid, entry) in cid_to_gid.chunks_exact(2).enumerate() {
-        let gid = u16::from_be_bytes([
-            entry.first().copied().unwrap_or(0),
-            entry.get(1).copied().unwrap_or(0),
-        ]);
+    for (cid, entry) in cid_to_gid.as_chunks::<2>().0.iter().enumerate() {
+        let gid = u16::from_be_bytes(*entry);
         let advance = glyphs.default_advance(pdfrum_font::Gid(gid));
         widths.insert(
             u32::try_from(cid).unwrap_or(u32::MAX),

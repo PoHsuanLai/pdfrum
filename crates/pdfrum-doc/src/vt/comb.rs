@@ -74,11 +74,17 @@ pub fn rearrange_char_array(section: &mut Section, config: &Config, metrics: &Me
             word.y = y;
             // The first character's position overrides whatever the
             // alignment put on the line.
-            word.tail = if index + 1 == count {
-                0.0
-            } else {
-                (node - (width + next_width) * 0.5).max(0.0)
-            };
+            // Not a midpoint: the half is the share of the two cells this
+            // gap spans, subtracted from the node to leave the space after
+            // the word.
+            #[expect(clippy::manual_midpoint, reason = "a gap, not a mean")]
+            {
+                word.tail = if index + 1 == count {
+                    0.0
+                } else {
+                    (node - (width + next_width) * 0.5).max(0.0)
+                };
+            }
         }
         if index == 0 {
             line_x = cell_x;

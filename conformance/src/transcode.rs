@@ -24,8 +24,8 @@ pub fn utf32le_to_utf8(bytes: &[u8]) -> Result<String, TranscodeError> {
         return Err(TranscodeError::Ragged { len: bytes.len() });
     }
     let mut out = String::with_capacity(bytes.len() / 4);
-    for (index, unit) in bytes.chunks_exact(4).enumerate() {
-        let value = u32::from_le_bytes([unit[0], unit[1], unit[2], unit[3]]);
+    for (index, &unit) in bytes.as_chunks::<4>().0.iter().enumerate() {
+        let value = u32::from_le_bytes(unit);
         // Strip the leading BOM; a BOM anywhere else is a real character.
         if index == 0 && value == 0xFEFF {
             continue;

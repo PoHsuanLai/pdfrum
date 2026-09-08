@@ -1133,8 +1133,10 @@ fn the_oracle_opens_what_we_encrypted() {
             let bytes = std::fs::read(&page).unwrap_or_else(|e| panic!("{}: {e}", page.display()));
             // pdfium_test writes UTF-16LE with a BOM.
             let units: Vec<u16> = bytes
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&c| u16::from_le_bytes(c))
                 .collect();
             text.push_str(&String::from_utf16_lossy(&units));
         }

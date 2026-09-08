@@ -260,8 +260,10 @@ fn the_cid_font_gains_a_cid_to_gid_stream() {
     // Every entry is a glyph in the *subset*, which is far smaller than the
     // original's 1294 glyphs.
     let highest = table
-        .chunks_exact(2)
-        .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| u16::from_be_bytes(pair))
         .max()
         .expect("a non-empty table");
     assert!(highest < 512, "glyph {highest} is outside the subset");

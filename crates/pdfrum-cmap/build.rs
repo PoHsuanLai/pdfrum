@@ -379,7 +379,7 @@ fn assert_sorted_words(symbol: &str, values: &[u16], is_range: bool) {
         prev = Some(k);
     }
     if is_range {
-        for (i, rec) in values.chunks_exact(3).enumerate() {
+        for (i, rec) in values.as_chunks::<3>().0.iter().enumerate() {
             assert!(
                 rec[0] <= rec[1],
                 "{symbol}: range record {i} has low {:#06x} > high {:#06x}",
@@ -392,7 +392,7 @@ fn assert_sorted_words(symbol: &str, values: &[u16], is_range: bool) {
 
 fn assert_sorted_dwords(symbol: &str, values: &[u16]) {
     let mut prev = None;
-    for (i, rec) in values.chunks_exact(4).enumerate() {
+    for (i, rec) in values.as_chunks::<4>().0.iter().enumerate() {
         let k = (rec[0], rec[2]);
         if let Some(p) = prev {
             assert!(

@@ -358,17 +358,15 @@ fn convert_row(samples: SampleRow<'_>, palette: Option<&Palette>, dst: &mut [Rgb
             src.len()
         }
         SampleRow::Rgb(src) => {
-            for (slot, px) in dst.iter_mut().zip(src.chunks_exact(3)) {
-                let rgb = [px.first(), px.get(1), px.get(2)].map(|c| c.copied().unwrap_or(0));
-                *slot = Rgba8([rgb[0], rgb[1], rgb[2], 255]);
+            for (slot, px) in dst.iter_mut().zip(src.as_chunks::<3>().0) {
+                let [red, green, blue] = *px;
+                *slot = Rgba8([red, green, blue, 255]);
             }
             src.len() / 3
         }
         SampleRow::Cmyk(src) => {
-            for (slot, px) in dst.iter_mut().zip(src.chunks_exact(4)) {
-                let cmyk =
-                    [px.first(), px.get(1), px.get(2), px.get(3)].map(|v| v.copied().unwrap_or(0));
-                let [cyan, magenta, yellow, black] = cmyk;
+            for (slot, px) in dst.iter_mut().zip(src.as_chunks::<4>().0) {
+                let [cyan, magenta, yellow, black] = *px;
                 let rgb = adobe_cmyk_to_srgb(cyan, magenta, yellow, black);
                 *slot = Rgba8([rgb[0], rgb[1], rgb[2], 255]);
             }

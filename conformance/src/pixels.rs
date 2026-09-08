@@ -35,13 +35,17 @@ pub fn decode(bytes: &[u8]) -> Result<Image, DecodeError> {
     let rgba = match info.color_type {
         png::ColorType::Rgba => buffer,
         png::ColorType::Rgb => buffer
-            .chunks_exact(3)
-            .flat_map(|px| [px[0], px[1], px[2], 255])
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|&[r, g, b]| [r, g, b, 255])
             .collect(),
         png::ColorType::Grayscale => buffer.iter().flat_map(|&v| [v, v, v, 255]).collect(),
         png::ColorType::GrayscaleAlpha => buffer
-            .chunks_exact(2)
-            .flat_map(|px| [px[0], px[0], px[0], px[1]])
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|&[v, a]| [v, v, v, a])
             .collect(),
         other @ png::ColorType::Indexed => {
             return Err(DecodeError::Unsupported {

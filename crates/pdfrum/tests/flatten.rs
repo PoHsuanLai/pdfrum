@@ -112,14 +112,18 @@ fn expected_rgba(name: &str) -> Result<(u32, u32, Vec<u8>), Box<dyn std::error::
     buffer.truncate(info.buffer_size());
     let rgba = match info.color_type {
         png::ColorType::Rgb => buffer
-            .chunks_exact(3)
-            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|&[r, g, b]| [r, g, b, 255])
             .collect(),
         png::ColorType::Rgba => buffer,
         png::ColorType::Grayscale => buffer.iter().flat_map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::GrayscaleAlpha => buffer
-            .chunks_exact(2)
-            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|&[v, a]| [v, v, v, a])
             .collect(),
         png::ColorType::Indexed => return Err(format!("{name}: an indexed PNG").into()),
     };
@@ -130,7 +134,9 @@ fn expected_rgba(name: &str) -> Result<(u32, u32, Vec<u8>), Box<dyn std::error::
 fn dark_pixels(pixmap: &pdfrum::Pixmap) -> Vec<usize> {
     pixmap
         .data()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .enumerate()
         .filter(|(_, p)| u32::from(p[0]) + u32::from(p[1]) + u32::from(p[2]) < 384)
         .map(|(i, _)| i)
