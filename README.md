@@ -50,13 +50,16 @@ Open a file once. Ask it questions (Rendering is one of them).
 
 A file a browser would open, we open, and tell you where it's broken.
 
-## Quick start
+## Command Line
 
 ![Pdfrum CLI](https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/cli/pdfrum-cli.gif)
+
+### Quick Start
 
 ```sh
 cargo install pdfrum-cli
 pdfrum preview report.pdf
+pdfrum view document.pdf
 pdfrum search -i "total due" invoice.pdf
 pdfrum extract markdown paper.pdf
 ```
