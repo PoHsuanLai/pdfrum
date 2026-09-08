@@ -33,8 +33,9 @@ Pinned by what produced the committed files:
 | font | DejaVu Sans Mono, 13px (`kitty.conf`) |
 | outputs | `pdfrum-cli.mp4` (canonical), `pdfrum-cli.gif` (README) |
 
-Theme tokens match `branding/final/README.md`. Cerise (`#f06a9b`) is the
-cursor and magenta; errors stay `#e01b24`, not cerise.
+Theme tokens are set in `kitty.conf` and match the banner SVGs in
+`docs/assets/`. Cerise (`#f06a9b`) is the cursor and magenta; errors stay
+`#e01b24`, not cerise.
 
 ## Beats
 

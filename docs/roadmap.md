@@ -1,8 +1,9 @@
 # Roadmap
 
-pdfrum reads, repairs, renders, extracts, edits and signs PDF files. It is
-not a typesetting system: markup-to-layout is Typst's problem, and a document
-this library writes is one it was given the pages for.
+pdfrum reads, repairs, renders, extracts and edits PDF files, and reports the
+signatures it finds without verifying them. It is not a typesetting system:
+markup-to-layout is Typst's problem, and a document this library writes is one
+it was given the pages for.
 
 ## Shipped
 

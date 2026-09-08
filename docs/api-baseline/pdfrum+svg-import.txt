@@ -88,6 +88,7 @@ pub use pdfrum::ScrollView
 pub use pdfrum::Section
 pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
+pub use pdfrum::Shape
 pub use pdfrum::Size
 pub use pdfrum::StandardFont
 pub use pdfrum::Stream
@@ -95,6 +96,7 @@ pub use pdfrum::StructElement
 pub use pdfrum::StructTree
 pub use pdfrum::SubstitutionOptions
 pub use pdfrum::Subtype
+pub use pdfrum::SvgError
 pub use pdfrum::TextAa
 pub use pdfrum::TextError
 pub use pdfrum::TextIndex

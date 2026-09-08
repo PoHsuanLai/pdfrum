@@ -13,7 +13,7 @@
 const DEFAULT_TARGETS = [
     parser_load parser_load_password parser_xref parser_object parser_lexer
     filters_chain filters_flate filters_lzw filters_a85 filters_ahx
-    filters_rle filters_predictor
+    filters_rle filters_predictor filters_ccitt
     crypt_encrypt_dict crypt_decrypt
     cmap_embedded cmap_predefined
     object_decode_text object_name_decode

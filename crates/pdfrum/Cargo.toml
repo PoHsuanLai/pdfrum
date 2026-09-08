@@ -34,16 +34,6 @@ must_use_candidate = "allow"
 fn_params_excessive_bools = "deny"
 
 [features]
-# The document's own JavaScript, actually run — `pdfrum-form`'s `javascript`
-# feature, forwarded.
-#
-# What it brings: `boa_engine` and the ~116 crates behind it, pure Rust and
-# zero `-sys`. Default-off: executing untrusted script is a different
-# security proposition from rendering, and most PDF work does not need it.
-#
-# The facade forwards the flag and owns no engine: `boa_engine` is not a
-# dependency of this crate under any feature, and `ScriptCascade` lives in
-# `pdfrum-form`.
 # One rasterizer by default, so `cargo add pdfrum` renders; none with
 # `default-features = false`, for a build that only parses, extracts, reads
 # forms or edits. Every backend is a feature named after its rasterizer, and
@@ -59,6 +49,17 @@ vello-gpu = ["dep:pdfrum-raster-vello"]
 # needs widgets to act on, so it implies `forms`.
 edit = ["dep:pdfrum-edit"]
 forms = ["dep:pdfrum-form"]
+
+# The document's own JavaScript, actually run — `pdfrum-form`'s `javascript`
+# feature, forwarded.
+#
+# What it brings: `boa_engine` and the ~116 crates behind it, pure Rust and
+# zero `-sys`. Default-off: executing untrusted script is a different
+# security proposition from rendering, and most PDF work does not need it.
+#
+# The facade forwards the flag and owns no engine: `boa_engine` is not a
+# dependency of this crate under any feature, and `ScriptCascade` lives in
+# `pdfrum-form`.
 javascript = ["forms", "pdfrum-form/javascript"]
 # Markdown and layout-preserving text from a page: `pdfrum-markdown`, the
 # structure tree where there is one and typography where there is not.
@@ -93,15 +94,15 @@ jpeg2000 = ["pdfrum-page/jpeg2000"]
 jbig2 = ["pdfrum-page/jbig2"]
 ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
 
+# `Pixmap::encode_png` and `Pixmap::save_png`, for a caller who wants a file
+# without choosing an encoder.
+png = ["pdfrum-render/png"]
+
 # The whole-render stage timers, forwarded down to `pdfrum-page` where the
 # accumulator lives and across to `pdfrum-doc`, which times the annotation
 # pass's five stages. Default-off, and it is not a published capability: the
 # flag exists so `pdfrum-bench`'s `profile` binary can measure the pipeline
 # `Page::paint` runs, and it adds no public item to this crate.
-# `Pixmap::encode_png` and `Pixmap::save_png`, for a caller who wants a file
-# without choosing an encoder.
-png = ["pdfrum-render/png"]
-
 profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]
 
 # Every published capability except the GPU rasterizer and the internal

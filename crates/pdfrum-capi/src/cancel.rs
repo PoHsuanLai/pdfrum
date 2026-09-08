@@ -21,11 +21,21 @@ impl pdfrum_cancel {
         self.0.clone()
     }
 
-    /// A deadline that also expires after `ms` milliseconds.
+    /// This flag, plus a budget of `ms` milliseconds.
     ///
-    /// Built from this flag rather than beside it, so one deadline answers to
-    /// both the timer and [`pdfrum_cancel_stop`].
-    pub(crate) fn with_time_limit(ms: u64) -> pdfrum::Deadline {
+    /// Built *from* this flag rather than beside it — the returned deadline
+    /// shares the flag, so it answers to both the timer and
+    /// [`pdfrum_cancel_stop`]. A free-standing `Deadline::after` would carry a
+    /// flag no C handle can raise, and since the facade holds one deadline,
+    /// naming both a `cancel` and a `time_limit_ms` would then silently lose
+    /// one of them.
+    pub(crate) fn with_time_limit(&self, ms: u64) -> pdfrum::Deadline {
+        self.0.with_budget(std::time::Duration::from_millis(ms))
+    }
+
+    /// A budget with no flag beside it, for a `pdfrum_limits` that names a
+    /// `time_limit_ms` and no `cancel`.
+    pub(crate) fn time_limit_only(ms: u64) -> pdfrum::Deadline {
         pdfrum::Deadline::after(std::time::Duration::from_millis(ms))
     }
 }

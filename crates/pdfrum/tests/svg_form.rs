@@ -3,7 +3,7 @@
 //! `Canvas::draw_svg` writes the SVG's operators inline into the page it is
 //! drawing on; for one placement that is equivalent to a form. For the same
 //! logo on twenty pages it would be twenty copies of the same content. A form
-//! XObject is one object placed twenty times instead.
+//! `XObject` is one object placed twenty times instead.
 //!
 //! That is a claim about the **file**, not about the picture, so it is what
 //! this file measures: every stream in the saved document is decoded and the

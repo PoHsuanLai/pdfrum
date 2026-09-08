@@ -36,7 +36,9 @@ deny = [
 ]
 
 [advisories]
-yanked = "warn"
+# Every dependency is an exact pin, so a yank is not routed around by
+# resolution — it is a decision to make, not a warning to scroll past.
+yanked = "deny"
 
 [sources]
 unknown-registry = "deny"

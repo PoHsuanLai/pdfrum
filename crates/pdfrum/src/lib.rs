@@ -171,6 +171,14 @@ pub use svg_ingest::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
 #[cfg(feature = "svg-text")]
 pub use svg_text::SvgFonts;
 
+/// Why `usvg` could not resolve an SVG: the payload of [`Error::Svg`].
+///
+/// Re-exported because that variant carries it, and a caller who matches the
+/// variant must be able to name what falls out — without adding `usvg` to
+/// their own manifest at the exact version this crate pins.
+#[cfg(feature = "svg-import")]
+pub use usvg::Error as SvgError;
+
 /// The things a page draws, as the interpreter produced them.
 ///
 /// Returned by [`Page::objects`] and [`PageEdit::objects`], and the currency
@@ -243,6 +251,15 @@ pub use pdfrum_common::PageIndex;
 pub use pdfrum_crypt::Permissions;
 
 pub use kurbo::{Affine, BezPath, Point, Rect, Size};
+
+/// What [`Canvas`] draws: the bound on [`Canvas::clip`], [`Canvas::draw`],
+/// [`Canvas::fill`] and [`Canvas::stroke`].
+///
+/// Under the same feature as `Canvas`, because those four methods are the
+/// only signatures here that name it — but a caller who writes a helper
+/// generic over the shape it draws has to be able to write the bound.
+#[cfg(feature = "edit")]
+pub use kurbo::Shape;
 
 /// Colour: the one `peniko` type this crate's signatures name.
 ///

@@ -27,6 +27,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Nothing here writes to the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -35,6 +39,7 @@ jobs:
   gate:
     name: fmt, clippy, tests, docs
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -98,6 +103,7 @@ jobs:
   portable:
     name: build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       # One platform failing is a fact worth having about the other two.
       fail-fast: false
@@ -138,6 +144,7 @@ jobs:
   msrv:
     name: minimum supported Rust version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

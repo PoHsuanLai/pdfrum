@@ -7,7 +7,7 @@ is the issue text; nothing above it is meant to be posted.
 the latest release, and no issue in the hayro tracker mentions segment
 lengths or truncated streams — the draft stands as written. The corpus file it comes from is
 `testing/resources/pixel/bug_867501.pdf` in the PDFium tree, which renders at
-SSIM 0.646 against PDFium's own output and is the only file in our 1675-file
+SSIM 0.646 against PDFium's own output and is the only file in our 1759-file
 corpus whose residual is a codec gap. **Re-verified 2026-09-08** against
 `hayro-jbig2` 0.3.0: the segment table below was re-derived from the stream's
 actual bytes, `Image::new_embedded` was observed returning
@@ -157,7 +157,7 @@ The two halves are independent and either is useful alone:
 ### Context
 
 Found while building a Rust PDF engine that uses `hayro-jbig2` for
-`/JBIG2Decode`, checked against PDFium as an oracle over a 1675-file corpus.
+`/JBIG2Decode`, checked against PDFium as an oracle over a 1759-file corpus.
 This is the only file in that corpus where the two disagree on JBIG2, so the
 gap is narrow — but it is a genuine "renders in every other viewer, blank
 here" case.
