@@ -168,23 +168,15 @@ pub fn draw_patches(
 fn post_process(buffer: &mut Pixmap, mode: ColorMode) {
     match mode {
         ColorMode::Alpha => {
-            for chunk in buffer.data_mut().chunks_exact_mut(4) {
-                let Some(&a) = chunk.get(3) else { continue };
-                if let Some(slot) = chunk.first_mut() {
-                    *slot = a;
-                }
+            for chunk in buffer.data_mut().as_chunks_mut::<4>().0 {
+                chunk[0] = chunk[3];
             }
         }
         ColorMode::Gray => {
-            for chunk in buffer.data_mut().chunks_exact_mut(4) {
-                let (Some(&r), Some(&g), Some(&b)) = (chunk.first(), chunk.get(1), chunk.get(2))
-                else {
-                    continue;
-                };
+            for chunk in buffer.data_mut().as_chunks_mut::<4>().0 {
+                let [r, g, b, _] = *chunk;
                 let v = crate::color::rgb_to_gray(r, g, b);
-                for slot in chunk.iter_mut().take(3) {
-                    *slot = v;
-                }
+                (chunk[0], chunk[1], chunk[2]) = (v, v, v);
                 // Alpha is left alone, per the >8bpp arm's behaviour.
             }
         }

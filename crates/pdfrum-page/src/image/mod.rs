@@ -938,7 +938,7 @@ fn tint_per_pixel(
 ) -> Result<Pixels, Error> {
     let mut bgr = vec![0u8; total_pixels.checked_mul(3).ok_or(Error::ImageTooLarge)?];
     space.translate_image_line(&mut bgr, samples, total_pixels, false);
-    for px in bgr.chunks_exact_mut(3) {
+    for px in bgr.as_chunks_mut::<3>().0 {
         px.swap(0, 2);
     }
     Ok(Pixels::Rgb8(bgr.into()))

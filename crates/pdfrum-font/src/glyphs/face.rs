@@ -832,7 +832,7 @@ impl Face {
         let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
             return false;
         };
-        font.post().ok().is_some_and(|p| p.is_fixed_pitch() != 0)
+        font.post().is_ok_and(|p| p.is_fixed_pitch() != 0)
     }
 
     /// Italic from OS/2 `fsSelection`, `head.macStyle`, or a non-zero `post.italicAngle`.
@@ -849,15 +849,13 @@ impl Face {
                 return true;
             }
         }
-        if font.head().ok().is_some_and(|h| {
+        if font.head().is_ok_and(|h| {
             h.mac_style()
                 .contains(read_fonts::tables::head::MacStyle::ITALIC)
         }) {
             return true;
         }
-        font.post()
-            .ok()
-            .is_some_and(|p| p.italic_angle().to_f64() != 0.0)
+        font.post().is_ok_and(|p| p.italic_angle().to_f64() != 0.0)
     }
 
     /// Bold from OS/2 `fsSelection` / `usWeightClass >= 700`, or `head.macStyle`.
@@ -877,7 +875,7 @@ impl Face {
                 return true;
             }
         }
-        font.head().ok().is_some_and(|h| {
+        font.head().is_ok_and(|h| {
             h.mac_style()
                 .contains(read_fonts::tables::head::MacStyle::BOLD)
         })

@@ -639,7 +639,7 @@ pub fn decode_bytes(source: Vec<u8>, what: &str) -> Result<Decoded> {
             png::ColorType::Rgba => pdfrum::PixelFormat::Rgba8,
             png::ColorType::GrayscaleAlpha => {
                 // Alpha over gray has no direct PDF form; drop the alpha.
-                data = data.chunks_exact(2).map(|px| px[0]).collect();
+                data = data.as_chunks::<2>().0.iter().map(|&[v, _]| v).collect();
                 pdfrum::PixelFormat::Gray8
             }
             png::ColorType::Indexed => {

@@ -811,8 +811,7 @@ pub fn parse_date_heuristic(value: &str, now_ms: f64) -> (f64, bool) {
         }
     }
 
-    let wrong_format;
-    if n_index == 2 {
+    let wrong_format = if n_index == 2 {
         let a = number[0];
         let b = number[1];
         if is_valid_month(a) && is_valid_day(b) {
@@ -822,7 +821,7 @@ pub fn parse_date_heuristic(value: &str, now_ms: f64) -> (f64, bool) {
             n_day = a;
             n_month = b;
         }
-        wrong_format = false;
+        false
     } else if n_index == 3 {
         let a = number[0];
         let b = number[1];
@@ -840,10 +839,10 @@ pub fn parse_date_heuristic(value: &str, now_ms: f64) -> (f64, bool) {
             n_month = b;
             n_year = c;
         }
-        wrong_format = false;
+        false
     } else {
         return (now_ms, true);
-    }
+    };
 
     (
         ms_from_civil(n_year, n_month, n_day, n_hour, n_min, n_sec),

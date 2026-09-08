@@ -260,8 +260,8 @@ impl Pixmap {
     /// ```
     pub fn fill(&mut self, color: peniko::Color) {
         let px = premultiply(color);
-        for chunk in self.data.chunks_exact_mut(4) {
-            chunk.copy_from_slice(&px);
+        for chunk in self.data.as_chunks_mut::<4>().0 {
+            *chunk = px;
         }
     }
 
@@ -328,12 +328,12 @@ impl Pixmap {
         }
         for (chunk, base) in self
             .data
-            .chunks_exact_mut(4)
-            .zip(backdrop.data.chunks_exact(4))
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(backdrop.data.as_chunks::<4>().0)
         {
-            let (Some(&agn), Some(&a0)) = (chunk.get(3), base.get(3)) else {
-                continue;
-            };
+            let (agn, a0) = (chunk[3], base[3]);
             // Nothing was added over this pixel: it is pure backdrop, and the
             // group contributes nothing there.
             if agn <= a0 {
@@ -412,8 +412,14 @@ impl Pixmap {
         if next.width != self.width || next.height != self.height {
             return;
         }
-        for (chunk, over) in self.data.chunks_exact_mut(4).zip(next.data.chunks_exact(4)) {
-            let Some(&a) = over.get(3) else { continue };
+        for (chunk, over) in self
+            .data
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(next.data.as_chunks::<4>().0)
+        {
+            let a = over[3];
             if a == 0 {
                 continue;
             }
@@ -464,8 +470,14 @@ impl Pixmap {
         if next.width != self.width || next.height != self.height {
             return;
         }
-        for (chunk, over) in self.data.chunks_exact_mut(4).zip(next.data.chunks_exact(4)) {
-            let Some(&a) = over.get(3) else { continue };
+        for (chunk, over) in self
+            .data
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(next.data.as_chunks::<4>().0)
+        {
+            let a = over[3];
             if a == 0 {
                 continue;
             }
@@ -499,7 +511,7 @@ impl Pixmap {
         if mask.width() != self.width || mask.height() != self.height {
             return;
         }
-        for (chunk, &m) in self.data.chunks_exact_mut(4).zip(mask.data()) {
+        for (chunk, &m) in self.data.as_chunks_mut::<4>().0.iter_mut().zip(mask.data()) {
             for b in chunk {
                 *b = mul255(*b, m);
             }
@@ -522,12 +534,7 @@ impl Pixmap {
     #[must_use]
     pub fn luminosity_mask(&self) -> AlphaMask {
         let mut out = Vec::with_capacity(self.data.len() / 4);
-        for chunk in self.data.chunks_exact(4) {
-            let (Some(&r), Some(&g), Some(&b), Some(&a)) =
-                (chunk.first(), chunk.get(1), chunk.get(2), chunk.get(3))
-            else {
-                continue;
-            };
+        for &[r, g, b, a] in self.data.as_chunks::<4>().0 {
             // The oracle's luminosity buffer is opaque (24bpp BGR cleared to
             // the /BC backdrop), so un-premultiplying is the identity there.
             // Ours can carry alpha where a group did not paint over the
@@ -549,11 +556,7 @@ impl Pixmap {
     /// ```
     #[must_use]
     pub fn alpha_mask(&self) -> AlphaMask {
-        let out: Vec<u8> = self
-            .data
-            .chunks_exact(4)
-            .filter_map(|c| c.get(3).copied())
-            .collect();
+        let out: Vec<u8> = self.data.as_chunks::<4>().0.iter().map(|c| c[3]).collect();
         AlphaMask::from_vec(self.width, self.height, out)
             .unwrap_or_else(|| AlphaMask::new(self.width, self.height))
     }
@@ -580,12 +583,7 @@ impl Pixmap {
     #[must_use]
     pub fn to_straight_bgra(&self, opaque: bool) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
-        for chunk in self.data.chunks_exact(4) {
-            let (Some(&r), Some(&g), Some(&b), Some(&a)) =
-                (chunk.first(), chunk.get(1), chunk.get(2), chunk.get(3))
-            else {
-                continue;
-            };
+        for &[r, g, b, a] in self.data.as_chunks::<4>().0 {
             let [r, g, b] = unpremultiply_rgb(r, g, b, a);
             out.extend_from_slice(&[b, g, r, if opaque { 0xFF } else { a }]);
         }
@@ -604,12 +602,7 @@ impl Pixmap {
     #[must_use]
     pub fn to_straight_rgb(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len() / 4 * 3);
-        for chunk in self.data.chunks_exact(4) {
-            let (Some(&r), Some(&g), Some(&b), Some(&a)) =
-                (chunk.first(), chunk.get(1), chunk.get(2), chunk.get(3))
-            else {
-                continue;
-            };
+        for &[r, g, b, a] in self.data.as_chunks::<4>().0 {
             out.extend_from_slice(&unpremultiply_rgb(r, g, b, a));
         }
         out
@@ -627,12 +620,7 @@ impl Pixmap {
     #[must_use]
     pub fn to_straight_rgba(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
-        for chunk in self.data.chunks_exact(4) {
-            let (Some(&r), Some(&g), Some(&b), Some(&a)) =
-                (chunk.first(), chunk.get(1), chunk.get(2), chunk.get(3))
-            else {
-                continue;
-            };
+        for &[r, g, b, a] in self.data.as_chunks::<4>().0 {
             let [r, g, b] = unpremultiply_rgb(r, g, b, a);
             out.extend_from_slice(&[r, g, b, a]);
         }

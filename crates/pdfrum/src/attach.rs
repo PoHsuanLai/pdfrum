@@ -548,8 +548,10 @@ fn hex_bytes(text: &str) -> Option<Vec<u8>> {
     }
     Some(
         digits
-            .chunks_exact(2)
-            .map(|pair| (pair[0] << 4) | pair[1])
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[hi, lo]| (hi << 4) | lo)
             .collect(),
     )
 }

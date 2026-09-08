@@ -640,7 +640,7 @@ mod tests {
                     .slots
                     .iter()
                     .rposition(Option::is_some)
-                    .map_or(0, |i| i),
+                    .unwrap_or(0),
             )
             .unwrap_or(0)
         }

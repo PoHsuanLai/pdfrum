@@ -566,26 +566,37 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
     print!("{}", text_summary(&totals));
 
     if let Some(previous_path) = &args.check_regressions {
-        let text = std::fs::read_to_string(previous_path)
-            .with_context(|| format!("reading {}", previous_path.display()))?;
-        let previous = Scoreboard::from_text(&text)
-            .with_context(|| format!("parsing {}", previous_path.display()))?;
-        let regressions = Scoreboard::regressions(&previous, &board);
-        if !regressions.is_empty() {
-            eprintln!(
-                "\nREGRESSION: {} previously-passing file(s) now fail:",
-                regressions.len()
-            );
-            for path in regressions.iter().take(50) {
-                eprintln!("  {path}");
-            }
-            if regressions.len() > 50 {
-                eprintln!("  ... and {} more", regressions.len() - 50);
-            }
-            return Ok(ExitCode::FAILURE);
-        }
-        println!("no regressions against {}", previous_path.display());
+        return report_regressions(previous_path, &board);
     }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Compare `board` against the scoreboard stored at `previous_path`, and fail
+/// on any file that passed there and does not here.
+///
+/// Only that direction is a failure: a file that starts passing is the point
+/// of the work. The list is capped at fifty rows because the count above it is
+/// what a reviewer acts on, and a full listing of a mass regression buries it.
+fn report_regressions(previous_path: &std::path::Path, board: &Scoreboard) -> Result<ExitCode> {
+    let text = std::fs::read_to_string(previous_path)
+        .with_context(|| format!("reading {}", previous_path.display()))?;
+    let previous = Scoreboard::from_text(&text)
+        .with_context(|| format!("parsing {}", previous_path.display()))?;
+    let regressions = Scoreboard::regressions(&previous, board);
+    if !regressions.is_empty() {
+        eprintln!(
+            "\nREGRESSION: {} previously-passing file(s) now fail:",
+            regressions.len()
+        );
+        for path in regressions.iter().take(50) {
+            eprintln!("  {path}");
+        }
+        if regressions.len() > 50 {
+            eprintln!("  ... and {} more", regressions.len() - 50);
+        }
+        return Ok(ExitCode::FAILURE);
+    }
+    println!("no regressions against {}", previous_path.display());
     Ok(ExitCode::SUCCESS)
 }
 

@@ -94,13 +94,11 @@ impl Hasher for FxHasher {
         // call sites in this workspace both go through `write_u32` /
         // `write_u64` below and never reach it, but a `Hasher` has to answer
         // `write` correctly regardless of who calls it.
-        let mut chunks = bytes.chunks_exact(8);
-        for chunk in &mut chunks {
-            let mut word = [0_u8; 8];
-            word.copy_from_slice(chunk);
-            self.add(u64::from_ne_bytes(word));
+        let (words, remainder) = bytes.as_chunks::<8>();
+        for word in words {
+            self.add(u64::from_ne_bytes(*word));
         }
-        for &byte in chunks.remainder() {
+        for &byte in remainder {
             self.add(u64::from(byte));
         }
     }
