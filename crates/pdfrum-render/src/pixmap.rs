@@ -72,11 +72,15 @@ impl Pixmap {
     ///
     /// `width * height * 4` is the whole of the request, and both axes can
     /// come from a file: an image declares its own `/Width` and `/Height`, and
-    /// the largest pair the sample unpacker accepts asks for 68 GB. A `Vec`
-    /// that cannot be grown calls `handle_alloc_error`, which **aborts** — no
+    /// the largest pair the sample unpacker accepts asks for 68 GB. Two
+    /// refusals, in order: the area cap first
+    /// ([`pdfrum_page::image_area_is_workable`]), because Linux overcommit
+    /// lets `try_reserve_exact` succeed for tens of gigabytes and the
+    /// `resize` below then zeros them; then the fallible reserve, for a size
+    /// inside the cap that this allocator still cannot meet. A `Vec` that
+    /// cannot be grown calls `handle_alloc_error`, which **aborts** — no
     /// unwind, so no `catch_unwind` above it helps and no `Result` can carry
-    /// it. Reserving fallibly is what turns that into an answer a caller can
-    /// act on.
+    /// it.
     ///
     /// [`Pixmap::new`] is this with the answer taken as an empty pixmap, which
     /// is what a caller that has no way to report the failure wants.
@@ -91,6 +95,9 @@ impl Pixmap {
     /// ```
     #[must_use]
     pub fn try_new(width: u32, height: u32) -> Option<Self> {
+        if !pdfrum_page::image_area_is_workable(width, height) {
+            return None;
+        }
         let len = (width as usize)
             .saturating_mul(height as usize)
             .saturating_mul(4);
@@ -125,7 +132,9 @@ impl Pixmap {
             .saturating_mul(4);
         let px = premultiply(color);
         let mut data = Vec::new();
-        if data.try_reserve_exact(len).is_err() {
+        if !pdfrum_page::image_area_is_workable(width, height)
+            || data.try_reserve_exact(len).is_err()
+        {
             // As `new`: a buffer the allocator cannot meet comes back empty
             // rather than aborting. Both axes can come from a file.
             return Self {
@@ -1037,9 +1046,10 @@ mod tests {
     ///
     /// `/Width` and `/Height` are the file's, and `ImageDict` accepts each up
     /// to 131071 — so `to_pixmap` reached `vec![0; 131071 * 131071 * 4]`, and
-    /// `handle_alloc_error` ends the process without unwinding. Nothing above
-    /// it can catch that, which is why the allocation has to be fallible here
-    /// rather than guarded by a limit somewhere else.
+    /// `handle_alloc_error` ends the process without unwinding. The area cap
+    /// is what turns that into `None` without touching the allocator:
+    /// `try_reserve_exact` of 68 GB often succeeds on overcommit, and the
+    /// `resize` that follows then zeros 68 GB.
     #[test]
     fn a_size_no_allocator_can_meet_comes_back_empty_rather_than_aborting() {
         // 68 GB at four bytes a pixel, from a dictionary that fits in 700
@@ -1051,6 +1061,9 @@ mod tests {
             Pixmap::filled(131_071, 131_071, peniko::Color::BLACK).width(),
             0
         );
+        // 65536 square is inside each axis cap and is 4.3 Gpx / 17 GB of
+        // pixmap — the size that would still pass a reserve-only check.
+        assert_eq!(Pixmap::try_new(65_536, 65_536), None);
 
         // A size that *can* be met is untouched by any of it.
         assert_eq!(Pixmap::try_new(3, 2).map(|p| p.data().len()), Some(24));
