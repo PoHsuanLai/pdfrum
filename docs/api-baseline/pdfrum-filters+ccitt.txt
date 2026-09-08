@@ -70,7 +70,7 @@ pub const pdfrum_filters::RUN_LENGTH_MAX_OUTPUT: u64
 pub fn pdfrum_filters::decode(pdfrum_filters::Filter, &[u8], &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_filters::DecodeOutput, pdfrum_filters::Error>
 pub fn pdfrum_filters::decode_ascii85(&[u8]) -> core::result::Result<(alloc::vec::Vec<u8>, usize), pdfrum_filters::Error>
 pub fn pdfrum_filters::decode_ascii_hex(&[u8]) -> (alloc::vec::Vec<u8>, usize)
-pub fn pdfrum_filters::decode_ccitt(&[u8], pdfrum_filters::CcittParams, u32, u32, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_filters::CcittImage, pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_ccitt(&[u8], pdfrum_filters::CcittParams, u32, u32, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_filters::CcittImage, pdfrum_filters::Error>
 pub fn pdfrum_filters::decode_chain(&pdfrum_object::stream::Stream, usize, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_filters::DecodedStream
 pub fn pdfrum_filters::decode_flate(&[u8], usize, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_filters::Error>
 pub fn pdfrum_filters::decode_lzw(&[u8], bool, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_filters::Error>
