@@ -5,6 +5,8 @@
 
 #![no_main]
 
+use std::sync::Arc;
+
 use libfuzzer_sys::fuzz_target;
 use pdfrum_object::{Name, Object};
 use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
@@ -14,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
     let limits = pdfrum_fuzz::limits();
     let mut diags = pdfrum_fuzz::diags();
 
-    let Ok(doc) = pdfrum_parser::load(data.into(), &pdfrum_parser::LoadOptions::default()) else {
+    let Ok(doc) = pdfrum_parser::load(Arc::from(data), &pdfrum_parser::LoadOptions::default()) else {
         return;
     };
     // The first few pages only: a document declaring thousands of them would
