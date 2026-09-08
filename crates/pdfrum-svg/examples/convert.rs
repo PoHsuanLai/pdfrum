@@ -9,7 +9,7 @@
 //! to look at what a document actually converts to rather than at a score.
 
 // Through the facade alone, which is the shortest path a caller has: the
-// `svg` feature puts `Page::to_svg` on the facade's own page type, so nothing
+// `svg-export` feature puts `Page::to_svg` on the facade's own page type, so nothing
 // here names an engine crate.
 use pdfrum::{Document, RenderOptions, TinySkiaBackend};
 

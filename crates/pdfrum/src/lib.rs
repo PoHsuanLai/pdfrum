@@ -42,7 +42,7 @@ mod session;
 mod signature;
 #[cfg(feature = "edit")]
 mod stamp;
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 mod svg_ingest;
 #[cfg(feature = "svg-text")]
 mod svg_text;
@@ -51,7 +51,7 @@ mod thumbnail;
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 /// An SVG compiled once into a Form `XObject`: one object, placed on any
 /// number of pages by [`Canvas::place_svg`].
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 pub use canvas::SvgForm;
 #[cfg(feature = "edit")]
 pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
@@ -99,13 +99,13 @@ pub mod markdown {
 }
 /// SVG export: what [`Page::to_svg`] returns, and the [`RasterBackend`]
 /// wrapper underneath it for a caller driving the walk themselves — behind the
-/// default-off `svg` feature.
+/// default-off `svg-export` feature.
 ///
 /// The conversion itself is a method on [`Page`], not a free function here,
 /// because it takes this crate's [`RenderOptions`] rather than the engine's;
 /// `pdfrum-svg`'s own `page_to_svg` is the entry point for a caller who
 /// already holds a page-object graph.
-#[cfg(feature = "svg")]
+#[cfg(feature = "svg-export")]
 pub mod svg {
     pub use pdfrum_svg::{RasterCause, RasterRegion, RasterReport, SvgBackend, SvgDevice, SvgPage};
 }
@@ -145,8 +145,8 @@ pub use pdfrum_edit::{Encryption, IdSource, PageBox};
 /// The AGG-parity rasterizer, behind the `agg` feature.
 #[cfg(feature = "agg")]
 pub use pdfrum_raster_agg::AggBackend;
-/// The `tiny-skia` rasterizer, behind the `tinyskia` feature.
-#[cfg(feature = "tinyskia")]
+/// The `tiny-skia` rasterizer, behind the `tiny-skia` feature.
+#[cfg(feature = "tiny-skia")]
 pub use pdfrum_raster_tinyskia::TinySkiaBackend;
 /// The GPU rasterizer over `wgpu`, behind the `vello-gpu` feature, which no
 /// default build carries.
@@ -165,7 +165,7 @@ pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPo
 /// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
 /// [`DocEdit::compile_svg`] once into a reusable [`SvgForm`], how each is
 /// placed, and everything neither could carry.
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 pub use svg_ingest::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
 /// The faces an ingested SVG's `<text>` is set in, and what it becomes.
 #[cfg(feature = "svg-text")]
@@ -424,7 +424,7 @@ mod tests {
         fn send<T: Send>() {}
         #[cfg(feature = "vello-cpu")]
         send_sync::<VelloCpuBackend>();
-        #[cfg(feature = "tinyskia")]
+        #[cfg(feature = "tiny-skia")]
         send_sync::<TinySkiaBackend>();
         #[cfg(feature = "agg")]
         send_sync::<AggBackend>();
@@ -440,7 +440,7 @@ mod tests {
         // gradient tables, so it is `Send` alone — which is what the engine
         // asks of it, since a target is rendered by the one thread that made
         // it.
-        #[cfg(all(feature = "svg", feature = "vello-cpu"))]
+        #[cfg(all(feature = "svg-export", feature = "vello-cpu"))]
         {
             use pdfrum_render::RasterBackend;
             send_sync::<svg::SvgBackend<'static, VelloCpuBackend>>();
@@ -448,7 +448,7 @@ mod tests {
         }
         // Over a rasterizer whose own target is shareable, so is the
         // recording device wrapping it.
-        #[cfg(all(feature = "svg", feature = "tinyskia"))]
+        #[cfg(all(feature = "svg-export", feature = "tiny-skia"))]
         {
             use pdfrum_render::RasterBackend;
             send_sync::<svg::SvgDevice<<TinySkiaBackend as RasterBackend>::Device>>();

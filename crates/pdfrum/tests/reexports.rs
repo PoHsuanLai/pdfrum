@@ -183,7 +183,7 @@ fn every_facade_own_type_is_nameable() {
     nameable::<dyn RasterBackend<Device = <VelloCpuBackend as RasterBackend>::Device>>();
     #[cfg(feature = "vello-cpu")]
     nameable::<VelloCpuBackend>();
-    #[cfg(feature = "tinyskia")]
+    #[cfg(feature = "tiny-skia")]
     nameable::<TinySkiaBackend>();
     #[cfg(feature = "agg")]
     nameable::<AggBackend>();

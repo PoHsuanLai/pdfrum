@@ -21,15 +21,16 @@ def main [] {
         {name: 'no-default', flags: [--no-default-features]}
         {name: 'no-default+forms', flags: [--no-default-features --features forms]}
         {name: 'no-default+edit', flags: [--no-default-features --features edit]}
-        {name: 'no-default+tinyskia,codecs-all', flags: [--no-default-features --features 'tinyskia,codecs-all']}
+        {name: 'no-default+tiny-skia,codecs-all', flags: [--no-default-features --features 'tiny-skia,codecs-all']}
         {name: '+javascript', flags: [--features javascript]}
         {name: '+markdown', flags: [--features markdown]}
-        {name: '+svg', flags: [--features svg]}
-        {name: '+svg-ingest', flags: [--features svg-ingest]}
+        {name: '+svg-export', flags: [--features svg-export]}
+        {name: '+svg-import', flags: [--features svg-import]}
         {name: '+svg-text', flags: [--features svg-text]}
         {name: '+png', flags: [--features png]}
-        {name: '+tinyskia,agg', flags: [--features 'tinyskia,agg']}
+        {name: '+tiny-skia,agg', flags: [--features 'tiny-skia,agg']}
         {name: '+vello-gpu', flags: [--features vello-gpu]}
+        {name: '+full', flags: [--features full]}
         {name: 'all-features', flags: [--all-features]}
     ]
     for c in $combos {
@@ -39,11 +40,11 @@ def main [] {
     print "    tests + all-features"
     ^cargo check -p pdfrum --tests --all-features --quiet
 
-    print "==> cargo nextest run (with the tool's and the CLI's javascript features and pdfrum/svg)"
-    ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg
+    print "==> cargo nextest run (with the tool's and the CLI's javascript features and pdfrum/svg-export)"
+    ^cargo nextest run --workspace --features pdfrum-tool/javascript,pdfrum-cli/javascript,pdfrum/svg-export
 
     print "==> cargo test --doc (nextest silently skips doctests)"
-    ^cargo test --doc --workspace --features pdfrum/svg
+    ^cargo test --doc --workspace --features pdfrum/svg-export
 
     print "==> cargo doc --no-deps (deny warnings)"
     with-env { RUSTDOCFLAGS: '-D warnings' } {

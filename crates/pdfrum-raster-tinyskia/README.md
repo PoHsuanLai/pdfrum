@@ -27,7 +27,7 @@ ports PDFium's rectangle snapping and zero-area detection instead, which
 removes the bulk of the cases, and the harness turns a residual drop into a
 hard failure rather than a quiet drift.
 
-Facade feature `tinyskia`.
+Facade feature `tiny-skia`.
 
 Part of [pdfrum](https://crates.io/crates/pdfrum). `#![forbid(unsafe_code)]`.
 

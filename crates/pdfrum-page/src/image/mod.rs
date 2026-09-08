@@ -28,7 +28,7 @@ mod decode_array;
 mod dict;
 #[cfg(feature = "jbig2")]
 mod jbig2;
-#[cfg(feature = "jpx")]
+#[cfg(feature = "jpeg2000")]
 mod jpx;
 mod mask;
 mod packed;
@@ -42,9 +42,9 @@ pub(crate) use decode_array::DecodeMap;
 pub(crate) use dict::ImageDict;
 #[cfg(feature = "jbig2")]
 pub use jbig2::decode_jbig2;
-#[cfg(feature = "jpx")]
+#[cfg(feature = "jpeg2000")]
 pub(crate) use jpx::SpaceOverride;
-#[cfg(feature = "jpx")]
+#[cfg(feature = "jpeg2000")]
 pub use jpx::{JpxImage, decode_jpx};
 pub use mask::ImageMask;
 pub(crate) use mask::{ColorKey, matte_color};
@@ -289,10 +289,10 @@ pub fn decode_image<R: Resolve>(
 
     // The codecs, dispatched on the last filter. The requested size reaches
     // only the JPEG 2000 decoder, which is the one that carries a pyramid.
-    #[cfg(not(feature = "jpx"))]
+    #[cfg(not(feature = "jpeg2000"))]
     let _ = size;
     let (width, height, samples, jpx_alpha) = match info.last_filter {
-        #[cfg(feature = "jpx")]
+        #[cfg(feature = "jpeg2000")]
         Some(Filter::Jpx) => {
             let smask_in_data = stream.dict.int(names::SMASK_IN_DATA, r).unwrap_or(0);
             // The request goes to the codec whole rather than as a level
@@ -355,11 +355,11 @@ pub fn decode_image<R: Resolve>(
                 image.alpha,
             )
         }
-        #[cfg(not(feature = "jpx"))]
+        #[cfg(not(feature = "jpeg2000"))]
         Some(Filter::Jpx) => {
             diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
             return Err(Error::ImageUndecodable {
-                what: concat!("this build has no ", "Jpx", " decoder (feature `jpx`)"),
+                what: concat!("this build has no ", "Jpx", " decoder (feature `jpeg2000`)"),
             });
         }
         #[cfg(feature = "jbig2")]

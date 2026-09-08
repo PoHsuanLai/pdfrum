@@ -50,7 +50,7 @@ fn_params_excessive_bools = "deny"
 # the GPU one is never in the default set.
 default = ["vello-cpu", "edit", "forms", "codecs-all", "system-fonts"]
 vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
-tinyskia = ["dep:pdfrum-raster-tinyskia"]
+tiny-skia = ["dep:pdfrum-raster-tinyskia"]
 agg = ["dep:pdfrum-raster-agg"]
 vello-gpu = ["dep:pdfrum-raster-vello"]
 
@@ -69,27 +69,27 @@ markdown = ["dep:pdfrum-markdown"]
 # because an SVG is a second output format rather than part of reading a PDF,
 # and because the backend is a wrapper the caller chooses to put in the way —
 # a build that never exports one should not carry it.
-svg = ["dep:pdfrum-svg"]
+svg-export = ["dep:pdfrum-svg"]
 
 # An SVG drawn into a page as vectors, through `Canvas::draw_svg` inline or
 # `DocEdit::compile_svg` once into a Form XObject. Needs `edit`. Default-off
-# and separate from `svg` (export): ingesting costs `usvg`; exporting does not.
-svg-ingest = ["edit", "dep:usvg", "dep:png"]
+# and separate from `svg-export`: import costs `usvg`; export does not.
+svg-import = ["edit", "dep:usvg", "dep:png"]
 
-# `<text>` in an ingested SVG, converted to outlines. Separate from
-# `svg-ingest` because `usvg/text` pulls a second font stack (`rustybuzz`,
+# `<text>` in an imported SVG, converted to outlines. Separate from
+# `svg-import` because `usvg/text` pulls a second font stack (`rustybuzz`,
 # `ttf-parser`, a second `fontdb`). Faces come from the caller through
 # `SvgFonts`; `usvg`'s `system-fonts` / `memmap-fonts` stay off.
-svg-text = ["svg-ingest", "usvg/text"]
+svg-text = ["svg-import", "usvg/text"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
-codecs-all = ["jpx", "jbig2", "ccitt"]
+codecs-all = ["jpeg2000", "jbig2", "ccitt"]
 
 # Substitute a missing font from the host's installed ones; off, the bundled
 # base-14 faces alone answer. Never compiled into a WebAssembly build.
 system-fonts = ["pdfrum-font/system-fonts"]
-jpx = ["pdfrum-page/jpx"]
+jpeg2000 = ["pdfrum-page/jpeg2000"]
 jbig2 = ["pdfrum-page/jbig2"]
 ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
 
@@ -103,6 +103,25 @@ ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
 png = ["pdfrum-render/png"]
 
 profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]
+
+# Every published capability except the GPU rasterizer and the internal
+# `profiling` timers. `vello-gpu` stays out because it pulls `wgpu`; a
+# caller who wants that names it. `docs.rs` still uses `all-features`.
+full = [
+    "vello-cpu",
+    "tiny-skia",
+    "agg",
+    "edit",
+    "forms",
+    "javascript",
+    "markdown",
+    "svg-export",
+    "svg-import",
+    "svg-text",
+    "png",
+    "codecs-all",
+    "system-fonts",
+]
 
 [dependencies]
 pdfrum-common.workspace = true
@@ -129,11 +148,11 @@ pdfrum-markdown = { workspace = true, optional = true }
 pdfrum-svg = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
-# SVG ingestion, behind `svg-ingest`. Defaults off: `text`, `system-fonts`
+# SVG import, behind `svg-import`. Defaults off: `text`, `system-fonts`
 # and `memmap-fonts` would pull a second font stack.
 usvg = { workspace = true, optional = true }
 # Decoding a PNG an SVG `<image>` carried, so it embeds as PDF image samples
-# rather than being dropped. Optional and reached only through `svg-ingest`;
+# rather than being dropped. Optional and reached only through `svg-import`;
 # it is also a dev-dependency below, for the examples that write files.
 #
 # It shares a name with this crate's existing `png` *feature* — the one
@@ -296,11 +315,11 @@ required-features = ["vello-cpu", "edit", "forms"]
 
 [[test]]
 name = "svg_export"
-required-features = ["vello-cpu", "svg"]
+required-features = ["vello-cpu", "svg-export"]
 
 [[test]]
 name = "svg_ingest"
-required-features = ["svg-ingest", "tinyskia"]
+required-features = ["svg-import", "tiny-skia"]
 
 [[test]]
 name = "pdfa_oracle"
@@ -308,7 +327,7 @@ required-features = ["vello-cpu", "edit", "forms"]
 
 [[test]]
 name = "svg_form"
-required-features = ["svg-ingest"]
+required-features = ["svg-import"]
 
 [[test]]
 name = "limits"

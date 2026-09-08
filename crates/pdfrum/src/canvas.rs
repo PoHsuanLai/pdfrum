@@ -443,9 +443,9 @@ enum Surface {
     /// A Form `XObject`'s own stream, placed later by [`Canvas::place_form`].
     ///
     /// Behind the feature that is the only thing that compiles a form: with
-    /// `svg-ingest` off nothing constructs it, and a variant nothing
+    /// `svg-import` off nothing constructs it, and a variant nothing
     /// constructs is the dead code forbids.
-    #[cfg(feature = "svg-ingest")]
+    #[cfg(feature = "svg-import")]
     Form,
 }
 
@@ -489,7 +489,7 @@ impl Canvas<'_, '_> {
     ///
     /// A canvas handed to [`DocEdit::draw_page`] or [`DocEdit::draw_pages`]
     /// always answers `Some`. The `None` case is a Form `XObject` compiled
-    /// by `DocEdit::compile_svg` (feature `svg-ingest`), whose content
+    /// by `DocEdit::compile_svg` (feature `svg-import`), whose content
     /// belongs to no page until `Canvas::place_svg` puts it on one.
     ///
     /// ```
@@ -502,7 +502,7 @@ impl Canvas<'_, '_> {
     pub fn page(&self) -> Option<PageIndex> {
         match self.surface {
             Surface::Page(index) => Some(index),
-            #[cfg(feature = "svg-ingest")]
+            #[cfg(feature = "svg-import")]
             Surface::Form => None,
         }
     }
@@ -854,7 +854,7 @@ impl Canvas<'_, '_> {
     /// own — colour spaces, function types, the extend flags — and the one
     /// caller here is [`Canvas::draw_svg`](crate::Canvas::draw_svg), which
     /// builds the dictionary from a `usvg` gradient.
-    #[cfg(feature = "svg-ingest")]
+    #[cfg(feature = "svg-import")]
     pub(crate) fn shade(
         &mut self,
         shape: &BezPath,
@@ -887,7 +887,7 @@ impl Canvas<'_, '_> {
     /// [`Unsupported::ImageFormat`](crate::Unsupported::ImageFormat) rather
     /// than failing the whole drawing, because one bad `<image>` should not
     /// cost the rest of the document.
-    #[cfg(feature = "svg-ingest")]
+    #[cfg(feature = "svg-import")]
     pub(crate) fn embed_svg_image(&mut self, bytes: &[u8]) -> Option<EmbeddedImage> {
         // JPEG passes through whole: `/DCTDecode` is the PDF filter for
         // exactly these bytes, so nothing is decoded and nothing is lost.
@@ -1120,7 +1120,7 @@ impl Canvas<'_, '_> {
 /// [`Canvas::place_svg`](crate::Canvas::place_svg).
 /// It carries no borrow of the session that made it, so a caller compiles
 /// once and then places inside as many `draw_page` closures as they like.
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SvgForm {
     /// The form's object in the session that compiled it.
@@ -1130,7 +1130,7 @@ pub struct SvgForm {
     bbox: Rect,
 }
 
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 impl SvgForm {
     /// The form's `/BBox`, in the form's own coordinate space.
     ///
@@ -1142,7 +1142,7 @@ impl SvgForm {
     }
 }
 
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 impl Canvas<'_, '_> {
     /// Place `form` so its [`SvgForm::bbox`] covers `into`.
     ///
@@ -1188,7 +1188,7 @@ impl Canvas<'_, '_> {
     }
 }
 
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 impl DocEdit<'_> {
     /// Compile `body`'s drawing into a Form `XObject` over `bbox`.
     ///
@@ -1251,7 +1251,7 @@ impl DocEdit<'_> {
 }
 
 /// A rectangle as the four numbers a `/BBox` holds.
-#[cfg(feature = "svg-ingest")]
+#[cfg(feature = "svg-import")]
 fn rect_array(rect: Rect) -> Array {
     Array::of([rect.x0, rect.y0, rect.x1, rect.y1].map(|value| Object::Real(as_f32(value))))
 }
