@@ -1819,8 +1819,8 @@ mod tests {
             .x;
             // The header sits at the line's left edge; character `w` sits
             // one advance further along than character `w - 1`.
-            #[allow(clippy::cast_precision_loss)]
-            let steps = word.map_or(0, |w| w.saturating_add(1)) as f32;
+            let steps = u16::try_from(word.map_or(0, |w| w.saturating_add(1)))
+                .map_or(f32::from(u16::MAX), f32::from);
             let want = f64::from(first + advance * steps);
             assert!(
                 (got - want).abs() < 1e-3,

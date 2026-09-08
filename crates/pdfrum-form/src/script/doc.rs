@@ -98,14 +98,12 @@ fn with_model<T>(context: &Context, body: impl FnOnce(&DocumentModel) -> T) -> O
 /// success without doing anything. Neither arity nor argument types are
 /// checked, so `this.addAnnot(1, 2, "clams", [1, 2, 3])` answers `undefined`
 /// as readily as `this.addAnnot()` does.
-#[allow(clippy::unnecessary_wraps)]
 fn noop(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
 
 /// A getter that always answers `undefined`, for the twelve properties whose
 /// getters upstream have no body at all.
-#[allow(clippy::unnecessary_wraps)]
 fn undefined_getter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
@@ -117,7 +115,6 @@ fn undefined_getter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResu
 /// eight metadata ones commented `// Read-only.` that nonetheless succeed.
 /// Both are indistinguishable to a script, and a golden asserts
 /// `this.author = true; yields true` for the second.
-#[allow(clippy::unnecessary_wraps)]
 fn ignoring_setter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
@@ -277,14 +274,12 @@ fn set_calculate(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
 }
 
 /// `Doc.filesize` — **always zero**, never the real size.
-#[allow(clippy::unnecessary_wraps)]
 fn get_filesize(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::from(0))
 }
 
 /// `Doc.external` — **always true**, with the comment
 /// `// In Chrome case, should always return true` to prove it.
-#[allow(clippy::unnecessary_wraps)]
 fn get_external(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::from(true))
 }
@@ -447,7 +442,6 @@ readonly!(set_url, "URL");
 ///
 /// `undefined` is the answer with no page view, and that is what the golden
 /// reads; the *setter* still navigates.
-#[allow(clippy::unnecessary_wraps)]
 fn get_page_num(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }

@@ -121,7 +121,6 @@ fn read<T>(
 /// without writing anything. Reproducing that is reproducing the behaviour —
 /// and the checks that are observable are the arity and type ones, which are
 /// shared, so this really is one body.
-#[allow(clippy::unnecessary_wraps)]
 fn ignoring_setter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
@@ -133,7 +132,6 @@ fn ignoring_setter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResul
 /// The consequence worth naming: a choice field's option list is
 /// **immutable from JavaScript**, and `setAction` silently discards every
 /// action a script assigns.
-#[allow(clippy::unnecessary_wraps)]
 fn noop(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
@@ -918,8 +916,7 @@ fn write_field(this: &JsValue, context: &mut Context, body: impl FnOnce(&mut Fie
 macro_rules! flag {
     ($fn_name:ident, $member:literal, $read:expr) => {
         fn $fn_name(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-            #[allow(clippy::redundant_closure_call)]
-            let flag = read(this, context, $member, |field| ($read)(field))?;
+            let flag = read(this, context, $member, $read)?;
             Ok(JsValue::from(flag))
         }
     };
@@ -994,7 +991,6 @@ fn get_export_values(this: &JsValue, _a: &[JsValue], context: &mut Context) -> J
 /// on nothing this model carries.
 macro_rules! fixed {
     ($fn_name:ident, $value:expr) => {
-        #[allow(clippy::unnecessary_wraps)]
         fn $fn_name(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
             Ok(JsValue::from($value))
         }
@@ -1076,7 +1072,6 @@ fixed!(get_radios_in_unison, false);
 /// A getter answering a fixed string.
 macro_rules! fixed_string {
     ($fn_name:ident, $value:literal) => {
-        #[allow(clippy::unnecessary_wraps)]
         fn $fn_name(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
             Ok(JsValue::from(boa_engine::js_string!($value)))
         }
@@ -1150,7 +1145,6 @@ fn get_color(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<Js
 
 /// A getter answering `undefined`, for the three properties that are pure
 /// no-ops upstream: `richValue`, `source`, `submitName`.
-#[allow(clippy::unnecessary_wraps)]
 fn get_undefined(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }

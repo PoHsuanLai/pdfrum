@@ -129,7 +129,7 @@ pub(crate) const ALT_FONT_NAMES: &[(&str, StandardFont)] = &[
     ("ZapfDingbats", StandardFont::Dingbats),
 ];
 
-/// `kWeightPow` (core/fxge/cfx_substfont.cpp).
+/// `kWeightPow` (`core/fxge/cfx_substfont.cpp`).
 #[cfg(test)]
 pub(crate) const WEIGHT_POW: [u8; 100] = [
     0, 6, 12, 14, 16, 18, 22, 24, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58,
@@ -139,7 +139,7 @@ pub(crate) const WEIGHT_POW: [u8; 100] = [
     104, 104, 104, 106, 106, 106, 106, 106,
 ];
 
-/// `kWeightPow11` (core/fxge/cfx_substfont.cpp).
+/// `kWeightPow11` (`core/fxge/cfx_substfont.cpp`).
 #[cfg(test)]
 pub(crate) const WEIGHT_POW_11: [u8; 100] = [
     0, 4, 7, 8, 9, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33,
@@ -149,7 +149,7 @@ pub(crate) const WEIGHT_POW_11: [u8; 100] = [
     58, 58, 58,
 ];
 
-/// `kWeightPowShiftJis` (core/fxge/cfx_substfont.cpp).
+/// `kWeightPowShiftJis` (`core/fxge/cfx_substfont.cpp`).
 #[cfg(test)]
 pub(crate) const WEIGHT_POW_SHIFT_JIS: [u8; 100] = [
     0, 0, 2, 4, 6, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 42, 44, 48, 52, 56, 60, 64, 66, 70,
@@ -159,7 +159,7 @@ pub(crate) const WEIGHT_POW_SHIFT_JIS: [u8; 100] = [
     116, 118, 118, 118, 118, 118, 118, 118, 120, 120, 120, 120, 120, 120, 120, 120,
 ];
 
-/// `kAngleSkew` (core/fxge/cfx_substfont.cpp).
+/// `kAngleSkew` (`core/fxge/cfx_substfont.cpp`).
 #[cfg(test)]
 pub(crate) const ANGLE_SKEW: [i8; 30] = [
     0, -2, -3, -5, -7, -9, -11, -12, -14, -16, -18, -19, -21, -23, -25, -27, -29, -31, -32, -34,

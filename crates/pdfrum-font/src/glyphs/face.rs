@@ -223,15 +223,12 @@ impl Face {
         // that an SFNT is unambiguous while a bare CFF is identified by a very
         // short header, so trying the specific format first avoids a false
         // positive on a truncated SFNT.
-        Self::new_sfnt(&bytes, index)
-            .or_else(|| Self::new_bare_cff(&bytes))
-            .map(|f| f(bytes, index))
+        Self::from_sfnt(&bytes, index).or_else(|| Self::from_bare_cff(bytes, index))
     }
 
     /// Read a table-directory font.
-    #[allow(clippy::type_complexity)]
-    fn new_sfnt(bytes: &[u8], index: u32) -> Option<Box<dyn FnOnce(Arc<[u8]>, u32) -> Self>> {
-        let font = skrifa::FontRef::from_index(bytes, index).ok()?;
+    fn from_sfnt(bytes: &Arc<[u8]>, index: u32) -> Option<Self> {
+        let font = skrifa::FontRef::from_index(bytes.as_ref(), index).ok()?;
         let upem = font.head().map_or(0, |h| h.units_per_em());
         let num_glyphs = u32::from(font.maxp().ok()?.num_glyphs());
         // `glyf` present means outlines are quadratic TrueType splines; a
@@ -250,8 +247,8 @@ impl Face {
                     .collect()
             })
             .unwrap_or_default();
-        Some(Box::new(move |bytes, index| Self {
-            bytes,
+        Some(Self {
+            bytes: Arc::clone(bytes),
             index,
             backend: Backend::Sfnt,
             upem,
@@ -262,7 +259,7 @@ impl Face {
             names: Arc::default(),
             advances: Arc::default(),
             boxes: Arc::default(),
-        }))
+        })
     }
 
     /// Read a bare CFF font program.
@@ -272,12 +269,11 @@ impl Face {
     /// glyph names, matching the shape a Type 1 face presents. That is what
     /// makes the Type 1 ladder's `UseType1Charmap` step behave the same for a
     /// bare CFF as for a PFB, which is what PDFium's FreeType backend does.
-    #[allow(clippy::type_complexity)]
-    fn new_bare_cff(bytes: &[u8]) -> Option<Box<dyn FnOnce(Arc<[u8]>, u32) -> Self>> {
-        let cff = read_fonts::ps::cff::CffFontRef::new(bytes, 0, None).ok()?;
+    fn from_bare_cff(bytes: Arc<[u8]>, index: u32) -> Option<Self> {
+        let cff = read_fonts::ps::cff::CffFontRef::new(bytes.as_ref(), 0, None).ok()?;
         let num_glyphs = cff.num_glyphs();
         let upem = u16::try_from(cff.upem()).unwrap_or(1000);
-        Some(Box::new(move |bytes, index| Self {
+        Some(Self {
             bytes,
             index,
             backend: Backend::BareCff,
@@ -290,7 +286,7 @@ impl Face {
             names: Arc::default(),
             advances: Arc::default(),
             boxes: Arc::default(),
-        }))
+        })
     }
 
     /// Open the bare-CFF reader, when that is this face's backend.
