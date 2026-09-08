@@ -26,8 +26,8 @@ pub enum Filter {
     Ascii85,
     /// `/RunLengthDecode` — byte-oriented run-length compression.
     RunLength,
-    /// `/CCITTFaxDecode` — Group 3/4 fax; decoded by [`decode_ccitt`] from the
-    /// image path, which knows the image's width and height.
+    /// `/CCITTFaxDecode` — Group 3/4 fax; decoded from the image path, which
+    /// knows the image's width and height.
     CcittFax,
     /// `/JBIG2Decode` — bi-level image compression.
     Jbig2,
@@ -48,7 +48,7 @@ impl Filter {
     /// comparisons whose final `else` treats every unrecognized name as an
     /// image codec to be resolved later, so a garbage `/FooBar` and a real
     /// `/JPXDecode` take the same path out of the chain executor. See
-    /// [`decode_chain`].
+    /// [`decode_chain`](crate::decode_chain).
     ///
     /// ```
     /// use pdfrum_filters::Filter;
@@ -145,7 +145,7 @@ pub enum DecodeOutput {
 
 /// A filter chain that ended at an image codec this crate does not decode.
 ///
-/// The codec's *input* is not here: it is [`DecodedStream::data`], which is
+/// The codec's *input* is not here: it is [`DecodedStream::data`](crate::DecodedStream::data), which is
 /// already the right bytes whether earlier filters produced them or the codec
 /// was the whole chain and the raw stream is what it should read.
 // `PartialEq` only: `params` holds `Object`s, and `Object::Real(f32)` has no
@@ -165,7 +165,7 @@ pub struct NeedsImageCodec {
 /// Apply one filter to `input`.
 ///
 /// `params` is that filter's `/DecodeParms` entry; pass an empty [`Dict`] when
-/// the stream has none. Filter *chains* are [`decode_chain`]'s business. Flate
+/// the stream has none. Filter *chains* are [`decode_chain`](crate::decode_chain)'s business. Flate
 /// and LZW apply their `/Predictor` inside this call. The four image codecs
 /// return [`DecodeOutput::Image`] rather than decoding, since they need an
 /// image dictionary this function does not have; `/Crypt` is the identity,

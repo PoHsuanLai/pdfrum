@@ -88,7 +88,7 @@ impl Font {
     /// font, whose glyphs are content streams rather than outlines.
     ///
     /// This is the uncached path. A renderer drawing many glyphs should go
-    /// through [`GlyphCache`] instead, which keys on the substitution
+    /// through [`crate::GlyphCache`] instead, which keys on the substitution
     /// parameters that change the outline for a Multiple-Master face.
     #[must_use]
     pub fn glyph_path(&self, gid: Gid) -> Option<BezPath> {
