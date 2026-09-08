@@ -14,7 +14,12 @@
 #
 # The dry run packages every crate with its unpublished siblings visible and
 # uploads nothing, which is the one way to exercise this without spending a
-# version number.
+# version number. It runs on *every* path, the real release included: a tag
+# push sets no `inputs`, so gating it on `inputs.dry-run` used to skip the
+# packaging check on the one run where a bad manifest cannot be taken back.
+#
+# Publishing is also gated on CI having passed for the tagged commit. Twenty-
+# three write-once uploads is not something to start from a red tree.
 
 name: Release
 
@@ -31,6 +36,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# The publish step gets its registry token from `secrets`; nothing here needs
+# to write to the repository. `actions: read` is for the CI-status gate below.
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: release
   cancel-in-progress: false
@@ -39,6 +50,9 @@ jobs:
   publish:
     name: publish to crates.io
     runs-on: ubuntu-latest
+    # `cargo publish` waits on the index between crates; 23 of those plus the
+    # packaging pass is long, but not six hours long.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -70,10 +84,28 @@ jobs:
             exit 1
           fi
 
+      # An upload cannot be withdrawn, so a real release only starts from a
+      # commit CI has already passed. A tag push carries no `inputs`, so this
+      # cannot be expressed as a dry-run condition; it asks GitHub directly.
+      - name: CI passed for this commit
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          conclusion="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=completed" \
+            --jq '[.workflow_runs[] | .conclusion] | first // "none"')"
+          if [ "$conclusion" != "success" ]; then
+            echo "CI for ${GITHUB_SHA} is '${conclusion}', not 'success'." >&2
+            echo "Publishing 23 write-once crates from an unverified tree is not recoverable." >&2
+            exit 1
+          fi
+
+      # Runs on every path, the real release included. Packaging is the only
+      # check that the manifests cargo *uploads* — not the ones in this
+      # repository — are coherent, and skipping it on the one irreversible run
+      # is how a workspace ends up half-published.
       - name: Package every crate
-        # A tag run publishes for real; a manual run defaults to the dry run,
-        # which is this same packaging step and nothing else.
-        if: inputs.dry-run
         run: ./scripts/release.nu --dry-run
 
       - name: Publish

@@ -126,7 +126,7 @@ option. So any image drawn under a matrix with a skew or a non-axis-aligned
 rotation is darkened, including its alpha channel where one is present.
 
 **Context.** Found while building a Rust PDF engine checked against
-`pdfium_test` as an oracle over a 1675-file conformance corpus.
+`pdfium_test` as an oracle over a 1759-file conformance corpus.
 `image_transformer_other.pdf` and `rotated_image.pdf` are the two files in that
 corpus whose residual is this bias, at SSIM 0.875 and 0.981 respectively; in
 both, the independent implementation reproduces the source bytes exactly and

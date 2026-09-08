@@ -97,6 +97,49 @@ impl Deadline {
         }
     }
 
+    /// This deadline's flag, with a budget of `budget` from now.
+    ///
+    /// The returned deadline **shares the flag**, so [`Deadline::stop`] on
+    /// either raises both — it is the same deadline with a clock added, not a
+    /// second one beside it. That is what a host wants when it holds a cancel
+    /// flag *and* a wall-clock budget: one deadline that answers to whichever
+    /// arrives first. Building the two separately gives the engine only one of
+    /// them, because [`Limits::deadline`](crate::Limits::deadline) is a single
+    /// slot.
+    ///
+    /// An existing budget is replaced, not intersected.
+    ///
+    /// Not available on `wasm32`, as [`Deadline::after`].
+    ///
+    /// ```
+    /// # #[cfg(not(target_arch = "wasm32"))] {
+    /// use std::time::Duration;
+    /// use pdfrum_common::Deadline;
+    ///
+    /// let flag = Deadline::manual();
+    /// let limit = flag.with_budget(Duration::from_secs(30));
+    ///
+    /// // The budget is live on the copy the engine holds...
+    /// assert_eq!(limit.budget(), Some(Duration::from_secs(30)));
+    /// assert!(!limit.passed());
+    ///
+    /// // ...and the flag still reaches it.
+    /// flag.stop();
+    /// assert!(limit.passed());
+    /// # }
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn with_budget(&self, budget: Duration) -> Deadline {
+        Deadline {
+            stop: Arc::clone(&self.stop),
+            clock: Some(Clock {
+                start: Instant::now(),
+                budget,
+            }),
+        }
+    }
+
     /// The deadline at `instant`; one already in the past has passed.
     ///
     /// Not available on `wasm32`, as [`Deadline::after`].

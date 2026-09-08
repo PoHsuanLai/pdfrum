@@ -11,7 +11,8 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
 
 pdfrum is a modern, thread-safe PDF library — modular stages you compose,
-CPU or GPU backends, no `unsafe` — 99% agreement with PDFium on its suite.
+CPU or GPU backends, no `unsafe` — 1,675 of 1,759 files on a PDFium suite
+pass outright, at a median page SSIM of 0.99999.
 For your UI, RAG pipeline, or any app that has to open a PDF file.
 
 pdfrum is an independent project, not affiliated with or derived from

@@ -72,19 +72,20 @@ impl pdfrum_limits {
             options.limits.max_render_pixels = Some(self.max_render_pixels);
         }
         // A flag and a budget are one deadline, not two: the facade holds a
-        // single `Option<Deadline>`, and `Deadline::after` is already
-        // stoppable. So a caller who gives both gets a deadline that expires
-        // on the timer *and* answers `pdfrum_cancel_stop` — but only when the
-        // flag it answers is the one C holds, which is why the flag wins the
-        // slot and the budget is folded into it.
+        // single `Option<Deadline>`, so a caller who gives both must get one
+        // deadline that expires on the timer *and* answers
+        // `pdfrum_cancel_stop`. `Deadline::with_budget` is what makes that a
+        // single value — it hangs a clock on the flag C already holds, rather
+        // than building a second deadline whose flag nothing can raise.
         options.limits.deadline = match (
             // SAFETY: the caller's contract says `cancel` is null or live.
             unsafe { self.cancel.as_ref() },
             self.time_limit_ms,
         ) {
-            (Some(cancel), _) => Some(cancel.deadline()),
+            (Some(cancel), 0) => Some(cancel.deadline()),
+            (Some(cancel), ms) => Some(cancel.with_time_limit(ms)),
             (None, 0) => None,
-            (None, ms) => Some(pdfrum_cancel::with_time_limit(ms)),
+            (None, ms) => Some(pdfrum_cancel::time_limit_only(ms)),
         };
         options
     }
