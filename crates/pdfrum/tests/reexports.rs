@@ -27,8 +27,6 @@
 //! [`the_escape_hatches_are_usable_without_naming_their_crate`]
 //! instead.
 
-#![allow(clippy::items_after_statements)]
-
 use std::sync::Arc;
 
 use pdfrum::*;
@@ -40,6 +38,85 @@ use pdfrum::*;
 /// because three of the names below are traits, and a trait a caller cannot
 /// name is a bound they cannot write.
 fn nameable<T: ?Sized>() {}
+
+fn inspect_error_payload(error: Error) {
+    match error {
+        Error::Open(payload) => {
+            let _: OpenError = payload;
+        }
+        Error::Read(payload) => {
+            let _: ReadError = payload;
+        }
+        Error::Render(payload) => {
+            let _: RenderError = payload;
+        }
+        Error::Doc(payload) => {
+            let _: DocError = payload;
+        }
+        Error::Save(payload) => {
+            let _: SaveError = payload;
+        }
+        Error::Text(payload) => {
+            let _: TextError = payload;
+        }
+        Error::Limit(payload) => {
+            let _: LimitExceeded = payload;
+        }
+        Error::Io(payload) => {
+            let _: std::io::Error = payload;
+        }
+        // `Error` is `#[non_exhaustive]`, so a caller must write this arm
+        // and so must this test. A new variant does not break the build
+        // here — it is the *payload* nameability this file guards, and a
+        // new variant's payload gets its own arm above when it lands.
+        _ => {}
+    }
+}
+
+fn fetch_one(doc: &impl Resolve, at: ObjRef) -> std::result::Result<Arc<Object>, ObjectError> {
+    doc.fetch(at)
+}
+
+fn describe(update: &UpdateKind) -> &'static str {
+    match update {
+        UpdateKind::Regenerated(ap) | UpdateKind::LiveEdit(ap) => {
+            let _: &GeneratedAp = ap;
+            let _: &[u8] = &ap.stream;
+            "appearance"
+        }
+        UpdateKind::ActionRequested { action, modifiers } => {
+            let _: &Action = action;
+            let _: Modifiers = *modifiers;
+            "action"
+        }
+        UpdateKind::RevertedToFileAppearance => "reverted",
+        UpdateKind::FocusChanged { from, to } => {
+            let _: (&Option<AnnotId>, &Option<AnnotId>) = (from, to);
+            "focus"
+        }
+    }
+}
+
+fn stroke(focus: Option<Focus>) -> Option<usize> {
+    let focus: Focus = focus?;
+    match focus.box_ {
+        FocusBox::None => None,
+        FocusBox::Inflated | FocusBox::Rect(_) => Some(focus.annot),
+    }
+}
+
+/// A caller's own cascade, written with nothing but `pdfrum` in scope.
+struct Mine;
+impl Cascade for Mine {
+    fn keystroke(&mut self, field: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
+        let _: &str = &field.name;
+        let _: Option<u32> = field.index;
+        KeystrokeOutcome::Accept(change)
+    }
+    fn calculate(&mut self, writes: &mut FieldWrites, _trigger: &FieldRef) {
+        writes.set(0, "computed");
+    }
+}
 
 /// Every foreign type in a `pdfrum` signature, named from the facade.
 ///
@@ -201,41 +278,7 @@ fn every_facade_own_type_is_nameable() {
 /// compile even if nothing were re-exported.
 #[test]
 fn every_error_variant_payload_is_nameable() {
-    fn inspect(error: Error) {
-        match error {
-            Error::Open(payload) => {
-                let _: OpenError = payload;
-            }
-            Error::Read(payload) => {
-                let _: ReadError = payload;
-            }
-            Error::Render(payload) => {
-                let _: RenderError = payload;
-            }
-            Error::Doc(payload) => {
-                let _: DocError = payload;
-            }
-            Error::Save(payload) => {
-                let _: SaveError = payload;
-            }
-            Error::Text(payload) => {
-                let _: TextError = payload;
-            }
-            Error::Limit(payload) => {
-                let _: LimitExceeded = payload;
-            }
-            Error::Io(payload) => {
-                let _: std::io::Error = payload;
-            }
-            // `Error` is `#[non_exhaustive]`, so a caller must write this arm
-            // and so must this test. A new variant does not break the build
-            // here — it is the *payload* nameability this file guards, and a
-            // new variant's payload gets its own arm above when it lands.
-            _ => {}
-        }
-    }
-
-    inspect(Error::Io(std::io::Error::other("not opened")));
+    inspect_error_payload(Error::Io(std::io::Error::other("not opened")));
 }
 
 /// `Document::fetch`'s three foreign types, all nameable.
@@ -246,10 +289,6 @@ fn every_error_variant_payload_is_nameable() {
 /// the bound is writable and the `Arc<Object>` is bindable.
 #[test]
 fn the_object_store_escape_hatch_is_writable() {
-    fn fetch_one(doc: &impl Resolve, at: ObjRef) -> std::result::Result<Arc<Object>, ObjectError> {
-        doc.fetch(at)
-    }
-
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture opens");
     // Object 1 is the catalog in every fixture here; what it *is* does not
     // matter, only that the call site above compiles from `pdfrum::*` alone.
@@ -344,26 +383,6 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
 /// re-exports rather than escape hatches.
 #[test]
 fn an_update_payload_is_reachable() {
-    fn describe(update: &UpdateKind) -> &'static str {
-        match update {
-            UpdateKind::Regenerated(ap) | UpdateKind::LiveEdit(ap) => {
-                let _: &GeneratedAp = ap;
-                let _: &[u8] = &ap.stream;
-                "appearance"
-            }
-            UpdateKind::ActionRequested { action, modifiers } => {
-                let _: &Action = action;
-                let _: Modifiers = *modifiers;
-                "action"
-            }
-            UpdateKind::RevertedToFileAppearance => "reverted",
-            UpdateKind::FocusChanged { from, to } => {
-                let _: (&Option<AnnotId>, &Option<AnnotId>) = (from, to);
-                "focus"
-            }
-        }
-    }
-
     assert_eq!(describe(&UpdateKind::RevertedToFileAppearance), "reverted");
 }
 
@@ -374,14 +393,6 @@ fn an_update_payload_is_reachable() {
 /// `Focus` and the `FocusBox` inside it — belong in the facade's block.
 #[test]
 fn a_focus_answer_is_matchable() {
-    fn stroke(focus: Option<Focus>) -> Option<usize> {
-        let focus: Focus = focus?;
-        match focus.box_ {
-            FocusBox::None => None,
-            FocusBox::Inflated | FocusBox::Rect(_) => Some(focus.annot),
-        }
-    }
-
     assert_eq!(stroke(Some(Focus::at(3))), None);
 }
 
@@ -401,19 +412,6 @@ fn the_cascade_seam_is_nameable_without_the_script_feature() {
     nameable::<FieldWrites>();
     nameable::<Keystroke>();
     nameable::<KeystrokeOutcome>();
-
-    /// A caller's own cascade, written with nothing but `pdfrum` in scope.
-    struct Mine;
-    impl Cascade for Mine {
-        fn keystroke(&mut self, field: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
-            let _: &str = &field.name;
-            let _: Option<u32> = field.index;
-            KeystrokeOutcome::Accept(change)
-        }
-        fn calculate(&mut self, writes: &mut FieldWrites, _trigger: &FieldRef) {
-            writes.set(0, "computed");
-        }
-    }
 
     let doc = Document::open("tests/fixtures/text_form.pdf").expect("fixture opens");
     let session = FormSession::with_cascade(&doc, Mine);

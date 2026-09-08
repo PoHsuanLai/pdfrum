@@ -746,8 +746,8 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
     /// The host's highlight alpha, 100 of 255.
     const HIGHLIGHT_ALPHA: f32 = 100.0 / 255.0;
 
-    #[allow(clippy::cast_precision_loss)]
-    let channel = |shift: u32| ((HIGHLIGHT_BGR >> shift) & 0xff) as f32 / 255.0;
+    let channel =
+        |shift: u32| u8::try_from((HIGHLIGHT_BGR >> shift) & 0xff).map_or(0.0, f32::from) / 255.0;
     let mut fill = pdfrum_page::ColorValue::default();
     fill.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
     // Red is the low byte and blue the high one: `FX_COLORREF` is BGR, so
@@ -845,10 +845,9 @@ mod tests {
         let state = highlight_state();
         let rgb = state.fill.to_rgb().expect("a resolved colour");
         assert_eq!(rgb.to_bytes(), [0xDD, 0xE4, 0xFF]);
-        #[allow(clippy::cast_possible_truncation)]
-        let alpha = (state.general.fill_alpha * 255.0) as i32;
-        assert_eq!(alpha, 100);
+        assert!((state.general.fill_alpha * 255.0 - 100.0).abs() < 1e-4);
         // The truncating `AlphaMerge` upstream composites it with.
+        let alpha = 100;
         let over_white = |c: i32| ((255 * (255 - alpha)) + c * alpha) / 255;
         assert_eq!(
             [over_white(0xDD), over_white(0xE4), over_white(0xFF)],

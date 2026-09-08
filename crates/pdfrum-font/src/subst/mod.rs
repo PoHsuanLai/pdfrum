@@ -16,10 +16,6 @@ mod probe;
 mod standard;
 mod style;
 mod substfont;
-// The table doc comments name their C++ source files, which read as
-// identifiers to clippy; the file is machine-generated, so the fix belongs in
-// the extractor, not here.
-#[allow(clippy::doc_markdown)]
 mod tables;
 
 pub use charset::{Charset, charset_from_unicode};

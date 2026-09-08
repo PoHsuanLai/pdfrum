@@ -211,8 +211,8 @@ fn apply_keystroke(outcome: &pdfrum_script::KeystrokeOutcome, context: &mut Cont
 macro_rules! af {
     ($fn_name:ident, $acrobat:literal, $body:expr) => {
         fn $fn_name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-            #[allow(clippy::redundant_closure_call)]
-            ($body)(args, context, $acrobat)
+            let body = $body;
+            body(args, context, $acrobat)
         }
     };
 }

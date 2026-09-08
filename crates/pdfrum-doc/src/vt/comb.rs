@@ -21,18 +21,22 @@ use crate::vt::{Alignment, Config, Line, Metrics, Section, font_ascent, font_des
 pub fn rearrange_char_array(section: &mut Section, config: &Config, metrics: &Metrics<'_>) -> Rect {
     section.lines.clear();
     let cells = config.char_array.max(1);
-    #[allow(clippy::cast_precision_loss)]
-    let node = geom::width(config.plate) / cells as f32;
+    // A comb with more than `u16::MAX` cells is not a real field.
+    let cells_u16 = u16::try_from(cells).unwrap_or(u16::MAX);
+    let node = geom::width(config.plate) / f32::from(cells_u16);
     let ascent = font_ascent(metrics, config.font_size);
     let descent = font_descent(metrics, config.font_size);
     let y = ascent;
 
     let count = section.words.len();
-    #[allow(clippy::cast_precision_loss)]
     let start = match config.alignment {
         Alignment::Left => 0.0_f32,
-        Alignment::Center => (cells.saturating_sub(count) / 2) as f32,
-        Alignment::Right => cells.saturating_sub(count) as f32,
+        Alignment::Center => {
+            u16::try_from(cells.saturating_sub(count) / 2).map_or(f32::from(u16::MAX), f32::from)
+        }
+        Alignment::Right => {
+            u16::try_from(cells.saturating_sub(count)).map_or(f32::from(u16::MAX), f32::from)
+        }
     };
     let mut line_x = match config.alignment {
         Alignment::Left => node * 0.5,
@@ -65,8 +69,9 @@ pub fn rearrange_char_array(section: &mut Section, config: &Config, metrics: &Me
         });
 
         // Computed in double precision and narrowed once, as upstream does.
+        let index_f64 = f64::from(u16::try_from(index).unwrap_or(u16::MAX));
         #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-        let cell_x = (f64::from(node) * (index as f64 + f64::from(start) + 0.5)
+        let cell_x = (f64::from(node) * (index_f64 + f64::from(start) + 0.5)
             - f64::from(width) * 0.5) as f32;
 
         if let Some(word) = section.words.get_mut(index) {
@@ -148,8 +153,8 @@ mod tests {
         let laid = comb("abcde", 10, Alignment::Left);
         let xs: Vec<f32> = laid.words.iter().map(|w| w.x).collect();
         for (index, x) in xs.iter().enumerate() {
-            #[allow(clippy::cast_precision_loss)]
-            let expected = 10.0 * (index as f32 + 0.5) - 0.05;
+            let expected =
+                10.0 * (f32::from(u16::try_from(index).unwrap_or(u16::MAX)) + 0.5) - 0.05;
             assert!(
                 (x - expected).abs() < 1e-4,
                 "cell {index}: {x} vs {expected}"

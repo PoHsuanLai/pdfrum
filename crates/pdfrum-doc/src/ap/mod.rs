@@ -717,8 +717,7 @@ impl TextFont<'_> {
     pub fn encode(&self, code: u32) -> Vec<u8> {
         let name = self.font.base_font_name();
         if name == b"Symbol" || name == b"ZapfDingbats" {
-            #[allow(clippy::cast_possible_truncation)]
-            return vec![code as u8];
+            return vec![u8::try_from(code & 0xff).unwrap_or(0)];
         }
         let mut out = Vec::new();
         let mapped = char::from_u32(code)
