@@ -1,0 +1,113 @@
+# Tag a cut changelog on main, then publish.
+#
+# `scripts/prepare-release.nu` writes the version into CHANGELOG.md (and
+# Cargo.toml, when bumping) *before* the tag exists. Merging that to main is
+# the signal: if the changelog has a section for the workspace version and
+# there is no `v*` tag yet, this workflow waits for CI, tags, and calls
+# `release.yml`. A tag pushed by hand still publishes through `release.yml`
+# directly; if that happened while we waited, the tag already exists and we
+# stop rather than publish twice.
+#
+# GITHUB_TOKEN tag pushes do not start other workflows, so publish is a
+# `workflow_call` here, not a hope that the tag event will fire.
+
+name: Tag release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - CHANGELOG.md
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: tag if the changelog is cut
+    runs-on: ubuntu-latest
+    # CI's own timeout is 90 minutes; this waits for it, then tags.
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      should_publish: ${{ steps.tag.outputs.should_publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Decide whether this commit is a release
+        id: plan
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, os
+          text = pathlib.Path("Cargo.toml").read_text()
+          m = re.search(r'(?ms)^\[workspace\.package\].*?^version = "([^"]+)"', text)
+          if not m:
+              raise SystemExit("no [workspace.package] version in Cargo.toml")
+          version = m.group(1)
+          cl = pathlib.Path("CHANGELOG.md").read_text()
+          cut = bool(re.search(rf'^## \[{re.escape(version)}\]', cl, re.M))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={version}\n")
+              f.write(f"ready={'true' if cut else 'false'}\n")
+          if cut:
+              print(f"CHANGELOG.md has [{version}]; will tag if v{version} is free")
+          else:
+              print(f"CHANGELOG.md has not been cut for {version}; nothing to tag")
+          PY
+
+      - name: Wait for CI
+        if: steps.plan.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha="${GITHUB_SHA}"
+          for i in $(seq 1 200); do
+            json="$(gh run list --commit "$sha" --workflow ci.yml --limit 1 \
+              --json status,conclusion)"
+            status="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["status"] if d else "none")' <<<"$json")"
+            conclusion="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d[0]["conclusion"] or "") if d else "")' <<<"$json")"
+            echo "CI status=${status} conclusion=${conclusion}"
+            case "$status:$conclusion" in
+              completed:success) exit 0 ;;
+              completed:*)
+                echo "CI for ${sha} is '${conclusion}', not 'success'." >&2
+                exit 1
+                ;;
+              *) sleep 30 ;;
+            esac
+          done
+          echo "CI for ${sha} did not finish within 100 minutes." >&2
+          exit 1
+
+      - name: Create tag
+        id: tag
+        if: steps.plan.outputs.ready == 'true'
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "v${VERSION} already exists; not publishing from this job"
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "pdfrum ${VERSION}"
+          git push origin "v${VERSION}"
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          echo "tagged v${VERSION}"
+
+  publish:
+    needs: tag
+    if: needs.tag.outputs.should_publish == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

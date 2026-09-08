@@ -131,6 +131,18 @@ bump the workspace together. `kurbo` and `peniko` are carets because their
 types are in public signatures; every other external crate is an exact pin.
 `Cargo.lock` is what reproduces our own builds. Keep `--locked` in CI.
 
+## Releases
+
+Workspace versions bump together. `scripts/prepare-release.nu` cuts
+`CHANGELOG.md` (`[Unreleased]` becomes `[x.y.z] - date`) and, if you pass a
+version, writes it into `Cargo.toml`. `just prepare-release` uses the version
+already in the manifest; `just prepare-release 0.1.1` bumps first.
+
+Commit that, open a PR, merge to `main`. Once CI is green,
+`.github/workflows/tag-release.yml` tags `v*` and the publish workflow
+uploads to crates.io and opens the GitHub Release from the changelog
+section. Pushing the tag by hand still takes the same publish path.
+
 ## Paths
 
 | variable | default |
