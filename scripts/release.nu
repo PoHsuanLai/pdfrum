@@ -186,6 +186,10 @@ def main [
         | get version)
 
     let order = (^./scripts/publish-order.nu | lines | where {|l| $l != "" })
+    if ($order | is-empty) {
+        print --stderr "error: publish-order.nu returned no crates"
+        exit 1
+    }
 
     print $"==> pdfrum ($version): ($order | length) crates"
     if $dry_run {

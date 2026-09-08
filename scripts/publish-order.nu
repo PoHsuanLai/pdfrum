@@ -37,8 +37,7 @@ def main [] {
         let ready = ($remaining | where {|n|
             let pkg = ($members | where name == $n | first)
             let deps = ($pkg.dependencies
-                | where {|d| $d.kind == null or $d.kind == "build"
-                             or ($d.kind == "dev" and $d.req != "*") }
+                | where {|d| ($d.kind == null) or ($d.kind == "build") or ($d.kind == "dev" and $d.req != "*") }
                 | get name
                 | where {|d| $d in $names and $d != $n })
             ($deps | all {|d| $d in $done })
