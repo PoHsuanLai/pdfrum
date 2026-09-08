@@ -50,24 +50,18 @@ Open a file once. Ask it questions (Rendering is one of them).
 
 A file a browser would open, we open, and tell you where it's broken.
 
-## Command line
+## Quick start
 
 ![Pdfrum CLI](https://raw.githubusercontent.com/PoHsuanLai/pdfrum/main/docs/assets/cli/pdfrum-cli.gif)
 
 ```sh
-pdfrum preview gradients.pdf
-pdfrum stamp text gradients.pdf DRAFT --angle 30 --opacity 0.4 --size 72 -o stamped.pdf
-pdfrum preview stamped.pdf
-pdfrum view stamped.pdf
-pdfrum search ISO paper.pdf
-```
-
-The rest of the catalog — `info`, `pages`, `forms`, `render`,
-`serve --stdio` / `--mcp` — is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
-
-```sh
 cargo install pdfrum-cli
+pdfrum preview report.pdf
+pdfrum search -i "total due" invoice.pdf
+pdfrum extract markdown paper.pdf
 ```
+
+The rest of the catalog is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
 
 ## Attributes
 
