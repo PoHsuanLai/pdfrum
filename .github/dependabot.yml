@@ -18,6 +18,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # criterion 0.6+ depends on `alloca`, which has a `cc` build-dependency.
+    # The workspace pin stays on 0.5.1 so the pure-Rust gate keeps passing;
+    # without this ignore the weekly cargo group proposes 0.8 every time.
+    ignore:
+      - dependency-name: criterion
+        versions: [">=0.6"]
     groups:
       cargo:
         patterns: ["*"]
