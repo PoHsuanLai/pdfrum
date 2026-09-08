@@ -234,15 +234,22 @@ pub fn run(config: &RunConfig) -> Result<RunJson> {
     for name in &config.engines {
         let info = engines::info(name).ok_or_else(|| anyhow!("unknown engine {name}"))?;
         let (ran, reason) = if !info.compiled {
+            let flag = if *name == "pdfrum-vello-gpu" {
+                "gpu"
+            } else {
+                name.as_str()
+            };
             (
                 false,
-                Some(format!("not compiled in: build with --features {name}")),
+                Some(format!("not compiled in: build with --features {flag}")),
             )
         } else if name == "pdfium-render" && config.pdfium_lib.is_none() {
             (
                 false,
                 Some("not run, needs libpdfium.so (--pdfium-lib)".to_owned()),
             )
+        } else if let Some(why) = engines::unavailable_reason(name) {
+            (false, Some(why))
         } else {
             (true, None)
         };
