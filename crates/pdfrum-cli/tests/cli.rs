@@ -2589,7 +2589,16 @@ fn time_limit_stops_the_command_with_exit_4_and_a_generous_one_changes_nothing()
     .unwrap();
     assert_eq!(several.status.code(), Some(4));
     let stderr = String::from_utf8_lossy(&several.stderr);
-    assert_eq!(stderr.matches("time limit of 1 ms exceeded").count(), 2);
+    // The budget is the run's, not each file's. A millisecond is gone inside
+    // the first file, so whether the second gets far enough to report the
+    // limit itself or is abandoned before its first check depends on how
+    // loaded the box is. What the exit code and the report promise is that
+    // every file is accounted for and at least one says why.
+    let reported = stderr.matches("time limit of 1 ms exceeded").count();
+    assert!(
+        (1..=2).contains(&reported),
+        "one report per file that reached a check: {stderr}"
+    );
 
     for junk in ["5", "1.5s", "5 s", "1d"] {
         let out = run(&["--time-limit", junk, "info", fx(GUIDE)]).unwrap();
