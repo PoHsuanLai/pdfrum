@@ -121,7 +121,7 @@ are on by default.
 | Signatures, as written (unverified) | §12.8 | yes | |
 | Tagged PDF, structure tree | §14.7 | yes | |
 | Text extraction | §14.8 | yes | |
-| PDF/A | ISO 19005 | yes | convert needs `edit` |
+| PDF/A-1b and PDF/A-2b, from the object graph | ISO 19005 | yes | convert needs `edit` |
 
 ## Beyond the spec
 
