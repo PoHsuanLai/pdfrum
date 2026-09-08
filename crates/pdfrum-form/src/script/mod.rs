@@ -739,7 +739,7 @@ impl ScriptCascade {
     ///
     /// The session is drained: a second call answers nothing.
     pub fn drain_diagnostics(&mut self, diags: &mut Diagnostics) -> Vec<ScriptFailure> {
-        let failures: Vec<ScriptFailure> = self.stops.drain(..).collect();
+        let failures: Vec<ScriptFailure> = std::mem::take(&mut self.stops);
         for failure in &failures {
             diags.record(
                 pdfrum_common::Severity::Suspicious,

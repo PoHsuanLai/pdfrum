@@ -248,8 +248,7 @@ pub(crate) fn font_resource_alias(base_font_name: &[u8]) -> Vec<u8> {
     // Short names are padded with the digits of the positions they lack.
     let mut position = alias.len();
     while alias.len() < WIDTH {
-        #[allow(clippy::cast_possible_truncation)]
-        alias.push(b'0' + (position % 10) as u8);
+        alias.push(b'0' + u8::try_from(position % 10).unwrap_or(0));
         position += 1;
     }
     alias

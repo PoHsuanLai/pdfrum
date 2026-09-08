@@ -10,10 +10,6 @@
 
 mod agl;
 mod differences;
-// The table doc comments name their C++ source files, which read as
-// identifiers to clippy; the file is machine-generated, so the fix belongs in
-// the extractor, not here.
-#[allow(clippy::doc_markdown)]
 mod tables;
 
 pub use agl::{adobe_name_from_unicode, unicode_from_adobe_name};
@@ -161,11 +157,11 @@ impl FaceEncoding {
 /// The Unicode an Apple Roman character code stands for
 /// (`UnicodeFromAppleRomanCharCode`, §1.7).
 #[must_use]
-// A `u8` index into a `[u16; 256]` covers exactly the table, so this cannot
-// be out of range.
-#[allow(clippy::indexing_slicing)]
 pub fn unicode_from_apple_roman(code: u8) -> u16 {
-    tables::MAC_ROMAN_ENCODING[usize::from(code)]
+    tables::MAC_ROMAN_ENCODING
+        .get(usize::from(code))
+        .copied()
+        .unwrap_or(0)
 }
 
 /// The glyph name for `charcode`, merging `/Differences` over the base

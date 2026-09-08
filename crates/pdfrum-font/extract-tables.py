@@ -302,7 +302,7 @@ def emit_weights(oracle: pathlib.Path, out: pathlib.Path, report: list[str]) -> 
         data[symbol] = vals
         report.append(f"D {symbol:<42} {len(vals)} entries ([{ty}; {expect}])")
         lines.append(
-            f"/// `{symbol}` ({rel}).\n"
+            f"/// `{symbol}` (`{rel}`).\n"
             f"pub(crate) const {rust}: [{ty}; {expect}] = [\n"
             + wrap([str(v) for v in vals])
             + "\n];\n"

@@ -845,12 +845,12 @@ fn comb_separators<R: Resolve>(out: &mut Content, dict: &Dict, client: Rect, cel
     } else {
         out.raw(" 2 J 0 j\n");
     }
-    #[allow(clippy::cast_precision_loss)]
-    let total = cells as f32;
+    // A comb with more than `u16::MAX` cells is not a real field.
+    let total = u16::try_from(cells).map_or(f32::from(u16::MAX), f32::from);
     let width = geom::width(client);
     for cell in 1..cells {
-        #[allow(clippy::cast_precision_loss)]
-        let left = geom::left(client) + (width / total) * cell as f32;
+        let left = geom::left(client)
+            + (width / total) * u16::try_from(cell).map_or(f32::from(u16::MAX), f32::from);
         out.point(left, geom::bottom(client), Float::Shortest);
         out.raw("m\n");
         out.point(left, geom::top(client), Float::Shortest);

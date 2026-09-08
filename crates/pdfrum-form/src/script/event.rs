@@ -265,10 +265,10 @@ declined!(no_will_commit, "willCommit");
 /// A read-only getter over one plain field of the state.
 macro_rules! plain {
     ($fn_name:ident, $slot:ident, $wrap:expr) => {
-        #[allow(clippy::redundant_closure_call)]
         fn $fn_name(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
             let value = read(context, |event| event.$slot.clone()).unwrap_or_default();
-            Ok(($wrap)(value))
+            let wrap = $wrap;
+            Ok(wrap(value))
         }
     };
 }
