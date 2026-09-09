@@ -5,12 +5,23 @@ graphics protocol for `preview` / `view`, not half-blocks. MP4 is the
 recording; the GIF is a 720px, 12 fps derivative for GitHub.
 
 ```bash
-./scripts/record-cli.nu
+./scripts/record-cli-macos.nu   # a Mac with a display
+./scripts/record-cli.nu         # a headless Linux host
 ```
 
-That builds `pdfrum-cli` in release, stages fixtures under friendly names
-in `/tmp/pdfrum-cli-demo`, drives Kitty over remote control on Xvfb, and
-captures the framebuffer with ffmpeg.
+Both build `pdfrum-cli` in release, stage fixtures under friendly names in
+`/tmp/pdfrum-cli-demo`, and drive Kitty over remote control. They differ
+only in how the window is captured.
+
+`record-cli-macos.nu` records a real Kitty window with
+`screencapture -l<window-id>`, which grabs that window alone: nothing else
+on screen can enter the frame and there is no crop geometry to keep in
+sync. The window is captured at 2x (1920x1480) and downscaled to 960x740,
+so the glyphs are supersampled. Prefer it when a display is available.
+
+`record-cli.nu` drives Xvfb with software GL and grabs the framebuffer
+with ffmpeg's `x11grab`. That is Linux-only — macOS ffmpeg has no
+`x11grab`, and a Cocoa Kitty does not draw into an X display.
 
 | Typed as | Source |
 |---|---|
@@ -28,9 +39,10 @@ Pinned by what produced the committed files:
 | | |
 |---|---|
 | kitty | 0.48.x (graphics protocol) |
-| Xvfb | framebuffer `:93`, 960×1280 |
-| ffmpeg | x11grab → H.264, then a 720px GIF |
-| font | DejaVu Sans Mono, 13px (`kitty.conf`) |
+| window | 960×740, captured at 2x on macOS |
+| capture | `screencapture -l<id>` (macOS), Xvfb `:93` + x11grab (Linux) |
+| ffmpeg | H.264, then a 720px GIF |
+| font | DejaVu Sans Mono, 13px (`kitty.conf`) — `brew install --cask font-dejavu` |
 | outputs | `pdfrum-cli.mp4` (canonical), `pdfrum-cli.gif` (README) |
 
 Theme tokens are set in `kitty.conf` and match the banner SVGs in
@@ -41,9 +53,11 @@ Theme tokens are set in `kitty.conf` and match the banner SVGs in
 
 `preview`, `stamp … DRAFT`, `preview stamped.pdf`, `view` (page 1, `j`/`k`
 between pages, `+` to zoom, `q`), `doctor`, `doctor --json`, `search ISO`,
-`extract markdown`. Ctrl+L between the text commands. Stamp and its preview
-stay before `view`: after the pager, a later Kitty image does not show up in
-the X11 grab.
+`extract markdown`. The screen is cleared between the text commands — Ctrl+L
+under X11, a verified shell `clear` on macOS, where Ctrl+L only scrolls the
+viewport and would stack one beat under the next. Stamp and its preview stay
+before `view` in both: after the pager, a later Kitty image does not show up
+in the X11 grab at all, and on macOS only once the placement is dropped.
 
 The holds are reading time, not work. Nothing here is slow: a page renders in
 about 40ms, `view` emits its first placement in ~5ms, and a page turn lands in
@@ -56,10 +70,16 @@ with no page under it, which is exactly what a slow open would look like.
 graphics protocol. `gradients.pdf` is TCPDF example 030 (two pages of
 shadings) so the pager has somewhere to go.
 
-Software GL (`LIBGL_ALWAYS_SOFTWARE=1`, llvmpipe) is used on a headless
-host. A machine with a real Kitty window can run the same script with
-`DISPLAY` already set by dropping Xvfb — the send-key sequence is the
-script.
+Software GL (`LIBGL_ALWAYS_SOFTWARE=1`, llvmpipe) is used on the headless
+host. The beat sequence is the same in both scripts.
+
+Two things the macOS script has to verify rather than time, because
+`screencapture` records the window as it finds it. Clears are confirmed
+through `kitty @ get-text` before moving on: a `clear` sent while the
+previous command still owns the terminal is read as that command's input
+and lost, which stacks the next beat under this one. And `view`'s page
+stays placed after the pager quits, so the alt-screen is given time to
+unwind and the image is dropped before the next command prints.
 
 `serve`, password prompts, and compile/install stay out.
 
