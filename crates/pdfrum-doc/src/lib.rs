@@ -15,6 +15,7 @@ pub mod nav;
 pub mod page_label;
 pub mod pdfa;
 pub mod prefs;
+pub mod signature;
 pub mod structure;
 pub mod vt;
 

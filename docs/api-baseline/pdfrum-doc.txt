@@ -576,6 +576,16 @@ pub fn pdfrum_doc::prefs::ViewerPrefs::num_copies<R: pdfrum_object::resolve::Res
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
 pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
+pub mod pdfrum_doc::signature
+pub struct pdfrum_doc::signature::Signature
+impl pdfrum_doc::signature::Signature
+pub fn pdfrum_doc::signature::Signature::byte_range(&self, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<i64>
+pub fn pdfrum_doc::signature::Signature::contents(&self, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::signature::Signature::doc_mdp_permission(&self, &impl pdfrum_object::resolve::Resolve) -> u32
+pub fn pdfrum_doc::signature::Signature::reason(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::Signature::sub_filter(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::Signature::time(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::signatures(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<pdfrum_doc::signature::Signature>
 pub mod pdfrum_doc::structure
 pub enum pdfrum_doc::structure::Kid
 pub pdfrum_doc::structure::Kid::Element

@@ -25,6 +25,7 @@ mod import;
 mod info;
 mod names;
 mod pages;
+mod pdfa_convert;
 mod stamp;
 #[cfg(feature = "svg-import")]
 mod svg_ingest;
@@ -55,6 +56,7 @@ pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
 pub use info::{pdf_date, set_info_entry};
 pub use pages::{PageBox, add_blank_page, delete_pages, set_page_box, set_page_rotation};
+pub use pdfa_convert::{convert as to_pdfa, pdf_date_to_iso8601};
 pub use pdfrum_font::StandardFont;
 pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
 #[cfg(feature = "svg-import")]

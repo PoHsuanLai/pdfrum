@@ -22,11 +22,6 @@ mod outline;
 mod owned_form;
 mod owned_page;
 mod page;
-/// PDF/A conversion. Behind `edit` because it writes a file, which is what
-/// that feature gates; the *checker* needs no feature and is in the default
-/// set.
-#[cfg(feature = "edit")]
-mod pdfa;
 mod profile;
 mod render;
 #[cfg(feature = "edit")]

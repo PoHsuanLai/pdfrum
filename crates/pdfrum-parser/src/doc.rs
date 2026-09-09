@@ -963,6 +963,37 @@ pub fn content_segments(
     (out, ends)
 }
 
+/// The byte after the `%%EOF` that closes the revision whose `startxref`
+/// names `offset`.
+pub fn revision_end(bytes: &[u8], offset: u64) -> Option<usize> {
+    let needle = b"startxref";
+    let mut at = 0;
+    while let Some(found) = find(bytes.get(at..)?, needle) {
+        let start = at + found + needle.len();
+        let rest = bytes.get(start..)?;
+        let digits: String = rest
+            .iter()
+            .skip_while(|b| b.is_ascii_whitespace())
+            .take_while(|b| b.is_ascii_digit())
+            .map(|&b| char::from(b))
+            .collect();
+        if digits.parse::<u64>().ok() == Some(offset) {
+            let eof = find(rest, b"%%EOF")?;
+            let mut end = start + eof + b"%%EOF".len();
+            while bytes.get(end).is_some_and(|b| *b == b'\r' || *b == b'\n') {
+                end += 1;
+            }
+            return Some(end);
+        }
+        at = start;
+    }
+    None
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{LoadError, LoadOptions, find_header, load, read_version};

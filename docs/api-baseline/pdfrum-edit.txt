@@ -327,6 +327,7 @@ pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limit
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::pdf_date(std::time::SystemTime) -> alloc::string::String
+pub fn pdfrum_edit::pdf_date_to_iso8601(&str) -> alloc::string::String
 pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::PageRewrite>
 pub fn pdfrum_edit::remove_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
@@ -339,6 +340,7 @@ pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, pdfrum_comm
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
 pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> f64
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
+pub fn pdfrum_edit::to_pdfa(&pdfrum_parser::doc::Document, pdfrum_doc::pdfa::report::Level, pdfrum_doc::pdfa::policy::Policy, &pdfrum_doc::pdfa::xmp_write::InfoFields, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_doc::pdfa::policy::Conversion, core::option::Option<alloc::vec::Vec<u8>>), pdfrum_edit::Error>
 pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
 pub fn pdfrum_edit::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
 pub fn pdfrum_edit::write_point(&mut alloc::string::String, kurbo::point::Point)
