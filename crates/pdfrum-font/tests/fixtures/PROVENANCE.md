@@ -35,12 +35,20 @@ pair, rebuilt from scratch; the other ten generalize the same skeleton.
 | `tt_macroman_empty.ttf` | 624 | 8 | `(1,0)` fmt 0, all 256 entries zero | *(nothing)* |
 | `tt_sjis_and_unicode.ttf` | 484 | 6 | `(3,1)` fmt 4, `(3,2)` fmt 4 | U+002E → 1; 0x889F → 3 |
 | `tt_named_no_cmap.ttf` | 376 | 3 | *(no `cmap` table)* | — |
+| `tt_composite_instructions.ttf` | 460 | 4 | `(3,1)` fmt 4 | U+002E → 1 |
 
 `tt_custom_40.ttf` exists so a test can assert that *neither* Windows nor Mac
 platform support is detected: platform 4 is neither. `tt_named_no_cmap.ttf`
 carries a `post` version 2.0 table naming `.notdef`, `A`, `B` and omits `cmap`
 entirely, which is the only way to reach the code path guarded by
 `has_glyph_names() && charmaps().is_empty()`.
+
+`tt_composite_instructions.ttf` holds the three glyph shapes the
+instructed-composite predicate distinguishes: glyph 1 is the usual triangle,
+glyph 2 a two-component composite of it with no instruction stream, and glyph 3
+the same composite carrying one instruction byte (`0x4B`, `MIAP[0]`) behind
+`WE_HAVE_INSTRUCTIONS`. Both composites place their components by plain
+translation.
 
 **How to regenerate them.** From the workspace root:
 

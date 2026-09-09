@@ -188,7 +188,18 @@ impl GlyphSource {
     pub(crate) fn outline(&self, gid: Gid, params: GlyphParams) -> Option<BezPath> {
         let upem = self.units_per_em();
         let raw = match self {
-            Self::Fontations(f) => f.outline(gid)?,
+            Self::Fontations(f) => {
+                // An instructed composite is not fully described by its
+                // component offsets; the bytecode is what places them. Run it
+                // for those glyphs, and take the unhinted outline back if the
+                // interpreter declines the face.
+                if f.composite_is_instructed(gid)
+                    && let Some(hinted) = self.hinted_outline(gid)
+                {
+                    return Some(hinted);
+                }
+                f.outline(gid)?
+            }
             Self::Type1(f) => match Self::mm_instance(f, gid, params) {
                 Some(inst) => inst.outline(gid.into())?.0,
                 None => f.outline(gid.into())?.0,
@@ -586,6 +597,24 @@ mod tests {
         p.close_path();
         let n = p.elements().len();
         assert_eq!(trim_empty_contours(p).map(|q| q.elements().len()), Some(n));
+    }
+
+    #[test]
+    fn only_a_composite_carrying_bytecode_is_reported_as_instructed() {
+        let bytes = crate::testfonts::load("tt_composite_instructions.ttf");
+        let face = Face::new(bytes.into(), 0).expect("the fixture loads");
+        // Glyph 1 is simple, 2 a composite with no instructions, 3 the
+        // instructed composite; only the last needs the interpreter.
+        assert!(!face.composite_is_instructed(Gid(1)));
+        assert!(!face.composite_is_instructed(Gid(2)));
+        assert!(face.composite_is_instructed(Gid(3)));
+    }
+
+    #[test]
+    fn a_gid_past_the_end_of_loca_is_not_instructed() {
+        let bytes = crate::testfonts::load("tt_composite_instructions.ttf");
+        let face = Face::new(bytes.into(), 0).expect("the fixture loads");
+        assert!(!face.composite_is_instructed(Gid(u16::MAX)));
     }
 
     #[test]

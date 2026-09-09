@@ -623,6 +623,36 @@ impl Face {
             .as_ref()
     }
 
+    /// Whether `gid` is a composite glyph that carries its own instructions.
+    ///
+    /// Such a glyph is only partly described by its component offsets: the
+    /// bytecode moves the components into their final places, so the
+    /// translations alone put them somewhere the design never intended. A
+    /// face that builds its glyphs this way — stroke-assembled CJK faces are
+    /// the usual example — needs the interpreter run before its outlines mean
+    /// anything, which is what [`GlyphSource::outline`] uses this to decide.
+    ///
+    /// `false` for a simple glyph, for a composite with no instructions, and
+    /// for every face with no `glyf` table at all.
+    ///
+    /// [`GlyphSource::outline`]: super::GlyphSource::outline
+    #[must_use]
+    pub(crate) fn composite_is_instructed(&self, gid: Gid) -> bool {
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return false;
+        };
+        let (Ok(glyf), Ok(loca)) = (font.glyf(), font.loca(None)) else {
+            return false;
+        };
+        let raw = read_fonts::types::GlyphId::new(u32::from(gid.0));
+        match loca.get_glyf(raw, &glyf) {
+            Ok(Some(read_fonts::tables::glyf::Glyph::Composite(c))) => {
+                c.count_and_instructions().1.is_some_and(|i| !i.is_empty())
+            }
+            _ => false,
+        }
+    }
+
     /// A glyph's outline in **font units**, unhinted.
     ///
     /// Unhinted at every size, for every face — this is the *path* side of
