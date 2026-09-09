@@ -20,7 +20,7 @@ use core::fmt;
 
 use pdfrum_object::ObjRef;
 
-use crate::PdfaLevel;
+use super::Level;
 
 /// What to do when the document cannot be converted faithfully.
 ///
@@ -141,10 +141,10 @@ impl Policy {
     /// of the two named starting points:
     ///
     /// ```
-    /// use pdfrum::{PdfaConcession, PdfaPolicy};
+    /// use pdfrum_doc::pdfa::{Concession, Policy};
     ///
     /// // Strip what PDF/A forbids, but never substitute a font behind my back.
-    /// let policy = PdfaPolicy::strict().forbidden_feature(PdfaConcession::Accept);
+    /// let policy = Policy::strict().forbidden_feature(Concession::Accept);
     /// assert!(policy.forbidden_feature.accepts());
     /// assert!(!policy.unembeddable_font.accepts());
     /// ```
@@ -418,7 +418,7 @@ impl fmt::Display for Refusal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversion {
     /// The level converted to.
-    pub level: PdfaLevel,
+    pub level: Level,
     /// Everything the conversion did that changed the document's meaning, in
     /// the order the pipeline did it.
     ///

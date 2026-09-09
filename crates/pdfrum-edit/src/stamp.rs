@@ -17,11 +17,15 @@ use pdfrum_object::{Name, Resolve};
 use pdfrum_page::{BuildContext, PageObject};
 use pdfrum_parser::PageDict;
 
-use crate::edit::transform_object;
-use crate::page::build_graph;
-use crate::{
-    Color, DocEdit, EmbeddedImage, ImageBuilder, PageEdit, Result, StandardFont, TextBuilder,
-};
+use pdfrum_common::Limits;
+use pdfrum_page::{PageEdit, transform_object};
+use peniko::Color;
+
+use crate::build_graph::build_graph;
+use crate::{EditDoc, EmbeddedImage, Error, ImageBuilder, StandardFont, TextBuilder};
+
+/// A stamp either applies or names why it could not.
+type Result<T> = core::result::Result<T, Error>;
 
 /// Where a stamp sits on the page, as the page is displayed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -87,7 +91,7 @@ impl std::str::FromStr for StampPosition {
 ///
 /// A config struct with [`Default`]. `#[non_exhaustive]` so a field added
 /// later is not a major break; fill one in with [`StampOptions::builder`].
-/// The three font fields are read by [`DocEdit::stamp_text`] only; the
+/// The three font fields are read by [`EditDoc::stamp_text`] only; the
 /// rest apply to an image stamp too.
 ///
 /// ```
@@ -356,7 +360,7 @@ struct TextExtent {
     descent: f64,
 }
 
-impl DocEdit<'_> {
+impl EditDoc<'_> {
     /// Draw `text` over every page.
     ///
     /// The text is set in [`StampOptions::font`] at [`StampOptions::font_size`],
@@ -368,7 +372,7 @@ impl DocEdit<'_> {
     /// ```
     /// use pdfrum::{Document, SaveOptions, StampOptions, StampPosition};
     ///
-    /// let doc = Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.stamp_text(
     ///     "DRAFT",
@@ -389,14 +393,19 @@ impl DocEdit<'_> {
     ///
     /// [`Error::Save`](crate::Error::Save) when the font cannot be added, and
     /// [`Error::Read`](crate::Error::Read) when a page cannot be opened.
-    pub fn stamp_text(&mut self, text: &str, options: &StampOptions) -> Result<()> {
-        let font = self.inner.standard_font(options.font)?;
+    pub fn stamp_text(
+        &mut self,
+        text: &str,
+        options: &StampOptions,
+        limits: &Limits,
+    ) -> Result<()> {
+        let font = (*self).standard_font(options.font)?;
         let codes = font.encode(text);
-        let extent = self.text_extent(font.object(), &codes, options);
+        let extent = self.text_extent(limits, font.object(), &codes, options);
         let height = extent.ascent - extent.descent;
-        let shared = pdfrum_edit::shared_objects(&self.inner);
-        for index in 0..self.doc.page_count() {
-            let Some(mut page) = self.session_page(index.into())? else {
+        let shared = crate::shared_objects(self);
+        for index in 0..self.base().page_count() {
+            let Some(mut page) = self.session_page(index.into(), limits)? else {
                 continue;
             };
             let place = Placement::of(page.crop, page.rotate, extent.width, height, options);
@@ -412,7 +421,8 @@ impl DocEdit<'_> {
             .build();
             transform_object(&mut object, place.rotation());
             page.edit.push(object);
-            self.apply_page(&page.edit, &shared)?;
+            self.apply_page(&page.edit, &shared)
+                .map_err(|_| Error::PageIndexOutOfRange(index.into()))?;
         }
         Ok(())
     }
@@ -420,15 +430,15 @@ impl DocEdit<'_> {
     /// Draw `image` over every page, `width` points wide with its aspect
     /// ratio kept.
     ///
-    /// Placed and turned as [`DocEdit::stamp_text`] places text, at
+    /// Placed and turned as [`EditDoc::stamp_text`] places text, at
     /// [`StampOptions::opacity`]; the font fields are not read. The image
-    /// is one this session embedded through [`DocEdit::embed_jpeg`] or
-    /// [`DocEdit::embed_image`], and one `XObject` serves every page.
+    /// is one this session embedded through [`EditDoc::embed_jpeg`] or
+    /// [`EditDoc::embed_image`], and one `XObject` serves every page.
     ///
     /// ```
     /// use pdfrum::{Document, PixelFormat, SaveOptions, StampOptions};
     ///
-    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// // A two-by-one image: red, then blue.
     /// let image = edit.embed_image(&[255, 0, 0, 0, 0, 255], 2, 1, PixelFormat::Rgb8)?;
@@ -448,14 +458,15 @@ impl DocEdit<'_> {
         image: &EmbeddedImage,
         width: f64,
         options: &StampOptions,
+        limits: &Limits,
     ) -> Result<()> {
         if !width.is_finite() || width <= 0.0 || image.width() == 0 {
-            return Err(pdfrum_edit::Error::EmptyImage.into());
+            return Err(Error::EmptyImage);
         }
         let height = width * f64::from(image.height()) / f64::from(image.width());
-        let shared = pdfrum_edit::shared_objects(&self.inner);
-        for index in 0..self.doc.page_count() {
-            let Some(mut page) = self.session_page(index.into())? else {
+        let shared = crate::shared_objects(self);
+        for index in 0..self.base().page_count() {
+            let Some(mut page) = self.session_page(index.into(), limits)? else {
                 continue;
             };
             let place = Placement::of(page.crop, page.rotate, width, height, options);
@@ -466,7 +477,8 @@ impl DocEdit<'_> {
             }
             transform_object(&mut object, place.rotation());
             page.edit.push(object);
-            self.apply_page(&page.edit, &shared)?;
+            self.apply_page(&page.edit, &shared)
+                .map_err(|_| Error::PageIndexOutOfRange(index.into()))?;
         }
         Ok(())
     }
@@ -475,8 +487,11 @@ impl DocEdit<'_> {
     /// resources and content read through the overlay, so a rotation set or
     /// a stamp drawn earlier in the session is what this one builds on.
     /// `None` for a page written inline in its parent's `/Kids`.
-    fn session_page(&self, index: PageIndex) -> Result<Option<SessionPage>> {
-        let Some((reference, dict, _)) = self.page_state(index)? else {
+    fn session_page(&self, index: PageIndex, limits: &Limits) -> Result<Option<SessionPage>> {
+        let Some((reference, dict, _)) = self
+            .page_state(index)
+            .map_err(|_| Error::PageIndexOutOfRange(index))?
+        else {
             return Ok(None);
         };
         let page = PageDict {
@@ -486,20 +501,20 @@ impl DocEdit<'_> {
         let mut diags = Diagnostics::default();
         let (_, crop) = pdfrum_page::derive_boxes(
             &page.dict,
-            |key| page.inherited(key, &self.inner),
-            &self.inner,
+            |key| page.inherited(key, self),
+            self,
             &mut diags,
         );
         let rotate = pdfrum_page::Rotation::from_degrees(
-            page.inherited(&Name::from("Rotate"), &self.inner)
+            page.inherited(&Name::from("Rotate"), self)
                 .as_ref()
                 .and_then(pdfrum_object::Object::as_int)
                 .unwrap_or(0),
         );
-        self.doc.note(&diags);
-        let graph = build_graph(self.doc, &page, &self.inner, &mut BuildContext::new());
+        let graph = build_graph(&page, self, limits, &mut BuildContext::new(), &mut diags);
+
         Ok(Some(SessionPage {
-            edit: PageEdit { index, page: graph },
+            edit: PageEdit::new(index, graph),
             crop,
             rotate: rotate.degrees(),
         }))
@@ -509,6 +524,7 @@ impl DocEdit<'_> {
     /// reading of the dictionary this session wrote for it.
     fn text_extent(
         &self,
+        limits: &Limits,
         font: pdfrum_object::ObjRef,
         codes: &[u8],
         options: &StampOptions,
@@ -516,7 +532,6 @@ impl DocEdit<'_> {
         let size = f64::from(options.font_size);
         let mut diags = Diagnostics::default();
         let loaded = self
-            .inner
             .fetch(font)
             .ok()
             .as_deref()
@@ -524,9 +539,9 @@ impl DocEdit<'_> {
             .and_then(|dict| {
                 pdfrum_font::load(
                     dict,
-                    &self.inner,
+                    self,
                     &pdfrum_font::FontCache::new(),
-                    &self.doc.limits,
+                    limits,
                     &mut diags,
                 )
             });

@@ -143,6 +143,7 @@ pub fn pdfrum_parser::Xref::sections(&self) -> &[pdfrum_parser::Section]
 pub fn pdfrum_parser::atoi64(&[u8]) -> i64
 pub fn pdfrum_parser::atoui(&[u8]) -> u32
 pub const fn pdfrum_parser::class_of(u8) -> pdfrum_parser::CharClass
+pub fn pdfrum_parser::content_segments(&pdfrum_parser::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> (alloc::vec::Vec<u8>, alloc::vec::Vec<usize>)
 pub fn pdfrum_parser::decoded_stream(&pdfrum_object::stream::Stream, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<u8>
 pub fn pdfrum_parser::find_word(&[u8], &[u8], usize, pdfrum_parser::WordBoundary) -> core::option::Option<usize>
 pub fn pdfrum_parser::is_delimiter(u8) -> bool

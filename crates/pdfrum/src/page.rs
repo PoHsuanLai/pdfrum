@@ -625,7 +625,7 @@ impl<'a> Page<'a> {
     /// than parsed apart — and the ends are what lets the editor say which
     /// element each object came from.
     fn content_segments(&self, diags: &mut Diagnostics) -> (Vec<u8>, Vec<usize>) {
-        content_segments(self.doc, &self.dict, &self.doc.inner, diags)
+        pdfrum_parser::content_segments(&self.dict, &self.doc.inner, &self.doc.limits, diags)
     }
 
     #[cfg(feature = "edit")]
@@ -636,87 +636,17 @@ impl<'a> Page<'a> {
     /// the element boundaries, which the render and text paths have no use
     /// for.
     pub(crate) fn build_for_edit(&self, ctx: &mut BuildContext) -> pdfrum_page::Page {
-        build_graph(self.doc, &self.dict, &self.doc.inner, ctx)
+        let mut diags = Diagnostics::default();
+        let page = pdfrum_edit::build_graph(
+            &self.dict,
+            &self.doc.inner,
+            &self.doc.limits,
+            ctx,
+            &mut diags,
+        );
+        self.doc.note(&diags);
+        page
     }
-}
-
-/// The content of `dict`'s page, decoded and joined, with the end offset of
-/// each `/Contents` element — read through `r`.
-fn content_segments(
-    doc: &Document,
-    dict: &PageDict,
-    r: &impl Resolve,
-    diags: &mut Diagnostics,
-) -> (Vec<u8>, Vec<usize>) {
-    let Some(contents) = dict.dict.get(&Name::from("Contents"), r) else {
-        return (Vec::new(), Vec::new());
-    };
-    let mut out = Vec::new();
-    let mut ends = Vec::new();
-    let mut push = |object: &pdfrum_object::Object, out: &mut Vec<u8>, ends: &mut Vec<usize>| {
-        if let Some(stream) = object.as_stream() {
-            let decoded = pdfrum_filters::decode_chain(stream, 0, r, &doc.limits, diags);
-            out.extend_from_slice(&decoded.data);
-            // The separating space belongs to the element before it: it is
-            // what terminates a stream ending mid-token.
-            out.push(b' ');
-        }
-        ends.push(out.len());
-    };
-    let Some(direct) = contents.as_direct() else {
-        return (out, ends);
-    };
-    match direct {
-        pdfrum_object::Object::Stream(_) => push(direct, &mut out, &mut ends),
-        pdfrum_object::Object::Array(array) => {
-            for element in array.iter() {
-                if let Ok(resolved) = element.resolve(r) {
-                    push(resolved.get(), &mut out, &mut ends);
-                } else {
-                    // A dangling element still occupies an index, so the
-                    // ones after it keep their numbers.
-                    ends.push(out.len());
-                }
-            }
-        }
-        _ => {}
-    }
-    (out, ends)
-}
-
-/// The object graph of `dict`'s page for editing, read through `r`: the
-/// base document for a page as it was opened, or an editing session's
-/// overlay for the page as that session's edits leave it — so a stream an
-/// earlier edit appended is a clean stream of the graph, and the names it
-/// uses are kept.
-#[cfg(feature = "edit")]
-pub(crate) fn build_graph(
-    doc: &Document,
-    dict: &PageDict,
-    r: &impl Resolve,
-    ctx: &mut BuildContext,
-) -> pdfrum_page::Page {
-    let mut diags = Diagnostics::default();
-    let (bytes, ends) = content_segments(doc, dict, r, &mut diags);
-    let ops = pdfrum_page::parse_content(&bytes, &doc.limits, &mut diags);
-    let bounds = pdfrum_page::StreamBounds::from_joined(&bytes, ops.len(), &ends, &doc.limits);
-    let resources = pdfrum_page::Resources::for_page(
-        dict.inherited(&Name::from("Resources"), r)
-            .and_then(|object| object.resolve(r).ok()?.as_dict().cloned()),
-    );
-    let page = pdfrum_page::build_page_streams(
-        &ops,
-        &bounds,
-        &dict.dict,
-        |key| dict.inherited(key, r),
-        &resources,
-        r,
-        ctx,
-        &doc.limits,
-        &mut diags,
-    );
-    doc.note(&diags);
-    page
 }
 
 /// A page whose content has been interpreted, ready to be drawn any number
@@ -1200,4 +1130,32 @@ fn raw_image(
         data: stream.data.as_ref().to_vec(),
         encoding,
     })
+}
+
+#[cfg(feature = "edit")]
+impl Page<'_> {
+    /// Open this page's object graph for editing.
+    ///
+    /// Interpreting the content stream is the expensive part and it happens
+    /// here, once. See [`PageEdit`] for what a save then does with
+    /// the result.
+    ///
+    /// ```
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut page = doc.page(0)?.edit();
+    ///
+    /// // Two text objects; drop the second.
+    /// assert_eq!(page.len(), 2);
+    /// assert!(page.remove(1).is_some());
+    /// assert_eq!(page.len(), 1);
+    /// assert!(page.is_modified());
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn edit(&self) -> pdfrum_page::PageEdit {
+        pdfrum_page::PageEdit::new(
+            self.index,
+            self.build_for_edit(&mut pdfrum_page::BuildContext::new()),
+        )
+    }
 }

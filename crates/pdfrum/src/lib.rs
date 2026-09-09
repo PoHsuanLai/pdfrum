@@ -11,16 +11,8 @@
 )]
 
 mod annotation;
-#[cfg(feature = "edit")]
-mod attach;
-#[cfg(feature = "edit")]
-mod canvas;
 mod document;
-#[cfg(feature = "edit")]
-mod edit;
 mod error;
-#[cfg(feature = "edit")]
-mod flatten;
 #[cfg(feature = "forms")]
 mod form;
 #[cfg(feature = "forms")]
@@ -41,30 +33,14 @@ mod render;
 mod save;
 mod session;
 mod signature;
-#[cfg(feature = "edit")]
-mod stamp;
-#[cfg(feature = "svg-import")]
-mod svg_ingest;
-#[cfg(feature = "svg-text")]
-mod svg_text;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
-/// An SVG compiled once into a Form `XObject`: one object, placed on any
-/// number of pages by [`Canvas::place_svg`].
-#[cfg(feature = "svg-import")]
-pub use canvas::SvgForm;
-#[cfg(feature = "edit")]
-pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 pub use document::{
     Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions,
     OpenOptionsBuilder, Revision, UnknownFontFileKind,
 };
-#[cfg(feature = "edit")]
-pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, ErrorCode, Result, UnknownErrorCode};
-#[cfg(feature = "edit")]
-pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode};
 #[cfg(feature = "forms")]
 pub use form::{Field, FieldFlags, FieldKind, Form, UnknownField};
 #[cfg(feature = "forms")]
@@ -72,6 +48,17 @@ pub use form_session::{
     AppearanceUpdate, Button, Cascade, FieldRef, FieldWrites, FormSession, Key, Keystroke,
     KeystrokeOutcome, Modifiers, NoScripts, Response, SessionConfig, UpdateKind,
 };
+/// An SVG compiled once into a Form `XObject`: one object, placed on any
+/// number of pages by [`Canvas::place_svg`].
+#[cfg(feature = "svg-import")]
+pub use pdfrum_edit::SvgForm;
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{FlattenMode, Flattened, UnknownFlattenMode, flatten};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{ImageBuilder, PathBuilder, TextBuilder};
+pub use pdfrum_page::PageEdit;
 // The viewer chrome a host draws for itself: an open combo dropdown and a
 // scrolled choice widget. Values, not a trait — `FormSession::popup_for_page`
 // is state a caller pulls rather than a seam the library calls back through.
@@ -133,16 +120,29 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, MissingGlyph, StandardFont};
 
-#[cfg(feature = "edit")]
-pub use attach::{AttachmentOptions, AttachmentOptionsBuilder};
+/// The faces an ingested SVG's `<text>` is set in, and what it becomes.
+#[cfg(feature = "svg-text")]
+pub use pdfrum_edit::SvgFonts;
 /// A `SystemTime` as the PDF date string [`AttachmentOptions::modified`] and
 /// [`Metadata`]'s two dates carry.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::pdf_date;
 #[cfg(feature = "edit")]
+pub use pdfrum_edit::{
+    AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
+    remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,
+};
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{Encryption, IdSource, PageBox};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
+/// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
+/// [`DocEdit::compile_svg`] once into a reusable [`SvgForm`], how each is
+/// placed, and everything neither could carry.
+#[cfg(feature = "svg-import")]
+pub use pdfrum_edit::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
 /// The AGG-parity rasterizer, behind the `agg` feature.
 #[cfg(feature = "agg")]
 pub use pdfrum_raster_agg::AggBackend;
@@ -161,16 +161,6 @@ pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, SaveOptionsBuilder, UnknownUpdate, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
-#[cfg(feature = "edit")]
-pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
-/// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
-/// [`DocEdit::compile_svg`] once into a reusable [`SvgForm`], how each is
-/// placed, and everything neither could carry.
-#[cfg(feature = "svg-import")]
-pub use svg_ingest::{SvgFit, SvgIngestReport, Unsupported, UnsupportedItem};
-/// The faces an ingested SVG's `<text>` is set in, and what it becomes.
-#[cfg(feature = "svg-text")]
-pub use svg_text::SvgFonts;
 
 /// Why `usvg` could not resolve an SVG: the payload of [`Error::Svg`].
 ///
@@ -222,7 +212,7 @@ pub use pdfrum_doc::pdfa::{
 };
 
 #[cfg(feature = "edit")]
-pub use pdfa::{
+pub use pdfrum_doc::pdfa::{
     Compromise as PdfaCompromise, Concession as PdfaConcession, Conversion as PdfaConversion,
     Dpi as PdfaDpi, Policy as PdfaPolicy, RasterCause as PdfaRasterCause, Refusal as PdfaRefusal,
 };

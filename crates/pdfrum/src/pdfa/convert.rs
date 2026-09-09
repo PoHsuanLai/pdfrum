@@ -43,9 +43,9 @@ use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, StringSyntax, names,
 };
 
-use super::policy::{Compromise, Conversion, Policy, RasterCause, Refusal};
-use super::xmp_write::{self, InfoFields};
 use crate::{Document, PdfaLevel};
+use pdfrum_doc::pdfa::{Compromise, Conversion, Policy, RasterCause, Refusal};
+use pdfrum_doc::pdfa::{InfoFields, xmp_packet};
 
 /// Actions PDF/A forbids by name (ISO 19005-2 6.5.1), `/JavaScript` included.
 const FORBIDDEN_ACTIONS: &[&str] = &[
@@ -1065,7 +1065,7 @@ fn apply(
         catalog.remove(key);
     }
 
-    // The XMP packet, generated rather than patched — `xmp_write`'s module
+    // The XMP packet, generated rather than patched — the XMP writer's
     // docs say why. It replaces whatever was there, because the packets that
     // fail are exactly the ones that cannot be edited into shape.
     let mut metadata_dict = Dict::default();
@@ -1073,7 +1073,7 @@ fn apply(
     metadata_dict.insert(names::SUBTYPE.clone(), Object::Name(Name::from("XML")));
     let metadata = edit.add(Object::Stream(Box::new(Stream::new(
         metadata_dict,
-        ByteSpan::from(xmp_write::packet(level, &info_fields(doc))),
+        ByteSpan::from(xmp_packet(level, &info_fields(doc))),
     ))));
     catalog.insert(names::METADATA.clone(), Object::Ref(metadata));
 
@@ -1286,7 +1286,7 @@ fn info_fields(doc: &Document) -> InfoFields {
 /// A PDF date string (`D:YYYYMMDDHHmmSSOHH'mm'`) as XMP's ISO 8601.
 ///
 /// A value with less than a four-digit year comes back unchanged and
-/// `xmp_write` then drops it: this converts what it recognises rather than
+/// the XMP writer then drops it: this converts what it recognises rather than
 /// guessing at what it does not, because a wrong date written confidently is
 /// worse than an absent optional property.
 fn pdf_date_to_iso8601(pdf: &str) -> String {
@@ -1336,6 +1336,7 @@ fn pdf_date_to_iso8601(pdf: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{FORBIDDEN_ACTIONS, ILLEGAL_FLAGS, PRINT_FLAG, pdf_date_to_iso8601};
+    use pdfrum_doc::pdfa::{InfoFields, xmp_packet};
 
     #[test]
     fn a_pdf_date_becomes_iso8601() {
@@ -1354,17 +1355,17 @@ mod tests {
         assert_eq!(pdf_date_to_iso8601("D:20260907"), "2026-09-07");
     }
 
-    // Unrecognisable input comes back unchanged and `xmp_write` declines to
+    // Unrecognisable input comes back unchanged and the XMP writer declines to
     // write it. The two halves together keep a malformed date out of the
     // packet rather than failing 6.6.2.3.1-2 on it.
     #[test]
     fn an_unreadable_date_is_returned_for_the_writer_to_drop() {
         assert_eq!(pdf_date_to_iso8601("garbage"), "garbage");
-        let packet = super::xmp_write::packet(
+        let packet = xmp_packet(
             crate::PdfaLevel::A2b,
-            &super::InfoFields {
+            &InfoFields {
                 create_date: Some(pdf_date_to_iso8601("garbage")),
-                ..super::InfoFields::default()
+                ..InfoFields::default()
             },
         );
         assert!(!packet.windows(10).any(|w| w == b"CreateDate"));

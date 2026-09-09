@@ -1175,3 +1175,47 @@ mod tests {
         }
     }
 }
+
+/// The content of `dict`'s page, decoded and joined, with the end offset of
+/// each `/Contents` element — read through `r`.
+pub fn content_segments(
+    dict: &PageDict,
+    r: &impl Resolve,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> (Vec<u8>, Vec<usize>) {
+    let Some(contents) = dict.dict.get(&pdfrum_object::Name::from("Contents"), r) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut ends = Vec::new();
+    let mut push = |object: &pdfrum_object::Object, out: &mut Vec<u8>, ends: &mut Vec<usize>| {
+        if let Some(stream) = object.as_stream() {
+            let decoded = pdfrum_filters::decode_chain(stream, 0, r, limits, diags);
+            out.extend_from_slice(&decoded.data);
+            // The separating space belongs to the element before it: it is
+            // what terminates a stream ending mid-token.
+            out.push(b' ');
+        }
+        ends.push(out.len());
+    };
+    let Some(direct) = contents.as_direct() else {
+        return (out, ends);
+    };
+    match direct {
+        pdfrum_object::Object::Stream(_) => push(direct, &mut out, &mut ends),
+        pdfrum_object::Object::Array(array) => {
+            for element in array.iter() {
+                if let Ok(resolved) = element.resolve(r) {
+                    push(resolved.get(), &mut out, &mut ends);
+                } else {
+                    // A dangling element still occupies an index, so the
+                    // ones after it keep their numbers.
+                    ends.push(out.len());
+                }
+            }
+        }
+        _ => {}
+    }
+    (out, ends)
+}
