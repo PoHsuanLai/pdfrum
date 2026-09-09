@@ -12,7 +12,7 @@
 // produced so far, which is how a `/Filter [/ASCII85Decode /DCTDecode]` image
 // reaches the JPEG decoder already de-ASCII'd.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every byte reaching this crate came from an untrusted file: index with
 // `get()`, and size arithmetic goes through `checked_*`.
 #![warn(clippy::indexing_slicing)]

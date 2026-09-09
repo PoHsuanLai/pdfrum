@@ -13,7 +13,7 @@
 // Damage is data, not failure: the best-effort results match what PDFium
 // produces, because that behaviour is what makes broken PDFs render.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every byte reaching this crate came from an untrusted file: index with
 // `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]

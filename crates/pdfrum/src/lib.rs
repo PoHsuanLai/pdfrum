@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // The crate docs link to `Form`, `PageEdit`, `Document::save` and their
 // kin, which only exist with `forms` and `edit` on. A headless build
 // (`--no-default-features`) still has the prose; the links become plain
