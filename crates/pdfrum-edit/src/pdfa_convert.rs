@@ -43,9 +43,15 @@ use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, StringSyntax, names,
 };
 
-use super::policy::{Compromise, Conversion, Policy, RasterCause, Refusal};
-use super::xmp_write::{self, InfoFields};
-use crate::{Document, PdfaLevel};
+use crate::{EditDoc, Error};
+use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_parser::Document;
+
+/// A conversion either applies or names why it could not.
+type Result<T> = core::result::Result<T, Error>;
+use pdfrum_doc::pdfa::{
+    Compromise, Conversion, InfoFields, Level, Policy, RasterCause, Refusal, xmp_packet,
+};
 
 /// Actions PDF/A forbids by name (ISO 19005-2 6.5.1), `/JavaScript` included.
 const FORBIDDEN_ACTIONS: &[&str] = &[
@@ -107,16 +113,22 @@ struct Plan {
 /// The bytes are `None` exactly when [`Conversion::converted`] is false. That
 /// is the interlock which makes a refusal impossible to ignore: on a refusal
 /// there is no file to write.
-pub(crate) fn convert(
+/// # Errors
+///
+/// When the converted document cannot be serialized.
+pub fn convert(
     doc: &Document,
-    level: PdfaLevel,
+    level: Level,
     policy: Policy,
-) -> crate::Result<(Conversion, Option<Vec<u8>>)> {
+    info: &InfoFields,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<(Conversion, Option<Vec<u8>>)> {
     let mut refusals = Vec::new();
     let mut plan = Plan::default();
 
-    let catalog = doc.catalog();
-    let Some(root) = doc.inner.trailer().reference(names::ROOT) else {
+    let catalog = doc.catalog().unwrap_or_default();
+    let Some(root) = doc.trailer().reference(names::ROOT) else {
         // A document whose trailer names no catalog is not one we can rewrite
         // the catalog of. Nothing in the corpus is like this, and a save would
         // fail downstream anyway; refusing here says why.
@@ -136,7 +148,7 @@ pub(crate) fn convert(
     survey_catalog(doc, &catalog, root, level, policy, &mut plan, &mut refusals);
     survey_pages(doc, level, policy, &mut plan, &mut refusals);
     survey_stray_metadata(doc, root, &mut plan);
-    survey_unrepairable(doc, level, policy, &mut refusals);
+    survey_unrepairable(doc, limits, diags, level, policy, &mut refusals);
 
     // A refusal means nothing is written. Every obstacle is collected first —
     // a caller widening a policy wants the whole list, not its first item.
@@ -151,7 +163,7 @@ pub(crate) fn convert(
         ));
     }
 
-    let bytes = apply(doc, level, root, &catalog, &plan)?;
+    let bytes = apply(doc, level, root, &catalog, &plan, info)?;
     Ok((
         Conversion {
             level,
@@ -244,7 +256,9 @@ impl Plan {
 /// honest meaning until the repair lands and it becomes "substitute it".
 fn survey_unrepairable(
     doc: &Document,
-    level: PdfaLevel,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+    level: Level,
     policy: Policy,
     refusals: &mut Vec<Refusal>,
 ) {
@@ -252,12 +266,19 @@ fn survey_unrepairable(
     if policy.unembeddable_font.accepts() && policy.unrepresentable_content.accepts() {
         return;
     }
-    let report = doc.check_pdfa(level);
+    let report = pdfrum_doc::pdfa::check(
+        level,
+        &doc.catalog().unwrap_or_default(),
+        doc.trailer(),
+        doc,
+        limits,
+        diags,
+    );
     for violation in &report.violations {
         match violation.clause {
-            crate::PdfaClause::FontNotEmbedded if !policy.unembeddable_font.accepts() => {
+            pdfrum_doc::pdfa::Clause::FontNotEmbedded if !policy.unembeddable_font.accepts() => {
                 let font = match violation.subject {
-                    crate::PdfaSubject::Object(reference) => reference,
+                    pdfrum_doc::pdfa::Subject::Object(reference) => reference,
                     _ => ObjRef::new(0, 0),
                 };
                 refusals.push(Refusal::UnembeddableFont {
@@ -267,10 +288,10 @@ fn survey_unrepairable(
             }
             // A-1b only: the checker does not run the transparency walk at
             // A-2b, which permits it, so this arm cannot fire there.
-            crate::PdfaClause::Transparency if !policy.unrepresentable_content.accepts() => {
+            pdfrum_doc::pdfa::Clause::Transparency if !policy.unrepresentable_content.accepts() => {
                 let page = match violation.subject {
-                    crate::PdfaSubject::Page(index)
-                    | crate::PdfaSubject::Resource { page: index, .. } => index,
+                    pdfrum_doc::pdfa::Subject::Page(index)
+                    | pdfrum_doc::pdfa::Subject::Resource { page: index, .. } => index,
                     _ => 0,
                 };
                 refusals.push(Refusal::UnrepresentableContent {
@@ -289,12 +310,12 @@ fn survey_catalog(
     doc: &Document,
     catalog: &Dict,
     root: ObjRef,
-    level: PdfaLevel,
+    level: Level,
     policy: Policy,
     plan: &mut Plan,
     refusals: &mut Vec<Refusal>,
 ) {
-    let resolve = &doc.inner;
+    let resolve = doc;
 
     // `/OpenAction` is an action dictionary or a destination array; only the
     // former can carry a forbidden `/S`.
@@ -337,7 +358,7 @@ fn survey_catalog(
         // itself PDF/A, which means recursing into it; the checker does not do
         // that (design doc §4) and neither does this, so A-2b leaves them
         // alone rather than removing files it is not entitled to remove.
-        if level == PdfaLevel::A1b && edited.contains_key(names::EMBEDDED_FILES) {
+        if level == Level::A1b && edited.contains_key(names::EMBEDDED_FILES) {
             if policy.forbidden_feature.accepts() {
                 edited.remove(names::EMBEDDED_FILES);
                 removed.push("EmbeddedFiles");
@@ -382,7 +403,7 @@ fn survey_catalog(
     }
 
     // A-1b forbids optional content; A-2b permits it.
-    if level == PdfaLevel::A1b && catalog.contains_key(&Name::from("OCProperties")) {
+    if level == Level::A1b && catalog.contains_key(&Name::from("OCProperties")) {
         if policy.forbidden_feature.accepts() {
             plan.drop_catalog_keys.push(Name::from("OCProperties"));
             plan.compromises
@@ -415,8 +436,8 @@ fn survey_catalog(
 /// reason to visit, and the xref is the only complete list of what a file
 /// holds.
 fn survey_stray_metadata(doc: &Document, root: ObjRef, plan: &mut Plan) {
-    let resolve = &doc.inner;
-    let last = doc.inner.xref().last_object_number();
+    let resolve = doc;
+    let last = doc.xref().last_object_number();
     for num in 1..=last {
         if num == root.num {
             continue;
@@ -496,7 +517,7 @@ fn survey_field(
     if depth >= MAX_FIELD_DEPTH || !seen.insert(reference.num) {
         return;
     }
-    let resolve = &doc.inner;
+    let resolve = doc;
     let Ok(object) = resolve.fetch(reference) else {
         return;
     };
@@ -552,17 +573,17 @@ fn with_key(dict: &Dict, key: &Name, value: Object) -> Dict {
 /// forbids.
 fn survey_pages(
     doc: &Document,
-    _level: PdfaLevel,
+    _level: Level,
     policy: Policy,
     plan: &mut Plan,
     refusals: &mut Vec<Refusal>,
 ) {
-    let resolve = &doc.inner;
+    let resolve = doc;
     // Shared across pages: a form XObject reached from two pages is swept
     // once, and a document that points a form at itself terminates.
     let mut seen = std::collections::BTreeSet::new();
     for index in 0..doc.page_count() {
-        let Ok(page) = doc.inner.page(index) else {
+        let Ok(page) = doc.page(index) else {
             continue;
         };
 
@@ -603,7 +624,7 @@ fn sweep_annotation_appearances(
     plan: &mut Plan,
     seen: &mut std::collections::BTreeSet<u32>,
 ) {
-    let resolve = &doc.inner;
+    let resolve = doc;
     let Some(annots) = page.array(names::ANNOTS, resolve) else {
         return;
     };
@@ -659,7 +680,7 @@ fn sweep_resources(
     if depth >= MAX_RESOURCE_DEPTH {
         return;
     }
-    let resolve = &doc.inner;
+    let resolve = doc;
     drop_key_from_resources(
         doc,
         resources,
@@ -714,7 +735,7 @@ fn drop_key_from_resources(
     key: &Name,
     plan: &mut Plan,
 ) {
-    let resolve = &doc.inner;
+    let resolve = doc;
     let Some(group) = resources.dict(category, resolve) else {
         return;
     };
@@ -752,7 +773,7 @@ fn survey_annotations(
     plan: &mut Plan,
     refusals: &mut Vec<Refusal>,
 ) {
-    let resolve = &doc.inner;
+    let resolve = doc;
     let Some(annots) = page.array(names::ANNOTS, resolve) else {
         return;
     };
@@ -1038,12 +1059,13 @@ fn forbidden_action_at<R: Resolve>(action: &Dict, resolve: &R, depth: u32) -> Op
 /// serialize.
 fn apply(
     doc: &Document,
-    level: PdfaLevel,
+    level: Level,
     root: ObjRef,
     catalog: &Dict,
     plan: &Plan,
-) -> crate::Result<Vec<u8>> {
-    let mut edit = pdfrum_edit::EditDoc::new(&doc.inner);
+    info: &InfoFields,
+) -> Result<Vec<u8>> {
+    let mut edit = EditDoc::new(doc);
 
     // The catalog may itself be a planned replacement (a direct `/Names` that
     // had a key dropped), so the plan is applied first and the catalog is then
@@ -1065,7 +1087,7 @@ fn apply(
         catalog.remove(key);
     }
 
-    // The XMP packet, generated rather than patched — `xmp_write`'s module
+    // The XMP packet, generated rather than patched — the XMP writer's
     // docs say why. It replaces whatever was there, because the packets that
     // fail are exactly the ones that cannot be edited into shape.
     let mut metadata_dict = Dict::default();
@@ -1073,7 +1095,7 @@ fn apply(
     metadata_dict.insert(names::SUBTYPE.clone(), Object::Name(Name::from("XML")));
     let metadata = edit.add(Object::Stream(Box::new(Stream::new(
         metadata_dict,
-        ByteSpan::from(xmp_write::packet(level, &info_fields(doc))),
+        ByteSpan::from(xmp_packet(level, info)),
     ))));
     catalog.insert(names::METADATA.clone(), Object::Ref(metadata));
 
@@ -1087,18 +1109,18 @@ fn apply(
 
     edit.replace(root, Object::Dict(catalog));
 
-    let options = pdfrum_edit::SaveOptions {
+    let options = crate::SaveOptions {
         // A rewrite, never an increment: an incremental save leaves the
         // original bytes in front, and those bytes are what fails 6.1.9-1
         // (object spacing) and carry the `/Encrypt` the level forbids.
-        mode: pdfrum_edit::SaveMode::Full,
+        mode: crate::SaveMode::Full,
         // PDF/A forbids encryption outright, and this is the only way to drop
         // the trailer's `/Encrypt` — the trailer is the writer's to build.
         remove_security: true,
-        ..pdfrum_edit::SaveOptions::default()
+        ..crate::SaveOptions::default()
     };
     let mut out = Vec::new();
-    pdfrum_edit::save(&edit, &options, &mut out)?;
+    crate::save(&edit, &options, &mut out)?;
     Ok(out)
 }
 
@@ -1156,11 +1178,11 @@ impl IntentProfile {
 /// operand is invisible here, and the file keeps the sRGB intent it would have
 /// had anyway, so the gap costs a repair rather than causing a wrong one.
 fn intent_profile(doc: &Document) -> IntentProfile {
-    let resolve = &doc.inner;
+    let resolve = doc;
     let mut cmyk = false;
     let mut other = false;
 
-    let last = doc.inner.xref().last_object_number();
+    let last = doc.xref().last_object_number();
     for num in 1..=last {
         let Ok(object) = resolve.fetch(ObjRef::new(num, 0)) else {
             continue;
@@ -1235,7 +1257,7 @@ fn note_one_space(space: &Object, cmyk: &mut bool, other: &mut bool, depth: u32)
 /// The `/OutputIntents` array with `profile` behind it.
 ///
 /// `None` when the profile will not encode; see [`IntentProfile::parts`].
-fn output_intent(edit: &mut pdfrum_edit::EditDoc<'_>, profile: IntentProfile) -> Option<Array> {
+fn output_intent(edit: &mut crate::EditDoc<'_>, profile: IntentProfile) -> Option<Array> {
     let (profile_bytes, components, condition) = profile.parts()?;
     let mut profile_dict = Dict::default();
     profile_dict.insert(Name::from("N"), Object::Int(components));
@@ -1266,39 +1288,25 @@ fn output_intent(edit: &mut pdfrum_edit::EditDoc<'_>, profile: IntentProfile) ->
     Some(array)
 }
 
-/// The information-dictionary fields the XMP packet mirrors.
-fn info_fields(doc: &Document) -> InfoFields {
-    let metadata = doc.metadata();
-    InfoFields {
-        title: metadata.title.clone(),
-        author: metadata.author.clone(),
-        creator: metadata.creator.clone(),
-        producer: metadata.producer.clone(),
-        keywords: metadata.keywords.clone(),
-        create_date: metadata.creation_date.as_deref().map(pdf_date_to_iso8601),
-        modify_date: metadata
-            .modification_date
-            .as_deref()
-            .map(pdf_date_to_iso8601),
-    }
-}
-
 /// A PDF date string (`D:YYYYMMDDHHmmSSOHH'mm'`) as XMP's ISO 8601.
 ///
 /// A value with less than a four-digit year comes back unchanged and
-/// `xmp_write` then drops it: this converts what it recognises rather than
+/// the XMP writer then drops it: this converts what it recognises rather than
 /// guessing at what it does not, because a wrong date written confidently is
 /// worse than an absent optional property.
-fn pdf_date_to_iso8601(pdf: &str) -> String {
+pub fn pdf_date_to_iso8601(pdf: &str) -> String {
     let body = pdf.trim_start_matches("D:");
     let digits: Vec<char> = body.chars().take_while(char::is_ascii_digit).collect();
     if digits.len() < 4 {
         return pdf.to_owned();
     }
     let at = |range: std::ops::Range<usize>| -> Option<String> {
-        (digits.len() >= range.end).then(|| digits[range].iter().collect())
+        digits.get(range).map(|slice| slice.iter().collect())
     };
-    let mut out: String = digits[0..4].iter().collect();
+    let Some(year) = digits.get(0..4) else {
+        return pdf.to_owned();
+    };
+    let mut out: String = year.iter().collect();
     let Some(month) = at(4..6) else { return out };
     out.push('-');
     out.push_str(&month);
@@ -1324,9 +1332,9 @@ fn pdf_date_to_iso8601(pdf: &str) -> String {
     let zone: Vec<char> = rest.chars().filter(char::is_ascii_digit).collect();
     if matches!(sign, Some('+' | '-')) && zone.len() >= 4 {
         out.push(sign.unwrap_or('Z'));
-        out.extend(&zone[0..2]);
+        out.extend(zone.get(0..2).into_iter().flatten());
         out.push(':');
-        out.extend(&zone[2..4]);
+        out.extend(zone.get(2..4).into_iter().flatten());
     } else {
         out.push('Z');
     }
@@ -1336,6 +1344,7 @@ fn pdf_date_to_iso8601(pdf: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{FORBIDDEN_ACTIONS, ILLEGAL_FLAGS, PRINT_FLAG, pdf_date_to_iso8601};
+    use pdfrum_doc::pdfa::{InfoFields, Level, xmp_packet};
 
     #[test]
     fn a_pdf_date_becomes_iso8601() {
@@ -1354,17 +1363,17 @@ mod tests {
         assert_eq!(pdf_date_to_iso8601("D:20260907"), "2026-09-07");
     }
 
-    // Unrecognisable input comes back unchanged and `xmp_write` declines to
+    // Unrecognisable input comes back unchanged and the XMP writer declines to
     // write it. The two halves together keep a malformed date out of the
     // packet rather than failing 6.6.2.3.1-2 on it.
     #[test]
     fn an_unreadable_date_is_returned_for_the_writer_to_drop() {
         assert_eq!(pdf_date_to_iso8601("garbage"), "garbage");
-        let packet = super::xmp_write::packet(
-            crate::PdfaLevel::A2b,
-            &super::InfoFields {
+        let packet = xmp_packet(
+            Level::A2b,
+            &InfoFields {
                 create_date: Some(pdf_date_to_iso8601("garbage")),
-                ..super::InfoFields::default()
+                ..InfoFields::default()
             },
         );
         assert!(!packet.windows(10).any(|w| w == b"CreateDate"));

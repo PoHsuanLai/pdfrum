@@ -32,6 +32,22 @@ pub pdfrum_edit::Error::PasswordNotText
 pub pdfrum_edit::Error::Subset(alloc::string::String)
 pub pdfrum_edit::Error::UnrecognisedFontProgram
 pub pdfrum_edit::Error::UnrecognisedImageData
+pub enum pdfrum_edit::Fill
+pub pdfrum_edit::Fill::EvenOdd
+pub pdfrum_edit::Fill::NonZero
+pub enum pdfrum_edit::FlattenMode
+pub pdfrum_edit::FlattenMode::Display
+pub pdfrum_edit::FlattenMode::Print
+impl core::fmt::Display for pdfrum_edit::FlattenMode
+pub fn pdfrum_edit::FlattenMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum_edit::FlattenMode
+pub type pdfrum_edit::FlattenMode::Err = pdfrum_edit::UnknownFlattenMode
+pub fn pdfrum_edit::FlattenMode::from_str(&str) -> core::result::Result<pdfrum_edit::FlattenMode, pdfrum_edit::UnknownFlattenMode>
+pub enum pdfrum_edit::Flattened
+pub pdfrum_edit::Flattened::Done
+pub pdfrum_edit::Flattened::NothingToDo
+impl core::fmt::Display for pdfrum_edit::Flattened
+pub fn pdfrum_edit::Flattened::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum_edit::FontEncoding
 pub pdfrum_edit::FontEncoding::Composite
 pub pdfrum_edit::FontEncoding::Simple
@@ -40,12 +56,27 @@ pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
 impl pdfrum_edit::IdSource
 pub fn pdfrum_edit::IdSource::tag_byte(self, u64) -> u8
+pub enum pdfrum_edit::LineCap
+pub pdfrum_edit::LineCap::Butt
+pub pdfrum_edit::LineCap::Round
+pub pdfrum_edit::LineCap::Square
+pub enum pdfrum_edit::LineJoin
+pub pdfrum_edit::LineJoin::Bevel
+pub pdfrum_edit::LineJoin::Miter
+pub pdfrum_edit::LineJoin::Round
 pub enum pdfrum_edit::PageBox
 pub pdfrum_edit::PageBox::Art
 pub pdfrum_edit::PageBox::Bleed
 pub pdfrum_edit::PageBox::Crop
 pub pdfrum_edit::PageBox::Media
 pub pdfrum_edit::PageBox::Trim
+pub enum pdfrum_edit::Paint
+pub pdfrum_edit::Paint::Fill(peniko::Color)
+pub pdfrum_edit::Paint::FillStroke(peniko::Color, pdfrum_edit::Stroke)
+pub pdfrum_edit::Paint::Stroke(pdfrum_edit::Stroke)
+impl pdfrum_edit::Paint
+pub fn pdfrum_edit::Paint::fill(&self) -> core::option::Option<peniko::Color>
+pub fn pdfrum_edit::Paint::stroke(&self) -> core::option::Option<&pdfrum_edit::Stroke>
 pub enum pdfrum_edit::PixelFormat
 pub pdfrum_edit::PixelFormat::Cmyk8
 pub pdfrum_edit::PixelFormat::Gray8
@@ -55,7 +86,60 @@ pub pdfrum_edit::PixelFormat::Rgba8
 pub enum pdfrum_edit::SaveMode
 pub pdfrum_edit::SaveMode::Full
 pub pdfrum_edit::SaveMode::Incremental
+pub enum pdfrum_edit::StampPosition
+pub pdfrum_edit::StampPosition::BottomLeft
+pub pdfrum_edit::StampPosition::BottomRight
+pub pdfrum_edit::StampPosition::Center
+pub pdfrum_edit::StampPosition::TopLeft
+pub pdfrum_edit::StampPosition::TopRight
+impl core::fmt::Display for pdfrum_edit::StampPosition
+pub fn pdfrum_edit::StampPosition::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum_edit::StampPosition
+pub type pdfrum_edit::StampPosition::Err = pdfrum_edit::UnknownStampPosition
+pub fn pdfrum_edit::StampPosition::from_str(&str) -> core::result::Result<pdfrum_edit::StampPosition, pdfrum_edit::UnknownStampPosition>
+#[non_exhaustive] pub struct pdfrum_edit::AttachmentOptions
+pub pdfrum_edit::AttachmentOptions::description: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AttachmentOptions::mime_type: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AttachmentOptions::modified: core::option::Option<alloc::string::String>
+impl pdfrum_edit::AttachmentOptions
+pub fn pdfrum_edit::AttachmentOptions::builder() -> pdfrum_edit::AttachmentOptionsBuilder
+pub struct pdfrum_edit::AttachmentOptionsBuilder(_)
+impl pdfrum_edit::AttachmentOptionsBuilder
+pub fn pdfrum_edit::AttachmentOptionsBuilder::build(self) -> pdfrum_edit::AttachmentOptions
+pub fn pdfrum_edit::AttachmentOptionsBuilder::description(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AttachmentOptionsBuilder::mime_type(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AttachmentOptionsBuilder::modified(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub struct pdfrum_edit::Canvas<'a, 'b>
+impl pdfrum_edit::Canvas<'_, '_>
+pub fn pdfrum_edit::Canvas<'_, '_>::bounds(&self) -> kurbo::rect::Rect
+pub fn pdfrum_edit::Canvas<'_, '_>::clip(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Fill)
+pub fn pdfrum_edit::Canvas<'_, '_>::draw(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Paint, pdfrum_edit::Fill)
+pub fn pdfrum_edit::Canvas<'_, '_>::fill(&mut self, impl kurbo::shape::Shape, peniko::Color)
+pub fn pdfrum_edit::Canvas<'_, '_>::fill_rect(&mut self, kurbo::rect::Rect, peniko::Color)
+pub fn pdfrum_edit::Canvas<'_, '_>::fill_rounded_rect(&mut self, kurbo::rect::Rect, f64, peniko::Color)
+pub fn pdfrum_edit::Canvas<'_, '_>::image(&mut self, &pdfrum_edit::EmbeddedImage, kurbo::rect::Rect)
+pub fn pdfrum_edit::Canvas<'_, '_>::line(&mut self, kurbo::point::Point, kurbo::point::Point, pdfrum_edit::Stroke)
+pub fn pdfrum_edit::Canvas<'_, '_>::opacity(&mut self, f64)
+pub fn pdfrum_edit::Canvas<'_, '_>::page(&self) -> core::option::Option<pdfrum_common::page_index::PageIndex>
+pub fn pdfrum_edit::Canvas<'_, '_>::saved(&mut self, impl core::ops::function::FnOnce(&mut Self))
+pub fn pdfrum_edit::Canvas<'_, '_>::size(&self) -> kurbo::size::Size
+pub fn pdfrum_edit::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Stroke)
+pub fn pdfrum_edit::Canvas<'_, '_>::text(&mut self, &str, &pdfrum_edit::EmbeddedFont, f64, kurbo::point::Point, peniko::Color)
+pub fn pdfrum_edit::Canvas<'_, '_>::text_width(&self, &str, &pdfrum_edit::EmbeddedFont, f64) -> f64
+pub fn pdfrum_edit::Canvas<'_, '_>::transform(&mut self, kurbo::affine::Affine)
+impl core::fmt::Debug for pdfrum_edit::Canvas<'_, '_>
+pub fn pdfrum_edit::Canvas<'_, '_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_edit::Dash
+impl pdfrum_edit::Dash
+pub fn pdfrum_edit::Dash::lengths(&self) -> &[f64]
+pub fn pdfrum_edit::Dash::new(&[f64], f64) -> core::option::Option<Self>
+pub fn pdfrum_edit::Dash::phase(&self) -> f64
 pub struct pdfrum_edit::EditDoc<'a>
+impl pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::draw_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_common::limits::Limits, impl core::ops::function::FnOnce(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::draw_page_with_fonts(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_common::limits::Limits, impl core::ops::function::FnOnce(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::draw_pages(&mut self, &pdfrum_common::limits::Limits, impl core::ops::function::FnMut(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::draw_pages_with_fonts(&mut self, &pdfrum_common::limits::Limits, impl core::ops::function::FnMut(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
 impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_font(&mut self, &[u8], pdfrum_edit::FontEncoding) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
@@ -63,14 +147,19 @@ pub fn pdfrum_edit::EditDoc<'_>::standard_font(&mut self, pdfrum_font::subst::st
 impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::PixelFormat) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_jpeg(&mut self, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
+impl pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::stamp_image(&mut self, &pdfrum_edit::EmbeddedImage, f64, &pdfrum_edit::StampOptions, &pdfrum_common::limits::Limits) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::stamp_text(&mut self, &str, &pdfrum_edit::StampOptions, &pdfrum_common::limits::Limits) -> core::result::Result<(), pdfrum_edit::Error>
 impl<'a> pdfrum_edit::EditDoc<'a>
 pub fn pdfrum_edit::EditDoc<'a>::add(&mut self, pdfrum_object::object::Object) -> pdfrum_object::object::ObjRef
+pub fn pdfrum_edit::EditDoc<'a>::apply_page(&mut self, &pdfrum_page::page_edit::PageEdit, &pdfrum_edit::ShareCounts) -> core::result::Result<(), pdfrum_parser::error::Error>
 pub fn pdfrum_edit::EditDoc<'a>::base(&self) -> &'a pdfrum_parser::doc::Document
 pub fn pdfrum_edit::EditDoc<'a>::edited(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &alloc::sync::Arc<pdfrum_object::object::Object>)>
 pub fn pdfrum_edit::EditDoc<'a>::is_edited(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::is_removed(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::last_object_number(&self) -> u32
 pub fn pdfrum_edit::EditDoc<'a>::new(&'a pdfrum_parser::doc::Document) -> Self
+pub fn pdfrum_edit::EditDoc<'a>::page_state(&self, pdfrum_common::page_index::PageIndex) -> core::result::Result<core::option::Option<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_object::dict::Dict)>, pdfrum_parser::error::Error>
 pub fn pdfrum_edit::EditDoc<'a>::remove(&mut self, pdfrum_object::object::ObjRef)
 pub fn pdfrum_edit::EditDoc<'a>::replace(&mut self, pdfrum_object::object::ObjRef, pdfrum_object::object::Object)
 impl pdfrum_object::resolve::Resolve for pdfrum_edit::EditDoc<'_>
@@ -105,6 +194,12 @@ pub fn pdfrum_edit::GidMap::get(&self, u16) -> core::option::Option<u16>
 pub fn pdfrum_edit::GidMap::is_empty(&self) -> bool
 pub fn pdfrum_edit::GidMap::len(&self) -> usize
 pub fn pdfrum_edit::GidMap::pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u16, u16)> + '_
+pub struct pdfrum_edit::ImageBuilder
+pub pdfrum_edit::ImageBuilder::matrix: kurbo::affine::Affine
+pub pdfrum_edit::ImageBuilder::source: pdfrum_object::object::ObjRef
+impl pdfrum_edit::ImageBuilder
+pub fn pdfrum_edit::ImageBuilder::at(pdfrum_object::object::ObjRef, kurbo::rect::Rect) -> Self
+pub fn pdfrum_edit::ImageBuilder::build(self) -> pdfrum_page::page::PageObject
 pub struct pdfrum_edit::ImportOptions
 pub pdfrum_edit::ImportOptions::at: pdfrum_common::page_index::PageIndex
 pub pdfrum_edit::ImportOptions::viewer_preferences: bool
@@ -118,6 +213,12 @@ pub fn pdfrum_edit::IvSource::drop(&mut self)
 pub struct pdfrum_edit::MissingGlyph
 pub pdfrum_edit::MissingGlyph::character: char
 pub pdfrum_edit::MissingGlyph::offset: usize
+pub struct pdfrum_edit::MiterLimit(_)
+impl pdfrum_edit::MiterLimit
+pub fn pdfrum_edit::MiterLimit::get(self) -> f64
+pub fn pdfrum_edit::MiterLimit::new(f64) -> Self
+impl core::default::Default for pdfrum_edit::MiterLimit
+pub fn pdfrum_edit::MiterLimit::default() -> Self
 pub struct pdfrum_edit::NUpOptions
 pub pdfrum_edit::NUpOptions::grid: (u32, u32)
 pub pdfrum_edit::NUpOptions::sheet: (f32, f32)
@@ -134,6 +235,18 @@ pub fn pdfrum_edit::PageRange::parse(&str, u32) -> core::result::Result<Self, pd
 pub struct pdfrum_edit::PageRewrite
 pub pdfrum_edit::PageRewrite::resources: pdfrum_object::dict::Dict
 pub pdfrum_edit::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::Regenerated>
+pub struct pdfrum_edit::PathBuilder
+pub pdfrum_edit::PathBuilder::even_odd: bool
+pub pdfrum_edit::PathBuilder::fill: core::option::Option<peniko::Color>
+pub pdfrum_edit::PathBuilder::line_width: f32
+pub pdfrum_edit::PathBuilder::matrix: kurbo::affine::Affine
+pub pdfrum_edit::PathBuilder::path: kurbo::bezpath::BezPath
+pub pdfrum_edit::PathBuilder::stroke: core::option::Option<peniko::Color>
+impl pdfrum_edit::PathBuilder
+pub fn pdfrum_edit::PathBuilder::build(self) -> pdfrum_page::page::PageObject
+pub fn pdfrum_edit::PathBuilder::rect(kurbo::rect::Rect) -> Self
+impl core::default::Default for pdfrum_edit::PathBuilder
+pub fn pdfrum_edit::PathBuilder::default() -> Self
 pub struct pdfrum_edit::Regenerated
 pub pdfrum_edit::Regenerated::bytes: alloc::string::String
 pub pdfrum_edit::Regenerated::stream: core::option::Option<usize>
@@ -156,22 +269,80 @@ pub pdfrum_edit::SaveOptions::subset_new_fonts: bool
 pub pdfrum_edit::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 impl core::default::Default for pdfrum_edit::SaveOptions
 pub fn pdfrum_edit::SaveOptions::default() -> Self
+#[non_exhaustive] pub struct pdfrum_edit::StampOptions
+pub pdfrum_edit::StampOptions::angle: f64
+pub pdfrum_edit::StampOptions::color: peniko::Color
+pub pdfrum_edit::StampOptions::font: pdfrum_font::subst::standard::StandardFont
+pub pdfrum_edit::StampOptions::font_size: f32
+pub pdfrum_edit::StampOptions::margin: f64
+pub pdfrum_edit::StampOptions::opacity: f32
+pub pdfrum_edit::StampOptions::position: pdfrum_edit::StampPosition
+impl pdfrum_edit::StampOptions
+pub fn pdfrum_edit::StampOptions::builder() -> pdfrum_edit::StampOptionsBuilder
+impl core::default::Default for pdfrum_edit::StampOptions
+pub fn pdfrum_edit::StampOptions::default() -> Self
+pub struct pdfrum_edit::StampOptionsBuilder(_)
+impl pdfrum_edit::StampOptionsBuilder
+pub fn pdfrum_edit::StampOptionsBuilder::angle(self, f64) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::build(self) -> pdfrum_edit::StampOptions
+pub fn pdfrum_edit::StampOptionsBuilder::color(self, peniko::Color) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::font(self, pdfrum_font::subst::standard::StandardFont) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::font_size(self, f32) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::margin(self, f64) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::opacity(self, f32) -> Self
+pub fn pdfrum_edit::StampOptionsBuilder::position(self, pdfrum_edit::StampPosition) -> Self
+pub struct pdfrum_edit::Stroke
+pub pdfrum_edit::Stroke::cap: pdfrum_edit::LineCap
+pub pdfrum_edit::Stroke::color: peniko::Color
+pub pdfrum_edit::Stroke::dash: core::option::Option<pdfrum_edit::Dash>
+pub pdfrum_edit::Stroke::join: pdfrum_edit::LineJoin
+pub pdfrum_edit::Stroke::miter_limit: pdfrum_edit::MiterLimit
+pub pdfrum_edit::Stroke::width: f64
+impl pdfrum_edit::Stroke
+pub fn pdfrum_edit::Stroke::new(peniko::Color, f64) -> Self
+pub fn pdfrum_edit::Stroke::with_cap(self, pdfrum_edit::LineCap) -> Self
+pub fn pdfrum_edit::Stroke::with_dash(self, pdfrum_edit::Dash) -> Self
+pub fn pdfrum_edit::Stroke::with_join(self, pdfrum_edit::LineJoin) -> Self
+pub fn pdfrum_edit::Stroke::with_miter_limit(self, pdfrum_edit::MiterLimit) -> Self
 pub struct pdfrum_edit::Subsetted
 pub pdfrum_edit::Subsetted::bytes: alloc::vec::Vec<u8>
 pub pdfrum_edit::Subsetted::gid_map: pdfrum_edit::GidMap
+pub struct pdfrum_edit::TextBuilder
+pub pdfrum_edit::TextBuilder::codes: alloc::vec::Vec<u8>
+pub pdfrum_edit::TextBuilder::fill: peniko::Color
+pub pdfrum_edit::TextBuilder::font: pdfrum_object::object::ObjRef
+pub pdfrum_edit::TextBuilder::position: kurbo::point::Point
+pub pdfrum_edit::TextBuilder::render_mode: pdfrum_page::ops::TextRenderMode
+pub pdfrum_edit::TextBuilder::size: f32
+impl pdfrum_edit::TextBuilder
+pub fn pdfrum_edit::TextBuilder::build(self) -> pdfrum_page::page::PageObject
+pub fn pdfrum_edit::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
+pub struct pdfrum_edit::UnknownFlattenMode(_)
+pub struct pdfrum_edit::UnknownStampPosition(_)
+pub fn pdfrum_edit::add_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<usize, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, u32) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
+pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
+pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::pdf_date(std::time::SystemTime) -> alloc::string::String
+pub fn pdfrum_edit::pdf_date_to_iso8601(&str) -> alloc::string::String
 pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::PageRewrite>
+pub fn pdfrum_edit::remove_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_attachment_description(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::set_attachment_file(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &[u8]) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::set_attachment_param(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
+pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> f64
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
+pub fn pdfrum_edit::to_pdfa(&pdfrum_parser::doc::Document, pdfrum_doc::pdfa::report::Level, pdfrum_doc::pdfa::policy::Policy, &pdfrum_doc::pdfa::xmp_write::InfoFields, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_doc::pdfa::policy::Conversion, core::option::Option<alloc::vec::Vec<u8>>), pdfrum_edit::Error>
 pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
 pub fn pdfrum_edit::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
 pub fn pdfrum_edit::write_point(&mut alloc::string::String, kurbo::point::Point)

@@ -75,13 +75,13 @@ svg-export = ["dep:pdfrum-svg"]
 # An SVG drawn into a page as vectors, through `Canvas::draw_svg` inline or
 # `DocEdit::compile_svg` once into a Form XObject. Needs `edit`. Default-off
 # and separate from `svg-export`: import costs `usvg`; export does not.
-svg-import = ["edit", "dep:usvg", "dep:png"]
+svg-import = ["edit", "pdfrum-edit/svg-import", "dep:usvg"]
 
 # `<text>` in an imported SVG, converted to outlines. Separate from
 # `svg-import` because `usvg/text` pulls a second font stack (`rustybuzz`,
 # `ttf-parser`, a second `fontdb`). Faces come from the caller through
 # `SvgFonts`; `usvg`'s `system-fonts` / `memmap-fonts` stay off.
-svg-text = ["svg-import", "usvg/text"]
+svg-text = ["svg-import", "pdfrum-edit/svg-text", "usvg/text"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
@@ -152,16 +152,6 @@ pdfrum-edit = { workspace = true, optional = true }
 # SVG import, behind `svg-import`. Defaults off: `text`, `system-fonts`
 # and `memmap-fonts` would pull a second font stack.
 usvg = { workspace = true, optional = true }
-# Decoding a PNG an SVG `<image>` carried, so it embeds as PDF image samples
-# rather than being dropped. Optional and reached only through `svg-import`;
-# it is also a dev-dependency below, for the examples that write files.
-#
-# It shares a name with this crate's existing `png` *feature* — the one
-# forwarding `pdfrum-render/png`. That is allowed precisely because every
-# reference to the dependency in a feature list is written
-# `dep:png`, so the feature never implicitly enables it and the two stay
-# independent: `--features png` still turns on only the pixmap encoder.
-png = { workspace = true, optional = true }
 kurbo.workspace = true
 peniko.workspace = true
 thiserror.workspace = true

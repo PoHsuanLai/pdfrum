@@ -20,7 +20,7 @@ use core::fmt;
 
 use pdfrum_object::ObjRef;
 
-use crate::PdfaLevel;
+use super::Level;
 
 /// What to do when the document cannot be converted faithfully.
 ///
@@ -141,10 +141,10 @@ impl Policy {
     /// of the two named starting points:
     ///
     /// ```
-    /// use pdfrum::{PdfaConcession, PdfaPolicy};
+    /// use pdfrum_doc::pdfa::{Concession, Policy};
     ///
     /// // Strip what PDF/A forbids, but never substitute a font behind my back.
-    /// let policy = PdfaPolicy::strict().forbidden_feature(PdfaConcession::Accept);
+    /// let policy = Policy::strict().forbidden_feature(Concession::Accept);
     /// assert!(policy.forbidden_feature.accepts());
     /// assert!(!policy.unembeddable_font.accepts());
     /// ```
@@ -172,7 +172,7 @@ impl Policy {
 /// One thing the conversion did that changed the document.
 ///
 /// Every variant carries the object or page it happened to, for the same
-/// reason [`crate::PdfaSubject`] does: a caller that wants to show the user
+/// reason [`Subject`](crate::pdfa::Subject) does: a caller that wants to show the user
 /// what changed needs to reach the thing, and a sentence cannot be turned back
 /// into an `ObjRef`.
 ///
@@ -407,7 +407,7 @@ impl fmt::Display for Refusal {
 
 /// What a conversion produced, and what it cost.
 ///
-/// Returned by [`crate::Document::to_pdfa`] whether or not the conversion
+/// Returned by the facade's `Document::to_pdfa` whether or not the conversion
 /// succeeded: [`Conversion::refusals`] non-empty means no bytes were written
 /// and the file is unchanged, and an empty `refusals` with a non-empty
 /// [`Conversion::compromises`] means a file was written that is not the
@@ -418,7 +418,7 @@ impl fmt::Display for Refusal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conversion {
     /// The level converted to.
-    pub level: PdfaLevel,
+    pub level: Level,
     /// Everything the conversion did that changed the document's meaning, in
     /// the order the pipeline did it.
     ///

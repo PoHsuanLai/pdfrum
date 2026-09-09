@@ -583,6 +583,27 @@ pub fn pdfrum_page::Page::remove_object(&mut self, usize) -> core::option::Optio
 impl pdfrum_page::Page
 pub fn pdfrum_page::Page::display_size(&self) -> (f64, f64)
 pub fn pdfrum_page::Page::empty() -> Self
+pub struct pdfrum_page::PageEdit
+impl pdfrum_page::PageEdit
+pub fn pdfrum_page::PageEdit::font_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
+pub fn pdfrum_page::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
+impl pdfrum_page::PageEdit
+pub fn pdfrum_page::PageEdit::graph(&self) -> &pdfrum_page::Page
+pub fn pdfrum_page::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::Page
+pub fn pdfrum_page::PageEdit::hide(&mut self, usize) -> core::result::Result<(), pdfrum_page::IndexOutOfRange>
+pub fn pdfrum_page::PageEdit::index(&self) -> pdfrum_common::page_index::PageIndex
+pub fn pdfrum_page::PageEdit::insert(&mut self, usize, pdfrum_page::PageObject) -> core::result::Result<(), pdfrum_page::IndexOutOfRange>
+pub fn pdfrum_page::PageEdit::is_empty(&self) -> bool
+pub fn pdfrum_page::PageEdit::is_modified(&self) -> bool
+pub fn pdfrum_page::PageEdit::is_visible(&self, usize) -> core::option::Option<bool>
+pub fn pdfrum_page::PageEdit::len(&self) -> usize
+pub fn pdfrum_page::PageEdit::new(pdfrum_common::page_index::PageIndex, pdfrum_page::Page) -> Self
+pub fn pdfrum_page::PageEdit::object_mut(&mut self, usize) -> core::option::Option<&mut pdfrum_page::PageObject>
+pub fn pdfrum_page::PageEdit::objects(&self) -> &[pdfrum_page::PageObject]
+pub fn pdfrum_page::PageEdit::push(&mut self, pdfrum_page::PageObject)
+pub fn pdfrum_page::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::PageObject>
+pub fn pdfrum_page::PageEdit::show(&mut self, usize) -> core::result::Result<(), pdfrum_page::IndexOutOfRange>
+pub fn pdfrum_page::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> core::result::Result<(), pdfrum_page::IndexOutOfRange>
 pub struct pdfrum_page::Palette(_)
 impl pdfrum_page::Palette
 pub fn pdfrum_page::Palette::get(&self, u8) -> pdfrum_page::Rgb8
@@ -830,4 +851,5 @@ pub fn pdfrum_page::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_
 pub fn pdfrum_page::parse_content(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_page::Op>
 pub fn pdfrum_page::parse_program(&[u8], &[f32], &[f32]) -> core::option::Option<pdfrum_page::PostScript>
 pub fn pdfrum_page::srgb_profile_bytes() -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_page::transform_object(&mut pdfrum_page::PageObject, kurbo::affine::Affine)
 pub fn pdfrum_page::uncolored_pattern_rgb(&pdfrum_page::ColorSpace, &[f32], bool) -> pdfrum_page::Rgb

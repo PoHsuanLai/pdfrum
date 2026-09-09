@@ -143,6 +143,7 @@ pub fn pdfrum_parser::Xref::sections(&self) -> &[pdfrum_parser::Section]
 pub fn pdfrum_parser::atoi64(&[u8]) -> i64
 pub fn pdfrum_parser::atoui(&[u8]) -> u32
 pub const fn pdfrum_parser::class_of(u8) -> pdfrum_parser::CharClass
+pub fn pdfrum_parser::content_segments(&pdfrum_parser::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> (alloc::vec::Vec<u8>, alloc::vec::Vec<usize>)
 pub fn pdfrum_parser::decoded_stream(&pdfrum_object::stream::Stream, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<u8>
 pub fn pdfrum_parser::find_word(&[u8], &[u8], usize, pdfrum_parser::WordBoundary) -> core::option::Option<usize>
 pub fn pdfrum_parser::is_delimiter(u8) -> bool
@@ -154,3 +155,4 @@ pub fn pdfrum_parser::load(impl core::convert::Into<pdfrum_object::stream::ByteS
 pub fn pdfrum_parser::parse_indirect_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_parser::Indirect, pdfrum_parser::Error>
 pub fn pdfrum_parser::parse_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_object::object::Object, pdfrum_parser::Error>
 pub fn pdfrum_parser::read_xref(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_parser::Xref, pdfrum_object::dict::Dict), pdfrum_parser::Error>
+pub fn pdfrum_parser::revision_end(&[u8], u64) -> core::option::Option<usize>

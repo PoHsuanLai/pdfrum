@@ -905,8 +905,7 @@ mod database_selection {
         std::fs::create_dir_all(&empty).expect("empty dir");
         let populated = std::env::temp_dir().join("pdfrum-subst-populated-font-dir");
         std::fs::create_dir_all(&populated).expect("populated dir");
-        let src =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pdfrum/tests/fixtures/roboto.ttf");
+        let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roboto.ttf");
         std::fs::copy(&src, populated.join("roboto.ttf")).expect("copy roboto");
         let scanned = SystemFontDb::scan(&[populated]);
         let hermetic = SystemFontDb::scan(&[empty]);

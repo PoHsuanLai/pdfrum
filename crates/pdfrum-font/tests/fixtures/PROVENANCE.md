@@ -81,3 +81,24 @@ extraction has something real to draw.
 codepoints through `map_codepoint`, and draws a non-empty outline for each
 triangle glyph. Note that a format 0 subtable answers `Some(0)` rather than
 `None` for an unmapped code — the 256-byte array always has an entry.
+
+
+## `roboto.ttf` — not synthesized
+
+Unlike the `tt_*.ttf` files above, this one is copied verbatim from the PDFium
+checkout that serves as the conformance oracle:
+
+- **Source:** `testing/resources/fonts/roboto.ttf` of the PDFium repository, at
+  commit `6f2272e1f3aaa141305475b83ef4eac2c1f527b8` (2026-08-28).
+- **License:** Apache-2.0 (the Roboto project); redistribution in source form is
+  permitted with the notice retained, which this file does.
+- **Modifications:** none.
+
+It is a copy rather than a reach into `crates/pdfrum/tests/fixtures` so that
+this crate's tests resolve every path inside their own crate. The bytes are
+identical to the facade's copy.
+
+| `roboto.ttf` | 35636 B | `testing/resources/fonts/roboto.ttf`, verbatim. The TrueType program `latin_extended.pdf` embeds; used here as the caller-supplied bytes for `DocEdit::embed_font`, so a test can write "Hello" in a font the page did not already have. |
+
+The substitution test wants a *real* face here: the cmap-only `tt_*.ttf`
+fixtures are too stripped for `fontdb` to accept.

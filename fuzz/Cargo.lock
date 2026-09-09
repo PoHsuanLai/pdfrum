@@ -119,6 +119,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "color"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ec7c5eb7a16992b1904d76c517d170ab353b0e0b3d5a0c81a8a0cd1037893cf"
+
+[[package]]
 name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -283,6 +289,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linebender_resource_handle"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
+
+[[package]]
 name = "md-5"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -379,13 +391,16 @@ name = "pdfrum-edit"
 version = "0.1.0"
 dependencies = [
  "getrandom",
+ "kurbo",
  "pdfrum-common",
  "pdfrum-crypt",
+ "pdfrum-doc",
  "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "peniko",
  "sha2",
  "subsetter",
  "thiserror",
@@ -494,6 +509,18 @@ dependencies = [
  "pdfrum-common",
  "read-fonts",
  "thiserror",
+]
+
+[[package]]
+name = "peniko"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "839c8299360d2e998bdb106dc0a6cd71dcc5f4df51df1b620361bf50e283cca6"
+dependencies = [
+ "color",
+ "kurbo",
+ "linebender_resource_handle",
+ "smallvec",
 ]
 
 [[package]]

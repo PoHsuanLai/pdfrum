@@ -284,8 +284,8 @@ pub(super) fn device_space(components: u8) -> Option<Name> {
 mod tests {
     use super::{Sof, adobe_transform, has_colour_transform, jpx_size, parse_sof};
 
-    const MONA_LISA: &[u8] = include_bytes!("../../../pdfrum/tests/fixtures/mona_lisa.jpg");
-    const GRAY_JP2: &[u8] = include_bytes!("../../../pdfrum/tests/fixtures/gray.jp2");
+    const MONA_LISA: &[u8] = include_bytes!("../../tests/fixtures/mona_lisa.jpg");
+    const GRAY_JP2: &[u8] = include_bytes!("../../tests/fixtures/gray.jp2");
 
     #[test]
     fn the_sof_of_a_real_jpeg_reads_back() {

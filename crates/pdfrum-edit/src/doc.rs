@@ -22,7 +22,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use pdfrum_common::PageIndex;
 use pdfrum_object::{Dict, ObjRef, Object, Resolve, names};
+use pdfrum_page::PageEdit;
 use pdfrum_parser::Document;
 
 /// A document plus the edits made to it.
@@ -135,6 +137,69 @@ impl<'a> EditDoc<'a> {
             .copied()
             .unwrap_or(0)
             .max(base)
+    }
+
+    /// A page's dictionary as the session's edits leave it, with the
+    /// reference the writer replaces and the resources the page reaches.
+    ///
+    /// Read through the overlay, not the base, so an earlier edit of the same
+    /// page — a rotation, a stamp — is what a later content rewrite builds on.
+    /// `None` for a page written inline in its parent's `/Kids`, which has no
+    /// object to replace.
+    ///
+    /// # Errors
+    ///
+    /// When `index` is outside the document.
+    pub fn page_state(
+        &self,
+        index: PageIndex,
+    ) -> Result<Option<(ObjRef, Dict, Dict)>, pdfrum_parser::Error> {
+        let page = self.base().page(index)?;
+        let Some(reference) = page.reference else {
+            return Ok(None);
+        };
+        let dict = self
+            .fetch(reference)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_dict)
+            .cloned()
+            .unwrap_or_else(|| page.dict.clone());
+        let resources = dict
+            .dict(crate::names::RESOURCES, &self)
+            .or_else(|| {
+                page.inherited(crate::names::RESOURCES, &self)?
+                    .resolve(&self)
+                    .ok()?
+                    .as_dict()
+                    .cloned()
+            })
+            .unwrap_or_default();
+        Ok(Some((reference, dict, resources)))
+    }
+
+    /// Turn one page edit into replacement objects on the session.
+    ///
+    /// `shared` is [`shared_objects`](crate::shared_objects) over the session, computed
+    /// once by the caller for however many pages it applies.
+    ///
+    /// # Errors
+    ///
+    /// When the page's index is outside the document.
+    pub fn apply_page(
+        &mut self,
+        page: &PageEdit,
+        shared: &crate::ShareCounts,
+    ) -> Result<(), pdfrum_parser::Error> {
+        let Some((reference, dict, resources)) = self.page_state(page.index())? else {
+            // Rather than half-apply the change, leave the page as it was.
+            return Ok(());
+        };
+        let Some(rewrite) = crate::regenerate(page.graph(), &resources, self) else {
+            return Ok(());
+        };
+        crate::apply_rewrite(self, reference, &dict, &rewrite, shared);
+        Ok(())
     }
 }
 

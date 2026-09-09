@@ -1005,6 +1005,30 @@ fn add_unicode(buf: &mut String, unicode: u32) {
     }
 }
 
+/// The advance of `codes` in the font `font` names, in thousandths of an em.
+///
+/// Falls back to half an em a code — the proportions of a typical Latin face
+/// — when the dictionary carries no usable metrics.
+#[must_use]
+pub fn string_width(
+    font: ObjRef,
+    codes: &[u8],
+    r: &impl pdfrum_object::Resolve,
+    limits: &pdfrum_common::Limits,
+    diags: &mut pdfrum_common::Diagnostics,
+) -> f64 {
+    let loaded = r
+        .fetch(font)
+        .ok()
+        .as_deref()
+        .and_then(Object::as_dict)
+        .and_then(|dict| pdfrum_font::load(dict, r, &pdfrum_font::FontCache::new(), limits, diags));
+    match loaded {
+        Some(metrics) => f64::from(metrics.string_width(codes)),
+        None => 500.0 * f64::from(u32::try_from(codes.len()).unwrap_or(u32::MAX)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{FontEncoding, ProgramKind, sniff_kind};
