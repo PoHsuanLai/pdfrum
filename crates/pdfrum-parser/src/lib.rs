@@ -12,7 +12,7 @@
 // - `doc` ties those together into a `Document` whose object store fetches
 //   lazily, decrypts, and guards against reference cycles.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(clippy::indexing_slicing)]
 
 mod decode;

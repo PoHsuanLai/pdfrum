@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every number reaching this crate came from an untrusted file, by way of the
 // page interpreter: index with `get()` and do arithmetic that cannot trap.
 #![warn(clippy::indexing_slicing)]

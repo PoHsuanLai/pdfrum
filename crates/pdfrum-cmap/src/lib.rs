@@ -12,7 +12,7 @@
 // maps to nothing reaches the parent. The oracle implements neither — see the
 // marked site in `parser.rs`.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every byte reaching this crate came from an untrusted file or a generated
 // blob: index with `get()`.
 #![warn(clippy::indexing_slicing)]

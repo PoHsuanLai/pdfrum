@@ -25,7 +25,7 @@
 // - The metadata exemption. When `SecurityHandler::encrypt_metadata` is false
 //   the object `/Root/Metadata` points at is not decrypted.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every byte reaching this crate came from an untrusted file or a password:
 // index with `get()`.
 #![warn(clippy::indexing_slicing)]
