@@ -46,7 +46,7 @@ fn rgba_of(color: peniko::Color) -> ([f32; 3], f32) {
     )
 }
 
-/// A filled or stroked path, ready to [`PageEdit::push`].
+/// A filled or stroked path, ready to [`PageEdit::push`](pdfrum_page::PageEdit::push).
 ///
 /// A plain config struct filled in with struct-update syntax, and
 /// [`PathBuilder::build`] turns it into the page object. The graphics state it
@@ -136,13 +136,13 @@ impl PathBuilder {
     }
 }
 
-/// A run of text, ready to [`PageEdit::push`].
+/// A run of text, ready to [`PageEdit::push`](pdfrum_page::PageEdit::push).
 ///
 /// The font is named by an indirect `/Font` dictionary: a regenerated stream
-/// writes `/Name Tf` and [`pdfrum_edit::ResourceTable::realize`] allocates
+/// writes `/Name Tf` and [`ResourceTable::realize`](crate::ResourceTable::realize) allocates
 /// that name for [`TextBuilder::font`]. Obtain the reference from
-/// [`PageEdit::font_of`] (a font the page already has) or from
-/// [`crate::DocEdit::embed_font`] / [`crate::DocEdit::standard_font`] (a font
+/// [`PageEdit::font_of`](pdfrum_page::PageEdit::font_of) (a font the page already has) or from
+/// [`EditDoc::embed_font`](crate::EditDoc::embed_font) / [`EditDoc::standard_font`](crate::EditDoc::standard_font) (a font
 /// this save is adding).
 ///
 /// [`crate::ImageBuilder`] names an `/XObject` the same way.
@@ -212,12 +212,12 @@ impl TextBuilder {
     }
 }
 
-/// An image placement, ready to [`PageEdit::push`].
+/// An image placement, ready to [`PageEdit::push`](pdfrum_page::PageEdit::push).
 ///
 /// The pixels are not supplied here: an image page object names an `/XObject`,
 /// and the regenerated stream writes `/Name Do`. Obtain the reference from
-/// [`PageEdit::image_of`] (an image the document already holds) or from
-/// [`crate::DocEdit::embed_jpeg`] / [`crate::DocEdit::embed_image`] (one this
+/// [`PageEdit::image_of`](pdfrum_page::PageEdit::image_of) (an image the document already holds) or from
+/// [`EditDoc::embed_jpeg`](crate::EditDoc::embed_jpeg) / [`EditDoc::embed_image`](crate::EditDoc::embed_image) (one this
 /// save is adding).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageBuilder {

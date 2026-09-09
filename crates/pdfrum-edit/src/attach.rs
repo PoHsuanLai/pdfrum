@@ -34,12 +34,12 @@ pub struct AttachmentOptions {
     pub description: Option<String>,
     /// The embedded file's MIME type — `text/plain`, `application/pdf` —
     /// written as the stream's `/Subtype` name. Read back by
-    /// [`Attachment::subtype`](crate::Attachment::subtype).
+    /// the facade's `Attachment::subtype`.
     pub mime_type: Option<String>,
     /// The file's own modification time as a PDF date string
     /// (`D:YYYYMMDDHHmmSS…`, ISO 32000-1 §7.9.4), written to `/Params
     /// /ModDate`. [`pdf_date`](crate::pdf_date) spells a `SystemTime` that
-    /// way. Read back by [`Attachment::param`](crate::Attachment::param).
+    /// way. Read back by the facade's `Attachment::param`.
     pub modified: Option<String>,
 }
 

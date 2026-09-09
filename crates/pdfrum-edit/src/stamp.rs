@@ -391,8 +391,7 @@ impl EditDoc<'_> {
     ///
     /// # Errors
     ///
-    /// [`Error::Save`](crate::Error::Save) when the font cannot be added, and
-    /// [`Error::Read`](crate::Error::Read) when a page cannot be opened.
+    /// When the font cannot be added, or a page cannot be opened.
     pub fn stamp_text(
         &mut self,
         text: &str,
@@ -451,8 +450,8 @@ impl EditDoc<'_> {
     ///
     /// # Errors
     ///
-    /// [`Error::Save`](crate::Error::Save) when `width` is not positive, and
-    /// [`Error::Read`](crate::Error::Read) when a page cannot be opened.
+    /// [`Error::EmptyImage`] when `width` is not positive or the image has no
+    /// width, and [`Error::PageIndexOutOfRange`] when a page cannot be opened.
     pub fn stamp_image(
         &mut self,
         image: &EmbeddedImage,

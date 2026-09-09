@@ -805,8 +805,8 @@ impl Canvas<'_, '_> {
     /// `image` is one this session embedded through [`EditDoc::embed_jpeg`]
     /// or [`EditDoc::embed_image`]. Nothing preserves the aspect ratio: a
     /// caller who wants it kept sizes `rect` from
-    /// [`EmbeddedImage::width`](pdfrum_edit::EmbeddedImage::width) and
-    /// [`EmbeddedImage::height`](pdfrum_edit::EmbeddedImage::height).
+    /// [`EmbeddedImage::width`](crate::EmbeddedImage::width) and
+    /// [`EmbeddedImage::height`](crate::EmbeddedImage::height).
     ///
     /// ```
     /// use pdfrum::Rect;
@@ -1399,7 +1399,7 @@ impl EditDoc<'_> {
     /// into the drawing and the drawing's cannot leak into the page. The
     /// page's existing streams are **not** rewritten, which is why drawing on
     /// a page costs none of the regeneration losses
-    /// [`PageEdit`](crate::PageEdit) documents.
+    /// [`PageEdit`](pdfrum_page::PageEdit) documents.
     ///
     /// # The resource-merging rule
     ///

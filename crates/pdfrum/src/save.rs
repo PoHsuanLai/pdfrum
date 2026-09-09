@@ -5,11 +5,11 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
-#[cfg(feature = "forms")]
-use pdfrum_common::Diagnostics;
-use pdfrum_common::{PageIndex, PdfVersion};
+use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
-use pdfrum_object::{Dict, Object, names};
+use pdfrum_object::names;
+#[cfg(feature = "forms")]
+use pdfrum_object::{Dict, Object};
 
 #[cfg(feature = "forms")]
 use crate::Form;

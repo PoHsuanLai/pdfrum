@@ -1137,7 +1137,7 @@ impl Page<'_> {
     /// Open this page's object graph for editing.
     ///
     /// Interpreting the content stream is the expensive part and it happens
-    /// here, once. See [`PageEdit`] for what a save then does with
+    /// here, once. See [`PageEdit`](pdfrum_page::PageEdit) for what a save then does with
     /// the result.
     ///
     /// ```

@@ -172,7 +172,7 @@ impl Policy {
 /// One thing the conversion did that changed the document.
 ///
 /// Every variant carries the object or page it happened to, for the same
-/// reason [`crate::PdfaSubject`] does: a caller that wants to show the user
+/// reason [`Subject`](crate::pdfa::Subject) does: a caller that wants to show the user
 /// what changed needs to reach the thing, and a sentence cannot be turned back
 /// into an `ObjRef`.
 ///
@@ -407,7 +407,7 @@ impl fmt::Display for Refusal {
 
 /// What a conversion produced, and what it cost.
 ///
-/// Returned by [`crate::Document::to_pdfa`] whether or not the conversion
+/// Returned by the facade's `Document::to_pdfa` whether or not the conversion
 /// succeeded: [`Conversion::refusals`] non-empty means no bytes were written
 /// and the file is unchanged, and an empty `refusals` with a non-empty
 /// [`Conversion::compromises`] means a file was written that is not the
