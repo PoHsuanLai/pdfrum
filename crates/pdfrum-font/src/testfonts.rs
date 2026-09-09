@@ -25,8 +25,13 @@ mod tests {
     use std::sync::Arc;
 
     /// The fixtures and what each declares, mirroring their `PROVENANCE.md`.
-    const FIXTURES: [(&str, u32, &[CharmapId]); 12] = [
+    const FIXTURES: [(&str, u32, &[CharmapId]); 13] = [
         ("tt_unicode_31.ttf", 2, &[CharmapId::WINDOWS_UNICODE]),
+        (
+            "tt_composite_instructions.ttf",
+            4,
+            &[CharmapId::WINDOWS_UNICODE],
+        ),
         ("tt_unicode_03.ttf", 2, &[CharmapId::UNICODE_SYNTHETIC]),
         ("tt_symbol_30.ttf", 6, &[CharmapId::WINDOWS_SYMBOL]),
         ("tt_macroman_10.ttf", 8, &[CharmapId::MAC_ROMAN]),

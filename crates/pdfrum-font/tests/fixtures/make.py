@@ -197,12 +197,48 @@ def make_triangle_glyph() -> bytes:
     return pad4(header + body)
 
 
-def make_glyf_and_loca(num_glyphs: int, filled: set[int]) -> tuple[bytes, bytes]:
+ARG_1_AND_2_ARE_WORDS = 0x0001
+ARGS_ARE_XY_VALUES = 0x0002
+MORE_COMPONENTS = 0x0020
+WE_HAVE_INSTRUCTIONS = 0x0100
+
+
+def make_composite_glyph(base: int, instructions: bytes) -> bytes:
+    """A two-component composite of `base`, optionally carrying bytecode.
+
+    Both components are plain translations. `instructions` is written only
+    when non-empty, and `WE_HAVE_INSTRUCTIONS` is set to match, so one builder
+    covers the instructed and uninstructed cases the predicate separates.
+    """
+    header = struct.pack(">hhhhh", -1, 0, 0, 1000, 1000)
+    body = b""
+    for i, (dx, dy) in enumerate(((0, 0), (300, 200))):
+        last = i == 1
+        flags = ARG_1_AND_2_ARE_WORDS | ARGS_ARE_XY_VALUES
+        if not last:
+            flags |= MORE_COMPONENTS
+        elif instructions:
+            flags |= WE_HAVE_INSTRUCTIONS
+        body += struct.pack(">HHhh", flags, base, dx, dy)
+    if instructions:
+        body += struct.pack(">H", len(instructions)) + instructions
+    return pad4(header + body)
+
+
+def make_glyf_and_loca(
+    num_glyphs: int,
+    filled: set[int],
+    composites: dict[int, tuple[int, bytes]] | None = None,
+) -> tuple[bytes, bytes]:
     """Build `glyf` plus a matching short-format `loca` (offsets/2)."""
+    composites = composites or {}
     glyf = bytearray()
     offsets = [0]
     for gid in range(num_glyphs):
-        if gid in filled:
+        if gid in composites:
+            base, instructions = composites[gid]
+            glyf += make_composite_glyph(base, instructions)
+        elif gid in filled:
             glyf += make_triangle_glyph()
         offsets.append(len(glyf))
     # Short loca stores offset/2, so every offset must be even; the triangle is
@@ -337,8 +373,9 @@ def make_font(
     filled: set[int],
     cmap: bytes | None,
     post: bytes,
+    composites: dict[int, tuple[int, bytes]] | None = None,
 ) -> bytes:
-    glyf, loca = make_glyf_and_loca(num_glyphs, filled)
+    glyf, loca = make_glyf_and_loca(num_glyphs, filled, composites)
     tables = {
         "head": make_head(),
         "hhea": make_hhea(num_glyphs),
@@ -387,6 +424,16 @@ def fixtures() -> dict[str, bytes]:
         8, {7}, make_cmap([(1, 0, fmt0_macroman)]), post3
     )
     out["tt_custom_40.ttf"] = make_font(2, set(), make_cmap([(4, 0, fmt0_empty)]), post3)
+    # Glyph 1 simple, glyph 2 an uninstructed composite, glyph 3 an instructed
+    # one: the three cases the instructed-composite predicate separates.
+    # `0x4B` is `MIAP[0]`, enough to make the stream non-empty.
+    out["tt_composite_instructions.ttf"] = make_font(
+        4,
+        {1},
+        make_cmap([(3, 1, fmt4_unicode)]),
+        post3,
+        composites={2: (1, b""), 3: (1, bytes([0x4B]))},
+    )
     out["tt_symbol_and_macroman.ttf"] = make_font(
         8,
         {5, 7},
