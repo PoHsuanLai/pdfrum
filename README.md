@@ -59,6 +59,9 @@ pdfrum search -i "total due" invoice.pdf
 pdfrum extract markdown paper.pdf
 ```
 
+`preview` and `view` are only supported on kitty, Ghostty, WezTerm, Konsole,
+iTerm2 and VS Code; anywhere else, pass `--graphics halfblock`.
+
 The rest of the catalog is [`pdfrum-cli`](https://crates.io/crates/pdfrum-cli).
 
 ## Attributes
