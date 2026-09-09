@@ -40,7 +40,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
@@ -72,34 +72,35 @@ must_use_candidate = "allow"
 # `=` pin there makes any other crate in a downstream graph that wants a
 # newer compatible version unresolvable.
 #
-# Internal members use a caret on `0.1.0` so a patch of one crate is usable
-# with siblings still at 0.1.0. Releases still bump the workspace together.
+# Internal members use a caret on the workspace version so a patch of one
+# crate is usable with siblings still on the previous patch. Releases still
+# bump the workspace together, and `prepare-release.nu` rewrites these rows.
 [workspace.dependencies]
 # internal
-pdfrum-common = { path = "crates/pdfrum-common", version = "0.1.0" }
-pdfrum-object = { path = "crates/pdfrum-object", version = "0.1.0" }
-pdfrum-crypt = { path = "crates/pdfrum-crypt", version = "0.1.0" }
-pdfrum-filters = { path = "crates/pdfrum-filters", version = "0.1.0" }
-pdfrum-cmap = { path = "crates/pdfrum-cmap", version = "0.1.0" }
-pdfrum-type1 = { path = "crates/pdfrum-type1", version = "0.1.0" }
-pdfrum-font = { path = "crates/pdfrum-font", version = "0.1.0" }
-pdfrum-parser = { path = "crates/pdfrum-parser", version = "0.1.0" }
-pdfrum-page = { path = "crates/pdfrum-page", version = "0.1.0" }
-pdfrum-render = { path = "crates/pdfrum-render", version = "0.1.0" }
-pdfrum-raster-vello-cpu = { path = "crates/pdfrum-raster-vello-cpu", version = "0.1.0" }
-pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "0.1.0" }
-pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "0.1.0" }
+pdfrum-common = { path = "crates/pdfrum-common", version = "0.1.1" }
+pdfrum-object = { path = "crates/pdfrum-object", version = "0.1.1" }
+pdfrum-crypt = { path = "crates/pdfrum-crypt", version = "0.1.1" }
+pdfrum-filters = { path = "crates/pdfrum-filters", version = "0.1.1" }
+pdfrum-cmap = { path = "crates/pdfrum-cmap", version = "0.1.1" }
+pdfrum-type1 = { path = "crates/pdfrum-type1", version = "0.1.1" }
+pdfrum-font = { path = "crates/pdfrum-font", version = "0.1.1" }
+pdfrum-parser = { path = "crates/pdfrum-parser", version = "0.1.1" }
+pdfrum-page = { path = "crates/pdfrum-page", version = "0.1.1" }
+pdfrum-render = { path = "crates/pdfrum-render", version = "0.1.1" }
+pdfrum-raster-vello-cpu = { path = "crates/pdfrum-raster-vello-cpu", version = "0.1.1" }
+pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "0.1.1" }
+pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "0.1.1" }
 # GPU backend. Not a dependency of the facade or the tool: reachable only
 # by naming it, which keeps a headless build free of `wgpu`.
-pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "0.1.0" }
-pdfrum-text = { path = "crates/pdfrum-text", version = "0.1.0" }
-pdfrum-doc = { path = "crates/pdfrum-doc", version = "0.1.0" }
-pdfrum-form = { path = "crates/pdfrum-form", version = "0.1.0" }
-pdfrum-script = { path = "crates/pdfrum-script", version = "0.1.0" }
-pdfrum-edit = { path = "crates/pdfrum-edit", version = "0.1.0" }
-pdfrum = { path = "crates/pdfrum", version = "0.1.0" }
-pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "0.1.0" }
-pdfrum-svg = { path = "crates/pdfrum-svg", version = "0.1.0" }
+pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "0.1.1" }
+pdfrum-text = { path = "crates/pdfrum-text", version = "0.1.1" }
+pdfrum-doc = { path = "crates/pdfrum-doc", version = "0.1.1" }
+pdfrum-form = { path = "crates/pdfrum-form", version = "0.1.1" }
+pdfrum-script = { path = "crates/pdfrum-script", version = "0.1.1" }
+pdfrum-edit = { path = "crates/pdfrum-edit", version = "0.1.1" }
+pdfrum = { path = "crates/pdfrum", version = "0.1.1" }
+pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "0.1.1" }
+pdfrum-svg = { path = "crates/pdfrum-svg", version = "0.1.1" }
 # Bench corpus list. A leaf so library crates can share it without depending
 # on the facade. `publish = false`.
 pdfrum-corpus = { path = "benches/corpus-list" }
