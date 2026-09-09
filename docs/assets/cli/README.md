@@ -39,10 +39,18 @@ Theme tokens are set in `kitty.conf` and match the banner SVGs in
 
 ## Beats
 
-`preview`, `stamp … DRAFT`, `preview stamped.pdf`, `view` (page 1, `j` to
-page 2, `q`), `doctor`, `doctor --json`, `search ISO`, `extract markdown`.
-Ctrl+L between the text commands. Stamp and its preview stay before `view`:
-after the pager, a later Kitty image does not show up in the X11 grab.
+`preview`, `stamp … DRAFT`, `preview stamped.pdf`, `view` (page 1, `j`/`k`
+between pages, `+` to zoom, `q`), `doctor`, `doctor --json`, `search ISO`,
+`extract markdown`. Ctrl+L between the text commands. Stamp and its preview
+stay before `view`: after the pager, a later Kitty image does not show up in
+the X11 grab.
+
+The holds are reading time, not work. Nothing here is slow: a page renders in
+about 40ms, `view` emits its first placement in ~5ms, and a page turn lands in
+a single frame because neighbours render and transmit while the pager waits
+for a key. The one hold that has to stay tight is the wait between `view` and
+the `0` that forces page 1 to draw — until that key lands the status bar is up
+with no page under it, which is exactly what a slow open would look like.
 
 `preview` / `view` are typed with no flags. Inside Kitty they pick the
 graphics protocol. `gradients.pdf` is TCPDF example 030 (two pages of
