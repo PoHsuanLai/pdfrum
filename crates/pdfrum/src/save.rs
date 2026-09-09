@@ -5,11 +5,11 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
-#[cfg(feature = "forms")]
-use pdfrum_common::Diagnostics;
-use pdfrum_common::{PageIndex, PdfVersion};
+use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
-use pdfrum_object::{Dict, ObjRef, Object, Resolve, names};
+use pdfrum_object::names;
+#[cfg(feature = "forms")]
+use pdfrum_object::{Dict, Object};
 
 #[cfg(feature = "forms")]
 use crate::Form;
@@ -503,6 +503,243 @@ pub struct DocEdit<'a> {
 }
 
 impl<'a> DocEdit<'a> {
+    /// Stamp `text` on every page, positioned by `options`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when the font cannot be added, and
+    /// [`Error::Read`](crate::Error::Read) when a page cannot be opened.
+    pub fn stamp_text(
+        &mut self,
+        text: &str,
+        options: &pdfrum_edit::StampOptions,
+    ) -> crate::Result<()> {
+        Ok(self.inner.stamp_text(text, options, &self.doc.limits)?)
+    }
+
+    /// Stamp `image` on every page at `width` points wide, positioned by
+    /// `options`. The height follows the image's aspect ratio.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when `width` is not positive, and
+    /// [`Error::Read`](crate::Error::Read) when a page cannot be opened.
+    pub fn stamp_image(
+        &mut self,
+        image: &pdfrum_edit::EmbeddedImage,
+        width: f64,
+        options: &pdfrum_edit::StampOptions,
+    ) -> crate::Result<()> {
+        Ok(self
+            .inner
+            .stamp_image(image, width, options, &self.doc.limits)?)
+    }
+
+    /// Compile an SVG into a Form `XObject`, placed with
+    /// [`Canvas::place_svg`](crate::Canvas::place_svg).
+    ///
+    /// One object however many pages place it, where
+    /// [`Canvas::draw_svg`](crate::Canvas::draw_svg) writes the operators
+    /// again per page.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Svg`](crate::Error::Svg) when the SVG will not resolve.
+    #[cfg(feature = "svg-import")]
+    pub fn compile_svg(
+        &mut self,
+        svg: &str,
+    ) -> crate::Result<(pdfrum_edit::SvgForm, pdfrum_edit::SvgIngestReport)> {
+        self.compile_svg_from(svg, None)
+    }
+
+    /// Compile an SVG whose relative `<image href>` links resolve against
+    /// `resources_dir`.
+    ///
+    /// # Errors
+    ///
+    /// As [`DocEdit::compile_svg`].
+    #[cfg(feature = "svg-import")]
+    pub fn compile_svg_from(
+        &mut self,
+        svg: &str,
+        resources_dir: Option<&std::path::Path>,
+    ) -> crate::Result<(pdfrum_edit::SvgForm, pdfrum_edit::SvgIngestReport)> {
+        #[cfg(feature = "svg-text")]
+        let out = self.inner.compile_svg_from_with_fonts(
+            svg,
+            resources_dir,
+            &self.doc.limits,
+            &self.svg_fonts,
+        );
+        #[cfg(not(feature = "svg-text"))]
+        let out = self
+            .inner
+            .compile_svg_from(svg, resources_dir, &self.doc.limits);
+        Ok(out?)
+    }
+
+    /// Draw on page `index` with a [`Canvas`](crate::Canvas).
+    ///
+    /// The canvas writes one more content stream and merges what it names
+    /// into the page's `/Resources`; nothing already on the page is touched.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the closure refused to draw, and
+    /// [`Error::Save`](crate::Error::Save) for a page written inline in its
+    /// parent's `/Kids`.
+    pub fn draw_page(
+        &mut self,
+        index: impl Into<pdfrum_common::PageIndex>,
+        body: impl FnOnce(&mut pdfrum_edit::Canvas<'_, '_>),
+    ) -> crate::Result<()> {
+        #[cfg(feature = "svg-text")]
+        let out = self
+            .inner
+            .draw_page_with_fonts(index, &self.doc.limits, &self.svg_fonts, body);
+        #[cfg(not(feature = "svg-text"))]
+        let out = self.inner.draw_page(index, &self.doc.limits, body);
+        Ok(out?)
+    }
+
+    /// Draw on every page, one canvas each.
+    ///
+    /// A page written inline in its parent's `/Kids` is skipped rather than
+    /// refused.
+    ///
+    /// # Errors
+    ///
+    /// As [`DocEdit::draw_page`], for the first page whose drawing failed.
+    pub fn draw_pages(
+        &mut self,
+        body: impl FnMut(&mut pdfrum_edit::Canvas<'_, '_>),
+    ) -> crate::Result<()> {
+        #[cfg(feature = "svg-text")]
+        let out = self
+            .inner
+            .draw_pages_with_fonts(&self.doc.limits, &self.svg_fonts, body);
+        #[cfg(not(feature = "svg-text"))]
+        let out = self.inner.draw_pages(&self.doc.limits, body);
+        Ok(out?)
+    }
+
+    /// Adds `bytes` as an embedded file named `name`, and returns its index.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog to attach to.
+    pub fn add_attachment(
+        &mut self,
+        name: &str,
+        bytes: &[u8],
+        options: &pdfrum_edit::AttachmentOptions,
+    ) -> crate::Result<usize> {
+        Ok(pdfrum_edit::add_attachment(
+            &mut self.inner,
+            &self.doc.limits,
+            name,
+            bytes,
+            options,
+        )?)
+    }
+
+    /// Removes the attachment at `index`; `false` when out of range.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn delete_attachment(&mut self, index: usize) -> crate::Result<bool> {
+        Ok(pdfrum_edit::delete_attachment(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+        )?)
+    }
+
+    /// Removes every attachment named `name`; `false` when none matched.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn remove_attachment(&mut self, name: &str) -> crate::Result<bool> {
+        Ok(pdfrum_edit::remove_attachment(
+            &mut self.inner,
+            &self.doc.limits,
+            name,
+        )?)
+    }
+
+    /// Replaces the bytes of the attachment at `index`; `false` when out of
+    /// range.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn set_attachment_file(&mut self, index: usize, bytes: &[u8]) -> crate::Result<bool> {
+        Ok(pdfrum_edit::set_attachment_file(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+            bytes,
+        )?)
+    }
+
+    /// Sets one `/Params` entry on the attachment at `index`; `false` when
+    /// out of range.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn set_attachment_param(
+        &mut self,
+        index: usize,
+        key: &str,
+        text: &str,
+    ) -> crate::Result<bool> {
+        Ok(pdfrum_edit::set_attachment_param(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+            key,
+            text,
+        )?)
+    }
+
+    /// Sets the `/Desc` of the attachment at `index`; `false` when out of
+    /// range.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn set_attachment_description(&mut self, index: usize, text: &str) -> crate::Result<bool> {
+        Ok(pdfrum_edit::set_attachment_description(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+            text,
+        )?)
+    }
+
+    /// Bakes annotation appearances into the page's content stream.
+    ///
+    /// `mode` selects which annotations qualify. Appearance generation is
+    /// recorded in the document's diagnostics.
+    ///
+    /// # Errors
+    ///
+    /// When `page` is out of range or the document has no catalog.
+    pub fn flatten(
+        &mut self,
+        page: impl Into<PageIndex>,
+        mode: pdfrum_edit::FlattenMode,
+    ) -> crate::Result<pdfrum_edit::Flattened> {
+        let mut diags = Diagnostics::default();
+        let out = pdfrum_edit::flatten(&mut self.inner, &self.doc.limits, page, mode, &mut diags);
+        self.doc.note(&diags);
+        Ok(out?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.
@@ -610,58 +847,6 @@ impl DocEdit<'_> {
         self.stamp_mod_date = true;
     }
 
-    /// A page's dictionary as the session's edits leave it, with the
-    /// reference the writer replaces and the resources the page reaches.
-    ///
-    /// Read through the overlay, not the base, so an earlier edit of the same
-    /// page — a rotation, a stamp — is what a later content rewrite builds on.
-    /// `None` for a page written inline in its parent's `/Kids`, which has no
-    /// object to replace.
-    pub(crate) fn page_state(&self, index: PageIndex) -> Result<Option<(ObjRef, Dict, Dict)>> {
-        let page = self.doc.inner.page(index)?;
-        let Some(reference) = page.reference else {
-            return Ok(None);
-        };
-        let dict = self
-            .inner
-            .fetch(reference)
-            .ok()
-            .as_deref()
-            .and_then(Object::as_dict)
-            .cloned()
-            .unwrap_or_else(|| page.dict.clone());
-        let resources = dict
-            .dict(names::RESOURCES, &self.inner)
-            .or_else(|| {
-                page.inherited(names::RESOURCES, &self.inner)?
-                    .resolve(&self.inner)
-                    .ok()?
-                    .as_dict()
-                    .cloned()
-            })
-            .unwrap_or_default();
-        Ok(Some((reference, dict, resources)))
-    }
-
-    /// Turn one page edit into replacement objects on the session.
-    ///
-    /// `shared` is [`pdfrum_edit::shared_objects`] over the session, computed
-    /// once by the caller for however many pages it applies.
-    pub(crate) fn apply_page(
-        &mut self,
-        page: &PageEdit,
-        shared: &pdfrum_edit::ShareCounts,
-    ) -> Result<()> {
-        let Some((reference, dict, resources)) = self.page_state(page.index())? else {
-            // Rather than half-apply the change, leave the page as it was.
-            return Ok(());
-        };
-        let Some(rewrite) = pdfrum_edit::regenerate(page.graph(), &resources, &self.inner) else {
-            return Ok(());
-        };
-        pdfrum_edit::apply_rewrite(&mut self.inner, reference, &dict, &rewrite, shared);
-        Ok(())
-    }
     /// Import `pages` of `source` as a contiguous run at `at` (past the end
     /// appends), in the order given, duplicates included. Objects two
     /// imported pages share are copied once.
@@ -977,7 +1162,7 @@ impl DocEdit<'_> {
     ) -> Result<()> {
         let shared = pdfrum_edit::shared_objects(&self.inner);
         for page in pages {
-            self.apply_page(page, &shared)?;
+            self.inner.apply_page(page, &shared)?;
         }
         write_edit(&self.for_save(options), options, out)
     }

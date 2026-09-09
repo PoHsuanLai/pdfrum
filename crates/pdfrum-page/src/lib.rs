@@ -30,6 +30,7 @@ mod names;
 mod ops;
 mod optional;
 mod page;
+mod page_edit;
 mod pattern;
 // The whole-render stage timers. Public *with the default-off `profiling`
 // feature and only then*: the module always exists, because the render calls
@@ -88,6 +89,7 @@ pub use page::{
     PathObject, Rotation, ShadingObject, TextObject, TextSegment, derive_boxes,
     display_size_from_dict,
 };
+pub use page_edit::{PageEdit, transform_object};
 pub use pattern::{Pattern, ShadingPattern, TileRange, TilingPattern, uncolored_pattern_rgb};
 pub use resources::Resources;
 pub use shading::{

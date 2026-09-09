@@ -450,6 +450,39 @@ pub pdfrum_doc::pdfa::Clause::XmpMalformed
 pub pdfrum_doc::pdfa::Clause::XmpMissing
 impl pdfrum_doc::PdfaClause
 pub const fn pdfrum_doc::PdfaClause::iso(self, pdfrum_doc::PdfaLevel) -> &'static str
+#[non_exhaustive] pub enum pdfrum_doc::pdfa::Compromise
+pub pdfrum_doc::pdfa::Compromise::ActionRemoved
+pub pdfrum_doc::pdfa::Compromise::ActionRemoved::holder: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::ActionRemoved::kind: alloc::string::String
+pub pdfrum_doc::pdfa::Compromise::AnnotationFlagsChanged
+pub pdfrum_doc::pdfa::Compromise::AnnotationFlagsChanged::annotation: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::AnnotationFlagsChanged::page: u32
+pub pdfrum_doc::pdfa::Compromise::AnnotationRemoved
+pub pdfrum_doc::pdfa::Compromise::AnnotationRemoved::annotation: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::AnnotationRemoved::page: u32
+pub pdfrum_doc::pdfa::Compromise::AnnotationRemoved::subtype: alloc::string::String
+pub pdfrum_doc::pdfa::Compromise::EmbeddedFileRemoved
+pub pdfrum_doc::pdfa::Compromise::EmbeddedFileRemoved::file: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::pdfa::Compromise::EmbeddedFileRemoved::name: alloc::string::String
+pub pdfrum_doc::pdfa::Compromise::FontSubstituted
+pub pdfrum_doc::pdfa::Compromise::FontSubstituted::base_name: alloc::string::String
+pub pdfrum_doc::pdfa::Compromise::FontSubstituted::font: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::FontSubstituted::substitute: &'static str
+pub pdfrum_doc::pdfa::Compromise::ObjectMetadataRemoved
+pub pdfrum_doc::pdfa::Compromise::ObjectMetadataRemoved::object: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::OptionalContentRemoved
+pub pdfrum_doc::pdfa::Compromise::OptionalContentRemoved::catalog: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Compromise::PageRasterized
+pub pdfrum_doc::pdfa::Compromise::PageRasterized::cause: pdfrum_doc::pdfa::RasterCause
+pub pdfrum_doc::pdfa::Compromise::PageRasterized::dpi: pdfrum_doc::pdfa::Dpi
+pub pdfrum_doc::pdfa::Compromise::PageRasterized::page: u32
+impl core::fmt::Display for pdfrum_doc::pdfa::Compromise
+pub fn pdfrum_doc::pdfa::Compromise::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub enum pdfrum_doc::pdfa::Concession
+pub pdfrum_doc::pdfa::Concession::Accept
+pub pdfrum_doc::pdfa::Concession::Refuse
+impl pdfrum_doc::pdfa::Concession
+pub const fn pdfrum_doc::pdfa::Concession::accepts(self) -> bool
 pub enum pdfrum_doc::pdfa::Level
 pub pdfrum_doc::pdfa::Level::A1b
 pub pdfrum_doc::pdfa::Level::A2b
@@ -459,6 +492,23 @@ pub const fn pdfrum_doc::PdfaLevel::name(self) -> &'static str
 pub const fn pdfrum_doc::PdfaLevel::part(self) -> u8
 impl core::fmt::Display for pdfrum_doc::PdfaLevel
 pub fn pdfrum_doc::PdfaLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_doc::pdfa::RasterCause
+pub pdfrum_doc::pdfa::RasterCause::Transparency
+pub pdfrum_doc::pdfa::RasterCause::UnembeddableFont
+impl core::fmt::Display for pdfrum_doc::pdfa::RasterCause
+pub fn pdfrum_doc::pdfa::RasterCause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum pdfrum_doc::pdfa::Refusal
+pub pdfrum_doc::pdfa::Refusal::ForbiddenFeature
+pub pdfrum_doc::pdfa::Refusal::ForbiddenFeature::holder: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Refusal::ForbiddenFeature::kind: alloc::string::String
+pub pdfrum_doc::pdfa::Refusal::UnembeddableFont
+pub pdfrum_doc::pdfa::Refusal::UnembeddableFont::base_name: alloc::string::String
+pub pdfrum_doc::pdfa::Refusal::UnembeddableFont::font: pdfrum_object::object::ObjRef
+pub pdfrum_doc::pdfa::Refusal::UnrepresentableContent
+pub pdfrum_doc::pdfa::Refusal::UnrepresentableContent::cause: pdfrum_doc::pdfa::RasterCause
+pub pdfrum_doc::pdfa::Refusal::UnrepresentableContent::page: u32
+impl core::fmt::Display for pdfrum_doc::pdfa::Refusal
+pub fn pdfrum_doc::pdfa::Refusal::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum pdfrum_doc::pdfa::Subject
 pub pdfrum_doc::pdfa::Subject::Catalog
 pub pdfrum_doc::pdfa::Subject::Document
@@ -469,6 +519,37 @@ pub pdfrum_doc::pdfa::Subject::Resource::name: alloc::string::String
 pub pdfrum_doc::pdfa::Subject::Resource::page: u32
 impl core::fmt::Display for pdfrum_doc::pdfa::Subject
 pub fn pdfrum_doc::pdfa::Subject::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::pdfa::Conversion
+pub pdfrum_doc::pdfa::Conversion::compromises: alloc::vec::Vec<pdfrum_doc::pdfa::Compromise>
+pub pdfrum_doc::pdfa::Conversion::level: pdfrum_doc::PdfaLevel
+pub pdfrum_doc::pdfa::Conversion::refusals: alloc::vec::Vec<pdfrum_doc::pdfa::Refusal>
+impl pdfrum_doc::pdfa::Conversion
+pub fn pdfrum_doc::pdfa::Conversion::converted(&self) -> bool
+pub fn pdfrum_doc::pdfa::Conversion::faithful(&self) -> bool
+pub fn pdfrum_doc::pdfa::Conversion::rasterized_pages(&self) -> alloc::vec::Vec<u32>
+impl core::fmt::Display for pdfrum_doc::pdfa::Conversion
+pub fn pdfrum_doc::pdfa::Conversion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::pdfa::Dpi(pub u16)
+impl core::fmt::Display for pdfrum_doc::pdfa::Dpi
+pub fn pdfrum_doc::pdfa::Dpi::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::pdfa::InfoFields
+pub pdfrum_doc::pdfa::InfoFields::author: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::create_date: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::creator: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::keywords: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::modify_date: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::producer: core::option::Option<alloc::string::String>
+pub pdfrum_doc::pdfa::InfoFields::title: core::option::Option<alloc::string::String>
+#[non_exhaustive] pub struct pdfrum_doc::pdfa::Policy
+pub pdfrum_doc::pdfa::Policy::forbidden_feature: pdfrum_doc::pdfa::Concession
+pub pdfrum_doc::pdfa::Policy::unembeddable_font: pdfrum_doc::pdfa::Concession
+pub pdfrum_doc::pdfa::Policy::unrepresentable_content: pdfrum_doc::pdfa::Concession
+impl pdfrum_doc::pdfa::Policy
+pub const fn pdfrum_doc::pdfa::Policy::forbidden_feature(self, pdfrum_doc::pdfa::Concession) -> Self
+pub const fn pdfrum_doc::pdfa::Policy::lossy() -> Self
+pub const fn pdfrum_doc::pdfa::Policy::strict() -> Self
+pub const fn pdfrum_doc::pdfa::Policy::unembeddable_font(self, pdfrum_doc::pdfa::Concession) -> Self
+pub const fn pdfrum_doc::pdfa::Policy::unrepresentable_content(self, pdfrum_doc::pdfa::Concession) -> Self
 pub struct pdfrum_doc::pdfa::Report
 pub pdfrum_doc::pdfa::Report::level: pdfrum_doc::PdfaLevel
 pub pdfrum_doc::pdfa::Report::violations: alloc::vec::Vec<pdfrum_doc::pdfa::Violation>
@@ -483,6 +564,7 @@ pub pdfrum_doc::pdfa::Violation::subject: pdfrum_doc::pdfa::Subject
 impl core::fmt::Display for pdfrum_doc::pdfa::Violation
 pub fn pdfrum_doc::pdfa::Violation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn pdfrum_doc::pdfa::check<R: pdfrum_object::resolve::Resolve>(pdfrum_doc::PdfaLevel, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::PdfaReport
+pub fn pdfrum_doc::pdfa::xmp_packet(pdfrum_doc::PdfaLevel, &pdfrum_doc::pdfa::InfoFields) -> alloc::vec::Vec<u8>
 pub mod pdfrum_doc::prefs
 pub struct pdfrum_doc::prefs::ViewerPrefs
 pub pdfrum_doc::prefs::ViewerPrefs::dict: core::option::Option<pdfrum_object::dict::Dict>
@@ -494,6 +576,16 @@ pub fn pdfrum_doc::prefs::ViewerPrefs::num_copies<R: pdfrum_object::resolve::Res
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
 pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
+pub mod pdfrum_doc::signature
+pub struct pdfrum_doc::signature::Signature
+impl pdfrum_doc::signature::Signature
+pub fn pdfrum_doc::signature::Signature::byte_range(&self, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<i64>
+pub fn pdfrum_doc::signature::Signature::contents(&self, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::signature::Signature::doc_mdp_permission(&self, &impl pdfrum_object::resolve::Resolve) -> u32
+pub fn pdfrum_doc::signature::Signature::reason(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::Signature::sub_filter(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::Signature::time(&self, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::signature::signatures(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> alloc::vec::Vec<pdfrum_doc::signature::Signature>
 pub mod pdfrum_doc::structure
 pub enum pdfrum_doc::structure::Kid
 pub pdfrum_doc::structure::Kid::Element

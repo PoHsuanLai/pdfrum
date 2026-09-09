@@ -27,7 +27,12 @@ use std::collections::BTreeMap;
 use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_object::{Array, Dict, Name, Object};
 
-use crate::Color;
+use crate::Error;
+use pdfrum_common::Limits;
+use peniko::Color;
+
+/// An ingestion either applies or names why it could not.
+type Result<T> = core::result::Result<T, Error>;
 use crate::canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 
 /// A construct in the source SVG that PDF drawing cannot carry.
@@ -260,18 +265,18 @@ impl SvgFit {
 ///
 /// Built here rather than taken from the caller because every field `usvg`
 /// offers either concerns text — whose faces arrive through
-/// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) instead of
+/// [`DocEdit::set_svg_fonts`](crate::EditDoc::set_svg_fonts) instead of
 /// through a `usvg` type on our surface — or is a resource-loading hook whose
 /// defaults are the safe ones. The one exception is the document's own
 /// directory, which a caller who reads an SVG from a file needs so that a
 /// relative `<image href>` resolves.
 ///
-/// With `svg-text` off, `session` is not read at all: there is no text stack
+/// With `svg-text` off, `fonts` is not read at all: there is no text stack
 /// to give faces to, and the parameter would be the dead option
 /// forbids — so with the feature off the function does not take one.
 fn parse_options(
     resources_dir: Option<std::path::PathBuf>,
-    #[cfg(feature = "svg-text")] session: &crate::DocEdit<'_>,
+    #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
 ) -> usvg::Options<'static> {
     #[cfg_attr(
         not(feature = "svg-text"),
@@ -283,7 +288,7 @@ fn parse_options(
     };
     #[cfg(feature = "svg-text")]
     {
-        let (db, default_family) = session.svg_fonts.parts();
+        let (db, default_family) = fonts.parts();
         options.fontdb = db;
         // Left at `usvg`'s own default when the set named none, so a document
         // that does name a family still resolves against what is registered.
@@ -336,10 +341,10 @@ fn mentions_text(svg: &str) -> bool {
 fn report_dropped_text(
     svg: &str,
     report: &mut SvgIngestReport,
-    #[cfg(feature = "svg-text")] session: &crate::DocEdit<'_>,
+    #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
 ) {
     #[cfg(feature = "svg-text")]
-    if !session.svg_fonts.is_empty() {
+    if !fonts.is_empty() {
         return;
     }
     if mentions_text(svg) {
@@ -361,7 +366,7 @@ impl Canvas<'_, '_> {
     ///
     /// # Errors
     ///
-    /// [`Error::Svg`](crate::Error::Svg) when `usvg` cannot resolve the
+    /// [`Error::Svg`](Error::Svg) when `usvg` cannot resolve the
     /// document at all — malformed XML, or an `<svg>` with no usable size.
     /// A construct that resolves but does not map is a report item, not an
     /// error.
@@ -383,12 +388,7 @@ impl Canvas<'_, '_> {
     /// })?;
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn draw_svg(
-        &mut self,
-        svg: &str,
-        into: Rect,
-        fit: SvgFit,
-    ) -> crate::Result<SvgIngestReport> {
+    pub fn draw_svg(&mut self, svg: &str, into: Rect, fit: SvgFit) -> Result<SvgIngestReport> {
         self.draw_svg_from(svg, into, fit, None)
     }
 
@@ -408,20 +408,20 @@ impl Canvas<'_, '_> {
         into: Rect,
         fit: SvgFit,
         resources_dir: Option<&std::path::Path>,
-    ) -> crate::Result<SvgIngestReport> {
+    ) -> Result<SvgIngestReport> {
         let options = parse_options(
             resources_dir.map(Into::into),
             #[cfg(feature = "svg-text")]
-            self.session(),
+            self.fonts(),
         );
-        let tree = usvg::Tree::from_str(svg, &options).map_err(crate::Error::Svg)?;
+        let tree = usvg::Tree::from_str(svg, &options).map_err(Error::Svg)?;
 
         let mut report = SvgIngestReport::default();
         report_dropped_text(
             svg,
             &mut report,
             #[cfg(feature = "svg-text")]
-            self.session(),
+            self.fonts(),
         );
 
         let placement = fit.place(tree.size().to_kurbo(), into);
@@ -437,8 +437,8 @@ impl Canvas<'_, '_> {
         Ok(report)
     }
 
-    /// Place an [`SvgForm`](crate::SvgForm) compiled by
-    /// [`DocEdit::compile_svg`](crate::DocEdit::compile_svg), fitting its
+    /// Place an [`SvgForm`](crate::canvas::SvgForm) compiled by
+    /// [`DocEdit::compile_svg`](crate::EditDoc::compile_svg), fitting its
     /// box into `into` the way [`Canvas::draw_svg`] fits a document.
     ///
     /// The deduplicating spelling of `draw_svg`: the SVG is compiled once and
@@ -460,7 +460,7 @@ impl Canvas<'_, '_> {
     /// edit.draw_pages(|c| c.place_svg(&logo, Rect::new(10.0, 10.0, 60.0, 60.0), SvgFit::Contain))?;
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn place_svg(&mut self, form: &crate::SvgForm, into: Rect, fit: SvgFit) {
+    pub fn place_svg(&mut self, form: &crate::canvas::SvgForm, into: Rect, fit: SvgFit) {
         // The form's box is the SVG's own, so fitting it into the
         // destination is the same computation `draw_svg` does on the tree's
         // size — minus the y flip, which the form's content already carries.
@@ -475,7 +475,7 @@ impl Canvas<'_, '_> {
     }
 }
 
-impl crate::DocEdit<'_> {
+impl crate::EditDoc<'_> {
     /// Compile an SVG document once, into a Form `XObject` any number of
     /// pages can place.
     ///
@@ -497,7 +497,7 @@ impl crate::DocEdit<'_> {
     ///
     /// # Errors
     ///
-    /// [`Error::Svg`](crate::Error::Svg) when `usvg` cannot resolve the
+    /// [`Error::Svg`](Error::Svg) when `usvg` cannot resolve the
     /// document, exactly as [`Canvas::draw_svg`] reports it.
     ///
     /// ```
@@ -513,14 +513,25 @@ impl crate::DocEdit<'_> {
     /// assert_eq!(logo.bbox().width(), 10.0);
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn compile_svg(&mut self, svg: &str) -> crate::Result<(crate::SvgForm, SvgIngestReport)> {
-        self.compile_svg_from(svg, None)
+    pub fn compile_svg(
+        &mut self,
+        svg: &str,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
+    ) -> Result<(crate::canvas::SvgForm, SvgIngestReport)> {
+        self.compile_svg_from_with_fonts(
+            svg,
+            None,
+            limits,
+            #[cfg(feature = "svg-text")]
+            fonts,
+        )
     }
 
     /// Compile an SVG whose relative `<image href>` links resolve against
     /// `resources_dir`.
     ///
-    /// [`DocEdit::compile_svg`](crate::DocEdit::compile_svg) is this with no
+    /// [`DocEdit::compile_svg`](crate::EditDoc::compile_svg) is this with no
     /// directory, which is right for
     /// a document held in memory; one read from a file wants the file's own
     /// directory here, or its linked images do not load. The same pairing
@@ -528,25 +539,48 @@ impl crate::DocEdit<'_> {
     ///
     /// # Errors
     ///
-    /// As [`DocEdit::compile_svg`](crate::DocEdit::compile_svg).
+    /// As [`DocEdit::compile_svg`](crate::EditDoc::compile_svg).
     pub fn compile_svg_from(
         &mut self,
         svg: &str,
         resources_dir: Option<&std::path::Path>,
-    ) -> crate::Result<(crate::SvgForm, SvgIngestReport)> {
+        limits: &Limits,
+    ) -> Result<(crate::canvas::SvgForm, SvgIngestReport)> {
+        self.compile_svg_from_with_fonts(
+            svg,
+            resources_dir,
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+        )
+    }
+
+    /// [`EditDoc::compile_svg_from`] with the faces the SVG's `<text>` is set
+    /// in; without them a `<text>` draws nothing and is reported instead.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::compile_svg_from`].
+    pub fn compile_svg_from_with_fonts(
+        &mut self,
+        svg: &str,
+        resources_dir: Option<&std::path::Path>,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
+    ) -> Result<(crate::canvas::SvgForm, SvgIngestReport)> {
         let options = parse_options(
             resources_dir.map(Into::into),
             #[cfg(feature = "svg-text")]
-            self,
+            fonts,
         );
-        let tree = usvg::Tree::from_str(svg, &options).map_err(crate::Error::Svg)?;
+        let tree = usvg::Tree::from_str(svg, &options).map_err(Error::Svg)?;
 
         let mut report = SvgIngestReport::default();
         report_dropped_text(
             svg,
             &mut report,
             #[cfg(feature = "svg-text")]
-            self,
+            fonts,
         );
 
         // The form's box is the SVG's own size in a y-**up** space, so a
@@ -554,14 +588,20 @@ impl crate::DocEdit<'_> {
         // lives once inside the form rather than at every placement.
         let size = tree.size().to_kurbo();
         let bbox = Rect::from_origin_size(Point::ZERO, size);
-        let form = self.compile_form(bbox, |c| {
-            c.transform(SvgFit::Stretch.place(size, bbox));
-            let mut walk = Walk {
-                canvas: c,
-                report: &mut report,
-            };
-            walk.group(tree.root());
-        })?;
+        let form = self.compile_form(
+            bbox,
+            limits,
+            #[cfg(feature = "svg-text")]
+            fonts,
+            |c| {
+                c.transform(SvgFit::Stretch.place(size, bbox));
+                let mut walk = Walk {
+                    canvas: c,
+                    report: &mut report,
+                };
+                walk.group(tree.root());
+            },
+        )?;
         Ok((form, report))
     }
 }
@@ -640,7 +680,7 @@ impl Walk<'_, '_, '_> {
     ///
     /// `usvg` has already done the hard half — resolved
     /// the family against the faces
-    /// [`DocEdit::set_svg_fonts`](crate::DocEdit::set_svg_fonts) registered,
+    /// [`DocEdit::set_svg_fonts`](crate::EditDoc::set_svg_fonts) registered,
     /// run the bidi and the shaping, positioned every glyph, applied
     /// `text-anchor` and `textLength` and any `textPath` — and
     /// [`flattened`](usvg::Text::flattened) hands back the result as an
@@ -830,7 +870,7 @@ impl Walk<'_, '_, '_> {
     }
 }
 
-/// One decoded PNG, in the shape [`crate::DocEdit::embed_image`] takes.
+/// One decoded PNG, in the shape [`crate::EditDoc::embed_image`] takes.
 pub(crate) struct DecodedPng {
     pub(crate) pixels: Vec<u8>,
     pub(crate) width: u32,
@@ -1105,7 +1145,9 @@ fn stitching(stops: &[usvg::Stop]) -> Dict {
     let mut bounds = Vec::new();
     let mut encode = Vec::new();
     for pair in stops.windows(2) {
-        let (from, to) = (&pair[0], &pair[1]);
+        let (Some(from), Some(to)) = (pair.first(), pair.get(1)) else {
+            continue;
+        };
         functions.push(Object::Dict(exponential(
             rgb(from.color()),
             rgb(to.color()),

@@ -1,11 +1,13 @@
 //! PDF/A conformance checking (ISO 19005): what a document fails, and why.
 //!
-//! # Report before repair
+//! # Reporting and repair policy
 //!
-//! This module only *reports*. Nothing here rewrites a document, and
-//! conversion is a later pass deliberately: a
-//! checker that has been cross-examined against an independent implementation
-//! is a result, and one that has not is a claim. The oracle is veraPDF, and
+//! [`check`] reports what a document fails; it rewrites nothing. [`Policy`]
+//! and its outcome types describe what a caller will accept in exchange for
+//! conformance, and [`packet`](xmp_packet) serializes the XMP a converted
+//! file carries. Applying a repair belongs to the writer.
+//!
+//! The checker is cross-examined against veraPDF:
 //! `crates/pdfrum/tests/pdfa_oracle.rs` scores every check against it exactly
 //! as the conformance board scores rendering against `pdfium_test`.
 //!
@@ -29,8 +31,12 @@
 //! its name.
 
 mod check;
+mod policy;
 mod report;
 mod xmp;
+mod xmp_write;
 
 pub use check::check;
+pub use policy::{Compromise, Concession, Conversion, Dpi, Policy, RasterCause, Refusal};
 pub use report::{Clause, Level, Report, Subject, Violation};
+pub use xmp_write::{InfoFields, packet as xmp_packet};

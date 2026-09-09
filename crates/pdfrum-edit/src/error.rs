@@ -56,6 +56,12 @@ pub enum Error {
     #[error("N-up needs a non-zero grid and sheet size")]
     BadNupParams,
 
+    /// An SVG would not resolve. Only produced with the `svg-import`
+    /// feature, whose ingestion parses it.
+    #[cfg(feature = "svg-import")]
+    #[error("the SVG would not resolve: {0}")]
+    Svg(#[source] usvg::Error),
+
     /// The font program could not be subset.
     #[error("font subsetting failed: {0}")]
     Subset(String),

@@ -165,13 +165,13 @@ surfaces that do not publish (`pdfrum-capi`, `pdfrum-wasm`, `pdfrum-tool`).
 
 | crate | duty |
 |---|---|
-| [`pdfrum`](https://docs.rs/pdfrum) | facade: `Document`, `Page`, `Form`, `Canvas` |
+| [`pdfrum`](https://docs.rs/pdfrum) | facade: `Document`, `Page`, `Form`, `DocEdit` |
 | [`pdfrum-common`](https://docs.rs/pdfrum-common) | diagnostics, limits, `kurbo` re-export |
 | [`pdfrum-object`](https://docs.rs/pdfrum-object) | PDF objects, names, strings, dictionaries |
 | [`pdfrum-crypt`](https://docs.rs/pdfrum-crypt) | standard security handler, revisions 2–6 |
 | [`pdfrum-filters`](https://docs.rs/pdfrum-filters) | Flate, LZW, ASCIIHex/85, RunLength, CCITT |
 | [`pdfrum-parser`](https://docs.rs/pdfrum-parser) | lexer, xref, `load` |
-| [`pdfrum-page`](https://docs.rs/pdfrum-page) | content streams, colour, images, shadings |
+| [`pdfrum-page`](https://docs.rs/pdfrum-page) | content streams, colour, images, shadings, `PageEdit` |
 | [`pdfrum-cmap`](https://docs.rs/pdfrum-cmap) | CMap parse and lookup |
 | [`pdfrum-type1`](https://docs.rs/pdfrum-type1) | Type 1 charstrings |
 | [`pdfrum-font`](https://docs.rs/pdfrum-font) | font programs, encodings, ToUnicode |
@@ -181,10 +181,10 @@ surfaces that do not publish (`pdfrum-capi`, `pdfrum-wasm`, `pdfrum-tool`).
 | [`pdfrum-raster-tinyskia`](https://docs.rs/pdfrum-raster-tinyskia) | tiny-skia backend |
 | [`pdfrum-raster-agg`](https://docs.rs/pdfrum-raster-agg) | AGG-parity backend |
 | [`pdfrum-raster-vello`](https://docs.rs/pdfrum-raster-vello) | GPU rasterizer over `wgpu` |
-| [`pdfrum-doc`](https://docs.rs/pdfrum-doc) | annotations, structure tree, PDF/A check |
+| [`pdfrum-doc`](https://docs.rs/pdfrum-doc) | annotations, structure tree, PDF/A check and policy |
 | [`pdfrum-form`](https://docs.rs/pdfrum-form) | AcroForm reader and session |
 | [`pdfrum-script`](https://docs.rs/pdfrum-script) | document JavaScript (behind `javascript`) |
-| [`pdfrum-edit`](https://docs.rs/pdfrum-edit) | save, page import, subsetting |
+| [`pdfrum-edit`](https://docs.rs/pdfrum-edit) | save, import, subsetting, `Canvas`, stamp, flatten, SVG import |
 | [`pdfrum-markdown`](https://docs.rs/pdfrum-markdown) | `Page::markdown` |
 | [`pdfrum-svg`](https://docs.rs/pdfrum-svg) | SVG export |
 | [`pdfrum-cli`](https://docs.rs/pdfrum-cli) | command line |

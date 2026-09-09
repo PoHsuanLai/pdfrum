@@ -27,23 +27,30 @@
 //! it needs correct escaping of five strings, which is the twenty lines below.
 //! , the same rule the checker's reader cites.
 
-use crate::PdfaLevel;
+use super::Level;
 
 /// The document information dictionary entries the packet mirrors.
 ///
-/// A struct of `Option<String>` rather than the `Metadata` facade type,
-/// because the packet needs exactly these five and takes them from wherever
-/// the caller read them.
+/// The document information an XMP packet carries.
+///
+/// Each field is optional and taken from wherever the caller read it; an
+/// absent one is omitted from the packet rather than written empty.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct InfoFields {
-    pub(crate) title: Option<String>,
-    pub(crate) author: Option<String>,
-    pub(crate) creator: Option<String>,
-    pub(crate) producer: Option<String>,
-    pub(crate) keywords: Option<String>,
-    /// `/CreationDate` and `/ModDate`, already in XMP's ISO 8601 form.
-    pub(crate) create_date: Option<String>,
-    pub(crate) modify_date: Option<String>,
+pub struct InfoFields {
+    /// `dc:title`.
+    pub title: Option<String>,
+    /// `dc:creator`.
+    pub author: Option<String>,
+    /// `xmp:CreatorTool`.
+    pub creator: Option<String>,
+    /// `pdf:Producer`.
+    pub producer: Option<String>,
+    /// `pdf:Keywords`.
+    pub keywords: Option<String>,
+    /// `xmp:CreateDate`, in XMP's ISO 8601 form.
+    pub create_date: Option<String>,
+    /// `xmp:ModifyDate`, in XMP's ISO 8601 form.
+    pub modify_date: Option<String>,
 }
 
 /// Escape the five characters XML reserves.
@@ -112,17 +119,20 @@ fn date_element(out: &mut String, name: &str, value: Option<&String>) {
 /// year, then either nothing or a `-`.
 fn is_iso8601(text: &str) -> bool {
     let bytes = text.as_bytes();
-    if bytes.len() < 4 || !bytes[..4].iter().all(u8::is_ascii_digit) {
+    let Some(year) = bytes.get(..4) else {
+        return false;
+    };
+    if !year.iter().all(u8::is_ascii_digit) {
         return false;
     }
-    bytes.len() == 4 || bytes[4] == b'-'
+    bytes.len() == 4 || bytes.get(4) == Some(&b'-')
 }
 
 /// The complete `/Metadata` packet for a document at `level`.
 ///
 /// Written as UTF-8 with no byte-order mark, which is what ISO 19005-2
 /// 6.6.2.1 requires and what 11 corpus files fail on.
-pub(crate) fn packet(level: PdfaLevel, info: &InfoFields) -> Vec<u8> {
+pub fn packet(level: Level, info: &InfoFields) -> Vec<u8> {
     let mut out = String::with_capacity(1024);
     // The `begin` attribute holds U+FEFF as a character, not as a BOM: it is
     // how a reader that found the packet in a byte stream learns the encoding.
@@ -191,19 +201,19 @@ pub(crate) fn packet(level: PdfaLevel, info: &InfoFields) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use super::Level;
     use super::{InfoFields, is_iso8601, packet};
-    use crate::PdfaLevel;
 
-    fn text(level: PdfaLevel, info: &InfoFields) -> String {
+    fn text(level: Level, info: &InfoFields) -> String {
         String::from_utf8(packet(level, info)).expect("the packet is UTF-8 by construction")
     }
 
     #[test]
     fn the_identification_schema_names_the_level() {
-        let one = text(PdfaLevel::A1b, &InfoFields::default());
+        let one = text(Level::A1b, &InfoFields::default());
         assert!(one.contains("<pdfaid:part>1</pdfaid:part>"));
         assert!(one.contains("<pdfaid:conformance>B</pdfaid:conformance>"));
-        let two = text(PdfaLevel::A2b, &InfoFields::default());
+        let two = text(Level::A2b, &InfoFields::default());
         assert!(two.contains("<pdfaid:part>2</pdfaid:part>"));
     }
 
@@ -211,9 +221,7 @@ mod tests {
     // Anything else means the conversion produces files it would itself fail.
     #[test]
     fn the_checker_reads_the_packet_the_writer_writes() {
-        let doc = crate::Document::open("tests/fixtures/text_form.pdf").expect("fixture opens");
-        let _ = doc;
-        let bytes = packet(PdfaLevel::A2b, &InfoFields::default());
+        let bytes = packet(Level::A2b, &InfoFields::default());
         // `is_xmp` and `identification` are the checker's, exercised through
         // the public surface by round-tripping a converted file in
         // `tests/pdfa_convert.rs`; here we assert the shape they scan for.
@@ -228,7 +236,7 @@ mod tests {
             title: Some("a & b < c > d".to_owned()),
             ..InfoFields::default()
         };
-        let out = text(PdfaLevel::A2b, &info);
+        let out = text(Level::A2b, &info);
         assert!(out.contains("a &amp; b &lt; c &gt; d"));
         // And the raw forms are gone, or the packet is not well-formed XML.
         assert!(!out.contains("a & b"));
@@ -243,7 +251,7 @@ mod tests {
             producer: Some("bad\u{0}producer".to_owned()),
             ..InfoFields::default()
         };
-        assert!(text(PdfaLevel::A2b, &info).contains("<pdf:Producer>badproducer"));
+        assert!(text(Level::A2b, &info).contains("<pdf:Producer>badproducer"));
     }
 
     #[test]
@@ -252,7 +260,7 @@ mod tests {
             producer: Some(String::new()),
             ..InfoFields::default()
         };
-        assert!(!text(PdfaLevel::A2b, &info).contains("pdf:Producer"));
+        assert!(!text(Level::A2b, &info).contains("pdf:Producer"));
     }
 
     // A date-typed property holding a non-date is 6.6.2.3.1-2, which 5 corpus
@@ -264,7 +272,7 @@ mod tests {
             modify_date: Some("2026-09-07T12:00:00Z".to_owned()),
             ..InfoFields::default()
         };
-        let out = text(PdfaLevel::A2b, &info);
+        let out = text(Level::A2b, &info);
         assert!(!out.contains("CreateDate"));
         assert!(out.contains("<xmp:ModifyDate>2026-09-07T12:00:00Z"));
     }
@@ -288,7 +296,7 @@ mod tests {
             author: Some("A".to_owned()),
             ..InfoFields::default()
         };
-        let out = text(PdfaLevel::A2b, &info);
+        let out = text(Level::A2b, &info);
         assert!(out.contains("<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">T</rdf:li>"));
         assert!(out.contains("<dc:creator><rdf:Seq><rdf:li>A</rdf:li>"));
     }
@@ -298,6 +306,6 @@ mod tests {
     // is one more thing a validator can object to.
     #[test]
     fn the_dublin_core_block_is_absent_when_it_would_be_empty() {
-        assert!(!text(PdfaLevel::A2b, &InfoFields::default()).contains("purl.org/dc"));
+        assert!(!text(Level::A2b, &InfoFields::default()).contains("purl.org/dc"));
     }
 }

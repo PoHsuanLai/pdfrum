@@ -25,7 +25,7 @@ mod syntax;
 mod xref;
 
 pub use decode::decoded_stream;
-pub use doc::{Document, LoadError, LoadOptions, PageDict, load};
+pub use doc::{Document, LoadError, LoadOptions, PageDict, content_segments, load, revision_end};
 pub use error::Error;
 pub use lexer::{
     CharClass, Delim, Lexer, Token, WordBoundary, atoi64, atoui, class_of, find_word, is_delimiter,
