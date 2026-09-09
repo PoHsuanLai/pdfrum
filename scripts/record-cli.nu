@@ -46,7 +46,11 @@ def key [kitty: string, sock: string, name: string] {
 def clear-screen [kitty: string, sock: string] {
     try { ^$kitty @ --to $sock kitten icat --clear }
     key $kitty $sock "ctrl+l"
-    sleep 300ms
+    # The screen really is empty between dropping the image and the next
+    # command's output, so the grab catches one blank frame per transition —
+    # the blink between beats. It is a single 24fps frame either way, so this
+    # wait is only about letting the clear land, not about hiding it.
+    sleep 200ms
 }
 
 def wait-sock [kitty: string, sock: string] {
@@ -152,6 +156,19 @@ def main [] {
     # Setup, not recorded.
     send $kitty $sock "cd /tmp/pdfrum-cli-demo\r"
     sleep 200ms
+    # Prime the graphics path before the capture starts. x11grab under llvmpipe
+    # does not pick up Xvfb damage until something forces a full repaint, and
+    # the first image of a session has nothing before it to force one: the
+    # shell runs the command 18ms after the send, but the grab showed the
+    # prompt and the page arriving together ~2s later, which read as a slow
+    # first `preview`. One throwaway image here pays that off camera.
+    #
+    # It has to stay on screen: a `clear` after it puts the grab back to
+    # square one and the first beat goes to ~4.7s. `--width 12` keeps the
+    # leftover thumbnail small, which costs a little (first beat ~0.4s rather
+    # than the 42ms of the rest) but does not park a full page in frame one.
+    send $kitty $sock "pdfrum preview gradients.pdf --width 12\r"
+    sleep 1.5sec
     clear-screen $kitty $sock
 
     print "==> ffmpeg"
@@ -163,42 +180,58 @@ def main [] {
         $"echo ($bang) > ($ff_pidf)"
     ] | str join (char nl) | save -f /tmp/pdfrum-cli-ffmpeg.sh
     ^bash /tmp/pdfrum-cli-ffmpeg.sh
-    sleep 500ms
+    sleep 1sec
+    # The setup lines and the priming image are still on screen: the pre-grab
+    # clear does not reach the capture. Clear once more now that x11grab is
+    # running, so the session opens on a bare prompt.
+    clear-screen $kitty $sock
 
     # Visible session. Graphics commands stay before `view`: a later
     # `preview` in the same Kitty after the pager's alt-screen does not
     # composite into the X11 grab.
+    # Pauses are reading time, not work: a page renders in about 40ms and the
+    # framebuffer follows within a frame. Each hold is just long enough to
+    # take the frame in.
     send $kitty $sock "pdfrum preview gradients.pdf\r"
-    sleep 3.5sec
+    sleep 3.2sec
     clear-screen $kitty $sock
     send $kitty $sock "pdfrum stamp text gradients.pdf DRAFT --angle 30 --opacity 0.4 --size 72 -o stamped.pdf\r"
-    sleep 1.8sec
+    sleep 1.2sec
     clear-screen $kitty $sock
     send $kitty $sock "pdfrum preview stamped.pdf\r"
-    sleep 3.5sec
-    clear-screen $kitty $sock
-    send $kitty $sock "pdfrum view stamped.pdf\r"
-    sleep 1.2sec
-    # First Kitty placement after the alt-screen switch is sometimes blank;
-    # `0` (zoom 100%) forces a second draw of page 1.
-    key $kitty $sock "0"
-    sleep 3sec
-    key $kitty $sock "j"
-    sleep 3sec
-    key $kitty $sock "q"
-    sleep 800ms
-    clear-screen $kitty $sock
-    send $kitty $sock "pdfrum doctor damaged.pdf\r"
-    sleep 2.2sec
-    clear-screen $kitty $sock
-    send $kitty $sock "pdfrum doctor damaged.pdf --json\r"
     sleep 2.6sec
     clear-screen $kitty $sock
+    send $kitty $sock "pdfrum view stamped.pdf\r"
+    sleep 250ms
+    # The first placement after the alt-screen switch is dropped by the grab,
+    # and `0` (zoom 100%) forces the redraw that makes page 1 appear. So the
+    # wait above is the whole visible startup gap: the status bar is up and
+    # the page is not until this key lands, which reads as a slow open. Keep
+    # it short — `view` emits its first placement in ~5ms. A page turn needs
+    # no such guard: neighbours render and transmit while we wait for a key,
+    # so j/k land in a single frame.
+    key $kitty $sock "0"
+    sleep 1.5sec
+    key $kitty $sock "j"
+    sleep 1.4sec
+    key $kitty $sock "k"
+    sleep 1.2sec
+    key $kitty $sock "+"
+    sleep 1.4sec
+    key $kitty $sock "q"
+    sleep 600ms
+    clear-screen $kitty $sock
+    send $kitty $sock "pdfrum doctor damaged.pdf\r"
+    sleep 1.8sec
+    clear-screen $kitty $sock
+    send $kitty $sock "pdfrum doctor damaged.pdf --json\r"
+    sleep 2.2sec
+    clear-screen $kitty $sock
     send $kitty $sock "pdfrum search ISO paper.pdf\r"
-    sleep 2sec
+    sleep 1.6sec
     clear-screen $kitty $sock
     send $kitty $sock "pdfrum extract markdown paper.pdf --pages 1\r"
-    sleep 2.5sec
+    sleep 2sec
 
     print "==> stop"
     sleep 500ms

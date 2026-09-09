@@ -58,6 +58,30 @@ pdfrum inspect object report.pdf 12
 pdfrum completions zsh > ~/.zfunc/_pdfrum
 ```
 
+## Terminals
+
+`preview` and `view` are only supported on terminals that can show a picture.
+The mode is picked from the terminal's own announcements; `--graphics` sets it.
+
+| terminal | `--graphics` |
+|---|---|
+| kitty, Ghostty, WezTerm, Konsole | `kitty` |
+| iTerm2, VS Code, WezTerm | `iterm` |
+| any 24-bit colour terminal — Alacritty, foot, GNOME Terminal, xterm | `halfblock` |
+| a pipe, a file, `TERM=dumb` | `off` — use `render` for a PNG |
+
+The first two send a PNG, at the terminal's own resolution. Half-blocks are
+plain SGR colour, two pixels per cell, so they survive `ssh` and multiplexers.
+Under tmux the inner `TERM` still names the outer terminal, so ask for
+`halfblock` there unless APC passthrough is on.
+
+```sh
+pdfrum preview report.pdf --graphics halfblock --width 100
+```
+
+`view` is the pager: `j`/`k` for pages, `g`/`G` for first and last, `+`/`-`
+and `0` for zoom, `/` and `n` to search, `q` to quit.
+
 ## Conventions
 
 Stdout is data, stderr is commentary. `-` is stdin or stdout. `--json` is
