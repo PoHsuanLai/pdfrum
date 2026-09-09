@@ -452,7 +452,7 @@ impl Document {
         level: pdfrum_doc::PdfaLevel,
         policy: &crate::PdfaPolicy,
     ) -> Result<crate::PdfaConversion> {
-        let (conversion, bytes) = crate::pdfa::convert(self, level, *policy)?;
+        let (conversion, bytes) = convert_pdfa(self, level, *policy)?;
         if let Some(bytes) = bytes {
             std::fs::write(path.as_ref(), &bytes)?;
         }
@@ -475,7 +475,7 @@ impl Document {
         level: pdfrum_doc::PdfaLevel,
         policy: &crate::PdfaPolicy,
     ) -> Result<crate::PdfaConversion> {
-        let (conversion, bytes) = crate::pdfa::convert(self, level, *policy)?;
+        let (conversion, bytes) = convert_pdfa(self, level, *policy)?;
         if let Some(bytes) = bytes {
             out.write_all(&bytes)?;
         }
@@ -777,7 +777,7 @@ impl Document {
                 index,
                 xref_offset: section.offset,
                 is_stream: section.is_stream,
-                end: revision_end(bytes, section.offset).unwrap_or(bytes.len()),
+                end: pdfrum_parser::revision_end(bytes, section.offset).unwrap_or(bytes.len()),
             })
             .collect()
     }
@@ -988,37 +988,6 @@ pub struct Revision {
     pub end: usize,
 }
 
-/// The byte after the `%%EOF` that closes the revision whose `startxref`
-/// names `offset`.
-fn revision_end(bytes: &[u8], offset: u64) -> Option<usize> {
-    let needle = b"startxref";
-    let mut at = 0;
-    while let Some(found) = find(bytes.get(at..)?, needle) {
-        let start = at + found + needle.len();
-        let rest = bytes.get(start..)?;
-        let digits: String = rest
-            .iter()
-            .skip_while(|b| b.is_ascii_whitespace())
-            .take_while(|b| b.is_ascii_digit())
-            .map(|&b| char::from(b))
-            .collect();
-        if digits.parse::<u64>().ok() == Some(offset) {
-            let eof = find(rest, b"%%EOF")?;
-            let mut end = start + eof + b"%%EOF".len();
-            while bytes.get(end).is_some_and(|b| *b == b'\r' || *b == b'\n') {
-                end += 1;
-            }
-            return Some(end);
-        }
-        at = start;
-    }
-    None
-}
-
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
-}
-
 /// One file attached to the document.
 #[derive(Debug, Clone)]
 
@@ -1118,4 +1087,34 @@ impl Attachment<'_> {
             _ => String::new(),
         })
     }
+}
+
+/// The PDF/A conversion, with the document's `/Info` supplied as the XMP the
+/// converted file carries and diagnostics routed into the session.
+#[cfg(feature = "edit")]
+fn convert_pdfa(
+    doc: &Document,
+    level: pdfrum_doc::PdfaLevel,
+    policy: crate::PdfaPolicy,
+) -> Result<(crate::PdfaConversion, Option<Vec<u8>>)> {
+    let metadata = doc.metadata();
+    let info = pdfrum_doc::pdfa::InfoFields {
+        title: metadata.title.clone(),
+        author: metadata.author.clone(),
+        creator: metadata.creator.clone(),
+        producer: metadata.producer.clone(),
+        keywords: metadata.keywords.clone(),
+        create_date: metadata
+            .creation_date
+            .as_deref()
+            .map(pdfrum_edit::pdf_date_to_iso8601),
+        modify_date: metadata
+            .modification_date
+            .as_deref()
+            .map(pdfrum_edit::pdf_date_to_iso8601),
+    };
+    let mut diags = Diagnostics::default();
+    let out = pdfrum_edit::to_pdfa(&doc.inner, level, policy, &info, &doc.limits, &mut diags);
+    doc.note(&diags);
+    Ok(out?)
 }

@@ -7,7 +7,7 @@
 //! page's `/Contents`. The page's own streams are never rewritten, so nothing
 //! a save would otherwise lose (`pdfrum_edit`'s regeneration losses) applies
 //! to a page that is only drawn on. The coordinate space is on [`Canvas`];
-//! the resource-merging rule is on [`DocEdit::draw_page`].
+//! the resource-merging rule is on [`EditDoc::draw_page`].
 //!
 //! # There is no layout here, deliberately
 //!
@@ -18,16 +18,18 @@
 
 use std::fmt::Write as _;
 
+use crate::{ContentsShape, EmbeddedFont, EmbeddedImage, write_float, write_matrix, write_point};
 use kurbo::{Affine, BezPath, PathEl, Point, Rect, RoundedRect, Shape};
-use pdfrum_common::{Diagnostics, PageIndex};
-use pdfrum_edit::{
-    ContentsShape, EmbeddedFont, EmbeddedImage, write_float, write_matrix, write_point,
-};
+use pdfrum_common::{Diagnostics, Limits, PageIndex};
 use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, Resolve, Stream, names as pdf_names,
 };
 
-use crate::{Color, DocEdit, Error, Result};
+use crate::{EditDoc, Error};
+use peniko::Color;
+
+/// A drawing either applies or names why it could not.
+type Result<T> = core::result::Result<T, Error>;
 
 /// How a shape is painted.
 ///
@@ -381,8 +383,8 @@ pub enum Fill {
 
 /// One page's drawing surface.
 ///
-/// Handed to the closure of [`DocEdit::draw_page`] and
-/// [`DocEdit::draw_pages`]; it cannot be constructed otherwise, because a
+/// Handed to the closure of [`EditDoc::draw_page`] and
+/// [`EditDoc::draw_pages`]; it cannot be constructed otherwise, because a
 /// canvas is only meaningful against the page whose space it maps and the
 /// session whose resources it merges into.
 ///
@@ -411,7 +413,12 @@ pub struct Canvas<'a, 'b> {
     out: String,
     /// The session the resources are merged into and new objects allocated
     /// from.
-    edit: &'a mut DocEdit<'b>,
+    edit: &'a mut EditDoc<'b>,
+    /// The ceilings a font read while measuring text obeys.
+    limits: Limits,
+    /// The faces an ingested SVG's `<text>` is set in.
+    #[cfg(feature = "svg-text")]
+    fonts: crate::svg_text::SvgFonts,
     /// The resources this drawing needs, by category, under names already
     /// checked against the page's own.
     added: Vec<(&'static Name, Name, Object)>,
@@ -423,7 +430,7 @@ pub struct Canvas<'a, 'b> {
     /// What the operators are being written into.
     surface: Surface,
     /// The first error a drawing method hit. Reported once, from
-    /// [`DocEdit::draw_page`], rather than at every call.
+    /// [`EditDoc::draw_page`], rather than at every call.
     failed: Option<Error>,
 }
 
@@ -497,9 +504,9 @@ impl Canvas<'_, '_> {
     /// The page this canvas draws on, or `None` when it is compiling a Form
     /// `XObject` that no page owns yet.
     ///
-    /// A canvas handed to [`DocEdit::draw_page`] or [`DocEdit::draw_pages`]
+    /// A canvas handed to [`EditDoc::draw_page`] or [`EditDoc::draw_pages`]
     /// always answers `Some`. The `None` case is a Form `XObject` compiled
-    /// by `DocEdit::compile_svg` (feature `svg-import`), whose content
+    /// by `EditDoc::compile_svg` (feature `svg-import`), whose content
     /// belongs to no page until `Canvas::place_svg` puts it on one.
     ///
     /// ```
@@ -710,8 +717,8 @@ impl Canvas<'_, '_> {
 
     /// Draw `text` in `font` at `size`, with its baseline starting at `at`.
     ///
-    /// `font` is one this session loaded through [`DocEdit::embed_font`] or
-    /// [`DocEdit::standard_font`], so its glyphs are subset and embedded by
+    /// `font` is one this session loaded through [`EditDoc::embed_font`] or
+    /// [`EditDoc::standard_font`], so its glyphs are subset and embedded by
     /// the machinery that already does that for a saved font. A base-14 face
     /// from `standard_font` needs no embedded program.
     ///
@@ -721,7 +728,7 @@ impl Canvas<'_, '_> {
     /// # Errors
     ///
     /// A character `font` has no glyph for is an error, not a blank — the
-    /// canvas records it and [`DocEdit::draw_page`] returns it. Nothing of
+    /// canvas records it and [`EditDoc::draw_page`] returns it. Nothing of
     /// this call is written when it fails, so a refused string leaves no
     /// half-drawn run behind.
     ///
@@ -739,7 +746,7 @@ impl Canvas<'_, '_> {
     pub fn text(&mut self, text: &str, font: &EmbeddedFont, size: f64, at: Point, color: Color) {
         let codes = match font.encode_checked(text) {
             Ok(codes) => codes,
-            Err(missing) => return self.fail(pdfrum_edit::Error::from(missing).into()),
+            Err(missing) => return self.fail(Error::from(missing)),
         };
         if codes.is_empty() {
             return;
@@ -783,16 +790,23 @@ impl Canvas<'_, '_> {
         let Ok(codes) = font.encode_checked(text) else {
             return 0.0;
         };
-        self.edit.string_width(font.object(), &codes) * size / 1000.0
+        crate::string_width(
+            font.object(),
+            &codes,
+            self.edit,
+            &self.limits,
+            &mut Diagnostics::default(),
+        ) * size
+            / 1000.0
     }
 
     /// Draw `image` stretched onto `rect`.
     ///
-    /// `image` is one this session embedded through [`DocEdit::embed_jpeg`]
-    /// or [`DocEdit::embed_image`]. Nothing preserves the aspect ratio: a
+    /// `image` is one this session embedded through [`EditDoc::embed_jpeg`]
+    /// or [`EditDoc::embed_image`]. Nothing preserves the aspect ratio: a
     /// caller who wants it kept sizes `rect` from
-    /// [`EmbeddedImage::width`](pdfrum_edit::EmbeddedImage::width) and
-    /// [`EmbeddedImage::height`](pdfrum_edit::EmbeddedImage::height).
+    /// [`EmbeddedImage::width`](crate::EmbeddedImage::width) and
+    /// [`EmbeddedImage::height`](crate::EmbeddedImage::height).
     ///
     /// ```
     /// use pdfrum::Rect;
@@ -921,8 +935,8 @@ impl Canvas<'_, '_> {
     /// mutable access, because a drawing method that reached into the session
     /// past the resource machinery could add an object nothing names.
     #[cfg(feature = "svg-text")]
-    pub(crate) fn session(&self) -> &DocEdit<'_> {
-        self.edit
+    pub(crate) fn fonts(&self) -> &crate::svg_text::SvgFonts {
+        &self.fonts
     }
 
     /// Record the first failure; later ones are dropped, because the first is
@@ -1015,7 +1029,7 @@ impl Canvas<'_, '_> {
     /// rather than flattened into lines.
     fn write_path(&mut self, path: &BezPath) {
         if let Some(rect) = axis_aligned_rect(path) {
-            pdfrum_edit::write_rect(&mut self.out, rect);
+            crate::write_rect(&mut self.out, rect);
             self.out.push_str(" re");
             return;
         }
@@ -1126,7 +1140,7 @@ impl Canvas<'_, '_> {
 /// logo on twenty pages is one copy of the content and twenty references,
 /// rather than twenty copies of the content.
 ///
-/// Produced by [`DocEdit::compile_svg`] and placed by
+/// Produced by [`EditDoc::compile_svg`] and placed by
 /// [`Canvas::place_svg`](crate::Canvas::place_svg).
 /// It carries no borrow of the session that made it, so a caller compiles
 /// once and then places inside as many `draw_page` closures as they like.
@@ -1199,7 +1213,7 @@ impl Canvas<'_, '_> {
 }
 
 #[cfg(feature = "svg-import")]
-impl DocEdit<'_> {
+impl EditDoc<'_> {
     /// Compile `body`'s drawing into a Form `XObject` over `bbox`.
     ///
     /// The canvas `body` receives writes into the form's own stream and its
@@ -1207,21 +1221,26 @@ impl DocEdit<'_> {
     /// form is a fresh resource scope, which is why the placement is one
     /// object rather than a merge per page.
     ///
-    /// The shared half of [`DocEdit::compile_svg`]; it is crate-internal
+    /// The shared half of [`EditDoc::compile_svg`]; it is crate-internal
     /// because the caller-facing surface for "drawing a caller wrote once" is
-    /// [`DocEdit::draw_page`] with the caller's own closure, and a second
+    /// [`EditDoc::draw_page`] with the caller's own closure, and a second
     /// spelling of it would be an option with no reader.
     ///
     /// # Errors
     ///
-    /// Whatever `body` refused to draw, as [`DocEdit::draw_page`] reports it.
+    /// Whatever `body` refused to draw, as [`EditDoc::draw_page`] reports it.
     pub(crate) fn compile_form(
         &mut self,
         bbox: Rect,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
         body: impl FnOnce(&mut Canvas<'_, '_>),
     ) -> Result<SvgForm> {
         let mut canvas = Canvas {
             out: String::new(),
+            limits: limits.clone(),
+            #[cfg(feature = "svg-text")]
+            fonts: fonts.clone(),
             edit: self,
             added: Vec::new(),
             // A form's resource scope is its own and starts empty: there is
@@ -1253,9 +1272,7 @@ impl DocEdit<'_> {
                 Object::Int(i64::try_from(bytes.len()).unwrap_or(0)),
             ),
         ]);
-        let object = self
-            .inner
-            .add(Object::Stream(Box::new(Stream::new(dict, bytes.into()))));
+        let object = self.add(Object::Stream(Box::new(Stream::new(dict, bytes.into()))));
         Ok(SvgForm { object, bbox })
     }
 }
@@ -1372,7 +1389,7 @@ fn write_hex_string(out: &mut String, codes: &[u8]) {
     out.push('>');
 }
 
-impl DocEdit<'_> {
+impl EditDoc<'_> {
     /// Draw on page `index`, appending what `body` draws as one new content
     /// stream.
     ///
@@ -1382,7 +1399,7 @@ impl DocEdit<'_> {
     /// into the drawing and the drawing's cannot leak into the page. The
     /// page's existing streams are **not** rewritten, which is why drawing on
     /// a page costs none of the regeneration losses
-    /// [`PageEdit`](crate::PageEdit) documents.
+    /// [`PageEdit`](pdfrum_page::PageEdit) documents.
     ///
     /// # The resource-merging rule
     ///
@@ -1414,22 +1431,52 @@ impl DocEdit<'_> {
     /// # Errors
     ///
     /// Whatever `body` refused to draw — a character the font has no glyph
-    /// for, most often — and [`pdfrum_edit::Error::InlinePage`] for a page with no
+    /// for, most often — and [`Error::InlinePage`] for a page with no
     /// object of its own. Nothing is written when the drawing failed.
     pub fn draw_page(
         &mut self,
         index: impl Into<PageIndex>,
+        limits: &Limits,
+        body: impl FnOnce(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        self.draw_page_with_fonts(
+            index,
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+            body,
+        )
+    }
+
+    /// [`EditDoc::draw_page`] with the faces an ingested SVG's `<text>` is set
+    /// in; without them a `<text>` draws nothing and is reported instead.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::draw_page`].
+    pub fn draw_page_with_fonts(
+        &mut self,
+        index: impl Into<PageIndex>,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
         body: impl FnOnce(&mut Canvas<'_, '_>),
     ) -> Result<()> {
         let index = index.into();
-        let Some((reference, dict, resources)) = self.page_state(index)? else {
-            return Err(pdfrum_edit::Error::InlinePage(index).into());
+        let Some((reference, dict, resources)) = self
+            .page_state(index)
+            .map_err(|_| Error::PageIndexOutOfRange(index))?
+        else {
+            return Err(Error::InlinePage(index));
         };
-        let (to_page, size) = self.canvas_space(reference, &dict);
+        let mut diags = Diagnostics::default();
+        let (to_page, size) = self.canvas_space(reference, &dict, &mut diags);
 
-        let taken = existing_names(&resources, &self.inner);
+        let taken = existing_names(&resources, self);
         let mut canvas = Canvas {
             out: String::new(),
+            limits: limits.clone(),
+            #[cfg(feature = "svg-text")]
+            fonts: fonts.clone(),
             edit: self,
             added: Vec::new(),
             taken,
@@ -1485,14 +1532,48 @@ impl DocEdit<'_> {
     ///
     /// # Errors
     ///
-    /// As [`DocEdit::draw_page`], for the first page whose drawing failed.
-    pub fn draw_pages(&mut self, mut body: impl FnMut(&mut Canvas<'_, '_>)) -> Result<()> {
-        for index in 0..self.doc.page_count() {
+    /// As [`EditDoc::draw_page`], for the first page whose drawing failed.
+    pub fn draw_pages(
+        &mut self,
+        limits: &Limits,
+        body: impl FnMut(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        self.draw_pages_with_fonts(
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+            body,
+        )
+    }
+
+    /// [`EditDoc::draw_pages`] with the faces an ingested SVG's `<text>` is
+    /// set in.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::draw_page`], for the first page whose drawing failed.
+    pub fn draw_pages_with_fonts(
+        &mut self,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
+        mut body: impl FnMut(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        for index in 0..self.base().page_count() {
             let index = PageIndex::from(index);
-            if self.page_state(index)?.is_none() {
+            if self
+                .page_state(index)
+                .map_err(|_| Error::PageIndexOutOfRange(index))?
+                .is_none()
+            {
                 continue;
             }
-            self.draw_page(index, &mut body)?;
+            self.draw_page_with_fonts(
+                index,
+                limits,
+                #[cfg(feature = "svg-text")]
+                fonts,
+                &mut body,
+            )?;
         }
         Ok(())
     }
@@ -1503,7 +1584,12 @@ impl DocEdit<'_> {
     /// the crop box, which is the whole of the coordinate-space composition:
     /// the crop box's offset and the `/Rotate` quarter turn fall out of it
     /// together, and there is nothing else to get right.
-    fn canvas_space(&self, reference: ObjRef, dict: &Dict) -> (Affine, kurbo::Size) {
+    fn canvas_space(
+        &self,
+        reference: ObjRef,
+        dict: &Dict,
+        diags: &mut Diagnostics,
+    ) -> (Affine, kurbo::Size) {
         // The dictionary is the session's, read through the overlay, and the
         // inheritance walk goes through the overlay too — so a `/Rotate` or a
         // `/CropBox` this same session set is what the canvas is built on,
@@ -1512,21 +1598,15 @@ impl DocEdit<'_> {
             dict: dict.clone(),
             reference: Some(reference),
         };
-        let mut diags = Diagnostics::default();
-        let (_, crop) = pdfrum_page::derive_boxes(
-            &page.dict,
-            |key| page.inherited(key, &self.inner),
-            &self.inner,
-            &mut diags,
-        );
-        self.doc.note(&diags);
+        let (_, crop) =
+            pdfrum_page::derive_boxes(&page.dict, |key| page.inherited(key, self), self, diags);
         let rotate_key = Name::from("Rotate");
         let rotate = pdfrum_page::Rotation::from_degrees(
             page.dict
                 .raw(&rotate_key)
                 .cloned()
-                .or_else(|| page.inherited(&rotate_key, &self.inner))
-                .and_then(|value| value.resolve(&self.inner).ok()?.get().as_int())
+                .or_else(|| page.inherited(&rotate_key, self))
+                .and_then(|value| value.resolve(self).ok()?.get().as_int())
                 .unwrap_or(0),
         );
         let size = if rotate.quarters().is_multiple_of(2) {
@@ -1535,33 +1615,6 @@ impl DocEdit<'_> {
             kurbo::Size::new(crop.height(), crop.width())
         };
         (rotate.display_matrix(crop).inverse(), size)
-    }
-
-    /// The advance of `codes` in the font `font` names, in thousandths of an
-    /// em — the font crate's reading of the dictionary this session wrote.
-    pub(crate) fn string_width(&self, font: ObjRef, codes: &[u8]) -> f64 {
-        let mut diags = Diagnostics::default();
-        let loaded = self
-            .inner
-            .fetch(font)
-            .ok()
-            .as_deref()
-            .and_then(Object::as_dict)
-            .and_then(|dict| {
-                pdfrum_font::load(
-                    dict,
-                    &self.inner,
-                    &pdfrum_font::FontCache::new(),
-                    &self.doc.limits,
-                    &mut diags,
-                )
-            });
-        match loaded {
-            Some(metrics) => f64::from(metrics.string_width(codes)),
-            // A face with no metrics: half an em a code, the proportions of a
-            // typical Latin face, so a centred string is at least close.
-            None => 500.0 * f64::from(u32::try_from(codes.len()).unwrap_or(u32::MAX)),
-        }
     }
 
     /// Append `bytes` as one more content stream of the page `reference`
@@ -1581,11 +1634,11 @@ impl DocEdit<'_> {
             )]),
             ByteSpan::from(bytes.to_vec()),
         );
-        let fresh = self.inner.add(Object::Stream(Box::new(stream)));
+        let fresh = (*self).add(Object::Stream(Box::new(stream)));
 
-        let shape = ContentsShape::read(dict, &self.inner);
+        let shape = ContentsShape::read(dict, self);
         let (_, next) = shape.with_added(fresh);
-        let shared = pdfrum_edit::shared_objects(&self.inner);
+        let shared = crate::shared_objects(self);
 
         let mut dict = dict.clone();
         // The `/Contents` array: reused when the page owns it outright,
@@ -1599,10 +1652,10 @@ impl DocEdit<'_> {
         let contents = match dict.raw(pdf_names::CONTENTS) {
             Some(Object::Ref(existing)) if reusable => {
                 let existing = *existing;
-                self.inner.replace(existing, array);
+                (*self).replace(existing, array);
                 Object::Ref(existing)
             }
-            _ => Object::Ref(self.inner.add(array)),
+            _ => Object::Ref((*self).add(array)),
         };
         dict = with_key(&dict, pdf_names::CONTENTS, contents);
 
@@ -1612,14 +1665,14 @@ impl DocEdit<'_> {
             // share: write through it and leave the page's key alone.
             Some(Object::Ref(existing)) if !shared.contains(&existing.num) => {
                 let existing = *existing;
-                self.inner.replace(existing, Object::Dict(merged));
+                (*self).replace(existing, Object::Dict(merged));
             }
             // Shared, inline or absent: the page gets its own copy, so
             // drawing on one page cannot change another.
             _ => dict = with_key(&dict, pdf_names::RESOURCES, Object::Dict(merged)),
         }
 
-        self.inner.replace(reference, Object::Dict(dict));
+        (*self).replace(reference, Object::Dict(dict));
     }
 }
 

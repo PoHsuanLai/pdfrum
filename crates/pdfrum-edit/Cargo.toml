@@ -16,10 +16,22 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lints]
 workspace = true
 
+[features]
+default = []
+# Placing a compiled SVG form; the ingestion itself lives in the facade.
+svg-import = ["dep:usvg", "dep:png"]
+# Text in an ingested SVG, which needs the caller's font set.
+svg-text = ["svg-import", "usvg/text"]
+
 [dependencies]
 getrandom.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
+usvg = { workspace = true, optional = true }
+png = { workspace = true, optional = true }
 pdfrum-common.workspace = true
 pdfrum-crypt.workspace = true
+pdfrum-doc.workspace = true
 pdfrum-object.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-parser.workspace = true
