@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every number reaching this crate came from an untrusted file by way of
 // `pdfrum-page`: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]
