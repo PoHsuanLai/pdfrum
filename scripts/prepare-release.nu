@@ -201,9 +201,13 @@ def bump-toml [text: string, old: string, new: string]: nothing -> string {
         } else if $in_pkg and $line == $'version = "($old)"' {
             $replaced_pkg = true
             $out = $out | append $'version = "($new)"'
-        } else if ($line | str contains 'path = "') and ($line | str contains $'version = "($old)"') {
+        } else if ($line | str contains 'path = "') and (($line | str contains $'version = "($old)"') or ($line | str contains $'version = "=($old)"')) {
             $replaced_deps = $replaced_deps + 1
-            $out = $out | append ($line | str replace $'version = "($old)"' $'version = "($new)"')
+            $out = $out | append (
+                $line
+                | str replace $'version = "=($old)"' $'version = "=($new)"'
+                | str replace $'version = "($old)"' $'version = "($new)"'
+            )
         } else {
             $out = $out | append $line
         }
@@ -215,6 +219,22 @@ def bump-toml [text: string, old: string, new: string]: nothing -> string {
     if $replaced_deps == 0 {
         print --stderr $"error: did not find any path-dependency version = \"($old)\""
         exit 1
+    }
+    ($out | str join (char nl)) + (char nl)
+}
+
+def bump-member [text: string, old: string, new: string]: nothing -> string {
+    mut out = []
+    for line in ($text | lines) {
+        if ($line | str contains 'path = "') and (($line | str contains $'version = "($old)"') or ($line | str contains $'version = "=($old)"')) {
+            $out = $out | append (
+                $line
+                | str replace $'version = "=($old)"' $'version = "=($new)"'
+                | str replace $'version = "($old)"' $'version = "($new)"'
+            )
+        } else {
+            $out = $out | append $line
+        }
     }
     ($out | str join (char nl)) + (char nl)
 }
@@ -250,6 +270,18 @@ def main [
 
     if $target != $current {
         (bump-toml (open --raw Cargo.toml) $current $target) | save --force Cargo.toml
+        # A member may pin a sibling by path in its own manifest rather than
+        # inheriting the workspace version — `pdfrum-wasm` does, because cargo
+        # refuses `default-features = false` on an inherited dependency. Those
+        # rows name the version too, and a root-only bump leaves them behind.
+        for manifest in (glob crates/*/Cargo.toml) {
+            let text = open --raw $manifest
+            let bumped = bump-member $text $current $target
+            if $bumped != $text {
+                $bumped | save --force $manifest
+                print $"    ($manifest | path basename | path dirname): pinned sibling ($current) -> ($target)"
+            }
+        }
         # Path-crate versions live in the lockfile too; --locked CI reads them.
         if ("Cargo.lock" | path exists) {
             let lock = (do { ^cargo metadata --format-version 1 --offline } | complete)
