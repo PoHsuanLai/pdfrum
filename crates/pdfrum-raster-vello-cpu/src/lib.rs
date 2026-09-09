@@ -13,7 +13,7 @@
 // wrapped call does not panic, so a future `vello_cpu` that implements the
 // field cannot silently change our rounding.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod convert;
 

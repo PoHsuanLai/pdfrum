@@ -9,7 +9,7 @@
 // removes the bulk of the cases, and the harness turns a residual drop into a
 // hard failure rather than a quiet drift.
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod convert;
 

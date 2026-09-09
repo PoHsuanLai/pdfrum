@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Every position in this crate is derived from an untrusted file's layout:
 // index with `get()`.
 #![warn(clippy::indexing_slicing)]

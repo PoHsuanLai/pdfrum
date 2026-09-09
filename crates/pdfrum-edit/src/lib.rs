@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // Everything here is written *from* untrusted input: index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
