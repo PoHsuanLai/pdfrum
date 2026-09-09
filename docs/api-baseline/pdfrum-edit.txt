@@ -137,7 +137,9 @@ pub fn pdfrum_edit::Dash::phase(&self) -> f64
 pub struct pdfrum_edit::EditDoc<'a>
 impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::draw_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_common::limits::Limits, impl core::ops::function::FnOnce(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::draw_page_with_fonts(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_common::limits::Limits, impl core::ops::function::FnOnce(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::draw_pages(&mut self, &pdfrum_common::limits::Limits, impl core::ops::function::FnMut(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::draw_pages_with_fonts(&mut self, &pdfrum_common::limits::Limits, impl core::ops::function::FnMut(&mut pdfrum_edit::Canvas<'_, '_>)) -> core::result::Result<(), pdfrum_edit::Error>
 impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_font(&mut self, &[u8], pdfrum_edit::FontEncoding) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>

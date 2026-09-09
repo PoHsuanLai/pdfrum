@@ -565,13 +565,18 @@ impl<'a> DocEdit<'a> {
         svg: &str,
         resources_dir: Option<&std::path::Path>,
     ) -> crate::Result<(pdfrum_edit::SvgForm, pdfrum_edit::SvgIngestReport)> {
-        Ok(self.inner.compile_svg_from(
+        #[cfg(feature = "svg-text")]
+        let out = self.inner.compile_svg_from_with_fonts(
             svg,
             resources_dir,
             &self.doc.limits,
-            #[cfg(feature = "svg-text")]
             &self.svg_fonts,
-        )?)
+        );
+        #[cfg(not(feature = "svg-text"))]
+        let out = self
+            .inner
+            .compile_svg_from(svg, resources_dir, &self.doc.limits);
+        Ok(out?)
     }
 
     /// Draw on page `index` with a [`Canvas`](crate::Canvas).
@@ -589,13 +594,13 @@ impl<'a> DocEdit<'a> {
         index: impl Into<pdfrum_common::PageIndex>,
         body: impl FnOnce(&mut pdfrum_edit::Canvas<'_, '_>),
     ) -> crate::Result<()> {
-        Ok(self.inner.draw_page(
-            index,
-            &self.doc.limits,
-            #[cfg(feature = "svg-text")]
-            &self.svg_fonts,
-            body,
-        )?)
+        #[cfg(feature = "svg-text")]
+        let out = self
+            .inner
+            .draw_page_with_fonts(index, &self.doc.limits, &self.svg_fonts, body);
+        #[cfg(not(feature = "svg-text"))]
+        let out = self.inner.draw_page(index, &self.doc.limits, body);
+        Ok(out?)
     }
 
     /// Draw on every page, one canvas each.
@@ -610,12 +615,13 @@ impl<'a> DocEdit<'a> {
         &mut self,
         body: impl FnMut(&mut pdfrum_edit::Canvas<'_, '_>),
     ) -> crate::Result<()> {
-        Ok(self.inner.draw_pages(
-            &self.doc.limits,
-            #[cfg(feature = "svg-text")]
-            &self.svg_fonts,
-            body,
-        )?)
+        #[cfg(feature = "svg-text")]
+        let out = self
+            .inner
+            .draw_pages_with_fonts(&self.doc.limits, &self.svg_fonts, body);
+        #[cfg(not(feature = "svg-text"))]
+        let out = self.inner.draw_pages(&self.doc.limits, body);
+        Ok(out?)
     }
 
     /// Adds `bytes` as an embedded file named `name`, and returns its index.

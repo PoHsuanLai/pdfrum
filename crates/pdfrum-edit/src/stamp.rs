@@ -372,7 +372,7 @@ impl EditDoc<'_> {
     /// ```
     /// use pdfrum::{Document, SaveOptions, StampOptions, StampPosition};
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.stamp_text(
     ///     "DRAFT",
@@ -437,7 +437,7 @@ impl EditDoc<'_> {
     /// ```
     /// use pdfrum::{Document, PixelFormat, SaveOptions, StampOptions};
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// // A two-by-one image: red, then blue.
     /// let image = edit.embed_image(&[255, 0, 0, 0, 0, 255], 2, 1, PixelFormat::Rgb8)?;

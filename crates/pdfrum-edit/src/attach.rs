@@ -349,7 +349,7 @@ pub fn delete_attachment(edit: &mut EditDoc<'_>, limits: &Limits, index: usize) 
 /// ```
 /// use pdfrum::{AttachmentOptions, Document, SaveOptions};
 ///
-/// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+/// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 /// let mut edit = doc.edit();
 /// edit.add_attachment(
 ///     "notes.txt",
@@ -419,7 +419,7 @@ pub fn add_attachment(
 /// ```
 /// use pdfrum::Document;
 ///
-/// let doc = Document::open("../pdfrum/tests/fixtures/embedded_attachments.pdf")?;
+/// let doc = Document::open("tests/fixtures/embedded_attachments.pdf")?;
 /// let mut edit = doc.edit();
 /// assert!(edit.remove_attachment("1.txt")?);
 /// assert!(!edit.remove_attachment("1.txt")?, "already gone");

@@ -474,7 +474,7 @@ impl Canvas<'_, '_> {
     /// is the whole visible page.
     ///
     /// ```
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     assert!(c.size().width > 0.0);
@@ -489,7 +489,7 @@ impl Canvas<'_, '_> {
     /// The whole visible page, as a rectangle in canvas coordinates.
     ///
     /// ```
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     assert_eq!(c.bounds().origin(), pdfrum::Point::ZERO);
@@ -510,7 +510,7 @@ impl Canvas<'_, '_> {
     /// belongs to no page until `Canvas::place_svg` puts it on one.
     ///
     /// ```
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_pages(|c| assert!(c.page().is_some_and(|p| u32::from(p) < 2)))?;
     /// # Ok::<(), pdfrum::Error>(())
@@ -534,7 +534,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Paint, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.saved(|c| {
@@ -561,7 +561,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Affine, Color, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.saved(|c| {
@@ -584,7 +584,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Fill, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.saved(|c| c.clip(Rect::new(10.0, 10.0, 90.0, 90.0), Fill::NonZero));
@@ -604,7 +604,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.fill(Rect::new(0.0, 0.0, 50.0, 50.0), Color::from_rgb8(0, 0, 255));
@@ -620,7 +620,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.fill_rect(Rect::new(0.0, 0.0, 50.0, 50.0), Color::BLACK);
@@ -636,7 +636,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.fill_rounded_rect(Rect::new(0.0, 0.0, 80.0, 30.0), 6.0, Color::BLACK);
@@ -652,7 +652,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Rect, Stroke};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.stroke(Rect::new(0.0, 0.0, 50.0, 50.0), Stroke::new(Color::BLACK, 1.0));
@@ -669,7 +669,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Point, Stroke};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     let y = c.size().height - 50.0;
@@ -691,7 +691,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Fill, Paint, Rect, Stroke};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.draw(
@@ -735,7 +735,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Point, StandardFont};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// let font = edit.standard_font(StandardFont::Helvetica)?;
     /// edit.draw_page(0, |c| {
@@ -777,7 +777,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::StandardFont;
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// let font = edit.standard_font(StandardFont::Helvetica)?;
     /// edit.draw_page(0, |c| {
@@ -811,9 +811,9 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::Rect;
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
-    /// let logo = edit.embed_jpeg(include_bytes!("../../pdfrum/tests/fixtures/mona_lisa.jpg"))?;
+    /// let logo = edit.embed_jpeg(include_bytes!("../tests/fixtures/mona_lisa.jpg"))?;
     /// edit.draw_page(0, |c| {
     ///     c.image(&logo, Rect::new(20.0, 20.0, 80.0, 80.0));
     /// })?;
@@ -844,7 +844,7 @@ impl Canvas<'_, '_> {
     /// ```
     /// use pdfrum::{Color, Rect};
     ///
-    /// let doc = pdfrum::Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     c.saved(|c| {
@@ -1414,7 +1414,7 @@ impl EditDoc<'_> {
     /// ```
     /// use pdfrum::{Color, Document, Point, SaveOptions, StandardFont};
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// let font = edit.standard_font(StandardFont::Helvetica)?;
     /// edit.draw_page(0, |c| {
@@ -1434,6 +1434,27 @@ impl EditDoc<'_> {
     /// for, most often — and [`Error::InlinePage`] for a page with no
     /// object of its own. Nothing is written when the drawing failed.
     pub fn draw_page(
+        &mut self,
+        index: impl Into<PageIndex>,
+        limits: &Limits,
+        body: impl FnOnce(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        self.draw_page_with_fonts(
+            index,
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+            body,
+        )
+    }
+
+    /// [`EditDoc::draw_page`] with the faces an ingested SVG's `<text>` is set
+    /// in; without them a `<text>` draws nothing and is reported instead.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::draw_page`].
+    pub fn draw_page_with_fonts(
         &mut self,
         index: impl Into<PageIndex>,
         limits: &Limits,
@@ -1496,7 +1517,7 @@ impl EditDoc<'_> {
     /// ```
     /// use pdfrum::{Color, Document, SaveOptions, Stroke, Point};
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_pages(|c| {
     ///     let y = c.size().height - 40.0;
@@ -1515,6 +1536,25 @@ impl EditDoc<'_> {
     pub fn draw_pages(
         &mut self,
         limits: &Limits,
+        body: impl FnMut(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        self.draw_pages_with_fonts(
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+            body,
+        )
+    }
+
+    /// [`EditDoc::draw_pages`] with the faces an ingested SVG's `<text>` is
+    /// set in.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::draw_page`], for the first page whose drawing failed.
+    pub fn draw_pages_with_fonts(
+        &mut self,
+        limits: &Limits,
         #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
         mut body: impl FnMut(&mut Canvas<'_, '_>),
     ) -> Result<()> {
@@ -1527,7 +1567,7 @@ impl EditDoc<'_> {
             {
                 continue;
             }
-            self.draw_page(
+            self.draw_page_with_fonts(
                 index,
                 limits,
                 #[cfg(feature = "svg-text")]

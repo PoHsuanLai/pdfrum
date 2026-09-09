@@ -380,7 +380,7 @@ impl Canvas<'_, '_> {
     ///     viewBox=\"0 0 10 10\">\
     ///     <circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"#c00\"/></svg>";
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// edit.draw_page(0, |c| {
     ///     let report = c.draw_svg(LOGO, Rect::new(40.0, 40.0, 140.0, 140.0), SvgFit::Contain);
@@ -453,7 +453,7 @@ impl Canvas<'_, '_> {
     ///     viewBox=\"0 0 10 10\">\
     ///     <circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"#c00\"/></svg>";
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world_2_pages.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world_2_pages.pdf")?;
     /// let mut edit = doc.edit();
     /// let (logo, report) = edit.compile_svg(LOGO)?;
     /// assert!(report.is_empty());
@@ -507,7 +507,7 @@ impl crate::EditDoc<'_> {
     ///     viewBox=\"0 0 10 10\">\
     ///     <rect width=\"10\" height=\"10\" fill=\"#0a0\"/></svg>";
     ///
-    /// let doc = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// let (logo, _) = edit.compile_svg(LOGO)?;
     /// assert_eq!(logo.bbox().width(), 10.0);
@@ -519,7 +519,7 @@ impl crate::EditDoc<'_> {
         limits: &Limits,
         #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
     ) -> Result<(crate::canvas::SvgForm, SvgIngestReport)> {
-        self.compile_svg_from(
+        self.compile_svg_from_with_fonts(
             svg,
             None,
             limits,
@@ -541,6 +541,27 @@ impl crate::EditDoc<'_> {
     ///
     /// As [`DocEdit::compile_svg`](crate::EditDoc::compile_svg).
     pub fn compile_svg_from(
+        &mut self,
+        svg: &str,
+        resources_dir: Option<&std::path::Path>,
+        limits: &Limits,
+    ) -> Result<(crate::canvas::SvgForm, SvgIngestReport)> {
+        self.compile_svg_from_with_fonts(
+            svg,
+            resources_dir,
+            limits,
+            #[cfg(feature = "svg-text")]
+            &crate::svg_text::SvgFonts::new(),
+        )
+    }
+
+    /// [`EditDoc::compile_svg_from`] with the faces the SVG's `<text>` is set
+    /// in; without them a `<text>` draws nothing and is reported instead.
+    ///
+    /// # Errors
+    ///
+    /// As [`EditDoc::compile_svg_from`].
+    pub fn compile_svg_from_with_fonts(
         &mut self,
         svg: &str,
         resources_dir: Option<&std::path::Path>,

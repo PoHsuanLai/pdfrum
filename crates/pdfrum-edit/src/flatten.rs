@@ -535,13 +535,13 @@ fn flatten_one(
 /// ```
 /// use pdfrum::{Document, FlattenMode, Flattened, SaveOptions};
 ///
-/// let doc = Document::open("../pdfrum/tests/fixtures/annotiter.pdf")?;
+/// let doc = Document::open("tests/fixtures/annotiter.pdf")?;
 /// let mut edit = doc.edit();
 /// assert_eq!(edit.flatten(0, FlattenMode::Display)?, Flattened::Done);
 /// let mut flat = Vec::new();
 /// edit.write_to(&mut flat, &SaveOptions::default())?;
 ///
-/// let plain = Document::open("../pdfrum/tests/fixtures/hello_world.pdf")?;
+/// let plain = Document::open("tests/fixtures/hello_world.pdf")?;
 /// assert_eq!(plain.edit().flatten(0, FlattenMode::Display)?, Flattened::NothingToDo);
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
