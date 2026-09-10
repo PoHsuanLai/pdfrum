@@ -9,7 +9,7 @@
 //! Complements are against 256, so a constant region is an identity. Taking
 //! them against 255 would darken every sample by two levels.
 
-use kurbo::{Affine, Point, Rect};
+use kurbo::{Affine, Rect};
 
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION};
 use crate::path::{IntRect, closest_rect};
@@ -59,6 +59,31 @@ pub fn map_sheared(
         left: setup.result.left,
         top: setup.result.top,
     })
+}
+
+/// Reverse-map an 8-bit coverage plane through the same dest-space loop.
+#[must_use]
+pub fn map_sheared_coverage(
+    plane: &[u8],
+    width: u32,
+    height: u32,
+    unit_matrix: Affine,
+    clip: IntRect,
+    pass1: ImageQuality,
+) -> Option<(crate::pixmap::AlphaMask, i32, i32)> {
+    let mut src = Pixmap::new(width, height);
+    let w = width as usize;
+    for (i, &coverage) in plane.iter().enumerate() {
+        let x = u32::try_from(i % w).ok()?;
+        let y = u32::try_from(i / w).ok()?;
+        src.set_pixel(x, y, [coverage, coverage, coverage, coverage]);
+    }
+    let mapped = map_sheared(&src, unit_matrix, clip, pass1)?;
+    Some((
+        mapped.pixels.alpha_mask(),
+        mapped.left,
+        mapped.top,
+    ))
 }
 
 struct Setup {
@@ -112,22 +137,26 @@ impl Setup {
     }
 
     fn sample(&self, col: i32, row: i32) -> Option<Tap> {
-        let device = Point::new(
-            f64::from(col.checked_add(self.result.left)?),
-            f64::from(row.checked_add(self.result.top)?),
-        );
-        let p = self.dest_to_stretch * device;
-        if !p.x.is_finite() || !p.y.is_finite() {
-            return None;
-        }
-        // 8.8: round the matrix to 256ths, add half a stretched pixel, then
-        // split into a source index and a 0..256 residue.
-        let fx = (p.x * 256.0).round();
-        let fy = (p.y * 256.0).round();
-        let src_col = trunc_i32(fx / 256.0)?;
-        let src_row = trunc_i32(fy / 256.0)?;
-        let mut res_x = rem_256(fx)?;
-        let mut res_y = rem_256(fy)?;
+        // Dest-bitmap (col, row) through the 8.8 matrix that already includes
+        // the result origin, plus half a stretched pixel.
+        let origin = Affine::translate((
+            f64::from(self.result.left),
+            f64::from(self.result.top),
+        ));
+        let [sx, kx, ky, sy, tx, ty] = (self.dest_to_stretch * origin).as_coeffs();
+        let coeff = |v: f64| trunc_i32((v * 256.0).round());
+        let fx = i64::from(coeff(sx)?) * i64::from(col)
+            + i64::from(coeff(ky)?) * i64::from(row)
+            + i64::from(coeff(tx)?)
+            + 128;
+        let fy = i64::from(coeff(kx)?) * i64::from(col)
+            + i64::from(coeff(sy)?) * i64::from(row)
+            + i64::from(coeff(ty)?)
+            + 128;
+        let src_col = i32::try_from(fx / 256).ok()?;
+        let src_row = i32::try_from(fy / 256).ok()?;
+        let mut res_x = i32::try_from(fx % 256).ok()?;
+        let mut res_y = i32::try_from(fy % 256).ok()?;
         if res_x < 0 && res_x > -256 {
             res_x += 256;
         }
@@ -209,15 +238,6 @@ fn trunc_i32(v: f64) -> Option<i32> {
         reason = "the range check keeps the value inside i32"
     )]
     Some(t as i32)
-}
-
-fn rem_256(fixed: f64) -> Option<i32> {
-    let n = trunc_i32(fixed)?;
-    let mut r = n % 256;
-    if r < 0 && r > -256 {
-        r += 256;
-    }
-    Some(r)
 }
 
 fn clamp_edge(v: i32, len: i32) -> i32 {

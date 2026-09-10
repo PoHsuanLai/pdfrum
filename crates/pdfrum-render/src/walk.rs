@@ -2471,6 +2471,88 @@ fn draw_sheared_image<D: RenderDevice>(
     true
 }
 
+/// Dest-space reverse-map of a base and its independent mask.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the mask plane is a separate resolution from the base"
+)]
+fn draw_sheared_masked<D: RenderDevice>(
+    ctx: &RenderCtx<'_>,
+    device: &mut D,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+    device_box: Rect,
+    mask_dict: &pdfrum_page::ImageData,
+    mask_plane: &[u8],
+) -> bool {
+    if !takes_other_transform(matrix) {
+        return false;
+    }
+    let image = &object.image;
+    let Some((hypot_w, hypot_h)) = crate::shear::hypot_size(matrix) else {
+        return false;
+    };
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let base = to_pixmap(image, fill, transfer.as_ref());
+    if base.width() == 0 || base.height() == 0 {
+        return false;
+    }
+    let pass1 = resample_quality(
+        image,
+        &ctx.opts,
+        image.width,
+        image.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let mask_q = resample_quality(
+        mask_dict,
+        &ctx.opts,
+        mask_dict.width,
+        mask_dict.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let clip = outer_rect(device_box);
+    let Some(mapped) = crate::shear::map_sheared(&base, matrix, clip, pass1) else {
+        return false;
+    };
+    let Some((mask, mx, my)) = crate::shear::map_sheared_coverage(
+        mask_plane,
+        mask_dict.width,
+        mask_dict.height,
+        matrix,
+        clip,
+        mask_q,
+    ) else {
+        return false;
+    };
+    if mx != mapped.left
+        || my != mapped.top
+        || mask.width() != mapped.pixels.width()
+        || mask.height() != mapped.pixels.height()
+    {
+        return false;
+    }
+    let mut pixels = mapped.pixels;
+    fold_mask_and_blit(
+        device,
+        image,
+        state,
+        &mut pixels,
+        &mask,
+        mapped.left,
+        mapped.top,
+    );
+    true
+}
+
 /// `/Matte`, or a mask on a grid of its own, is a separate dest-space mask
 /// multiply. A colour-key `/Mask` stays fused.
 fn uses_draw_masked_image(image: &pdfrum_page::ImageData) -> bool {
@@ -2513,6 +2595,18 @@ fn render_masked_image<B: RasterBackend>(
         return;
     };
     let matrix = to_device * object.matrix;
+    if draw_sheared_masked(
+        ctx,
+        device,
+        object,
+        state,
+        matrix,
+        device_box,
+        &mask_dict,
+        &mask_plane,
+    ) {
+        return;
+    }
     let bbox = matrix
         .transform_rect_bbox(unit_rect())
         .intersect(device_box);
