@@ -36,6 +36,7 @@ pair, rebuilt from scratch; the other ten generalize the same skeleton.
 | `tt_sjis_and_unicode.ttf` | 484 | 6 | `(3,1)` fmt 4, `(3,2)` fmt 4 | U+002E → 1; 0x889F → 3 |
 | `tt_named_no_cmap.ttf` | 376 | 3 | *(no `cmap` table)* | — |
 | `tt_composite_instructions.ttf` | 460 | 4 | `(3,1)` fmt 4 | U+002E → 1 |
+| `tt_hint_reliant.ttf` | 512 | 4 | `(3,1)` fmt 4 | U+002E → 1 |
 
 `tt_custom_40.ttf` exists so a test can assert that *neither* Windows nor Mac
 platform support is detected: platform 4 is neither. `tt_named_no_cmap.ttf`
@@ -49,6 +50,12 @@ glyph 2 a two-component composite of it with no instruction stream, and glyph 3
 the same composite carrying one instruction byte (`0x4B`, `MIAP[0]`) behind
 `WE_HAVE_INSTRUCTIONS`. Both composites place their components by plain
 translation.
+
+`tt_hint_reliant.ttf` holds those same glyphs under a `name` table declaring
+the family `DFKai-SB`, which is on FreeType's hardcoded list of faces whose
+outlines are wrong unless the interpreter runs. It is the only fixture with a
+`name` table, and the pair differs in nothing else, so a test that compares the
+two is reading the family name and not the glyphs.
 
 **How to regenerate them.** From the workspace root:
 
