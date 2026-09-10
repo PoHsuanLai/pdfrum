@@ -153,6 +153,11 @@ pub struct Face {
     /// the lock across clones, so two fonts substituted onto one face pay for
     /// the interpreter once between them.
     hinting: Arc<OnceLock<Option<HintingInstance>>>,
+    /// Whether this face is one whose outlines are wrong without the
+    /// interpreter, memoized because answering digs through the `name` table
+    /// and may checksum tables — `skrifa` documents it as slow enough to
+    /// cache, and it is asked once per glyph drawn.
+    hint_reliant: Arc<OnceLock<bool>>,
     /// Glyph name → the first glyph id carrying it, built on the first name
     /// lookup. A simple font with `/Differences` looks up hundreds of names
     /// against one face; scanning the `post` table per name was quadratic.
@@ -200,6 +205,7 @@ impl fmt::Debug for Face {
             .field("is_truetype", &self.is_truetype)
             .field("charmaps", &self.charmaps)
             .field("hinting", &self.hinting.get().map(Option::is_some))
+            .field("hint_reliant", &self.hint_reliant.get())
             .field("names", &self.names.get().map(HashMap::len))
             .field(
                 "advances",
@@ -256,6 +262,7 @@ impl Face {
             is_truetype,
             charmaps,
             hinting: Arc::default(),
+            hint_reliant: Arc::default(),
             names: Arc::default(),
             advances: Arc::default(),
             boxes: Arc::default(),
@@ -283,6 +290,7 @@ impl Face {
             is_truetype: false,
             charmaps: vec![CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM],
             hinting: Arc::default(),
+            hint_reliant: Arc::default(),
             names: Arc::default(),
             advances: Arc::default(),
             boxes: Arc::default(),
@@ -601,6 +609,7 @@ impl Face {
                     return None;
                 }
                 let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+                let outlines = font.outline_glyphs();
                 // `Engine::Interpreter` rather than the default
                 // `AutoFallback`: the autofitter is compiled out of the
                 // oracle's FreeType (`ftmodule.h`), so a face with no
@@ -609,13 +618,30 @@ impl Face {
                 // never applies. `Target::Smooth`'s default `Normal` mode is
                 // `FT_RENDER_MODE_NORMAL`, which is what `RenderGlyph` selects
                 // by passing no `FT_LOAD_TARGET_*` at all.
+                //
+                // Except for a **hint-reliant** face, which takes `Mono`.
+                // Smooth is subpixel-positioned, and its backward-compatibility
+                // rules exist to stop a legacy program from moving points
+                // across the x axis — which is precisely what these faces'
+                // programs are *for*. A stroke-assembled CJK face stores its
+                // strokes off-canvas and moves them into place from `fpgm`, so
+                // suppressing that movement leaves the strokes piled where they
+                // were stored and the glyph unreadable. `Mono` runs the program
+                // as written, which is what `skrifa` documents for the faces
+                // `require_interpreter` selects and what the oracle gets by
+                // passing no load target at all.
+                let target = if outlines.require_interpreter() {
+                    HintingTarget::Mono
+                } else {
+                    HintingTarget::default()
+                };
                 HintingInstance::new(
-                    &font.outline_glyphs(),
+                    &outlines,
                     Size::new(Self::HINT_PPEM),
                     LocationRef::default(),
                     HintingOptions {
                         engine: HintingEngine::Interpreter,
-                        target: HintingTarget::default(),
+                        target,
                     },
                 )
                 .ok()
@@ -623,34 +649,28 @@ impl Face {
             .as_ref()
     }
 
-    /// Whether `gid` is a composite glyph that carries its own instructions.
+    /// Whether this face's outlines are wrong without the interpreter.
     ///
-    /// Such a glyph is only partly described by its component offsets: the
-    /// bytecode moves the components into their final places, so the
-    /// translations alone put them somewhere the design never intended. A
-    /// face that builds its glyphs this way — stroke-assembled CJK faces are
-    /// the usual example — needs the interpreter run before its outlines mean
-    /// anything, which is what [`GlyphSource::outline`] uses this to decide.
+    /// FreeType's `FT_FACE_FLAG_TRICKY`, which it sets for a hardcoded list of
+    /// faces — a handful of stroke-assembled CJK families — whose glyphs are
+    /// *assembled* by their bytecode rather than merely fitted to a grid by
+    /// it. The strokes are stored off-canvas and the `fpgm` program moves them
+    /// into place, so an unhinted outline of one is not a coarser rendering of
+    /// the glyph but a pile of misplaced strokes.
     ///
-    /// `false` for a simple glyph, for a composite with no instructions, and
-    /// for every face with no `glyf` table at all.
-    ///
-    /// [`GlyphSource::outline`]: super::GlyphSource::outline
+    /// The oracle reads the same flag to decide the same thing: `LoadGlyphPath`
+    /// adds `FT_LOAD_NO_HINTING` unless `IsTtOt() && IsTricky()`
+    /// (`cfx_face.cpp:882`), which is the *only* case where its path side is
+    /// hinted at all.
     #[must_use]
-    pub(crate) fn composite_is_instructed(&self, gid: Gid) -> bool {
-        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
-            return false;
-        };
-        let (Ok(glyf), Ok(loca)) = (font.glyf(), font.loca(None)) else {
-            return false;
-        };
-        let raw = read_fonts::types::GlyphId::new(u32::from(gid.0));
-        match loca.get_glyf(raw, &glyf) {
-            Ok(Some(read_fonts::tables::glyf::Glyph::Composite(c))) => {
-                c.count_and_instructions().1.is_some_and(|i| !i.is_empty())
+    pub(crate) fn is_hint_reliant(&self) -> bool {
+        *self.hint_reliant.get_or_init(|| {
+            if self.backend != Backend::Sfnt {
+                return false;
             }
-            _ => false,
-        }
+            skrifa::FontRef::from_index(&self.bytes, self.index)
+                .is_ok_and(|font| font.outline_glyphs().require_interpreter())
+        })
     }
 
     /// A glyph's outline in **font units**, unhinted.
