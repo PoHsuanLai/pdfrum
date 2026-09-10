@@ -18,7 +18,7 @@ use pdfrum_page::{
 use crate::color::Argb;
 use crate::device::ImageQuality;
 use crate::options::RenderOptions;
-use crate::pixmap::{Pixmap, mul255};
+use crate::pixmap::{AlphaMask, Pixmap, mul255, unpremultiply_rgb};
 
 /// Above this many bytes, bilinear interpolation is forced on unless
 /// halftoning was requested.
@@ -652,6 +652,48 @@ pub fn matte_source(sample: [u8; 3], mask: u8, matte: [u8; 3]) -> [u8; 3] {
     out
 }
 
+/// Fold a stretched coverage plane into a stretched dest, as `DrawMaskedImage`
+/// does after both planes have been resampled to the device.
+///
+/// The dest is our premultiplied buffer; the oracle dest is straight and
+/// opaque. Recover the sample's own colour first, optionally undo `/Matte`
+/// against that colour, then **replace** alpha with the mask and premultiply.
+/// Scaling the dest's existing alpha by the mask would count the rasterizer's
+/// coverage of the base twice — once in dest A, again in the mask.
+///
+/// A dest pixel the base never wrote (`A = 0`) is left transparent: there is
+/// no sample to recover. A zero mask clears the pixel.
+pub fn apply_stretched_mask(pixels: &mut Pixmap, mask: &AlphaMask, matte: Option<[u8; 3]>) {
+    if mask.width() != pixels.width() || mask.height() != pixels.height() {
+        return;
+    }
+    for (chunk, &coverage) in pixels
+        .data_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(mask.data())
+    {
+        let dest_a = chunk[3];
+        if dest_a == 0 {
+            continue;
+        }
+        let straight = unpremultiply_rgb(chunk[0], chunk[1], chunk[2], dest_a);
+        let rgb = match matte {
+            Some(matte) => matte_source(straight, coverage, matte),
+            None => straight,
+        };
+        if coverage == 0 {
+            *chunk = [0, 0, 0, 0];
+            continue;
+        }
+        chunk[0] = mul255(rgb[0], coverage);
+        chunk[1] = mul255(rgb[1], coverage);
+        chunk[2] = mul255(rgb[2], coverage);
+        chunk[3] = coverage;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pdfrum_page::GeneralState;
@@ -1266,6 +1308,53 @@ mod tests {
         assert_eq!(matte_source([255, 255, 255], 1, [0, 0, 0]), [255, 255, 255]);
         // And one far below undershoots 0.
         assert_eq!(matte_source([0, 0, 0], 1, [255, 255, 255]), [0, 0, 0]);
+    }
+
+    #[test]
+    fn an_opaque_dest_times_a_mask_replaces_alpha_then_premultiplies() {
+        // Dest A is 255, so un-premultiply is the identity and the mask
+        // becomes A. RGB scales by the mask.
+        let mut pixels = Pixmap::filled(1, 1, peniko::Color::from_rgba8(10, 20, 30, 255));
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 128), None);
+        assert_eq!(
+            pixels.pixel(0, 0),
+            Some([mul255(10, 128), mul255(20, 128), mul255(30, 128), 128])
+        );
+    }
+
+    #[test]
+    fn a_partial_dest_recovers_straight_colour_before_the_mask() {
+        // Premul red at dest A 128 is (128, 0, 0, 128). The mask is 64.
+        // Scaling dest A by the mask would yield A 64 and RGB 64. Recovering
+        // the sample first yields straight (255, 0, 0), then A 64, RGB 64.
+        let mut pixels = Pixmap::from_vec(1, 1, vec![128, 0, 0, 128]).expect("one pixel");
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 64), None);
+        assert_eq!(pixels.pixel(0, 0), Some([64, 0, 0, 64]));
+    }
+
+    #[test]
+    fn a_dest_the_base_never_wrote_stays_transparent() {
+        let mut pixels = Pixmap::new(1, 1);
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 200), None);
+        assert_eq!(pixels.pixel(0, 0), Some([0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn matte_runs_on_the_recovered_sample_not_the_premul_bytes() {
+        // Premul (50, 0, 0, 128) is straight (100, 0, 0). Matte 0, mask 128:
+        // (100-0)*255/128 + 0 = 199, then premul by 128.
+        let mut pixels = Pixmap::from_vec(1, 1, vec![50, 0, 0, 128]).expect("one pixel");
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 128), Some([0, 0, 0]));
+        let recovered = matte_source([100, 0, 0], 128, [0, 0, 0]);
+        assert_eq!(
+            pixels.pixel(0, 0),
+            Some([
+                mul255(recovered[0], 128),
+                mul255(recovered[1], 128),
+                mul255(recovered[2], 128),
+                128
+            ])
+        );
     }
 
     #[test]

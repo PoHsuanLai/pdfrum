@@ -28,13 +28,14 @@ use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDev
 use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
 use crate::image::{
-    color_as_fill_mask, effective_quality, overprint_blend, resample_quality_at, to_pixmap,
+    apply_stretched_mask, color_as_fill_mask, effective_quality, overprint_blend,
+    resample_quality_at, to_pixmap,
 };
 use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
-use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding, alpha_byte_truncating};
+use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
 use crate::shading;
 use crate::text::{has_face, paint_kinds, stroke_text_matrices};
 use crate::transfer::TransferFunc;
@@ -2517,13 +2518,15 @@ fn render_masked_image<B: RasterBackend>(
         1.0,
     );
     let mask = backend.finish(mask_target).alpha_mask();
-    // `DrawMaskedImage` un-premultiplies the *stretched* dest with the
-    // *stretched* mask, then multiplies coverage. Doing it at source is
-    // what missed `bug_1395648`'s `/Matte [0 0.2 1]`.
     if let Some(matte) = image.matte {
-        apply_matte_after_stretch(&mut pixels, &mask, matte.to_bytes());
+        // Dest RGB is premultiplied; `/Matte` reads it as a straight sample.
+        // Recover the colour, un-premultiply against the stretched mask, then
+        // let the mask replace dest alpha — scaling dest A by the mask would
+        // count the base's coverage twice.
+        apply_stretched_mask(&mut pixels, &mask, Some(matte.to_bytes()));
+    } else {
+        pixels.multiply_alpha_mask(&mask);
     }
-    pixels.multiply_alpha_mask(&mask);
 
     let blend = overprint_blend(image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
@@ -2538,26 +2541,6 @@ fn render_masked_image<B: RasterBackend>(
     );
     if layered {
         device.pop();
-    }
-}
-
-/// Un-premultiply stretched samples against `/Matte`, using the stretched
-/// mask as coverage (`DrawMaskedImage`).
-fn apply_matte_after_stretch(pixels: &mut Pixmap, mask: &AlphaMask, matte: [u8; 3]) {
-    if mask.width() != pixels.width() || mask.height() != pixels.height() {
-        return;
-    }
-    for (chunk, &coverage) in pixels
-        .data_mut()
-        .as_chunks_mut::<4>()
-        .0
-        .iter_mut()
-        .zip(mask.data())
-    {
-        let rgb = crate::image::matte_source([chunk[0], chunk[1], chunk[2]], coverage, matte);
-        chunk[0] = rgb[0];
-        chunk[1] = rgb[1];
-        chunk[2] = rgb[2];
     }
 }
 
