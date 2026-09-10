@@ -243,6 +243,24 @@ fn a_cid_to_gid_stream_is_a_big_endian_u16_table() {
 }
 
 #[test]
+fn an_indirect_cid_to_gid_identity_still_reads_as_the_identity_mapping() {
+    // `GetDirectObjectFor` resolves the reference before looking at the type
+    // (`core/fpdfapi/parser/cpdf_dictionary.cpp:89-93`), so the name behind
+    // `/CIDToGIDMap 1 0 R` reaches the `IsName()` test in
+    // `core/fpdfapi/font/cpdf_cidfont.cpp:507-518` unchanged.
+    let mut store = TestStore::new();
+    let name = store.add(Object::Name(Name::from("Identity")));
+    let desc = embedded_descendant(
+        &mut store,
+        "CIDFontType2",
+        vec![(names::CID_TO_GID_MAP, name)],
+    );
+    let d = type0(Object::Name(Name::from("Identity-H")), desc, vec![]);
+    let f = load_with(&d, &store).expect("loads");
+    assert_eq!(f.cid_to_gid, CidToGid::Identity);
+}
+
+#[test]
 fn cid_to_gid_identity_needs_an_embedded_program() {
     // Named `/Identity` *without* a program is not the Identity mapping — the
     // C++ guards the assignment on `font_file_`.

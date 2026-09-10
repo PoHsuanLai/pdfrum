@@ -409,6 +409,166 @@ def make_font(
 
 
 # --------------------------------------------------------------------------
+# a CID-keyed CFF, bare and wrapped in an OpenType shell
+# --------------------------------------------------------------------------
+#
+# FreeType's CFF driver maps a CID through the charset whenever the font is
+# CID-keyed, with no condition on how the program is packaged
+# (`third_party/freetype/src/src/cff/cffgload.c:222-236`), so the same program
+# is emitted twice: bare, and inside an `OTTO` shell. A test given only the
+# bare form could not tell the two packagings apart.
+
+CFF_CIDS = [0, 4000, 4001]  # glyph i holds CID CFF_CIDS[i]
+
+
+def cff_index(items: list[bytes]) -> bytes:
+    """A CFF INDEX: count, offset size, offsets, then the concatenated data."""
+    if not items:
+        return struct.pack(">H", 0)
+    offsets = [1]
+    for item in items:
+        offsets.append(offsets[-1] + len(item))
+    off_size = 1 if offsets[-1] < 0x100 else (2 if offsets[-1] < 0x10000 else 4)
+    out = struct.pack(">HB", len(items), off_size)
+    for off in offsets:
+        out += off.to_bytes(off_size, "big")
+    return out + b"".join(items)
+
+
+def cff_int(value: int) -> bytes:
+    """A DICT integer operand, always in the five-byte `29` spelling.
+
+    Fixed width on purpose: the top DICT holds offsets into a layout whose
+    sizes depend on the DICT, and a constant-size operand makes that circle
+    close in one step instead of iterating.
+    """
+    return b"\x1d" + struct.pack(">i", value)
+
+
+def cff_op(code: int) -> bytes:
+    """A DICT operator: one byte, or `12 x` for the escaped set."""
+    return bytes([code]) if code < 0x100 else bytes([12, code & 0xFF])
+
+
+def cs_int(value: int) -> bytes:
+    """A Type 2 charstring integer operand, in the five-byte `255` fixed form
+    shifted back to an integer — legal for every value we emit."""
+    return b"\xff" + struct.pack(">i", value << 16)
+
+
+def cff_charstring(width: int, box: int) -> bytes:
+    """A Type 2 charstring drawing a `box`-unit square `width` units wide.
+
+    The leading odd operand of the first stack-clearing operator is the
+    advance width, which is how a bare CFF carries metrics at all.
+    """
+    return (
+        cs_int(width)
+        + cs_int(0)
+        + bytes([21])  # rmoveto
+        + cs_int(box)
+        + bytes([6])  # hlineto
+        + cs_int(box)
+        + bytes([7])  # vlineto
+        + cs_int(-box)
+        + bytes([6])  # hlineto
+        + bytes([14])  # endchar
+    )
+
+
+def make_cid_cff() -> bytes:
+    """A three-glyph CID-keyed CFF whose CIDs are nowhere near its glyph ids.
+
+    Charset format 0 lists the CID of every glyph but the first, which is
+    always CID 0. `ROS` plus the FDArray/FDSelect pair is what makes a reader
+    call the font CID-keyed.
+    """
+    name_index = cff_index([b"CidTest"])
+    string_index = cff_index([b"Adobe", b"Identity"])
+    # SIDs 0..390 are the standard strings; ours start after them.
+    sid_adobe, sid_identity = 391, 392
+
+    charstrings = cff_index(
+        [cff_charstring(500 + 100 * i, 200 + 100 * i) for i in range(len(CFF_CIDS))]
+    )
+    charset = b"\x00" + b"".join(struct.pack(">H", c) for c in CFF_CIDS[1:])
+    # FDSelect format 3: one range covering every glyph, mapped to font dict 0.
+    fdselect = struct.pack(">BHHBH", 3, 1, 0, 0, len(CFF_CIDS))
+    # defaultWidthX 0, nominalWidthX 0 — so a charstring's width operand is
+    # the advance as written.
+    private = cff_int(0) + cff_op(20) + cff_int(0) + cff_op(21)
+    header = bytes([1, 0, 4, 4])
+    empty_subrs = cff_index([])
+
+    def top_dict(charset_off, fdselect_off, charstrings_off, fdarray_off):
+        return (
+            cff_int(sid_adobe)
+            + cff_int(sid_identity)
+            + cff_int(0)
+            + cff_op(0x100 | 30)  # ROS
+            + cff_int(max(CFF_CIDS) + 1)
+            + cff_op(0x100 | 34)  # CIDCount
+            + cff_int(charset_off)
+            + cff_op(15)  # charset
+            + cff_int(charstrings_off)
+            + cff_op(17)  # CharStrings
+            + cff_int(fdarray_off)
+            + cff_op(0x100 | 36)  # FDArray
+            + cff_int(fdselect_off)
+            + cff_op(0x100 | 37)  # FDSelect
+        )
+
+    def font_dict(private_off):
+        return cff_index([cff_int(len(private)) + cff_int(private_off) + cff_op(18)])
+
+    # Sizes are fixed regardless of the operand values, so one probe pass with
+    # zeroes measures the layout and the second pass writes the real offsets.
+    top_len = len(cff_index([top_dict(0, 0, 0, 0)]))
+    fdarray_len = len(font_dict(0))
+    pos = len(header) + len(name_index) + top_len + len(string_index) + len(empty_subrs)
+    charset_off = pos
+    pos += len(charset)
+    fdselect_off = pos
+    pos += len(fdselect)
+    charstrings_off = pos
+    pos += len(charstrings)
+    fdarray_off = pos
+    pos += fdarray_len
+    private_off = pos
+
+    # The four fixed INDEXes come in this order and no other: Name, Top DICT,
+    # String, Global Subr (CFF spec, table 2).
+    return (
+        header
+        + name_index
+        + cff_index([top_dict(charset_off, fdselect_off, charstrings_off, fdarray_off)])
+        + string_index
+        + empty_subrs
+        + charset
+        + fdselect
+        + charstrings
+        + font_dict(private_off)
+        + private
+    )
+
+
+def wrap_cff_in_sfnt(cff: bytes, num_glyphs: int) -> bytes:
+    """Put a CFF program inside an `OTTO` shell — how a CIDFontType0 reaches a
+    PDF when it is embedded as `/FontFile3` with `/Subtype /OpenType`."""
+    tables = {
+        "CFF ": cff,
+        "head": make_head(),
+        "hhea": make_hhea(num_glyphs),
+        "hmtx": make_hmtx(num_glyphs),
+        "maxp": make_maxp(num_glyphs),
+        "post": make_post_v3(),
+    }
+    sfnt = bytearray(build_sfnt(tables))
+    sfnt[0:4] = b"OTTO"
+    return bytes(sfnt)
+
+
+# --------------------------------------------------------------------------
 # the fixture catalogue
 # --------------------------------------------------------------------------
 
@@ -495,6 +655,9 @@ def fixtures() -> dict[str, bytes]:
         make_cmap([(3, 1, fmt4_unicode), (3, 2, cmap_format4_table(SJIS_MAP))]),
         post3,
     )
+    cid_cff = make_cid_cff()
+    out["cid_keyed.cff"] = cid_cff
+    out["cid_keyed_otto.otf"] = wrap_cff_in_sfnt(cid_cff, len(CFF_CIDS))
     out["tt_named_no_cmap.ttf"] = make_font(
         3, {1, 2}, None, make_post_v2([".notdef", "A", "B"])
     )
