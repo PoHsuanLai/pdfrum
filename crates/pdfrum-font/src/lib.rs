@@ -39,7 +39,9 @@ pub use cid::{CidTransform, Type0Font, cid_transform_to_float};
 pub use encoding::FaceEncoding;
 pub use encoding::adobe_name_from_unicode;
 pub use error::Error;
-pub use glyphs::{Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource, em_adjust};
+pub use glyphs::{
+    Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource, SynthGlyph, em_adjust,
+};
 pub use ids::{CharCode, Cid, FontFlags, FontId, Gid};
 pub use simple::SimpleFont;
 pub use subst::{
