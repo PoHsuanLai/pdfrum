@@ -2195,6 +2195,7 @@ dependencies = [
  "pdfrum",
  "pdfrum-common",
  "pdfrum-corpus",
+ "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
  "pdfrum-raster-agg",

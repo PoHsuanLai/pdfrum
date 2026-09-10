@@ -225,6 +225,52 @@ pub trait RasterBackend {
 
     /// Consume the device, yielding its premultiplied RGBA8 pixels.
     fn finish(&self, d: Self::Device) -> Pixmap;
+
+    /// [`snapshot`][Self::snapshot] cropped to `(origin_x, origin_y, width, height)`.
+    ///
+    /// The default is a full snapshot and a host crop. A retained-scene GPU
+    /// backend still has to rasterize the scene so far — that is the
+    /// structural cost — but can copy only this rectangle off the device,
+    /// which is the whole of a non-isolated group's backdrop.
+    ///
+    /// ```
+    /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
+    /// use pdfrum_render::RasterBackend;
+    ///
+    /// let backend = VelloCpuBackend::new();
+    /// let device = backend.new_target(4, 4, peniko::Color::WHITE);
+    /// let crop = backend.snapshot_rect(&device, 1, 1, 2, 2);
+    /// assert_eq!((crop.width(), crop.height()), (2, 2));
+    /// ```
+    fn snapshot_rect(
+        &self,
+        d: &Self::Device,
+        origin_x: u32,
+        origin_y: u32,
+        width: u32,
+        height: u32,
+    ) -> Pixmap {
+        self.snapshot(d).cropped(origin_x, origin_y, width, height)
+    }
+
+    /// Whether isolated groups should composite as native layers instead of
+    /// an offscreen pixmap round trip.
+    ///
+    /// The pixmap path is the CPU goldens: `finish`, `multiply_alpha_mask`,
+    /// `remove_backdrop`. Native layers skip that host stall, which is the
+    /// GPU win, but they are not bit-identical to the pixmap arithmetic —
+    /// so the default is `false` and only a backend that has opted in (the
+    /// GPU one) takes it. CPU backends keep the board still.
+    ///
+    /// ```
+    /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
+    /// use pdfrum_render::RasterBackend;
+    ///
+    /// assert!(!VelloCpuBackend::new().composite_isolated_groups_as_layers());
+    /// ```
+    fn composite_isolated_groups_as_layers(&self) -> bool {
+        false
+    }
 }
 
 /// The largest render target either backend accepts in one axis.

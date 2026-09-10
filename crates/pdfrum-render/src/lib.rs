@@ -70,7 +70,10 @@ pub use device::{
 pub use error::Error;
 pub use options::{ColorMode, ColorScheme, RenderOptions, TextAa};
 pub use pixmap::{AlphaMask, Pixmap};
-pub use walk::{RenderSession, needs_alpha_background, render_page, render_page_with};
+pub use walk::{
+    RenderSession, needs_alpha_background, render_page, render_page_to_device,
+    render_page_to_device_with, render_page_with,
+};
 
 /// A decoded image as a pixmap, composed the way a page draw would compose
 /// it: its mask applied, its matte removed, a stencil painted black.

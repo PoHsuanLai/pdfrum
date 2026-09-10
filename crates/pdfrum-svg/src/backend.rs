@@ -335,6 +335,22 @@ impl<B: RasterBackend> RasterBackend for SvgBackend<'_, B> {
         self.inner.snapshot(&d.inner)
     }
 
+    fn snapshot_rect(
+        &self,
+        d: &Self::Device,
+        origin_x: u32,
+        origin_y: u32,
+        width: u32,
+        height: u32,
+    ) -> Pixmap {
+        self.inner
+            .snapshot_rect(&d.inner, origin_x, origin_y, width, height)
+    }
+
+    fn composite_isolated_groups_as_layers(&self) -> bool {
+        self.inner.composite_isolated_groups_as_layers()
+    }
+
     fn finish(&self, d: Self::Device) -> Pixmap {
         if let Role::Offscreen(seen) = d.role {
             lock(&d.shared).pending.push(seen);

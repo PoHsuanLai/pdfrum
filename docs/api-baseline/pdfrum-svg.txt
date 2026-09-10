@@ -25,10 +25,12 @@ pub fn pdfrum_svg::SvgBackend<'a, B>::into_svg(self) -> (alloc::string::String, 
 pub fn pdfrum_svg::SvgBackend<'a, B>::new(&'a B) -> Self
 impl<B: pdfrum_render::device::RasterBackend> pdfrum_render::device::RasterBackend for pdfrum_svg::SvgBackend<'_, B>
 pub type pdfrum_svg::SvgBackend<'_, B>::Device = pdfrum_svg::SvgDevice<<B as pdfrum_render::device::RasterBackend>::Device>
+pub fn pdfrum_svg::SvgBackend<'_, B>::composite_isolated_groups_as_layers(&self) -> bool
 pub fn pdfrum_svg::SvgBackend<'_, B>::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_svg::SvgBackend<'_, B>::new_target(&self, u32, u32, peniko::Color) -> Self::Device
 pub fn pdfrum_svg::SvgBackend<'_, B>::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
 pub fn pdfrum_svg::SvgBackend<'_, B>::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_svg::SvgBackend<'_, B>::snapshot_rect(&self, &Self::Device, u32, u32, u32, u32) -> pdfrum_render::pixmap::Pixmap
 pub struct pdfrum_svg::SvgDevice<D>
 impl<D: pdfrum_render::device::RenderDevice> pdfrum_render::device::RenderDevice for pdfrum_svg::SvgDevice<D>
 pub fn pdfrum_svg::SvgDevice<D>::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
