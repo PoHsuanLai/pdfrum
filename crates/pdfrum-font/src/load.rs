@@ -569,8 +569,9 @@ impl Font {
         }
     }
 
-    /// The Arial stand-in `GetCharPosList` draws when [`should_use_own_glyph`]
-    /// fails. Created on first miss; `None` if even Arial failed to load.
+    /// The Arial stand-in `GetCharPosList` draws when
+    /// [`Self::should_use_own_glyph`] fails. Created on first miss; `None` if
+    /// even Arial failed to load.
     #[must_use]
     pub fn glyph_fallback(&self) -> Option<&crate::GlyphFallback> {
         match self {
