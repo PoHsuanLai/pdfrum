@@ -27,6 +27,26 @@ and [`VelloBackend::device_fault`] reports a lost device after the fact.
 renderer of their own; [`try_real_gpu`] says whether the adapter is hardware
 or a software fallback.
 
+## When to use this backend
+
+The GPU path is for a **viewer or editor that already holds a `wgpu::Device`**
+and wants the page as a texture to composite, pan, and zoom. That caller
+records with [`pdfrum_render::render_page_to_device`] and presents with
+[`VelloBackend::render_to_view`] — no `map_async`, no host pixmap. The view
+must be `Rgba8Unorm` with `STORAGE_BINDING`; a swapchain image is almost
+never that, so [`VelloBackend::render_to_texture`] is the intermediate.
+
+It is the wrong default for a CLI, a thumbnailer, wasm, or anything that
+needs a CPU `Pixmap`. Those stay on `vello_cpu`. GPU rasterization also
+loses on small text-heavy pages: every glyph is still a scene image, and
+the CPU SIMD rasterizer is faster at that. It wins on heavy vector,
+shading, and large images, and it wins on the present path whenever
+staying on the GPU avoids a readback the embedder would only re-upload.
+
+[`pdfrum_render::RasterBackend::finish`] still exists and still readbacks —
+that is the CPU-shaped path, and [`VelloBackend::roundtrip_stats`] counts
+how many of those a page took. The G3 bench reports both columns.
+
 Tier C: not bit-reproducible across GPUs, not the facade default, not on the
 conformance board. Facade feature `vello-gpu`, never a default dependency.
 

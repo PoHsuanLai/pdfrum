@@ -243,6 +243,46 @@ impl Pixmap {
         self.data
     }
 
+    /// A sub-rectangle of this pixmap.
+    ///
+    /// Bytes outside this pixmap are left transparent. Used to lift a
+    /// non-isolated group's backdrop out of a parent snapshot without a
+    /// second GPU round trip's worth of host pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut src = Pixmap::new(4, 2);
+    /// src.set_pixel(1, 0, [1, 2, 3, 255]);
+    /// let out = src.cropped(1, 0, 2, 1);
+    /// assert_eq!(out.pixel(0, 0), Some([1, 2, 3, 255]));
+    /// assert_eq!(out.pixel(1, 0), Some([0, 0, 0, 0]));
+    /// ```
+    #[must_use]
+    pub fn cropped(&self, x: u32, y: u32, width: u32, height: u32) -> Self {
+        let mut out = Self::new(width, height);
+        if width == 0 || height == 0 || x >= self.width || y >= self.height {
+            return out;
+        }
+        let copy_w = width.min(self.width - x);
+        let copy_h = height.min(self.height - y);
+        let n = (copy_w as usize).saturating_mul(4);
+        for row in 0..copy_h {
+            let src_i = ((y.saturating_add(row) as usize) * (self.width as usize) + (x as usize))
+                .saturating_mul(4);
+            let dst_i = (row as usize)
+                .saturating_mul(width as usize)
+                .saturating_mul(4);
+            if let (Some(src), Some(dst)) = (
+                self.data.get(src_i..src_i.saturating_add(n)),
+                out.data.get_mut(dst_i..dst_i.saturating_add(n)),
+            ) {
+                dst.copy_from_slice(src);
+            }
+        }
+        out
+    }
+
     /// The premultiplied RGBA bytes of one pixel, or `None` when out of range.
     ///
     /// ```
@@ -1182,6 +1222,18 @@ mod tests {
         let before = group.clone();
         group.remove_backdrop(&Pixmap::filled(3, 3, peniko::Color::BLACK));
         assert_eq!(group, before);
+    }
+
+    #[test]
+    fn cropped_lifts_a_sub_rectangle_and_pads_the_rest() {
+        let mut src = Pixmap::new(4, 2);
+        src.set_pixel(1, 0, [1, 2, 3, 255]);
+        src.set_pixel(2, 0, [4, 5, 6, 255]);
+        let out = src.cropped(1, 0, 3, 1);
+        assert_eq!(out.pixel(0, 0), Some([1, 2, 3, 255]));
+        assert_eq!(out.pixel(1, 0), Some([4, 5, 6, 255]));
+        assert_eq!(out.pixel(2, 0), Some([0, 0, 0, 0]));
+        assert_eq!(src.cropped(8, 0, 1, 1).pixel(0, 0), Some([0, 0, 0, 0]));
     }
 
     #[test]

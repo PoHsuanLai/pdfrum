@@ -8,7 +8,11 @@
 #
 # Walks `crates/*/tests/*.rs` in nushell so the gate does not need `rg`.
 
-const PINNED = 33
+# 33 plus six GPU tests for roundtrip counters, texture pooling, present
+# without readback, isolated-group layers, snapshot_rect, and masked layers.
+# Same skip as the rest of `pdfrum-raster-vello/tests/gpu.rs`: no adapter
+# returns, and the Linux GPU job runs them on lavapipe.
+const PINNED = 39
 const NEEDLE = 'else { return'
 
 def main [] {
