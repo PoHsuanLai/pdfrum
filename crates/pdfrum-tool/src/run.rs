@@ -376,12 +376,12 @@ fn open_facade(bytes: &Arc<[u8]>, load: &LoadOptions, needed: bool) -> Option<pd
 /// and each field's `/AA` actually run and rewrite the appearances the PNG
 /// path then draws. `with_context` is `NoScripts` and would leave those
 /// actions silent (`bug_1445426`, `bug_1447268`).
+#[cfg(feature = "javascript")]
 fn form_session<'a>(
     facade: Option<&'a pdfrum::Document>,
     options: &Options,
     ctx: &mut BuildContext,
 ) -> Option<pdfrum::FormSession<'a>> {
-    #[cfg(feature = "javascript")]
     let mut session = if options.send_events {
         facade.and_then(|facade| {
             let config = match options.time {
@@ -393,13 +393,19 @@ fn form_session<'a>(
     } else {
         facade.map(|facade| pdfrum::FormSession::with_context(facade, ctx))
     };
-    #[cfg(not(feature = "javascript"))]
-    let session = facade.map(|facade| pdfrum::FormSession::with_context(facade, ctx));
-    #[cfg(feature = "javascript")]
     if let Some(session) = session.as_mut() {
         session.open_document();
     }
     session
+}
+
+#[cfg(not(feature = "javascript"))]
+fn form_session<'a>(
+    facade: Option<&'a pdfrum::Document>,
+    _options: &Options,
+    ctx: &mut BuildContext,
+) -> Option<pdfrum::FormSession<'a>> {
+    facade.map(|facade| pdfrum::FormSession::with_context(facade, ctx))
 }
 
 /// Visits the selected pages, dumping each one.
