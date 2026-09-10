@@ -312,6 +312,10 @@ pub struct LiveInput<'a> {
     /// inside the script; the host spends it here so the regenerated
     /// appearance sees the new style and the file is left alone.
     pub border_style: Option<BorderStyle>,
+    /// Vertically centre each list row in its plate (`SetAlignmentV(1)`).
+    /// The stored list-box appearance stacks from the top; a combo popup
+    /// is a `CPWL_ListBox` and centres.
+    pub center_rows: bool,
 }
 
 /// The same again, for a widget a form session is currently editing.
@@ -357,6 +361,7 @@ pub(crate) fn generate_with_live<R: Resolve>(
             substitute: None,
             appearance_state: None,
             border_style: None,
+            center_rows: false,
         },
     )
 }
@@ -457,6 +462,7 @@ fn build<R: Resolve>(
             r,
             input.caret_and_selection,
             input.live,
+            input.center_rows,
         )
     });
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());

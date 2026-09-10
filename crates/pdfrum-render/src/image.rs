@@ -382,7 +382,13 @@ impl<'a> RowFinish<'a> {
         transfer: Option<&'a crate::transfer::TransferFunc<'a>>,
     ) -> Self {
         Self {
-            fused: image.mask.as_ref().filter(|m| is_coregistered(m, image)),
+            // A `/Matte` SMask is un-premultiplied *after* both planes are
+            // stretched (`DrawMaskedImage`). Folding it here would sample the
+            // mask at source and skip that path.
+            fused: image
+                .mask
+                .as_ref()
+                .filter(|m| image.matte.is_none() && is_coregistered(m, image)),
             stencil: image.samples.is_stencil().then_some(stencil_color),
             matte: image.matte.map(pdfrum_page::Rgb::to_bytes),
             // A stencil takes the transfer function through its *colour*
@@ -1263,9 +1269,10 @@ mod tests {
     }
 
     #[test]
-    fn a_matte_image_un_premultiplies_before_the_mask_becomes_alpha() {
-        // Half-covered mid grey pre-blended against black: the source colour
-        // was twice as bright as the sample, and the mask is still the alpha.
+    fn a_matte_image_is_not_un_premultiplied_at_source() {
+        // `DrawMaskedImage` un-premultiplies after both planes are stretched.
+        // Folding `/Matte` into the source pixmap would sample the mask at
+        // source and skip that path (`bug_1395648`).
         let img = ImageData {
             width: 1,
             height: 1,
@@ -1281,17 +1288,7 @@ mod tests {
             family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
-        // (64 - 0) * 255 / 128 + 0 = 127, premultiplied by 128/255 = 63.
-        let source = u8::try_from(64 * 255 / 128).expect("in range");
-        assert_eq!(
-            p.pixel(0, 0),
-            Some([
-                mul255(source, 128),
-                mul255(source, 128),
-                mul255(source, 128),
-                128
-            ])
-        );
+        assert_eq!(p.pixel(0, 0), Some([64, 64, 64, 255]));
     }
 
     #[test]

@@ -129,6 +129,7 @@ pub fn push_popup<R: Resolve>(
             substitute: fonts.substitute(pdfrum_font::Charset::Hebrew),
             appearance_state: None,
             border_style: None,
+            center_rows: true,
         },
     ) else {
         return;
@@ -233,8 +234,13 @@ pub fn push_scrollbar<R: Resolve>(
     }
 }
 
-/// The bar's page-space rectangle: the 12-unit strip inside the widget's
+/// The bar's **page-space** rectangle: the 12-unit strip inside the widget's
 /// client, inset 1 unit from the right as `RepositionChildWnd` does.
+///
+/// `client_rect` is appearance space (the widget box at the origin). Mapping
+/// through [`pdfrum_doc::geom::match_rect`] is what `push_popup` already
+/// does with a page-space destination — without it the bar lands at y≈0
+/// instead of inside `/Rect`, which is `scrollable_widgets1`.
 fn scrollbar_rect<R: Resolve>(widget: &Dict, r: &R) -> Option<kurbo::Rect> {
     let client = ap::field_body::client_rect(widget, r);
     let right = pdfrum_doc::geom::right(client);
@@ -245,9 +251,25 @@ fn scrollbar_rect<R: Resolve>(widget: &Dict, r: &R) -> Option<kurbo::Rect> {
         right - SCROLLBAR_RIGHT_INSET,
         pdfrum_doc::geom::top(client),
     );
-    let width = pdfrum_doc::geom::width(bar);
-    let height = pdfrum_doc::geom::height(bar);
-    (width > 0.0 && height > 0.0).then_some(bar)
+    if pdfrum_doc::geom::width(bar) <= 0.0 || pdfrum_doc::geom::height(bar) <= 0.0 {
+        return None;
+    }
+    let page = widget.rect(pdfrum_object::names::RECT, r);
+    let rotation = ap::widget::widget_rotation(widget, r);
+    let (ap_w, ap_h) = if rotation.swaps_axes() {
+        (
+            pdfrum_doc::geom::height(page),
+            pdfrum_doc::geom::width(page),
+        )
+    } else {
+        (
+            pdfrum_doc::geom::width(page),
+            pdfrum_doc::geom::height(page),
+        )
+    };
+    let ap_box = pdfrum_doc::geom::rect(0.0, 0.0, ap_w, ap_h);
+    let matrix = pdfrum_doc::geom::match_rect(pdfrum_doc::geom::normalize(page), ap_box);
+    Some(pdfrum_doc::geom::transform_rect(matrix, bar))
 }
 
 /// The bar as a form whose bbox sits at the origin.

@@ -34,7 +34,7 @@ use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
-use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
+use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding, alpha_byte_truncating};
 use crate::shading;
 use crate::text::{has_face, paint_kinds, stroke_text_matrices};
 use crate::transfer::TransferFunc;
@@ -2184,14 +2184,7 @@ fn render_image<B: RasterBackend>(
         );
         return;
     }
-    // `DrawMaskedImage`: a mask on a grid of its own is stretched to the
-    // device by itself rather than through the base's samples.
-    if object
-        .image
-        .mask
-        .as_ref()
-        .is_some_and(|m| !crate::image::is_coregistered(m, &object.image))
-    {
+    if uses_draw_masked_image(&object.image) {
         render_masked_image(ctx, device, backend, object, state, to_device, device_box);
         return;
     }
@@ -2333,6 +2326,16 @@ fn image_placement(
     }
 }
 
+/// `/Matte`, or a mask on a grid of its own, is `DrawMaskedImage`. A colour-key
+/// `/Mask` stays fused — C++ bakes it into the DIB (`bug_1395648`).
+fn uses_draw_masked_image(image: &pdfrum_page::ImageData) -> bool {
+    image.matte.is_some()
+        || image
+            .mask
+            .as_ref()
+            .is_some_and(|m| !crate::image::is_coregistered(m, image))
+}
+
 /// Paint an image whose mask has a resolution of its own.
 ///
 /// A mask is **never resolution-reduced**, so its
@@ -2447,7 +2450,14 @@ fn render_masked_image<B: RasterBackend>(
         effective_quality(mask_q, mask_placement),
         1.0,
     );
-    pixels.multiply_alpha_mask(&backend.finish(mask_target).alpha_mask());
+    let mask = backend.finish(mask_target).alpha_mask();
+    // `DrawMaskedImage` un-premultiplies the *stretched* dest with the
+    // *stretched* mask, then multiplies coverage. Doing it at source is
+    // what missed `bug_1395648`'s `/Matte [0 0.2 1]`.
+    if let Some(matte) = image.matte {
+        apply_matte_after_stretch(&mut pixels, &mask, matte.to_bytes());
+    }
+    pixels.multiply_alpha_mask(&mask);
 
     let blend = overprint_blend(image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
@@ -2462,6 +2472,26 @@ fn render_masked_image<B: RasterBackend>(
     );
     if layered {
         device.pop();
+    }
+}
+
+/// Un-premultiply stretched samples against `/Matte`, using the stretched
+/// mask as coverage (`DrawMaskedImage`).
+fn apply_matte_after_stretch(pixels: &mut Pixmap, mask: &AlphaMask, matte: [u8; 3]) {
+    if mask.width() != pixels.width() || mask.height() != pixels.height() {
+        return;
+    }
+    for (chunk, &coverage) in pixels
+        .data_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(mask.data())
+    {
+        let rgb = crate::image::matte_source([chunk[0], chunk[1], chunk[2]], coverage, matte);
+        chunk[0] = rgb[0];
+        chunk[1] = rgb[1];
+        chunk[2] = rgb[2];
     }
 }
 

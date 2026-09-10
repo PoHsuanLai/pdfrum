@@ -446,11 +446,31 @@ impl<'a> FormSession<'a> {
         doc: &'a Document,
         config: &pdfrum_form::ScriptConfig,
     ) -> Result<FormSession<'a>, crate::ScriptBuildError> {
+        Self::with_scripts_in(doc, config, &mut BuildContext::new())
+    }
+
+    /// [`FormSession::with_scripts`] through a caller-owned [`BuildContext`].
+    ///
+    /// Use this when the same substitution must serve both the page walk and
+    /// the scripts: `--send-events` renders appearances the session rewrote,
+    /// so a second context would resolve `/Arial` to a different face than
+    /// the bitmap is drawn with.
+    ///
+    /// # Errors
+    ///
+    /// Only if `boa` cannot build a context at all, which no document can
+    /// cause.
+    #[cfg(feature = "javascript")]
+    pub fn with_scripts_in(
+        doc: &'a Document,
+        config: &pdfrum_form::ScriptConfig,
+        ctx: &mut BuildContext,
+    ) -> Result<FormSession<'a>, crate::ScriptBuildError> {
         let cascade = pdfrum_form::ScriptCascade::new(config)?;
         let mut session = FormSession::build_with(
             doc,
             Inner::new(),
-            &mut BuildContext::new(),
+            ctx,
             Cascades::Scripted(Box::new(cascade)),
         );
         session.install_document_model();
@@ -848,6 +868,17 @@ impl<'a> FormSession<'a> {
     ) -> Vec<(pdfrum_form::AnnotId, pdfrum_form::ScrollView)> {
         self.with_page(page, |inner, ctx| {
             pdfrum_form::scroll_views_on_page(inner, ctx)
+        })
+    }
+
+    /// Live appearances for every widget on `page` that this session holds
+    /// state for — the `FPDF_FFLDraw` snapshot, not the event-delta list.
+    pub fn appearances_for_page(
+        &mut self,
+        page: impl Into<PageIndex>,
+    ) -> Vec<pdfrum_form::AppearanceUpdate> {
+        self.with_page(page, |inner, ctx| {
+            pdfrum_form::appearances_on_page(inner, ctx)
         })
     }
 

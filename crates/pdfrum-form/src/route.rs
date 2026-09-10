@@ -314,6 +314,7 @@ fn generate_border_only<R: Resolve>(
                 substitute,
                 appearance_state: None,
                 border_style: Some(style),
+                center_rows: false,
             },
         )
     })
@@ -561,7 +562,12 @@ fn mouse_up<R: Resolve>(
     ) {
         // `SetFocusAnnot` first, `OnButtonUp` second
         // (`cffl_interactiveformfiller.cpp:213-250`) — so a document with
-        // both scripts alerts `focus` and then `up`.
+        // both scripts alerts `focus` and then `up`. A mouseup-first `.evt`
+        // (`bug_1447268`) never sent the down that `mouse_down` focuses on,
+        // so the release has to take the keyboard itself.
+        if let Some(widget) = ctx.widget(id) {
+            let _ = take_focus(session, ctx, cascade, FocusTarget::Widget(widget.field, id));
+        }
         fire_pointer(session, ctx, cascade, id, PointerTrigger::Focus, modifiers);
         fire_pointer(session, ctx, cascade, id, PointerTrigger::Up, modifiers);
     }
@@ -3205,6 +3211,23 @@ fn appearance_of<R: Resolve>(
     Some(AppearanceUpdate::new(id, kind))
 }
 
+/// Every widget on this page that has session state, as `FPDF_FFLDraw`
+/// would paint it: the live editor if focused, the committed appearance
+/// otherwise.
+///
+/// Event deltas alone miss an `/OpenAction` `setFocus` that never produced a
+/// later click (`bug_1445426`, `bug_1447268`).
+pub fn appearances_on_page<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+) -> Vec<AppearanceUpdate> {
+    ctx.page
+        .widgets
+        .iter()
+        .filter_map(|widget| appearance_of(session, ctx, widget.field, widget.id))
+        .collect()
+}
+
 /// Generates a widget's appearance stream for its current interaction state.
 ///
 /// The whole seam between appearance generation and interaction, and it is
@@ -3254,6 +3277,7 @@ fn generate<R: Resolve>(
                 substitute,
                 appearance_state: as_override.map(str::as_bytes),
                 border_style,
+                center_rows: false,
             },
         )
     })

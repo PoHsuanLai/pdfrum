@@ -509,11 +509,16 @@ pub fn decode_image<R: Resolve>(
         other => other,
     };
 
-    let matte = matte_color(
-        stream.dict.array(names::MATTE, r).as_ref(),
-        space.as_ref(),
-        usize::try_from(info.components).unwrap_or(0),
-    );
+    // `/Matte` lives on the **soft-mask** stream, not the base (`cpdf_dib.cpp`
+    // reads `mask->GetDict()->GetArrayFor("Matte")`). `bug_1395648` names
+    // `[0 0.2 1]` on a 50×50 `/SMask`; looking on the base always missed it.
+    let matte = stream.dict.stream(names::SMASK, r).and_then(|smask| {
+        matte_color(
+            smask.dict.array(names::MATTE, r).as_ref(),
+            space.as_ref(),
+            usize::try_from(info.components).unwrap_or(0),
+        )
+    });
 
     Ok(ImageData {
         width,
