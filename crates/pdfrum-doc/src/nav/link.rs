@@ -61,8 +61,10 @@ impl Link {
     /// )]);
     /// use pdfrum_doc::geom;
     ///
-    /// let links = page_links(&page, &NoResolve);
-    /// let link = links[0].as_ref().expect("a link at index 0");
+    /// let link = page_links(&page, &NoResolve)
+    ///     .next()
+    ///     .flatten()
+    ///     .expect("a link at index 0");
     /// // Not normalized: the numbers are the ones the file wrote.
     /// assert_eq!(link.rect(&NoResolve), geom::rect(0.0, 700.0, 200.0, 780.0));
     /// ```
@@ -144,23 +146,22 @@ impl Link {
 /// )]);
 ///
 /// // One slot per `/Annots` entry, so an index here is an annotation index.
-/// let links = page_links(&page, &NoResolve);
+/// let mut links = page_links(&page, &NoResolve);
 /// assert_eq!(links.len(), 1);
-/// assert!(links[0].is_some());
+/// assert!(links.next().is_some_and(|slot| slot.is_some()));
 /// ```
-#[must_use]
-pub fn page_links<R: Resolve>(page: &Dict, r: &R) -> Vec<Option<Link>> {
-    let Some(array) = page.array(obj_names::ANNOTS, r) else {
-        return Vec::new();
-    };
-    (0..array.len())
-        .map(|index| {
-            let dict = array.dict_at(index, r)?;
-            // Read coercively, so a *string* `/Subtype (Link)` is a link.
-            let subtype = dict.byte_string(obj_names::SUBTYPE, r)?;
-            (subtype == b"Link").then(|| Link::new(dict))
-        })
-        .collect()
+pub fn page_links<'a, R: Resolve>(
+    page: &'a Dict,
+    r: &'a R,
+) -> impl ExactSizeIterator<Item = Option<Link>> + 'a {
+    let array = page.array(obj_names::ANNOTS, r);
+    let len = array.as_ref().map_or(0, pdfrum_object::Array::len);
+    (0..len).map(move |index| {
+        let dict = array.as_ref()?.dict_at(index, r)?;
+        // Read coercively, so a *string* `/Subtype (Link)` is a link.
+        let subtype = dict.byte_string(obj_names::SUBTYPE, r)?;
+        (subtype == b"Link").then(|| Link::new(dict))
+    })
 }
 
 /// The topmost link containing a point, with its index in `/Annots`.
@@ -217,7 +218,7 @@ mod tests {
                 annot(Object::Name(Name::from("Link")), [0.0, 0.0, 10.0, 10.0]),
             ])),
         )]);
-        let links = page_links(&page, &NoResolve);
+        let links: Vec<_> = page_links(&page, &NoResolve).collect();
         assert_eq!(links.len(), 2);
         assert!(links.first().is_some_and(Option::is_none));
         assert!(links.get(1).is_some_and(Option::is_some));
@@ -238,8 +239,8 @@ mod tests {
         )]);
         assert!(
             page_links(&page, &NoResolve)
-                .first()
-                .is_some_and(Option::is_some)
+                .next()
+                .is_some_and(|slot| slot.is_some())
         );
     }
 
@@ -252,7 +253,7 @@ mod tests {
                 annot(Object::Name(Name::from("Link")), [0.0, 0.0, 20.0, 20.0]),
             ])),
         )]);
-        let links = page_links(&page, &NoResolve);
+        let links: Vec<_> = page_links(&page, &NoResolve).collect();
         assert_eq!(
             link_at_point(&links, Point::new(1.0, 1.0), &NoResolve).map(|(i, _)| i),
             Some(1)
@@ -268,7 +269,7 @@ mod tests {
                 [10.0, 10.0, 20.0, 20.0],
             )])),
         )]);
-        let links = page_links(&page, &NoResolve);
+        let links: Vec<_> = page_links(&page, &NoResolve).collect();
         assert!(link_at_point(&links, Point::new(10.0, 10.0), &NoResolve).is_some());
         assert!(link_at_point(&links, Point::new(20.0, 20.0), &NoResolve).is_some());
         assert!(link_at_point(&links, Point::new(9.9, 15.0), &NoResolve).is_none());
@@ -276,6 +277,6 @@ mod tests {
 
     #[test]
     fn a_page_with_no_annots_has_no_links() {
-        assert!(page_links(&Dict::new(), &NoResolve).is_empty());
+        assert_eq!(page_links(&Dict::new(), &NoResolve).len(), 0);
     }
 }
