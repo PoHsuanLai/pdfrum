@@ -189,11 +189,17 @@ impl GlyphSource {
         let upem = self.units_per_em();
         let raw = match self {
             Self::Fontations(f) => {
-                // An instructed composite is not fully described by its
-                // component offsets; the bytecode is what places them. Run it
-                // for those glyphs, and take the unhinted outline back if the
-                // interpreter declines the face.
-                if f.composite_is_instructed(gid)
+                // A hint-reliant face does not describe its glyphs without its
+                // bytecode: the strokes are stored off-canvas and the program
+                // is what places them, so the unhinted outline is a pile, not a
+                // rougher glyph. Run the interpreter for the whole face — the
+                // oracle's `IsTtOt() && IsTricky()` gate — and take the
+                // unhinted outline back only if it declines the face.
+                //
+                // Every other face stays unhinted here. This is the *path* side
+                // of text, which the oracle also draws unhinted, and grid-fitting
+                // it would round coordinates the filler wants exact.
+                if f.is_hint_reliant()
                     && let Some(hinted) = self.hinted_outline(gid)
                 {
                     return Some(hinted);
@@ -600,21 +606,54 @@ mod tests {
     }
 
     #[test]
-    fn only_a_composite_carrying_bytecode_is_reported_as_instructed() {
-        let bytes = crate::testfonts::load("tt_composite_instructions.ttf");
-        let face = Face::new(bytes.into(), 0).expect("the fixture loads");
-        // Glyph 1 is simple, 2 a composite with no instructions, 3 the
-        // instructed composite; only the last needs the interpreter.
-        assert!(!face.composite_is_instructed(Gid(1)));
-        assert!(!face.composite_is_instructed(Gid(2)));
-        assert!(face.composite_is_instructed(Gid(3)));
+    fn only_a_face_on_the_hint_reliant_list_asks_for_the_interpreter() {
+        // The two fixtures hold the same glyphs and differ only in the family
+        // name, so the name is what the predicate is reading.
+        let plain = crate::testfonts::load("tt_composite_instructions.ttf");
+        let plain = Face::new(plain.into(), 0).expect("the fixture loads");
+        assert!(!plain.is_hint_reliant());
+
+        let tricky = crate::testfonts::load("tt_hint_reliant.ttf");
+        let tricky = Face::new(tricky.into(), 0).expect("the fixture loads");
+        assert!(tricky.is_hint_reliant());
     }
 
     #[test]
-    fn a_gid_past_the_end_of_loca_is_not_instructed() {
+    fn a_hint_reliant_face_draws_its_path_outlines_grid_fitted() {
+        // `outline` must route a hint-reliant face through the interpreter,
+        // because its components are placed by bytecode and not by their
+        // offsets. Grid-fitting at 64 ppem lands coordinates on a coarse
+        // lattice, which is what separates the two paths here.
+        let bytes = crate::testfonts::load("tt_hint_reliant.ttf");
+        let face = Face::new(bytes.into(), 0).expect("the fixture loads");
+        let source = GlyphSource::Fontations(face);
+        let gid = Gid(3);
+
+        let drawn = source
+            .outline(gid, GlyphParams::default())
+            .expect("the instructed composite draws");
+        let hinted = source
+            .hinted_outline(gid)
+            .expect("the fixture carries programs the interpreter accepts");
+        assert_eq!(drawn.to_svg(), hinted.to_svg());
+    }
+
+    #[test]
+    fn an_ordinary_face_keeps_its_unhinted_path_outlines() {
+        // The other side of the gate: everything not on the list stays
+        // unhinted on the path side, which is what the oracle draws.
         let bytes = crate::testfonts::load("tt_composite_instructions.ttf");
         let face = Face::new(bytes.into(), 0).expect("the fixture loads");
-        assert!(!face.composite_is_instructed(Gid(u16::MAX)));
+        let source = GlyphSource::Fontations(face.clone());
+        let gid = Gid(3);
+
+        let drawn = source
+            .outline(gid, GlyphParams::default())
+            .expect("the instructed composite draws");
+        let unhinted = face.outline(gid).expect("the glyph has an outline");
+        let upem = f64::from(face.units_per_em());
+        let expected = Affine::scale(1000.0 / upem) * unhinted;
+        assert_eq!(drawn.to_svg(), expected.to_svg());
     }
 
     #[test]

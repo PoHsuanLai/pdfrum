@@ -322,6 +322,21 @@ def make_cmap(subtables: list[tuple[int, int, bytes]]) -> bytes:
 # --------------------------------------------------------------------------
 
 
+def make_name(family: str) -> bytes:
+    """A minimal `name` table declaring `family` as the Windows family name.
+
+    Only nameID 1 on platform 3 (Windows), encoding 1 (Unicode BMP), language
+    0x0409 — the record `skrifa`'s `english_or_first` reads, and the one
+    FreeType compares against its hint-reliant list. The string is UTF-16BE
+    because that is what platform 3 requires.
+    """
+    value = family.encode("utf-16-be")
+    count = 1
+    storage_offset = 6 + 12 * count
+    record = struct.pack(">HHHHHH", 3, 1, 0x0409, 1, len(value), 0)
+    return pad4(struct.pack(">HHH", 0, count, storage_offset) + record + value)
+
+
 def build_sfnt(tables: dict[str, bytes]) -> bytes:
     """Lay out an SFNT: sorted table directory, per-table checksums, and a
     `head.checkSumAdjustment` patched to make the whole file sum to 0xB1B0AFBA."""
@@ -374,6 +389,7 @@ def make_font(
     cmap: bytes | None,
     post: bytes,
     composites: dict[int, tuple[int, bytes]] | None = None,
+    family: str | None = None,
 ) -> bytes:
     glyf, loca = make_glyf_and_loca(num_glyphs, filled, composites)
     tables = {
@@ -387,6 +403,8 @@ def make_font(
     }
     if cmap is not None:
         tables["cmap"] = cmap
+    if family is not None:
+        tables["name"] = make_name(family)
     return build_sfnt(tables)
 
 
@@ -433,6 +451,17 @@ def fixtures() -> dict[str, bytes]:
         make_cmap([(3, 1, fmt4_unicode)]),
         post3,
         composites={2: (1, b""), 3: (1, bytes([0x4B]))},
+    )
+    # The same shapes under a family name on FreeType's hint-reliant list, so
+    # a test can assert the face-level predicate that decides whether the
+    # interpreter runs. "DFKai-SB" is the name the DynaLab Kai faces carry.
+    out["tt_hint_reliant.ttf"] = make_font(
+        4,
+        {1},
+        make_cmap([(3, 1, fmt4_unicode)]),
+        post3,
+        composites={2: (1, b""), 3: (1, bytes([0x4B]))},
+        family="DFKai-SB",
     )
     out["tt_symbol_and_macroman.ttf"] = make_font(
         8,
