@@ -61,11 +61,36 @@ impl GlyphKey {
         }
     }
 
-    fn params(self) -> GlyphParams {
-        GlyphParams {
+    /// What this key asks the face for, resolved against the font it names.
+    ///
+    /// The first two fields go straight through; the italic angle does not,
+    /// because the shear it stands for is a *table* lookup that the CJK/CID
+    /// arm can override (`GetEffectiveSkew`), and the embolden level is not in
+    /// the key at all — it is a function of the weight that already is.
+    /// Carrying the two derived numbers rather than the raw inputs is what
+    /// keeps this the only place that knows the derivation.
+    ///
+    /// `font` must be the font `self.font` identifies, which is the same
+    /// precondition [`GlyphCache::path`] states.
+    fn params(self, font: &Font) -> GlyphParams {
+        let mut params = GlyphParams {
             dest_width: self.dest_width,
             weight: self.weight,
-        }
+            ..GlyphParams::default()
+        };
+        let Some(subst) = font.subst() else {
+            return params;
+        };
+        params.vertical = font.is_vertical();
+        // The *path* side takes the plain skew, not the effective one — the
+        // CJK arm is the render side's alone (`cfx_face.cpp:870` calls
+        // `GetSkew()` where `:769` calls `GetEffectiveSkew()`).
+        params.skew = subst.skew();
+        // The load-path level is in the 26.6 units of a 64-ppem instance —
+        // 64*64 per em, PDFium's own `kCoordUnit` (`cfx_face.cpp:67`) — so it
+        // reaches this crate's 1000/em outlines scaled by 1000/4096.
+        params.embolden = f64::from(subst.embolden_level_for_load()) * 1000.0 / 4096.0;
+        params
     }
 }
 
@@ -116,7 +141,11 @@ impl GlyphCache {
     fn entry(&mut self, font: &Font, key: GlyphKey) -> Option<&Arc<BezPath>> {
         self.entries
             .entry(key)
-            .or_insert_with(|| font.glyphs().outline(key.gid, key.params()).map(Arc::new))
+            .or_insert_with(|| {
+                font.glyphs()
+                    .outline(key.gid, key.params(font))
+                    .map(Arc::new)
+            })
             .as_ref()
     }
 
@@ -144,7 +173,8 @@ impl GlyphCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{FontCache, subst};
+    use crate::{FontCache, SubstFont, subst};
+    use pdfrum_common::kurbo::Shape;
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Dict, Name, NoResolve, Object};
 
@@ -262,6 +292,7 @@ mod tests {
         let params = |w: i32| GlyphParams {
             dest_width: w,
             weight: 0,
+            ..GlyphParams::default()
         };
         let at = |w: i32| font.glyphs().advance(gid, params(w));
 
@@ -336,6 +367,7 @@ mod tests {
             GlyphParams {
                 dest_width: 200,
                 weight: 400,
+                ..GlyphParams::default()
             },
         );
         let wide = source.outline(
@@ -343,6 +375,7 @@ mod tests {
             GlyphParams {
                 dest_width: 900,
                 weight: 400,
+                ..GlyphParams::default()
             },
         );
         let (Some(narrow), Some(wide)) = (narrow, wide) else {
@@ -364,6 +397,7 @@ mod tests {
             GlyphParams {
                 dest_width: 0,
                 weight: 100,
+                ..GlyphParams::default()
             },
         );
         let heavy = source.outline(
@@ -371,6 +405,7 @@ mod tests {
             GlyphParams {
                 dest_width: 0,
                 weight: 900,
+                ..GlyphParams::default()
             },
         );
         let (Some(light), Some(heavy)) = (light, heavy) else {
@@ -391,6 +426,7 @@ mod tests {
             GlyphParams {
                 dest_width: 100,
                 weight: 100,
+                ..GlyphParams::default()
             },
         );
         let b = font.glyphs().outline(
@@ -398,8 +434,209 @@ mod tests {
             GlyphParams {
                 dest_width: 900,
                 weight: 900,
+                ..GlyphParams::default()
             },
         );
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
+    }
+
+    /// A non-embedded font with a descriptor complete enough to earn
+    /// `USE_EXTERN_ATTR` — without that flag substitution throws the caller's
+    /// weight and slant away, and the synthetic adjustments never arise.
+    fn synthesized(base_font: &str, italic_angle: i64, weight: i64) -> Font {
+        let desc = Dict::from_pairs([
+            (
+                crate::names::ITALIC_ANGLE.clone(),
+                Object::Int(italic_angle),
+            ),
+            (crate::names::FONT_WEIGHT.clone(), Object::Int(weight)),
+            (crate::names::ASCENT.clone(), Object::Int(700)),
+            (crate::names::DESCENT.clone(), Object::Int(-200)),
+            (crate::names::CAP_HEIGHT.clone(), Object::Int(700)),
+            (crate::names::STEM_V.clone(), Object::Int(80)),
+        ]);
+        let dict = Dict::from_pairs([
+            (
+                crate::names::SUBTYPE.clone(),
+                Object::Name(Name::from("TrueType")),
+            ),
+            (
+                crate::names::BASE_FONT.clone(),
+                Object::Name(Name::from(base_font)),
+            ),
+            (crate::names::FONT_DESCRIPTOR.clone(), Object::Dict(desc)),
+        ]);
+        crate::load(
+            &dict,
+            &NoResolve,
+            &FontCache::new(),
+            &Limits::default(),
+            &mut Diagnostics::default(),
+        )
+        .expect("a simple font always constructs")
+    }
+
+    /// The defect this cache had for its whole life: `GlyphKey` carried the
+    /// italic angle, `params` dropped it on the floor, and nothing anywhere
+    /// sheared an outline — so a document asking for an italic it did not
+    /// embed got upright glyphs (`CFX_Face::LoadGlyphPath`,
+    /// `cfx_face.cpp:869-876`).
+    #[test]
+    fn a_synthetic_italic_leans_the_outline_the_document_asked_for() {
+        let upright = synthesized("SomeFontNobodyHas", 0, 400);
+        let italic = synthesized("SomeFontNobodyHas", -20, 400);
+        assert_eq!(upright.subst().map(|s| s.italic_angle), Some(0));
+        assert_eq!(
+            italic.subst().map(|s| s.italic_angle),
+            Some(-20),
+            "the fixture must actually reach a synthetic slant"
+        );
+
+        let gid = Gid(italic.glyphs().name_index(b"A"));
+        let mut cache = GlyphCache::new();
+        let straight = cache
+            .path(&upright, GlyphKey::plain(upright.id(), gid))
+            .cloned()
+            .expect("the fallback face draws an A");
+        let leaning = cache
+            .path(
+                &italic,
+                GlyphKey {
+                    italic_angle: -20,
+                    ..GlyphKey::plain(italic.id(), gid)
+                },
+            )
+            .cloned()
+            .expect("and draws it slanted too");
+        assert_ne!(
+            format!("{straight:?}"),
+            format!("{leaning:?}"),
+            "the shear must reach the outline"
+        );
+        // A shear about the baseline leaves the bottom where it was and pushes
+        // the top to the right, so the slanted glyph reaches further right
+        // without reaching further left.
+        let (a, b) = (straight.bounding_box(), leaning.bounding_box());
+        assert!(b.x1 > a.x1, "the top must lean right: {a:?} vs {b:?}");
+        assert!(b.y0 >= a.y0 - 1.0 && b.y1 <= a.y1 + 1.0, "y is untouched");
+    }
+
+    /// The other half, and the one that reads a different table on each of the
+    /// oracle's two call sites: a weight the face cannot supply is dilated
+    /// into the outline (`FT_Outline_Embolden`, `cfx_face.cpp:886-892`).
+    /// The other half, and the one that reads a different table on each of the
+    /// oracle's two call sites: a weight the face cannot supply is dilated into
+    /// the outline (`FT_Outline_Embolden`, `cfx_face.cpp:886-892`).
+    ///
+    /// Driven through [`GlyphParams`] rather than through a substitution,
+    /// because the only face a test can reach without a system font database
+    /// is the Multiple-Master generic — and that one deliberately suppresses
+    /// the dilation, solving weight on its own axis instead. The derivation
+    /// from a weight to a level is [`SubstFont::embolden_level_for_load`]'s,
+    /// and is pinned beside it; what is proven here is that the level reaches
+    /// the outline at all, which is what it never used to do.
+    #[test]
+    fn a_synthetic_bold_dilates_the_outline_the_document_asked_for() {
+        let font = helvetica();
+        let gid = Gid(font.glyphs().name_index(b"o"));
+        let at = |embolden: f64| {
+            font.glyphs()
+                .outline(
+                    gid,
+                    GlyphParams {
+                        embolden,
+                        ..GlyphParams::default()
+                    },
+                )
+                .expect("Helvetica draws an o")
+        };
+        let thin = at(0.0);
+        // Weight 700 is level 70 on the load table, which is 70/4096 of an em.
+        let fat = at(f64::from(70) * 1000.0 / 4096.0);
+        assert_ne!(format!("{thin:?}"), format!("{fat:?}"));
+        assert!(
+            fat.area().abs() > thin.area().abs(),
+            "the dilation must add ink: {} vs {}",
+            fat.area().abs(),
+            thin.area().abs()
+        );
+        // ...and the level really is the one a 700-weight substitution asks
+        // for, so the number above is not a magic constant.
+        let bold = SubstFont {
+            weight: Some(700),
+            ..SubstFont::default()
+        };
+        assert_eq!(bold.embolden_level_for_load(), 70);
+    }
+
+    /// The bitmap side's own resolution, which is not the path side's: its
+    /// embolden level scales with the device matrix (`GetEmboldenLevelForRender`,
+    /// `cfx_face.cpp:806-816`) where the path side's does not, and it reads the
+    /// effective skew rather than the plain one (`:769` against `:870`).
+    #[test]
+    fn the_bitmap_side_scales_its_dilation_with_the_device_matrix() {
+        let italic = synthesized("SomeFontNobodyHas", -20, 400);
+        // 12 pt at 1:1, in the oracle's 16.16 `matrix.a / 64 * 65536`.
+        let ft = |em_per_px: f64| (em_per_px / 64.0 * 65536.0) as i32;
+        let small = italic.render_synth(ft(12.0), 0).expect("12 pt draws");
+        let large = italic.render_synth(ft(48.0), 0).expect("48 pt draws too");
+        // The generic suppresses the dilation, so what the size must move here
+        // is nothing — but the skew is a pure table lookup and must not move
+        // with the size either way.
+        assert_eq!(small.skew, large.skew);
+        // `kAngleSkew[20]`, the value `GetSkewFromAngle` returns for -20°.
+        assert_eq!(small.skew, -36, "the render side reads the same table");
+        assert!(!small.vertical, "a simple font is never vertical");
+
+        // A face that does dilate: the level is proportional to the matrix, so
+        // four times the size is four times the strength.
+        let bold = SubstFont {
+            weight: Some(700),
+            ..SubstFont::default()
+        };
+        let level = |px: f64| {
+            bold.embolden_level_for_render(false, ft(px), 0)
+                .expect("700 is inside the table")
+        };
+        assert!(
+            level(48.0) > level(12.0) * 3,
+            "{} {}",
+            level(12.0),
+            level(48.0)
+        );
+    }
+
+    /// The oracle abandons the glyph outright when the level comes back
+    /// negative — a substitution weight of 1400 or more is past the render
+    /// table, and `RenderGlyph` returns a null bitmap (`cfx_face.cpp:809-811`).
+    #[test]
+    fn a_weight_past_the_render_table_abandons_the_glyph() {
+        let heavy = SubstFont {
+            weight: Some(1400),
+            ..SubstFont::default()
+        };
+        assert_eq!(heavy.embolden_level_for_render(false, 1024, 0), None);
+        // ...and the load side clamps instead of failing, which is why the two
+        // sides cannot share one answer.
+        assert!(heavy.embolden_level_for_load() > 0);
+    }
+
+    /// An embedded font is the document's own program, so neither adjustment
+    /// applies — and the outline must come back byte-for-byte as the face drew
+    /// it, not through a shear of zero that a floating-point matrix would
+    /// perturb.
+    #[test]
+    fn a_font_with_no_substitution_takes_neither_adjustment() {
+        let font = helvetica();
+        assert!(font.subst().is_none_or(|s| s.italic_angle == 0));
+        let gid = Gid(font.glyphs().name_index(b"A"));
+        let key = GlyphKey::plain(font.id(), gid);
+        let mut cache = GlyphCache::new();
+        let cached = cache.path(&font, key).cloned().expect("Helvetica draws");
+        let raw = font
+            .glyphs()
+            .outline(gid, GlyphParams::default())
+            .expect("and draws unadjusted");
+        assert_eq!(format!("{cached:?}"), format!("{raw:?}"));
     }
 }

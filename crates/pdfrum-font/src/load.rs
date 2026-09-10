@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::cid::{self, CidTransform, Type0Font};
 use crate::encoding;
-use crate::glyphs::{self, GlyphSource};
+use crate::glyphs::{self, GlyphSource, SynthGlyph};
 use crate::ids::{CharCode, Cid, FontId, Gid};
 use crate::names;
 use crate::simple::{self, SimpleFont};
@@ -116,6 +116,44 @@ impl Font {
     #[must_use]
     pub fn hinted_glyph_path(&self, gid: Gid) -> Option<BezPath> {
         self.glyphs().hinted_outline(gid)
+    }
+
+    /// The synthetic italic and embolden the glyph-*bitmap* side applies,
+    /// resolved against the device matrix's two horizontal components.
+    ///
+    /// The bitmap side is a second call site with its *own* two levels
+    /// (`CFX_Face::RenderGlyph`, `cfx_face.cpp:769-778` and `:806-816`), not
+    /// the path side's, which is why it cannot simply reuse the outline the
+    /// glyph cache already adjusted: the render-path embolden level depends on
+    /// the *device* matrix, which only the renderer knows, and the render-path
+    /// skew is the effective one rather than the plain one.
+    ///
+    /// `xx` and `xy` are the oracle's own 16.16 quantities —
+    /// `matrix.a / 64 * 65536` and `matrix.c / 64 * 65536`
+    /// (`cfx_face.cpp:766-767`) — because the embolden table's `/ 36655` is
+    /// calibrated to that scale and nothing else. The [`SynthGlyph`] that
+    /// comes back is therefore in **device pixels**, and belongs on an outline
+    /// already mapped into that space.
+    ///
+    /// `None` where the C++ returns a negative level and `RenderGlyph` bails
+    /// out with a null bitmap (`cfx_face.cpp:809-811`): a substitution weight
+    /// of 1400 or more, which is past the table. A caller draws nothing.
+    #[must_use]
+    pub fn render_synth(&self, xx: i32, xy: i32) -> Option<SynthGlyph> {
+        let Some(subst) = self.subst() else {
+            return Some(SynthGlyph::NONE);
+        };
+        let is_cid = matches!(self, Self::Type0(_));
+        let level = subst.embolden_level_for_render(is_cid, xx, xy)?;
+        Some(SynthGlyph {
+            skew: subst.effective_skew(is_cid),
+            vertical: self.is_vertical(),
+            // The level is a strength in the 26.6 units the transformed
+            // outline is loaded in, so it becomes device pixels by /64 —
+            // which is the space the caller has already mapped the outline
+            // into by the time it asks.
+            embolden: f64::from(level) / 64.0,
+        })
     }
 
     /// Is this a vertical-writing font? Only a Type0 font with a `-V` CMap is.
