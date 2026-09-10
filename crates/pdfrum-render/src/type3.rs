@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 
 use kurbo::Affine;
+use pdfrum_font::FontId;
 use pdfrum_page::{ImageData, ImageObject, Pixels, Samples};
 
 use crate::color::Argb;
@@ -32,15 +33,15 @@ const MAX_BLUES: usize = 16;
 /// as ink, so a padded stencil does not take the integer-stretch path.
 const INK: u8 = 0x40;
 
-/// Baselines remembered per linear device matrix.
+/// Baselines remembered per font and linear device matrix.
 #[derive(Debug, Default)]
 pub(crate) struct BlueCache {
-    sizes: HashMap<[i32; 4], Blues>,
+    sizes: HashMap<(FontId, [i32; 4]), Blues>,
 }
 
 impl BlueCache {
-    pub(crate) fn for_matrix(&mut self, matrix: Affine) -> &mut Blues {
-        self.sizes.entry(size_key(matrix)).or_default()
+    pub(crate) fn for_font_matrix(&mut self, font: FontId, matrix: Affine) -> &mut Blues {
+        self.sizes.entry((font, size_key(matrix))).or_default()
     }
 }
 

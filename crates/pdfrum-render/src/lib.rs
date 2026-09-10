@@ -22,6 +22,7 @@ mod paint;
 mod path;
 mod pattern;
 mod shading;
+mod shear;
 mod softmask;
 mod stretch;
 mod stroke;

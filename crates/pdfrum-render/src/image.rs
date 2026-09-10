@@ -103,12 +103,12 @@ pub fn resample_quality(
     }
 }
 
-/// Whether this device matrix takes AGG's `StretchType::kOther` path.
+/// Whether this device matrix is sheared enough to reverse-map dest pixels.
 ///
-/// A shear (`|b|` or `|c|` ≥ 0.5) or a zero on the diagonal sends the image
-/// through `CFX_ImageTransformer`, whose second pass is **always bilinear**
-/// — `/Interpolate` is not consulted. A near-quarter-turn (`kRotate`) is a
-/// swapped-axis stretch instead and keeps the ordinary interpolate heuristic.
+/// A shear (`|b|` or `|c|` ≥ 0.5) or a zero on the diagonal cannot stretch
+/// onto an integer axis-aligned rect. Those draws fill the unit square's
+/// closest dest rect by inverse-mapping each pixel. A near-quarter-turn is
+/// a swapped-axis stretch instead and keeps the interpolate heuristic.
 #[must_use]
 #[expect(
     clippy::many_single_char_names,
@@ -769,7 +769,7 @@ mod tests {
     }
 
     #[test]
-    fn k_other_forces_bilinear_without_interpolate() {
+    fn a_sheared_draw_forces_bilinear_without_interpolate() {
         let img = gray_image(4, 4, false);
         let opts = RenderOptions::default();
         let shear = Affine::new([16.0, 64.0, 64.0, 16.0, 20.0, 120.0]);

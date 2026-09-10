@@ -29,7 +29,7 @@ use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
 use crate::image::{
     apply_stretched_mask, color_as_fill_mask, effective_quality, overprint_blend,
-    resample_quality_at, to_pixmap,
+    resample_quality, resample_quality_at, takes_other_transform, to_pixmap,
 };
 use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
@@ -1883,7 +1883,13 @@ fn draw_type3_glyph<B: RasterBackend>(
 ) {
     if !metrics.colored {
         if let Some(image) = sole_stencil(&metrics.objects) {
-            if let Some(mask) = type3_stencil_glyph(backend, caches, image, placed.matrix) {
+            if let Some(mask) = type3_stencil_glyph(
+                backend,
+                caches,
+                image,
+                placed.matrix,
+                ancestry.last().copied().unwrap_or(pdfrum_font::FontId(0)),
+            ) {
                 pending.push(mask);
                 return;
             }
@@ -1962,8 +1968,9 @@ fn type3_stencil_glyph<B: RasterBackend>(
     caches: &mut RenderCaches,
     image: &pdfrum_page::ImageObject,
     char_to_device: Affine,
+    font: pdfrum_font::FontId,
 ) -> Option<crate::type3::PlacedMask> {
-    let blues = caches.type3_blues.for_matrix(char_to_device);
+    let blues = caches.type3_blues.for_font_matrix(font, char_to_device);
     crate::type3::try_stretch(backend, image, char_to_device, blues)
         .and_then(|glyph| glyph.place(char_to_device))
 }
@@ -2273,6 +2280,11 @@ fn render_image<B: RasterBackend>(
     if image.width == 0 || image.height == 0 {
         return;
     }
+    if draw_sheared_image(
+        ctx, device, caches, object, state, matrix, device_box, fill, transfer.as_ref(),
+    ) {
+        return;
+    }
     // The image's unit square maps through the object matrix, so the device
     // transform folds in the sample grid's own size and the y flip PDF's
     // image space needs.
@@ -2393,8 +2405,74 @@ fn image_placement(
     }
 }
 
-/// `/Matte`, or a mask on a grid of its own, is `DrawMaskedImage`. A colour-key
-/// `/Mask` stays fused — C++ bakes it into the DIB (`bug_1395648`).
+/// Draw a sheared image by reverse-mapping dest pixels, then blit 1:1.
+///
+/// Returns `false` when the geometry is not drawable this way, so the caller
+/// can fall through to the quad rasterizer.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk threads context, device, caches, the image and the \
+              transfer the hypot pixmap is keyed on"
+)]
+fn draw_sheared_image<D: RenderDevice>(
+    ctx: &RenderCtx<'_>,
+    device: &mut D,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+    device_box: Rect,
+    fill: Argb,
+    transfer: Option<&TransferFunc>,
+) -> bool {
+    if !takes_other_transform(matrix) {
+        return false;
+    }
+    let image = &object.image;
+    let Some((hypot_w, hypot_h)) = crate::shear::hypot_size(matrix) else {
+        return false;
+    };
+    let pass1 = resample_quality(
+        image,
+        &ctx.opts,
+        image.width,
+        image.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let key = crate::imagecache::PixmapRequest::for_image(
+        image,
+        fill,
+        transfer,
+        hypot_w,
+        hypot_h,
+    );
+    let src = caches.images.get_or_render(object.source, key, || {
+        to_pixmap(image, fill, transfer)
+    });
+    let clip = outer_rect(device_box);
+    let Some(mapped) = crate::shear::map_sheared(&src, matrix, clip, pass1) else {
+        return false;
+    };
+    let blend = overprint_blend(image.family, &state.general);
+    let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
+    if layered {
+        device.push_layer(blend, 1.0, None);
+    }
+    device.draw_image(
+        &mapped.pixels,
+        Affine::translate((f64::from(mapped.left), f64::from(mapped.top))),
+        ImageQuality::Nearest,
+        state.general.fill_alpha,
+    );
+    if layered {
+        device.pop();
+    }
+    true
+}
+
+/// `/Matte`, or a mask on a grid of its own, is a separate dest-space mask
+/// multiply. A colour-key `/Mask` stays fused.
 fn uses_draw_masked_image(image: &pdfrum_page::ImageData) -> bool {
     image.matte.is_some()
         || image
@@ -2518,24 +2596,36 @@ fn render_masked_image<B: RasterBackend>(
         1.0,
     );
     let mask = backend.finish(mask_target).alpha_mask();
+    fold_mask_and_blit(device, image, state, &mut pixels, &mask, rect.left, rect.top);
+}
+
+/// Fold coverage into the dest (matte then replace A, or multiply) and blit.
+fn fold_mask_and_blit<D: RenderDevice>(
+    device: &mut D,
+    image: &pdfrum_page::ImageData,
+    state: &pdfrum_page::GraphicsState,
+    pixels: &mut Pixmap,
+    mask: &crate::pixmap::AlphaMask,
+    left: i32,
+    top: i32,
+) {
     if let Some(matte) = image.matte {
         // Dest RGB is premultiplied; `/Matte` reads it as a straight sample.
         // Recover the colour, un-premultiply against the stretched mask, then
         // let the mask replace dest alpha — scaling dest A by the mask would
         // count the base's coverage twice.
-        apply_stretched_mask(&mut pixels, &mask, Some(matte.to_bytes()));
+        apply_stretched_mask(pixels, mask, Some(matte.to_bytes()));
     } else {
-        pixels.multiply_alpha_mask(&mask);
+        pixels.multiply_alpha_mask(mask);
     }
-
     let blend = overprint_blend(image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
         device.push_layer(blend, 1.0, None);
     }
     device.draw_image(
-        &pixels,
-        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        pixels,
+        Affine::translate((f64::from(left), f64::from(top))),
         ImageQuality::Nearest,
         state.general.fill_alpha,
     );
