@@ -398,12 +398,17 @@ fn resolve_inner(
     };
     let parsed = parse_styles(&style_source, weight, n_style);
     let mut is_style_available = parsed.is_style_available;
+    // The tokens parsed *before* an abort keep what they applied.
+    // `cfx_fontmapper.cpp:124-171` writes through `int* weight` and `uint32_t*
+    // style` token by token, and both `return true` paths (`:139`, `:162`)
+    // return after those writes; the caller at `:594-597` resets only the
+    // family and the base font. So `FooSans,Bold,Italic` — which aborts on the
+    // non-first italic — still reaches the mapper at weight 700 and force-bold.
+    weight = parsed.weight;
+    n_style = parsed.style;
     if parsed.abort {
         family.clone_from(&name);
         base_font = None;
-    } else {
-        weight = parsed.weight;
-        n_style = parsed.style;
     }
 
     // Step 7 — with no database at all, go straight to the built-ins.
