@@ -913,3 +913,153 @@ mod database_selection {
         assert!(!scanned.faces().is_empty());
     }
 }
+
+// ---------------------------------------------------------------------------
+// The CJK preference lists (`fx_linux_impl.cpp:95-152`).
+// ---------------------------------------------------------------------------
+
+/// A non-embedded `/MSung-Light` with Traditional-Chinese ordering names a
+/// family no Linux machine has installed. The oracle answers it from
+/// `kB5FontList` (`fx_linux_impl.cpp:47-51`) before any name matching runs.
+#[test]
+fn a_traditional_chinese_request_takes_the_first_installed_big5_preference() {
+    let req = FontRequest {
+        name: b"MSung-Light".to_vec(),
+        flags: FontFlags::SYMBOLIC,
+        weight: 400,
+        code_page: CodePage::ChineseTraditional,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    // A face that would win the generic scan, listed first so insertion order
+    // cannot be what selects the preference.
+    db.push_with_bytes("Unrelated Sans", 0, vec![Charset::Ansi], helvetica_bytes());
+    db.push_with_bytes(
+        "AR PL UKai TW",
+        0,
+        vec![Charset::ChineseTraditional],
+        helvetica_bytes(),
+    );
+    db.push_with_bytes(
+        "AR PL UMing TW Light",
+        0,
+        vec![Charset::ChineseTraditional],
+        helvetica_bytes(),
+    );
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    assert_eq!(s.subst.family, "AR PL UMing TW Light");
+}
+
+/// The list is walked in *its* order, not the database's: with only the third
+/// entry installed, that is the answer.
+#[test]
+fn a_traditional_chinese_request_falls_to_a_later_big5_preference_entry() {
+    let req = FontRequest {
+        name: b"MSung-Light".to_vec(),
+        flags: FontFlags::SYMBOLIC,
+        weight: 400,
+        code_page: CodePage::ChineseTraditional,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    db.push_with_bytes(
+        "AR PL UKai TW",
+        0,
+        vec![Charset::ChineseTraditional],
+        helvetica_bytes(),
+    );
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    assert_eq!(s.subst.family, "AR PL UKai TW");
+}
+
+/// With no preference entry installed the oracle still does not give up: it
+/// re-runs the scan with `must_match_name = false` (`fx_linux_impl.cpp:151`),
+/// so the requested family stops being a filter and any face claiming the
+/// charset can answer.
+#[test]
+fn a_cjk_request_with_no_preference_installed_drops_the_name_filter() {
+    let req = FontRequest {
+        name: b"MSungBold".to_vec(),
+        flags: FontFlags::SYMBOLIC,
+        weight: 700,
+        code_page: CodePage::ChineseTraditional,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    // Two faces claiming the charset, the *second* the better score for a bold
+    // request. Only the scan can prefer it; the last rung, which takes the
+    // first face claiming the charset in insertion order, would answer with
+    // the light one — so the assertion names which rung answered.
+    db.push_with_bytes(
+        "Noto Serif CJK TC Light",
+        0,
+        vec![Charset::ChineseTraditional],
+        helvetica_bytes(),
+    );
+    db.push_with_bytes(
+        "Noto Serif CJK TC Bold",
+        style_bits::FORCE_BOLD,
+        vec![Charset::ChineseTraditional],
+        helvetica_bytes(),
+    );
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    assert_eq!(s.subst.family, "Noto Serif CJK TC Bold");
+}
+
+/// A non-CJK request keeps the name filter, so an unrelated installed family
+/// must not answer for it.
+#[test]
+fn a_latin_request_keeps_the_name_filter_the_cjk_arm_drops() {
+    let req = FontRequest {
+        name: b"NoSuchFamily".to_vec(),
+        flags: FontFlags::USE_EXTERN_ATTR,
+        weight: 400,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    db.push_with_bytes("Unrelated Sans", 0, vec![Charset::Ansi], helvetica_bytes());
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    assert_ne!(s.subst.family, "Unrelated Sans");
+}
+
+/// `GetJapanesePreference` (`fx_linux_impl.cpp:58-78`) reads the *requested*
+/// face name: a Mincho name takes the Mincho row even when a Gothic face is
+/// the only other thing installed.
+#[test]
+fn a_shift_jis_mincho_request_takes_the_mincho_preference_row() {
+    let req = FontRequest {
+        name: b"MS-Mincho".to_vec(),
+        flags: FontFlags::SYMBOLIC,
+        weight: 400,
+        code_page: CodePage::ShiftJis,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    db.push_with_bytes("VL PGothic", 0, vec![Charset::ShiftJis], helvetica_bytes());
+    db.push_with_bytes("IPAMincho", 0, vec![Charset::ShiftJis], helvetica_bytes());
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    assert_eq!(s.subst.family, "IPAMincho");
+}
+
+/// A Shift-JIS request whose face name says neither Gothic nor Mincho picks
+/// its row from weight and pitch instead: bold and not Roman is `PGothic`.
+#[test]
+fn a_bold_sans_shift_jis_request_with_no_family_hint_takes_the_pgothic_row() {
+    let req = FontRequest {
+        name: b"SomeJapaneseFont".to_vec(),
+        // `USE_EXTERN_ATTR` is what lets the 700 survive step 0; without it
+        // the weight is discarded and the row decision falls to PMincho.
+        flags: FontFlags::SYMBOLIC.with(FontFlags::USE_EXTERN_ATTR),
+        weight: 700,
+        code_page: CodePage::ShiftJis,
+        ..FontRequest::default()
+    };
+    let mut db = TestFontDb::new();
+    db.push_with_bytes("VL Gothic", 0, vec![Charset::ShiftJis], helvetica_bytes());
+    db.push_with_bytes("VL PGothic", 0, vec![Charset::ShiftJis], helvetica_bytes());
+    let s = resolve(&req, &db, &SubstitutionOptions::default(), &mut quiet());
+    // `VL PGothic` is column 2 of the PGothic row and column 2 of no other,
+    // where `VL Gothic` is column 2 of the Gothic row — so the answer names
+    // which row was chosen.
+    assert_eq!(s.subst.family, "VL PGothic");
+}
