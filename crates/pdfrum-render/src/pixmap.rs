@@ -248,6 +248,16 @@ impl Pixmap {
     /// Bytes outside this pixmap are left transparent. Used to lift a
     /// non-isolated group's backdrop out of a parent snapshot without a
     /// second GPU round trip's worth of host pixels.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let mut src = Pixmap::new(4, 2);
+    /// src.set_pixel(1, 0, [1, 2, 3, 255]);
+    /// let out = src.cropped(1, 0, 2, 1);
+    /// assert_eq!(out.pixel(0, 0), Some([1, 2, 3, 255]));
+    /// assert_eq!(out.pixel(1, 0), Some([0, 0, 0, 0]));
+    /// ```
     #[must_use]
     pub fn cropped(&self, x: u32, y: u32, width: u32, height: u32) -> Self {
         let mut out = Self::new(width, height);

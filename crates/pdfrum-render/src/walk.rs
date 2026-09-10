@@ -138,6 +138,24 @@ pub fn render_page_with<B: RasterBackend>(
 /// still calls [`RasterBackend::finish`]. Offscreen `finish` calls inside
 /// the walk — groups, masks, pattern cells — are unchanged.
 ///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_page::Page;
+/// use pdfrum_raster_tinyskia::TinySkiaBackend;
+/// use pdfrum_render::{RasterBackend, RenderOptions, render_page_to_device};
+///
+/// let backend = TinySkiaBackend::new();
+/// let device = render_page_to_device(
+///     &Page::empty(),
+///     &RenderOptions::default(),
+///     &backend,
+///     &mut Diagnostics::default(),
+/// )?;
+/// let pixmap = backend.finish(device);
+/// assert_eq!((pixmap.width(), pixmap.height()), (612, 792));
+/// # Ok::<(), pdfrum_render::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// As [`render_page`].
@@ -151,6 +169,26 @@ pub fn render_page_to_device<B: RasterBackend>(
 }
 
 /// [`render_page_to_device`] with a [`RenderSession`].
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_page::Page;
+/// use pdfrum_raster_tinyskia::TinySkiaBackend;
+/// use pdfrum_render::{
+///     RasterBackend, RenderOptions, RenderSession, render_page_to_device_with,
+/// };
+///
+/// let backend = TinySkiaBackend::new();
+/// let device = render_page_to_device_with(
+///     &Page::empty(),
+///     &RenderOptions::default(),
+///     &backend,
+///     RenderSession::default(),
+///     &mut Diagnostics::default(),
+/// )?;
+/// let _ = backend.finish(device);
+/// # Ok::<(), pdfrum_render::Error>(())
+/// ```
 ///
 /// # Errors
 ///

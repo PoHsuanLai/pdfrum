@@ -232,6 +232,16 @@ pub trait RasterBackend {
     /// backend still has to rasterize the scene so far — that is the
     /// structural cost — but can copy only this rectangle off the device,
     /// which is the whole of a non-isolated group's backdrop.
+    ///
+    /// ```
+    /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
+    /// use pdfrum_render::RasterBackend;
+    ///
+    /// let backend = VelloCpuBackend::new();
+    /// let device = backend.new_target(4, 4, peniko::Color::WHITE);
+    /// let crop = backend.snapshot_rect(&device, 1, 1, 2, 2);
+    /// assert_eq!((crop.width(), crop.height()), (2, 2));
+    /// ```
     fn snapshot_rect(
         &self,
         d: &Self::Device,
@@ -251,6 +261,13 @@ pub trait RasterBackend {
     /// GPU win, but they are not bit-identical to the pixmap arithmetic —
     /// so the default is `false` and only a backend that has opted in (the
     /// GPU one) takes it. CPU backends keep the board still.
+    ///
+    /// ```
+    /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
+    /// use pdfrum_render::RasterBackend;
+    ///
+    /// assert!(!VelloCpuBackend::new().composite_isolated_groups_as_layers());
+    /// ```
     fn composite_isolated_groups_as_layers(&self) -> bool {
         false
     }
