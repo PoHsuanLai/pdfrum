@@ -163,7 +163,24 @@ impl SimpleFont {
             return SmallVec::new();
         };
         match self.unicodes.get(index) {
-            Some(&0) | None => SmallVec::new(),
+            Some(&0) | None => {
+                // The ladder left this code unmapped. A symbolic TrueType
+                // still has an encoding table (`MsSymbol` has no glyph
+                // names, so the name-driven fill never runs), and the Arial
+                // stand-in looks that Unicode up rather than treating the
+                // raw byte as WinAnsi — `bug_1442723`.
+                match self
+                    .encoding_kind
+                    .unicodes()
+                    .and_then(|table| table.get(index))
+                    .copied()
+                {
+                    Some(0) | None => SmallVec::new(),
+                    Some(u) => char::from_u32(u32::from(u))
+                        .map(|c| SmallVec::from_slice(&[c]))
+                        .unwrap_or_default(),
+                }
+            }
             Some(&u) => char::from_u32(u32::from(u))
                 .map(|c| SmallVec::from_slice(&[c]))
                 .unwrap_or_default(),

@@ -304,6 +304,36 @@ mod tests {
         let fb = font.glyph_fallback().expect("Arial is a built-in stand-in");
         assert!(fb.gid(&['A'], CharCode(u32::from(b'A'))).is_some());
     }
+
+    #[test]
+    fn a_truetype_symbol_code_keeps_its_encoding_unicode() {
+        // `bug_1442723`: `/Subtype /TrueType /BaseFont /Symbol`, Flags
+        // symbolic, no `/Encoding`. The ladder's Unicode table stays 0
+        // because `MsSymbol` has no glyph names; the encoding table still
+        // names U+2297 for 0xD9, which the Arial stand-in looks up.
+        let desc = Dict::from_pairs([(names::FLAGS.clone(), Object::Int(6))]);
+        let dict = Dict::from_pairs([
+            (
+                names::SUBTYPE.clone(),
+                Object::Name(Name::from("TrueType")),
+            ),
+            (
+                names::BASE_FONT.clone(),
+                Object::Name(Name::from("Symbol")),
+            ),
+            (names::FONT_DESCRIPTOR.clone(), Object::Dict(desc)),
+        ]);
+        let font = load(
+            &dict,
+            &NoResolve,
+            &FontCache::new(),
+            &Limits::default(),
+            &mut Diagnostics::default(),
+        )
+        .expect("a simple font always constructs");
+        let chars = font.unicode_from_charcode(CharCode(0xD9));
+        assert_eq!(chars.as_slice(), &['\u{2227}']);
+    }
 }
 
 #[cfg(test)]

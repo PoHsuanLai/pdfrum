@@ -62,10 +62,16 @@ pub(super) fn load_glyph_map(
         if has_any_glyph(glyph_index) {
             if base != FontEncoding::Builtin {
                 for c in 0..=255u8 {
-                    if let Some(name) = ctx.char_name(c)
-                        && let Some(slot) = unicodes.get_mut(usize::from(c))
-                    {
+                    let idx = usize::from(c);
+                    let Some(slot) = unicodes.get_mut(idx) else {
+                        continue;
+                    };
+                    if let Some(name) = ctx.char_name(c) {
                         *slot = unicode_from_adobe_name(name);
+                    } else if let Some(&u) = base.unicodes().and_then(|table| table.get(idx)) {
+                        // `MsSymbol` has no name table; the Unicode still
+                        // has to reach the Arial stand-in and the text dump.
+                        *slot = u;
                     }
                 }
             } else if find_charmap(ctx, CharmapId::MAC_ROMAN).is_some() {
