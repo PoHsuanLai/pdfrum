@@ -7,9 +7,11 @@
 
 mod cache;
 mod face;
+mod synth;
 
 pub use cache::{GlyphCache, GlyphKey};
 pub use face::{Charmap, CharmapId, Face};
+pub use synth::SynthGlyph;
 
 pub use crate::descriptor::em_adjust;
 pub(crate) use crate::descriptor::normalize_font_metric;
@@ -38,16 +40,26 @@ pub enum GlyphSource {
 
 /// The parameters that change what a glyph *looks like*, beyond its index.
 ///
-/// For an ordinary face these are all inert. For a Multiple-Master face they
-/// are not: `dest_width` alone changes the outline, which is why the glyph
-/// cache keys on them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+/// The first two reach the *face*: for an ordinary face they are inert, but a
+/// Multiple-Master face solves its axes from them, so `dest_width` alone
+/// changes the outline. The last two are applied to whatever outline comes
+/// back, for every face alike.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(crate) struct GlyphParams {
     /// The width the PDF declared for this character code, in 1000/em units.
     /// Zero means "whatever the face does naturally".
     pub dest_width: i32,
     /// The substitution weight, or 0 for the face's own.
     pub weight: i32,
+    /// The synthetic shear, in hundredths of a unit per unit, already resolved
+    /// through the CJK/CID arm (`GetEffectiveSkew` / `GetSkew`).
+    pub skew: i32,
+    /// Whether the shear runs down the page rather than across it, which is
+    /// the font's *writing mode* and not the vertical-glyph substitution.
+    pub vertical: bool,
+    /// The synthetic dilation, in 1000/em units. Zero for a face that is
+    /// already the requested weight.
+    pub embolden: f64,
 }
 
 impl GlyphSource {
@@ -196,7 +208,7 @@ impl GlyphSource {
                 if f.composite_is_instructed(gid)
                     && let Some(hinted) = self.hinted_outline(gid)
                 {
-                    return Some(hinted);
+                    return Some(synthesize(hinted, params));
                 }
                 f.outline(gid)?
             }
@@ -207,11 +219,12 @@ impl GlyphSource {
             Self::None => return None,
         };
         let trimmed = trim_empty_contours(raw)?;
-        if upem == 0 || upem == 1000 {
-            return Some(trimmed);
-        }
-        let scale = 1000.0 / f64::from(upem);
-        Some(Affine::scale(scale) * trimmed)
+        let scaled = if upem == 0 || upem == 1000 {
+            trimmed
+        } else {
+            Affine::scale(1000.0 / f64::from(upem)) * trimmed
+        };
+        Some(synthesize(scaled, params))
     }
 
     /// A glyph's outline in 1000/em text space, **grid-fitted at 64 ppem**.
@@ -526,6 +539,27 @@ fn trim_empty_contours(path: BezPath) -> Option<BezPath> {
     } else {
         Some(out)
     }
+}
+
+/// Apply a substitution's synthetic shear and dilation to a finished outline.
+///
+/// The order is the oracle's, and it is not commutative: the skew rides on the
+/// matrix the glyph is *loaded* through (`cfx_face.cpp:771-776`, `:871-875`)
+/// while the embolden runs on the outline that comes back (`:812-815`,
+/// `:889-891`), so the dilation happens in the already-sheared space. Dilating
+/// first and shearing after would slant the added weight along with the glyph,
+/// which is a different — and visibly wrong — stem shape.
+///
+/// Doing this here rather than at the call sites is what keeps the glyph cache
+/// correct for free: its key already separates two fonts that differ only in
+/// slant or weight, so each entry holds the outline that font actually draws.
+fn synthesize(path: BezPath, params: GlyphParams) -> BezPath {
+    SynthGlyph {
+        skew: params.skew,
+        vertical: params.vertical,
+        embolden: params.embolden,
+    }
+    .apply(path)
 }
 
 #[cfg(test)]
