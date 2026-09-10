@@ -231,8 +231,8 @@ impl Type0Font {
         self.cmap.is_vertical()
     }
 
-    /// The bounding box for a code, in 1000/em units, with the Japan1
-    /// transform applied when it applies.
+    /// The bounding box for a code, in 1000/em units, with the top's
+    /// sixty-fourth added and the Japan1 transform applied when it applies.
     #[must_use]
     pub(crate) fn char_bbox(&self, code: CharCode) -> Rect {
         let (gid, vertical) = self.glyph_from_charcode(code);
@@ -240,6 +240,7 @@ impl Type0Font {
         let Some(bbox) = self.glyphs.glyph_bbox(gid) else {
             return Rect::ZERO;
         };
+        let bbox = grow_top(bbox);
         // The transform rotates an upright glyph into a vertical one — so a
         // glyph GSUB *already* substituted must not be rotated again.
         if vertical {
@@ -304,6 +305,29 @@ impl Type0Font {
 // operand only `if (!useCMap && embeddedUseCMap)` — then merges child-wins in
 // `extendCMap` (:650-669). We do the same; `pdfrum_cmap::inherit_from` is the
 // call that overrides whatever the program named.
+/// Add a sixty-fourth of the top to the top (`CFX_Face::GetCharBBox`).
+///
+/// `cfx_face.cpp:1211-1216` does this to every box it returns from the
+/// non-tricky branch, and `cpdf_cidfont.cpp:550` is the only caller — so
+/// every CID box carries it. The simple-font path reads `GetGlyphBBox`
+/// directly (`cpdf_facebasedsimplefont.cpp:74`) and carries none.
+///
+/// The saturation is the oracle's: past `kMaxRectTop` (`cfx_face.cpp:74`),
+/// the value one below where the addition would overflow an `int`, the top
+/// becomes `INT_MAX` outright rather than wrapping.
+fn grow_top(bbox: Rect) -> Rect {
+    /// `cfx_face.cpp:74` — the largest top a sixty-fourth still fits above.
+    const MAX_RECT_TOP: i32 = 2_114_445_437;
+
+    let top = bbox.y1 as i32;
+    let grown = if top <= MAX_RECT_TOP {
+        top + top / 64
+    } else {
+        i32::MAX
+    };
+    Rect::new(bbox.x0, bbox.y0, bbox.x1, f64::from(grown))
+}
+
 fn use_cmap_parent(
     dict: &Dict,
     r: &impl Resolve,

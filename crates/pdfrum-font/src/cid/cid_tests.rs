@@ -558,6 +558,33 @@ fn a_font_with_no_face_still_answers_every_accessor() {
 }
 
 #[test]
+fn a_cid_char_box_grows_its_top_by_a_sixty_fourth() {
+    let mut store = TestStore::new();
+    let desc = embedded_descendant(&mut store, "CIDFontType2", vec![]);
+    let d = type0(Object::Name(Name::from("Identity-H")), desc, vec![]);
+    let f = load_with(&d, &store).expect("loads");
+
+    // A glyph with a top to grow. Identity-H makes the code the glyph index.
+    let code = (1..64u32)
+        .find(|g| {
+            f.glyphs
+                .glyph_bbox(Gid(*g as u16))
+                .is_some_and(|b| b.y1 > 64.0)
+        })
+        .expect("some glyph has a tall box");
+    let raw = f.glyphs.glyph_bbox(Gid(code as u16)).expect("has a box");
+
+    // `cfx_face.cpp:1211-1216` adds a sixty-fourth of the top to the top on
+    // the way out of `GetCharBBox`, and `cpdf_cidfont.cpp:550` is its only
+    // caller — so every CID box carries it, and the simple-font path, which
+    // reads `GetGlyphBBox` directly, carries none.
+    let top = raw.y1 as i32;
+    assert_eq!(f.char_bbox(CharCode(code)).y1, f64::from(top + top / 64));
+    assert_ne!(f.char_bbox(CharCode(code)).y1, raw.y1, "the top moved");
+    assert_eq!(f.char_bbox(CharCode(code)).y0, raw.y0, "only the top moves");
+}
+
+#[test]
 fn the_charmap_chooser_takes_the_legacy_subtable_the_coding_scheme_names() {
     // `tt_sjis_and_unicode.ttf` carries `(3,1)` first and `(3,2)` second, so a
     // chooser that ignored the coding scheme would always pick index 0. The
