@@ -292,6 +292,72 @@ fn an_already_styled_index_is_not_styled_again() {
 }
 
 // ---------------------------------------------------------------------------
+// Step 6 — the style suffix, and what an abort keeps.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn an_aborted_style_suffix_keeps_the_weight_the_tokens_before_it_applied() {
+    /// Records the weight the database was asked for.
+    struct Recorder(std::cell::RefCell<Vec<i32>>, Vec<FaceInfo>);
+    impl FontDb for Recorder {
+        fn faces(&self) -> &[FaceInfo] {
+            &self.1
+        }
+        fn face_bytes(&self, _: FaceHandle) -> Option<(Arc<[u8]>, u32)> {
+            None
+        }
+        fn find_font(
+            &self,
+            weight: i32,
+            _: bool,
+            _: Charset,
+            _: PitchFamily,
+            _: &str,
+            _: bool,
+        ) -> Option<FaceHandle> {
+            self.0.borrow_mut().push(weight);
+            None
+        }
+    }
+
+    // `Bold,Italic` aborts on its *second* token — an italic that is not the
+    // first item. `ParseStyles` writes through `int* weight` as it walks, so
+    // the bold token's 700 is already applied when the abort returns, and
+    // `cfx_fontmapper.cpp:594-597` resets only the family and the base font.
+    let req = FontRequest {
+        name: b"FooSans,Bold,Italic".to_vec(),
+        flags: FontFlags::USE_EXTERN_ATTR,
+        weight: 400,
+        ..FontRequest::default()
+    };
+    let db = Recorder(
+        std::cell::RefCell::new(Vec::new()),
+        vec![FaceInfo {
+            name: "Unrelated".to_owned(),
+            styles: 0,
+            charsets: vec![Charset::Ansi],
+        }],
+    );
+    let _ = resolve(
+        &req,
+        &db,
+        // Branch A's enumeration reset would put the weight back to 400 for
+        // its own reason; skipping it leaves the abort as the only thing the
+        // query's weight can be measuring.
+        &SubstitutionOptions {
+            skip_font_enumeration: true,
+            ..SubstitutionOptions::default()
+        },
+        &mut quiet(),
+    );
+    assert_eq!(
+        db.0.borrow().first().copied(),
+        Some(700),
+        "the bold token applied before the abort survives it"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Step 7 and the terminal rung.
 // ---------------------------------------------------------------------------
 
