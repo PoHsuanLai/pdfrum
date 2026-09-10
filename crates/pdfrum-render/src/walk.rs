@@ -28,8 +28,8 @@ use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDev
 use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
 use crate::image::{
-    apply_stretched_mask, color_as_fill_mask, effective_quality, overprint_blend,
-    resample_quality, resample_quality_at, takes_other_transform, to_pixmap,
+    apply_stretched_mask, color_as_fill_mask, effective_quality, overprint_blend, resample_quality,
+    resample_quality_at, takes_other_transform, to_pixmap,
 };
 use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
@@ -2281,7 +2281,15 @@ fn render_image<B: RasterBackend>(
         return;
     }
     if draw_sheared_image(
-        ctx, device, caches, object, state, matrix, device_box, fill, transfer.as_ref(),
+        ctx,
+        device,
+        caches,
+        object,
+        state,
+        matrix,
+        device_box,
+        fill,
+        transfer.as_ref(),
     ) {
         return;
     }
@@ -2440,16 +2448,10 @@ fn draw_sheared_image<D: RenderDevice>(
         i64::from(hypot_w),
         i64::from(hypot_h),
     );
-    let key = crate::imagecache::PixmapRequest::for_image(
-        image,
-        fill,
-        transfer,
-        hypot_w,
-        hypot_h,
-    );
-    let src = caches.images.get_or_render(object.source, key, || {
-        to_pixmap(image, fill, transfer)
-    });
+    let key = crate::imagecache::PixmapRequest::for_image(image, fill, transfer, hypot_w, hypot_h);
+    let src = caches
+        .images
+        .get_or_render(object.source, key, || to_pixmap(image, fill, transfer));
     let clip = outer_rect(device_box);
     let Some(mapped) = crate::shear::map_sheared(&src, matrix, clip, pass1) else {
         return false;
@@ -2690,7 +2692,15 @@ fn render_masked_image<B: RasterBackend>(
         1.0,
     );
     let mask = backend.finish(mask_target).alpha_mask();
-    fold_mask_and_blit(device, image, state, &mut pixels, &mask, rect.left, rect.top);
+    fold_mask_and_blit(
+        device,
+        image,
+        state,
+        &mut pixels,
+        &mask,
+        rect.left,
+        rect.top,
+    );
 }
 
 /// Fold coverage into the dest (matte then replace A, or multiply) and blit.

@@ -79,11 +79,7 @@ pub fn map_sheared_coverage(
         src.set_pixel(x, y, [coverage, coverage, coverage, coverage]);
     }
     let mapped = map_sheared(&src, unit_matrix, clip, pass1)?;
-    Some((
-        mapped.pixels.alpha_mask(),
-        mapped.left,
-        mapped.top,
-    ))
+    Some((mapped.pixels.alpha_mask(), mapped.left, mapped.top))
 }
 
 struct Setup {
@@ -121,11 +117,7 @@ impl Setup {
         let y_flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, sh]);
         let edge = Affine::new([sx / sw, kx / sw, ky / sh, sy / sh, tx, ty]);
         let dest_to_stretch = (edge * y_flip).inverse();
-        if dest_to_stretch
-            .as_coeffs()
-            .iter()
-            .any(|v| !v.is_finite())
-        {
+        if dest_to_stretch.as_coeffs().iter().any(|v| !v.is_finite()) {
             return None;
         }
         Some(Self {
@@ -139,10 +131,7 @@ impl Setup {
     fn sample(&self, col: i32, row: i32) -> Option<Tap> {
         // Dest-bitmap (col, row) through the 8.8 matrix that already includes
         // the result origin, plus half a stretched pixel.
-        let origin = Affine::translate((
-            f64::from(self.result.left),
-            f64::from(self.result.top),
-        ));
+        let origin = Affine::translate((f64::from(self.result.left), f64::from(self.result.top)));
         let [sx, kx, ky, sy, tx, ty] = (self.dest_to_stretch * origin).as_coeffs();
         let coeff = |v: f64| trunc_i32((v * 256.0).round());
         let fx = i64::from(coeff(sx)?) * i64::from(col)
@@ -275,8 +264,12 @@ fn bilinear_rgba(src: &Pixmap, tap: Tap) -> [u8; 4] {
 }
 
 fn texel(src: &Pixmap, x: i32, y: i32) -> [u8; 4] {
-    let x = u32::try_from(x.max(0)).unwrap_or(0).min(src.width().saturating_sub(1));
-    let y = u32::try_from(y.max(0)).unwrap_or(0).min(src.height().saturating_sub(1));
+    let x = u32::try_from(x.max(0))
+        .unwrap_or(0)
+        .min(src.width().saturating_sub(1));
+    let y = u32::try_from(y.max(0))
+        .unwrap_or(0)
+        .min(src.height().saturating_sub(1));
     src.pixel(x, y).unwrap_or([0; 4])
 }
 
@@ -331,7 +324,9 @@ fn scale_index(pos: u32, src: u32, dest: u32) -> u32 {
         return 0;
     }
     let n = (u64::from(pos) * u64::from(src)) / u64::from(dest);
-    u32::try_from(n).unwrap_or(u32::MAX).min(src.saturating_sub(1))
+    u32::try_from(n)
+        .unwrap_or(u32::MAX)
+        .min(src.saturating_sub(1))
 }
 
 fn enlarge_tap(x: u32, y: u32, sw: u32, sh: u32, dw: u32, dh: u32) -> Tap {
@@ -339,8 +334,12 @@ fn enlarge_tap(x: u32, y: u32, sw: u32, sh: u32, dw: u32, dh: u32) -> Tap {
     let sy = (f64::from(y) + 0.5) * f64::from(sh) / f64::from(dh) - 0.5;
     let col = trunc_i32(sx.floor()).unwrap_or(0);
     let row = trunc_i32(sy.floor()).unwrap_or(0);
-    let res_x = trunc_i32((sx - sx.floor()) * 256.0).unwrap_or(0).clamp(0, 255);
-    let res_y = trunc_i32((sy - sy.floor()) * 256.0).unwrap_or(0).clamp(0, 255);
+    let res_x = trunc_i32((sx - sx.floor()) * 256.0)
+        .unwrap_or(0)
+        .clamp(0, 255);
+    let res_y = trunc_i32((sy - sy.floor()) * 256.0)
+        .unwrap_or(0)
+        .clamp(0, 255);
     let w = i32::try_from(sw).unwrap_or(0);
     let h = i32::try_from(sh).unwrap_or(0);
     Tap {

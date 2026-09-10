@@ -474,7 +474,11 @@ pub fn closest_rect(r: Rect) -> IntRect {
         let ceil = lo.ceil();
         let error_floor = (lo - floor) + (hi - floor - length).abs();
         let error_ceil = (ceil - lo) + (hi - ceil - length).abs();
-        let start = if error_floor > error_ceil { ceil } else { floor };
+        let start = if error_floor > error_ceil {
+            ceil
+        } else {
+            floor
+        };
         let clamp = |v: f64| v.clamp(f64::from(i32::MIN) / 2.0, f64::from(i32::MAX) / 2.0);
         (clamp(start) as i32, clamp(start + length) as i32)
     };

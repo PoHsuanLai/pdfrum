@@ -313,14 +313,8 @@ mod tests {
         // names U+2297 for 0xD9, which the Arial stand-in looks up.
         let desc = Dict::from_pairs([(names::FLAGS.clone(), Object::Int(6))]);
         let dict = Dict::from_pairs([
-            (
-                names::SUBTYPE.clone(),
-                Object::Name(Name::from("TrueType")),
-            ),
-            (
-                names::BASE_FONT.clone(),
-                Object::Name(Name::from("Symbol")),
-            ),
+            (names::SUBTYPE.clone(), Object::Name(Name::from("TrueType"))),
+            (names::BASE_FONT.clone(), Object::Name(Name::from("Symbol"))),
             (names::FONT_DESCRIPTOR.clone(), Object::Dict(desc)),
         ]);
         let font = load(
