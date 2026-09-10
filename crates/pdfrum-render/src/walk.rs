@@ -2223,12 +2223,6 @@ fn render_pattern_stencil<B: RasterBackend>(
 }
 
 #[expect(
-    clippy::cast_possible_truncation,
-    reason = "`image_value_fits` has already rejected a non-finite extent and \
-              anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
-              values are well inside i64"
-)]
-#[expect(
     clippy::too_many_arguments,
     reason = "the pattern-stencil arm needs the backend, caches, device box \
               and diagnostics the ordinary image draw does not"
@@ -2293,6 +2287,33 @@ fn render_image<B: RasterBackend>(
     ) {
         return;
     }
+    draw_snapped_image::<B>(ctx, device, caches, object, state, matrix);
+}
+
+/// Stretch an axis-aligned image onto its device rect, reduce it if the
+/// destination is smaller than the source, and blit.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`image_value_fits` has already rejected a non-finite extent and \
+              anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
+              values are well inside i64"
+)]
+fn draw_snapped_image<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+) {
+    let image = &object.image;
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let transfer = transfer.as_ref();
     // The image's unit square maps through the object matrix, so the device
     // transform folds in the sample grid's own size and the y flip PDF's
     // image space needs.
@@ -2349,21 +2370,15 @@ fn render_image<B: RasterBackend>(
     // unreduced pixmap alone would keep the box filter running per draw *and*
     // hold the larger of the two buffers.
     let pixels = crate::walkprofile::phase(crate::walkprofile::Phase::Image, || {
-        let key = crate::imagecache::PixmapRequest::for_image(
-            image,
-            fill,
-            transfer.as_ref(),
-            out_w,
-            out_h,
-        );
+        let key = crate::imagecache::PixmapRequest::for_image(image, fill, transfer, out_w, out_h);
         caches.images.get_or_render(object.source, key, || {
             if reduction.filters() {
                 // The conversion and the reduction are one pull pipeline,
                 // so neither the full-size RGBA pixmap nor the two
                 // full-height intermediates are ever built.
-                crate::stretch::convert_and_reduce(image, fill, transfer.as_ref(), out_w, out_h)
+                crate::stretch::convert_and_reduce(image, fill, transfer, out_w, out_h)
             } else {
-                to_pixmap(image, fill, transfer.as_ref())
+                to_pixmap(image, fill, transfer)
             }
         })
     });
