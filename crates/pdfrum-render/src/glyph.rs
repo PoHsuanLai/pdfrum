@@ -286,8 +286,9 @@ impl SubpixelPhase {
 /// split the oracle's own cache makes, and it is why its key has no phase in
 /// it. This function is the one-shot spelling.
 ///
-/// Returns `None` when the glyph would exceed [`MAX_GLYPH_DIMENSION`], which is
-/// what `RenderGlyph` does, or when it has no area at all.
+/// Returns `None` when the glyph would exceed [`MAX_GLYPH_DIMENSION`] — in
+/// *subpixels* across and in rows down, the two FreeType reports and the two
+/// `RenderGlyph` bounds — or when it has no area at all.
 #[cfg(test)]
 #[must_use]
 pub(crate) fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<GlyphBitmap> {
@@ -384,10 +385,23 @@ pub(crate) fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
 
     let width = i32::try_from(right - left).ok()?;
     let height = i32::try_from(bottom - top).ok()?;
-    if width <= 0 || height <= 0 || width > MAX_GLYPH_DIMENSION || height > MAX_GLYPH_DIMENSION {
+    // `RenderGlyph` bounds `ft_bitmap.width` and `ft_bitmap.rows`, not the
+    // pixel box (`cfx_face.cpp:824-830`). Under `FT_RENDER_MODE_LCD` — the
+    // mode it renders in (`cfx_face.cpp:818`, `:265-275`) — FreeType has
+    // already tripled `width` and left `rows` alone
+    // (`ftobjs.c:519-521`, `case FT_PIXEL_MODE_LCD: width *= 3`). So the cap
+    // falls on the subpixel width, a third of the limit in pixels, while the
+    // height cap is on whole rows. Testing pixel width against the same 2048
+    // let a 700-2048px glyph through that upstream drops entirely: `RenderGlyph`
+    // returns nullptr and `DrawNormalText` skips the glyph rather than clipping
+    // it (`cfx_renderdevice.cpp:1275`, `:1350`).
+    if width <= 0 || height <= 0 || height > MAX_GLYPH_DIMENSION {
         return None;
     }
     let sub_width = width.checked_mul(3)?;
+    if sub_width > MAX_GLYPH_DIMENSION {
+        return None;
+    }
     let cells = usize::try_from(sub_width.checked_mul(height)?).ok()?;
     let mut subpixels = vec![0u8; cells];
 
@@ -1134,6 +1148,22 @@ mod tests {
         // loop skips the glyph; it does not clamp it to the limit.
         let huge = square(f64::from(MAX_GLYPH_DIMENSION) + 10.0, 4.0);
         assert!(rasterize(&huge, SubpixelPhase::Zero).is_none());
+    }
+
+    #[test]
+    fn the_width_cap_is_a_third_of_the_height_cap_because_lcd_triples_columns() {
+        // FreeType hands `RenderGlyph` a bitmap whose `width` is already three
+        // subpixels per pixel and whose `rows` is untouched, so upstream's one
+        // 2048 bounds ~682 pixels across and 2048 down. A glyph between those
+        // two is the whole point: tall enough to pass the row check, wide
+        // enough to fail the subpixel one.
+        let wide = square(1000.0, 100.0);
+        assert!(rasterize(&wide, SubpixelPhase::Zero).is_none());
+
+        // Just inside on both axes. The padding the LCD filter adds costs a
+        // couple of columns, so stay a few pixels clear of the boundary.
+        let tall = square(600.0, 2000.0);
+        assert!(rasterize(&tall, SubpixelPhase::Zero).is_some());
     }
 
     #[test]
