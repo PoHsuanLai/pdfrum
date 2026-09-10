@@ -42,6 +42,7 @@ pdfrum-parser.workspace = true
 pdfrum-raster-agg.workspace = true
 pdfrum-raster-vello-cpu.workspace = true
 pdfrum-common.workspace = true
+pdfrum-object.workspace = true
 
 # The two harnesses are **examples**, for two reasons. A `[[bin]]` target gets
 # no dev-dependencies, and these need the facade to open a document. And an

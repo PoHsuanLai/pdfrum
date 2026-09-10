@@ -24,6 +24,14 @@ impl core::fmt::Display for pdfrum_raster_vello::AdapterReport
 pub fn pdfrum_raster_vello::AdapterReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_raster_vello::OwnedDevice
 pub pdfrum_raster_vello::OwnedDevice::report: pdfrum_raster_vello::AdapterReport
+pub struct pdfrum_raster_vello::RoundtripStats
+pub pdfrum_raster_vello::RoundtripStats::bytes_uploaded: u64
+pub pdfrum_raster_vello::RoundtripStats::finishes: u64
+pub pdfrum_raster_vello::RoundtripStats::new_targets: u64
+pub pdfrum_raster_vello::RoundtripStats::pixels_read: u64
+pub pdfrum_raster_vello::RoundtripStats::snapshots: u64
+pub pdfrum_raster_vello::RoundtripStats::textures_created: u64
+pub pdfrum_raster_vello::RoundtripStats::textures_reused: u64
 pub struct pdfrum_raster_vello::VelloBackend<'a>
 impl pdfrum_raster_vello::VelloBackend<'static>
 pub fn pdfrum_raster_vello::VelloBackend<'static>::adapter_report(&self) -> core::option::Option<pdfrum_raster_vello::AdapterReport>
@@ -33,6 +41,11 @@ pub fn pdfrum_raster_vello::VelloBackend<'a>::check_target(&self, u32, u32) -> c
 pub fn pdfrum_raster_vello::VelloBackend<'a>::device_fault(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_raster_vello::VelloBackend<'a>::max_dimension(&self) -> u32
 pub fn pdfrum_raster_vello::VelloBackend<'a>::new(&'a wgpu::api::device::Device, &'a wgpu::api::queue::Queue) -> core::result::Result<Self, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::read_texture(&self, &wgpu::api::texture::Texture, u32, u32) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::render_to_texture(&self, &pdfrum_raster_vello::VelloDevice) -> core::result::Result<wgpu::api::texture::Texture, pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::render_to_view(&self, &pdfrum_raster_vello::VelloDevice, &wgpu::api::texture_view::TextureView) -> core::result::Result<(), pdfrum_raster_vello::Error>
+pub fn pdfrum_raster_vello::VelloBackend<'a>::reset_roundtrip_stats(&self)
+pub fn pdfrum_raster_vello::VelloBackend<'a>::roundtrip_stats(&self) -> pdfrum_raster_vello::RoundtripStats
 pub fn pdfrum_raster_vello::VelloBackend<'a>::try_finish(&self, pdfrum_raster_vello::VelloDevice) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_raster_vello::Error>
 pub fn pdfrum_raster_vello::VelloBackend<'a>::try_new_target(&self, u32, u32, peniko::Color) -> core::result::Result<pdfrum_raster_vello::VelloDevice, pdfrum_raster_vello::Error>
 pub fn pdfrum_raster_vello::VelloBackend<'a>::try_snapshot(&self, &pdfrum_raster_vello::VelloDevice) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_raster_vello::Error>
@@ -40,10 +53,12 @@ impl core::fmt::Debug for pdfrum_raster_vello::VelloBackend<'_>
 pub fn pdfrum_raster_vello::VelloBackend<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl pdfrum_render::device::RasterBackend for pdfrum_raster_vello::VelloBackend<'_>
 pub type pdfrum_raster_vello::VelloBackend<'_>::Device = pdfrum_raster_vello::VelloDevice
+pub fn pdfrum_raster_vello::VelloBackend<'_>::composite_isolated_groups_as_layers(&self) -> bool
 pub fn pdfrum_raster_vello::VelloBackend<'_>::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_raster_vello::VelloBackend<'_>::new_target(&self, u32, u32, peniko::Color) -> Self::Device
 pub fn pdfrum_raster_vello::VelloBackend<'_>::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
 pub fn pdfrum_raster_vello::VelloBackend<'_>::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_raster_vello::VelloBackend<'_>::snapshot_rect(&self, &Self::Device, u32, u32, u32, u32) -> pdfrum_render::pixmap::Pixmap
 pub struct pdfrum_raster_vello::VelloDevice
 impl core::fmt::Debug for pdfrum_raster_vello::VelloDevice
 pub fn pdfrum_raster_vello::VelloDevice::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result

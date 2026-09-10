@@ -27,7 +27,10 @@ use pdfrum_page::{
 };
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello_cpu::VelloCpuBackend;
-use pdfrum_render::{Pixmap, RenderOptions, RenderSession, render_page, render_page_with};
+use pdfrum_render::{
+    Pixmap, RasterBackend, RenderOptions, RenderSession, render_page, render_page_to_device,
+    render_page_with,
+};
 
 /// A session over caller-owned caches with an explicit visibility tree.
 fn session_for<'a>(
@@ -143,6 +146,28 @@ fn an_empty_page_is_opaque_white() {
     let (vello, tiny) = render_both(&page(20.0, 10.0, Vec::new()), &RenderOptions::default());
     assert_eq!(vello.pixel(5, 5), Some([255, 255, 255, 255]));
     assert_eq!(tiny.pixel(5, 5), Some([255, 255, 255, 255]));
+}
+
+#[test]
+fn recording_then_finishing_matches_render_page() {
+    // `render_page_to_device` is `render_page` without the root `finish`,
+    // so a caller that records and then finishes itself must get the same
+    // pixmap. The GPU present path depends on that split being a cut, not
+    // a different walk.
+    let page = page(
+        20.0,
+        10.0,
+        vec![filled(rect_path(0.0, 0.0, 10.0, 10.0), [1.0, 0.0, 0.0])],
+    );
+    let opts = RenderOptions::default();
+    let backend = VelloCpuBackend::new();
+    let mut diags = Diagnostics::default();
+    let direct = render_page(&page, &opts, &backend, &mut diags).expect("direct");
+    let mut diags = Diagnostics::default();
+    let device = render_page_to_device(&page, &opts, &backend, &mut diags).expect("record");
+    let split = backend.finish(device);
+    assert_eq!(direct.pixel(5, 5), split.pixel(5, 5));
+    assert_eq!(direct.pixel(15, 5), split.pixel(15, 5));
 }
 
 #[test]
