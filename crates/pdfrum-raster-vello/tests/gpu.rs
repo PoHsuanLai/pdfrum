@@ -446,3 +446,273 @@ fn the_facade_renders_a_page_on_this_backend() {
         .expect("the GPU backend satisfies Page::render_on's bound");
     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
 }
+
+#[test]
+fn a_finish_increments_the_roundtrip_counter_once() {
+    // The scoreboard's contract, on a backend: one `finish` is one finish,
+    // including a zero-sized target that never reaches the GPU. Without this,
+    // a missed increment at the try_finish call site would leave the G3 bench
+    // counting dispatches rather than round trips.
+    let Some(backend) = gpu() else { return };
+    backend.reset_roundtrip_stats();
+    let empty = backend.new_target(0, 0, peniko::Color::TRANSPARENT);
+    let out = backend.finish(empty);
+    assert_eq!((out.width(), out.height()), (0, 0));
+    let stats = backend.roundtrip_stats();
+    assert_eq!(stats.finishes, 1, "a zero-sized finish still counts");
+    assert_eq!(stats.snapshots, 0);
+    assert_eq!(stats.new_targets, 1);
+    assert_eq!(stats.pixels_read, 0, "nothing came back from the GPU");
+}
+
+#[test]
+fn two_same_size_finishes_reuse_a_texture() {
+    let Some(backend) = gpu() else { return };
+    backend.reset_roundtrip_stats();
+    for _ in 0..2 {
+        let mut device = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+        device.fill_path(
+            &square(0.0, 0.0, 16.0, 16.0),
+            Affine::IDENTITY,
+            &Brush::Solid(peniko::Color::from_rgba8(1, 2, 3, 255)),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        let out = backend.finish(device);
+        assert_eq!(out.pixel(8, 8), Some([1, 2, 3, 255]));
+    }
+    let stats = backend.roundtrip_stats();
+    assert_eq!(stats.finishes, 2);
+    assert_eq!(stats.textures_created, 1, "the second finish must reuse");
+    assert_eq!(stats.textures_reused, 1);
+    assert_eq!(stats.pixels_read, 16 * 16 * 2);
+}
+
+#[test]
+fn render_to_texture_matches_finish_and_does_not_count_as_a_finish() {
+    // The present path is a dispatch without a host stall. Pixels, when the
+    // test asks for them through `read_texture`, must match `finish`; the
+    // finish counter must not move, because a GUI that never reads back has
+    // not taken a pixmap round trip.
+    let Some(backend) = gpu() else { return };
+    let paint = |d: &mut pdfrum_raster_vello::VelloDevice| {
+        d.fill_path(
+            &square(4.0, 4.0, 12.0, 12.0),
+            Affine::IDENTITY,
+            &Brush::Solid(peniko::Color::from_rgba8(10, 20, 30, 255)),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+    };
+    let mut via_finish = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+    paint(&mut via_finish);
+    let finished = backend.finish(via_finish);
+
+    backend.reset_roundtrip_stats();
+    let mut via_texture = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+    paint(&mut via_texture);
+    let texture = backend
+        .render_to_texture(&via_texture)
+        .expect("present path");
+    let from_texture = backend
+        .read_texture(&texture, 16, 16)
+        .expect("opt-in readback");
+    assert_eq!(from_texture.pixel(8, 8), finished.pixel(8, 8));
+    assert_eq!(from_texture.pixel(0, 0), finished.pixel(0, 0));
+    let stats = backend.roundtrip_stats();
+    assert_eq!(stats.finishes, 0, "present is not a pixmap finish");
+    assert!(stats.textures_created >= 1, "the returned texture is owned");
+}
+
+fn page_with(width: f64, height: f64, objects: Vec<pdfrum_page::PageObject>) -> pdfrum_page::Page {
+    pdfrum_page::Page {
+        objects,
+        media_box: Rect::new(0.0, 0.0, width, height),
+        crop_box: Rect::new(0.0, 0.0, width, height),
+        rotate: pdfrum_page::Rotation::None,
+        transparency: pdfrum_page::Transparency::default(),
+        resources: None,
+        ..pdfrum_page::Page::empty()
+    }
+}
+
+fn filled_path(path: BezPath, rgb: [f32; 3]) -> pdfrum_page::PageObject {
+    let mut state = pdfrum_page::GraphicsState::default();
+    state
+        .fill
+        .set_stock(pdfrum_page::ColorSpace::DeviceRgb, &rgb);
+    pdfrum_page::PageObject::Path(Box::new(pdfrum_page::Content {
+        object: pdfrum_page::PathObject {
+            path,
+            matrix: Affine::IDENTITY,
+            fill_rule: pdfrum_page::FillRule::Winding,
+            stroke: false,
+        },
+        state,
+        marks: pdfrum_page::ContentMarks::new(),
+        content_stream: Some(0),
+        dirty: false,
+        active: true,
+    }))
+}
+
+fn isolated_form(inner: BezPath, rgb: [f32; 3], bbox: Rect) -> pdfrum_page::PageObject {
+    pdfrum_page::PageObject::Form(Box::new(pdfrum_page::Content {
+        object: pdfrum_page::FormObject {
+            objects: vec![filled_path(inner, rgb)],
+            matrix: Affine::IDENTITY,
+            bbox: Some(bbox),
+            transparency: pdfrum_page::Transparency {
+                group: true,
+                isolated: true,
+                knockout: false,
+            },
+            oc: None,
+            source: None,
+            live_edit: false,
+        },
+        state: pdfrum_page::GraphicsState::default(),
+        marks: pdfrum_page::ContentMarks::new(),
+        content_stream: Some(0),
+        dirty: false,
+        active: true,
+    }))
+}
+
+#[test]
+fn an_isolated_group_does_not_finish_a_second_target() {
+    // The layer path: one root target, one finish. The pixmap path would
+    // allocate a second target for the group, finish it, and blit it back.
+    let Some(backend) = gpu() else { return };
+    let page = page_with(
+        32.0,
+        32.0,
+        vec![isolated_form(
+            square(4.0, 4.0, 12.0, 12.0),
+            [1.0, 0.0, 0.0],
+            Rect::new(4.0, 4.0, 12.0, 12.0),
+        )],
+    );
+    backend.reset_roundtrip_stats();
+    let mut diags = pdfrum_common::Diagnostics::default();
+    let out = pdfrum_render::render_page(
+        &page,
+        &pdfrum_render::RenderOptions::default(),
+        &backend,
+        &mut diags,
+    )
+    .expect("renders");
+    assert_eq!(out.pixel(8, 8).map(|px| px[0] > 200), Some(true));
+    let stats = backend.roundtrip_stats();
+    assert_eq!(stats.new_targets, 1, "the group must stay on the parent");
+    assert_eq!(stats.finishes, 1, "no offscreen finish for the group");
+    assert_eq!(stats.snapshots, 0);
+}
+
+#[test]
+fn a_non_isolated_snapshot_copies_only_the_group_rect() {
+    // Multiply on a non-isolated form forces a backdrop copy. The parent is
+    // 64×64; the group is 8×8. A full snapshot would read 4096 pixels for
+    // the backdrop alone; the rect copy should read 64.
+    let Some(backend) = gpu() else { return };
+    let mut form_state = pdfrum_page::GraphicsState::default();
+    form_state.general.blend = BlendMode::Multiply;
+    let form = pdfrum_page::PageObject::Form(Box::new(pdfrum_page::Content {
+        object: pdfrum_page::FormObject {
+            objects: vec![filled_path(square(0.0, 0.0, 8.0, 8.0), [1.0, 0.0, 0.0])],
+            matrix: Affine::IDENTITY,
+            bbox: Some(Rect::new(0.0, 0.0, 8.0, 8.0)),
+            transparency: pdfrum_page::Transparency {
+                group: true,
+                isolated: false,
+                knockout: false,
+            },
+            oc: None,
+            source: None,
+            live_edit: false,
+        },
+        state: form_state,
+        marks: pdfrum_page::ContentMarks::new(),
+        content_stream: Some(0),
+        dirty: false,
+        active: true,
+    }));
+    let page = page_with(
+        64.0,
+        64.0,
+        vec![
+            filled_path(square(0.0, 0.0, 64.0, 64.0), [1.0, 1.0, 0.0]),
+            form,
+        ],
+    );
+    backend.reset_roundtrip_stats();
+    let mut diags = pdfrum_common::Diagnostics::default();
+    let _ = pdfrum_render::render_page(
+        &page,
+        &pdfrum_render::RenderOptions::default(),
+        &backend,
+        &mut diags,
+    )
+    .expect("renders");
+    let stats = backend.roundtrip_stats();
+    assert_eq!(stats.snapshots, 1);
+    // Backdrop 8×8 + group finish 8×8 + page finish 64×64.
+    assert_eq!(
+        stats.pixels_read,
+        8 * 8 + 8 * 8 + 64 * 64,
+        "the backdrop copy must be the group rect, not the whole page"
+    );
+}
+
+#[test]
+fn a_soft_mask_is_the_only_extra_finish_on_an_isolated_group() {
+    // The mask group still has to become an AlphaMask, so it finishes. The
+    // painted group must not: it stays a layer on the parent, masked at pop.
+    let Some(backend) = gpu() else { return };
+    let mask = std::sync::Arc::new(pdfrum_page::SoftMask {
+        group: pdfrum_object::Stream {
+            dict: pdfrum_object::Dict::default(),
+            data: pdfrum_object::ByteSpan::empty(),
+        },
+        kind: pdfrum_page::SoftMaskKind::Luminosity,
+        backdrop: pdfrum_page::Rgb::BLACK,
+        objects: vec![filled_path(square(0.0, 0.0, 8.0, 16.0), [1.0, 1.0, 1.0])],
+        transfer: None,
+        matrix: Affine::IDENTITY,
+    });
+    let mut state = pdfrum_page::GraphicsState::default();
+    state.general.soft_mask = Some(mask);
+    let form = pdfrum_page::PageObject::Form(Box::new(pdfrum_page::Content {
+        object: pdfrum_page::FormObject {
+            objects: vec![filled_path(square(0.0, 0.0, 16.0, 16.0), [1.0, 0.0, 0.0])],
+            matrix: Affine::IDENTITY,
+            bbox: Some(Rect::new(0.0, 0.0, 16.0, 16.0)),
+            transparency: pdfrum_page::Transparency {
+                group: true,
+                isolated: true,
+                knockout: false,
+            },
+            oc: None,
+            source: None,
+            live_edit: false,
+        },
+        state,
+        marks: pdfrum_page::ContentMarks::new(),
+        content_stream: Some(0),
+        dirty: false,
+        active: true,
+    }));
+    backend.reset_roundtrip_stats();
+    let mut diags = pdfrum_common::Diagnostics::default();
+    let out = pdfrum_render::render_page(
+        &page_with(16.0, 16.0, vec![form]),
+        &pdfrum_render::RenderOptions::default(),
+        &backend,
+        &mut diags,
+    )
+    .expect("renders");
+    assert!(out.pixel(4, 8).expect("lit")[0] > 200);
+    let counts = backend.roundtrip_stats();
+    assert_eq!(counts.finishes, 2, "mask + root, not mask + group + root");
+    assert_eq!(counts.new_targets, 2);
+}

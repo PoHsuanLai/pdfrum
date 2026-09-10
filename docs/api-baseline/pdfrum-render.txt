@@ -29,6 +29,7 @@ pub fn pdfrum_render::pixmap::AlphaMask::width(&self) -> u32
 pub struct pdfrum_render::pixmap::Pixmap
 impl pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::pixmap::Pixmap::alpha_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::cropped(&self, u32, u32, u32, u32) -> Self
 pub fn pdfrum_render::pixmap::Pixmap::data(&self) -> &[u8]
 pub fn pdfrum_render::pixmap::Pixmap::data_mut(&mut self) -> &mut [u8]
 pub fn pdfrum_render::pixmap::Pixmap::fill(&mut self, peniko::Color)
@@ -141,6 +142,7 @@ pub pdfrum_render::ColorScheme::text_stroke: pdfrum_render::Argb
 pub struct pdfrum_render::Pixmap
 impl pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::pixmap::Pixmap::alpha_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::cropped(&self, u32, u32, u32, u32) -> Self
 pub fn pdfrum_render::pixmap::Pixmap::data(&self) -> &[u8]
 pub fn pdfrum_render::pixmap::Pixmap::data_mut(&mut self) -> &mut [u8]
 pub fn pdfrum_render::pixmap::Pixmap::fill(&mut self, peniko::Color)
@@ -195,10 +197,12 @@ pub pdfrum_render::RenderSession::visible: core::option::Option<&'a pdfrum_page:
 pub const pdfrum_render::MAX_TARGET_DIMENSION: u32
 pub trait pdfrum_render::RasterBackend
 pub type pdfrum_render::RasterBackend::Device: pdfrum_render::RenderDevice
+pub fn pdfrum_render::RasterBackend::composite_isolated_groups_as_layers(&self) -> bool
 pub fn pdfrum_render::RasterBackend::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::RasterBackend::new_target(&self, u32, u32, peniko::Color) -> Self::Device
 pub fn pdfrum_render::RasterBackend::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
 pub fn pdfrum_render::RasterBackend::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::RasterBackend::snapshot_rect(&self, &Self::Device, u32, u32, u32, u32) -> pdfrum_render::pixmap::Pixmap
 pub trait pdfrum_render::RenderDevice
 pub fn pdfrum_render::RenderDevice::draw_glyph_lcd(&mut self, &pdfrum_render::glyph::SubpixelBitmap, (f64, f64), peniko::Color)
 pub fn pdfrum_render::RenderDevice::draw_image(&mut self, &pdfrum_render::RasterImage, kurbo::affine::Affine, pdfrum_render::ImageQuality, f32)
@@ -211,5 +215,7 @@ pub fn pdfrum_render::RenderDevice::stroke_path(&mut self, &kurbo::bezpath::BezP
 pub fn pdfrum_render::image_to_pixmap(&pdfrum_page::image::ImageData) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::needs_alpha_background(&pdfrum_page::page::Page) -> bool
 pub fn pdfrum_render::render_page<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::render_page_to_device<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<<B as pdfrum_render::RasterBackend>::Device, pdfrum_render::Error>
+pub fn pdfrum_render::render_page_to_device_with<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, pdfrum_render::RenderSession<'_>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<<B as pdfrum_render::RasterBackend>::Device, pdfrum_render::Error>
 pub fn pdfrum_render::render_page_with<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, pdfrum_render::RenderSession<'_>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
 pub type pdfrum_render::RasterImage = pdfrum_render::pixmap::Pixmap

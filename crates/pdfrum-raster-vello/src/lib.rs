@@ -27,7 +27,9 @@ mod adapter;
 mod block;
 mod convert;
 mod error;
+mod pool;
 mod readback;
+mod stats;
 
 use std::sync::{Arc, Mutex};
 
@@ -42,6 +44,7 @@ use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene}
 pub use adapter::{OwnedDevice, request_adapter, try_real_gpu};
 pub use error::Error;
 pub use readback::AdapterReport;
+pub use stats::RoundtripStats;
 /// The exact `wgpu` a device handed to this backend must come from.
 ///
 /// Re-exported rather than depended on separately: a `wgpu::Device` from a
@@ -90,6 +93,8 @@ pub struct VelloBackend<'a> {
     renderer: Mutex<Renderer>,
     limits: Limits,
     faults: Faults,
+    counters: Arc<stats::Counters>,
+    pool: pool::GpuPool,
     /// Present only when [`request_adapter`] built this backend, rather than
     /// an embedder handing it a device.
     owned: Option<Box<OwnedDevice>>,
@@ -203,8 +208,30 @@ impl<'a> VelloBackend<'a> {
                 max_dimension: device.limits().max_texture_dimension_2d,
             },
             faults,
+            counters: stats::Counters::shared(),
+            pool: pool::GpuPool::new(),
             owned: None,
         })
+    }
+
+    /// What this backend has done since it was built, or since the last
+    /// [`reset_roundtrip_stats`][Self::reset_roundtrip_stats].
+    ///
+    /// Cheap and racy on purpose: two threads sharing one backend are already
+    /// refused at the renderer mutex, and a bench that reads this between
+    /// pages wants a snapshot, not a lock.
+    #[must_use]
+    pub fn roundtrip_stats(&self) -> RoundtripStats {
+        self.counters.snapshot()
+    }
+
+    /// Set every roundtrip counter to zero.
+    ///
+    /// The G3 bench does this between documents so a corpus sum is a sum of
+    /// per-page shapes rather than a running total that only the last row
+    /// can read.
+    pub fn reset_roundtrip_stats(&self) {
+        self.counters.reset();
     }
 
     /// The first `wgpu` error this backend's device reported outside an error
@@ -293,6 +320,7 @@ impl<'a> VelloBackend<'a> {
     /// unrecoverable and taints every later render. [`Error::Render`] and
     /// [`Error::Readback`] for a dispatch or a map that failed on its own.
     pub fn try_finish(&self, mut d: VelloDevice) -> Result<Pixmap, Error> {
+        self.counters.add_finish();
         while !d.frames.is_empty() {
             d.pop();
         }
@@ -305,7 +333,134 @@ impl<'a> VelloBackend<'a> {
     ///
     /// As [`try_finish`][Self::try_finish].
     pub fn try_snapshot(&self, d: &VelloDevice) -> Result<Pixmap, Error> {
+        self.counters.add_snapshot();
         self.try_rasterize(d)
+    }
+
+    /// Dispatch `target`'s scene into `view` and return without reading pixels.
+    ///
+    /// `view` must be `Rgba8Unorm` with `STORAGE_BINDING`, at `target`'s size.
+    /// A swapchain image is almost never that — typically `Bgra8UnormSrgb`
+    /// with `RENDER_ATTACHMENT` — so a GUI renders into an intermediate
+    /// storage texture ([`render_to_texture`][Self::render_to_texture]) and
+    /// blits. This is the present path: no `copy_texture_to_buffer`, no
+    /// `map_async`, no host stall.
+    ///
+    /// Does not increment [`RoundtripStats::finishes`]. A finish is a pixmap
+    /// round trip; this is not one.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Device`] when the device has already faulted,
+    /// [`Error::TargetTooLarge`] when `target` exceeds the adapter,
+    /// [`Error::Render`] when the dispatcher is busy or vello refuses.
+    pub fn render_to_view(
+        &self,
+        target: &VelloDevice,
+        view: &wgpu::TextureView,
+    ) -> Result<(), Error> {
+        if let Some(fault) = self.faults.seen() {
+            self.pool.clear();
+            return Err(Error::Device(fault));
+        }
+        let (w, h) = (target.width, target.height);
+        if w == 0 || h == 0 {
+            return Ok(());
+        }
+        self.check_target(w, h)?;
+        let Ok(mut renderer) = self.renderer.try_lock() else {
+            return Err(Error::Render("the renderer was already in use".to_owned()));
+        };
+        let result = readback::render_to_view(
+            self.device,
+            self.queue,
+            &mut renderer,
+            &target.scene,
+            view,
+            &RenderParams {
+                base_color: peniko::Color::TRANSPARENT,
+                width: w,
+                height: h,
+                antialiasing_method: PINNED_AA,
+            },
+        );
+        if let Some(fault) = self.faults.seen() {
+            self.pool.clear();
+            return Err(Error::Device(fault));
+        }
+        result
+    }
+
+    /// Rasterize `target` into a new storage texture and return it.
+    ///
+    /// The texture is `Rgba8Unorm` with `STORAGE_BINDING | COPY_SRC |
+    /// TEXTURE_BINDING`, so the caller can sample it or read it back with
+    /// [`read_texture`][Self::read_texture]. It is **not** pooled: the
+    /// caller owns it.
+    ///
+    /// # Errors
+    ///
+    /// As [`render_to_view`][Self::render_to_view].
+    pub fn render_to_texture(&self, target: &VelloDevice) -> Result<wgpu::Texture, Error> {
+        let (w, h) = (target.width, target.height);
+        if w == 0 || h == 0 {
+            // wgpu refuses a zero-extent texture. The pixmap path returns an
+            // empty buffer here; matching that with a dummy would invent a
+            // size. The caller asked for pixels of nothing.
+            return Err(Error::Render(
+                "cannot create a zero-sized GPU texture".to_owned(),
+            ));
+        }
+        self.check_target(w, h)?;
+        // Counted as created, not reused: the caller keeps this handle.
+        self.counters.add_texture_created();
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("pdfrum-vello-gpu present"),
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: pool::TARGET_FORMAT,
+            usage: pool::TARGET_USAGE,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.render_to_view(target, &view)?;
+        Ok(texture)
+    }
+
+    /// Copy a storage texture this backend rendered into a host pixmap.
+    ///
+    /// The present path's opt-in readback: an embedder that usually stays on
+    /// the GPU and occasionally wants pixels (a screenshot, a test) uses this
+    /// instead of going through [`RasterBackend::finish`].
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Readback`] if the staging map fails.
+    pub fn read_texture(
+        &self,
+        texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<Pixmap, Error> {
+        let pixmap = readback::read_texture(
+            self.device,
+            self.queue,
+            texture,
+            0,
+            0,
+            width,
+            height,
+            &self.pool,
+        )?;
+        self.counters
+            .add_pixels_read(u64::from(pixmap.width()).saturating_mul(u64::from(pixmap.height())));
+        Ok(pixmap)
     }
 
     /// The largest target this device will actually accept, in either axis.
@@ -335,13 +490,6 @@ impl<'a> VelloBackend<'a> {
     /// costs no more than the backdrop it was handed.
     /// [`RasterBackend::new_target`] clamps to [`ceiling`][Self::ceiling] and
     /// cannot reach it at all.
-    fn rasterize(&self, target: &VelloDevice) -> Pixmap {
-        self.try_rasterize(target)
-            .unwrap_or_else(|_| Pixmap::new(target.width, target.height))
-    }
-
-    /// [`rasterize`][Self::rasterize] with its failures returned rather than
-    /// blanked.
     ///
     /// The device fault is checked **after** the round trip as well as before
     /// it: an uncaptured error raised by this very dispatch arrives during the
@@ -349,6 +497,7 @@ impl<'a> VelloBackend<'a> {
     /// driver had already abandoned.
     fn try_rasterize(&self, target: &VelloDevice) -> Result<Pixmap, Error> {
         if let Some(fault) = self.faults.seen() {
+            self.pool.clear();
             return Err(Error::Device(fault));
         }
         let (w, h) = (target.width, target.height);
@@ -358,36 +507,92 @@ impl<'a> VelloBackend<'a> {
             return Ok(Pixmap::new(w, h));
         }
         self.check_target(w, h)?;
-        // Only held elsewhere if a second thread is rendering on this same
-        // backend, or if a previous render panicked and poisoned the lock.
-        // Either way an error beats a panic (STYLE §3), and refusing is the
-        // honest answer: one `Renderer` cannot serve two renders at once.
+        self.rasterize_and_read(target, 0, 0, w, h)
+    }
+
+    /// Rasterize `target` and copy only `(x, y, w, h)` back to the host.
+    ///
+    /// The scene still fills a full-size storage texture — vello has no
+    /// sub-rect dispatch — but the staging copy and the pixmap are the
+    /// rectangle, which is a non-isolated group's backdrop.
+    fn try_rasterize_rect(
+        &self,
+        target: &VelloDevice,
+        x: u32,
+        y: u32,
+        w: u32,
+        h: u32,
+    ) -> Result<Pixmap, Error> {
+        if let Some(fault) = self.faults.seen() {
+            self.pool.clear();
+            return Err(Error::Device(fault));
+        }
+        let (tw, th) = (target.width, target.height);
+        if tw == 0 || th == 0 || w == 0 || h == 0 {
+            return Ok(Pixmap::new(w, h));
+        }
+        self.check_target(tw, th)?;
+        let x = x.min(tw);
+        let y = y.min(th);
+        let w = w.min(tw.saturating_sub(x));
+        let h = h.min(th.saturating_sub(y));
+        self.rasterize_and_read(target, x, y, w, h)
+    }
+
+    fn rasterize_and_read(
+        &self,
+        target: &VelloDevice,
+        origin_x: u32,
+        origin_y: u32,
+        w: u32,
+        h: u32,
+    ) -> Result<Pixmap, Error> {
         let Ok(mut renderer) = self.renderer.try_lock() else {
             return Err(Error::Render("the renderer was already in use".to_owned()));
         };
-        let pixels = readback::render_and_read(
+        let tw = target.width;
+        let th = target.height;
+        let texture = self
+            .pool
+            .acquire_texture(self.device, tw, th, &self.counters);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        readback::render_to_view(
             self.device,
             self.queue,
             &mut renderer,
             &target.scene,
-            w,
-            h,
+            &view,
             &RenderParams {
                 // The backdrop is drawn as the scene's first image (see
                 // `VelloDevice::new`), so vello's own base colour must be
                 // transparent or it would paint over it.
                 base_color: peniko::Color::TRANSPARENT,
-                width: w,
-                height: h,
+                width: tw,
+                height: th,
                 antialiasing_method: PINNED_AA,
             },
+        )?;
+        let pixels = readback::read_texture(
+            self.device,
+            self.queue,
+            &texture,
+            origin_x,
+            origin_y,
+            w,
+            h,
+            &self.pool,
         );
-        // The device's verdict outranks the round trip's own: a readback that
-        // "succeeded" against a lost device read whatever was in the buffer.
+        let Ok(pixmap) = pixels else {
+            return pixels;
+        };
+        self.pool.release_texture(texture, tw, th);
+        self.counters
+            .add_pixels_read(u64::from(pixmap.width()).saturating_mul(u64::from(pixmap.height())));
         if let Some(fault) = self.faults.seen() {
+            self.pool.clear();
             return Err(Error::Device(fault));
         }
-        pixels
+        Ok(pixmap)
     }
 }
 
@@ -405,9 +610,12 @@ pub struct VelloDevice {
     /// One entry per open frame — clip or layer, since `vello` keeps them on
     /// one stack (unlike `vello_cpu`, where they are two and each `pop` must
     /// name which). The entry is the mask that frame still owes, which is
-    /// `None` for every frame the engine actually pushes today; see
+    /// `None` unless the engine passed a soft mask into `push_layer`; see
     /// [`Frame`].
     frames: Vec<Frame>,
+    /// Shared with the backend that created this target, so an image encoded
+    /// here still counts against that backend's upload total.
+    counters: Arc<stats::Counters>,
 }
 
 /// What an open frame still owes its `pop`.
@@ -444,11 +652,21 @@ impl VelloDevice {
     /// knockout buffer both need — cannot go through it. It is encoded as the
     /// scene's first draw instead, an opaque image at identity, which is
     /// exactly the pixel-for-pixel blit `draw_image`'s convention describes.
-    fn new(width: u32, height: u32, backdrop: Option<&Pixmap>) -> Self {
+    fn new(
+        width: u32,
+        height: u32,
+        backdrop: Option<&Pixmap>,
+        counters: Arc<stats::Counters>,
+    ) -> Self {
         let mut scene = Scene::new();
         if let Some(base) = backdrop
             && let Some(image) = convert::to_image_data(base)
         {
+            counters.add_bytes_uploaded(
+                u64::from(base.width())
+                    .saturating_mul(u64::from(base.height()))
+                    .saturating_mul(4),
+            );
             scene.draw_image(
                 peniko::ImageBrush {
                     image: &image,
@@ -465,6 +683,7 @@ impl VelloDevice {
             width,
             height,
             frames: Vec::new(),
+            counters,
         }
     }
 
@@ -520,6 +739,11 @@ impl RenderDevice for VelloDevice {
         let Some(image) = convert::to_image_data(img) else {
             return;
         };
+        self.counters.add_bytes_uploaded(
+            u64::from(img.width())
+                .saturating_mul(u64::from(img.height()))
+                .saturating_mul(4),
+        );
         // Unlike `vello_cpu 0.2.0`, which panics on a sampler alpha below one,
         // GPU vello encodes it as an 8-bit multiplier in the draw tag
         // (`vello_encoding::Encoding::encode_image`), so a translucent image
@@ -578,7 +802,14 @@ impl RenderDevice for VelloDevice {
                 // keeps a Tier C difference from being about error handling.
                 return None;
             }
-            convert::mask_to_image_data(m).map(Box::new)
+            convert::mask_to_image_data(m).map(|image| {
+                self.counters.add_bytes_uploaded(
+                    u64::from(m.width())
+                        .saturating_mul(u64::from(m.height()))
+                        .saturating_mul(4),
+                );
+                Box::new(image)
+            })
         });
         self.scene.push_layer(
             peniko::Fill::NonZero,
@@ -644,13 +875,14 @@ impl RasterBackend for VelloBackend<'_> {
         // be told than clamped uses [`VelloBackend::try_new_target`].
         let ceiling = self.ceiling();
         let (w, h) = (w.min(ceiling), h.min(ceiling));
+        self.counters.add_new_target();
         // A transparent clear needs no backdrop draw at all, which is the
         // common case (every group, mask and pattern cell) and the one worth
         // keeping free of an image upload.
         if clear == peniko::Color::TRANSPARENT {
-            return VelloDevice::new(w, h, None);
+            return VelloDevice::new(w, h, None, Arc::clone(&self.counters));
         }
-        let mut target = VelloDevice::new(w, h, None);
+        let mut target = VelloDevice::new(w, h, None, Arc::clone(&self.counters));
         let rect = target.full_rect();
         target
             .scene
@@ -659,7 +891,13 @@ impl RasterBackend for VelloBackend<'_> {
     }
 
     fn new_target_with_backdrop(&self, base: &Pixmap) -> Self::Device {
-        VelloDevice::new(base.width(), base.height(), Some(base))
+        self.counters.add_new_target();
+        VelloDevice::new(
+            base.width(),
+            base.height(),
+            Some(base),
+            Arc::clone(&self.counters),
+        )
     }
 
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
@@ -671,16 +909,36 @@ impl RasterBackend for VelloBackend<'_> {
             d.frames.is_empty(),
             "snapshot requires every layer and clip popped"
         );
-        self.rasterize(d)
+        self.try_snapshot(d)
+            .unwrap_or_else(|_| Pixmap::new(d.width, d.height))
     }
 
-    fn finish(&self, mut d: Self::Device) -> Pixmap {
+    fn snapshot_rect(
+        &self,
+        d: &Self::Device,
+        origin_x: u32,
+        origin_y: u32,
+        width: u32,
+        height: u32,
+    ) -> Pixmap {
+        debug_assert!(
+            d.frames.is_empty(),
+            "snapshot requires every layer and clip popped"
+        );
+        self.counters.add_snapshot();
+        self.try_rasterize_rect(d, origin_x, origin_y, width, height)
+            .unwrap_or_else(|_| Pixmap::new(width, height))
+    }
+
+    fn composite_isolated_groups_as_layers(&self) -> bool {
+        true
+    }
+
+    fn finish(&self, d: Self::Device) -> Pixmap {
         // Close anything the engine left open on a damaged page, so the scene
-        // is well-formed before it is encoded.
-        while !d.frames.is_empty() {
-            d.pop();
-        }
-        self.rasterize(&d)
+        // is well-formed before it is encoded. `try_finish` pops and counts.
+        let (w, h) = (d.width, d.height);
+        self.try_finish(d).unwrap_or_else(|_| Pixmap::new(w, h))
     }
 }
 
@@ -703,6 +961,10 @@ impl VelloBackend<'static> {
 mod tests {
     use super::*;
 
+    fn device(w: u32, h: u32) -> VelloDevice {
+        VelloDevice::new(w, h, None, stats::Counters::shared())
+    }
+
     /// The GPU backend carries the same `Send + Sync` surface as the CPU
     /// ones. `Renderer` is `Send` and not `Sync` — `vello` asserts the first
     /// itself — which is exactly what a `Mutex` is enough for, and asserting
@@ -716,6 +978,7 @@ mod tests {
         // whichever thread rasterizes it.
         send_sync::<VelloDevice>();
         send_sync::<Error>();
+        send_sync::<RoundtripStats>();
     }
 
     #[test]
@@ -731,7 +994,7 @@ mod tests {
         // The design point behind `VelloDevice` carrying a scene and not a
         // texture: a soft mask or pattern cell that is created and discarded
         // must not have cost an allocation on the device.
-        let d = VelloDevice::new(64, 64, None);
+        let d = device(64, 64);
         assert_eq!(d.width, 64);
         assert!(d.frames.is_empty());
     }
@@ -742,7 +1005,7 @@ mod tests {
         // `Vec<Frame>` *tagged by kind* because `vello_cpu` keeps two stacks
         // and each `pop` must name one. Here every frame pops the same way,
         // and the vector carries a deferred mask rather than a kind.
-        let mut d = VelloDevice::new(8, 8, None);
+        let mut d = device(8, 8);
         d.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 8.0));
         d.push_layer(BlendMode::Multiply, 1.0, None);
         assert_eq!(d.frames.len(), 2);
@@ -756,7 +1019,7 @@ mod tests {
         // A damaged page can leave the engine unbalanced, and STYLE §3 forbids
         // a library panic. Popping past the bottom would close a layer this
         // device never opened, corrupting the caller's own scene nesting.
-        let mut d = VelloDevice::new(8, 8, None);
+        let mut d = device(8, 8);
         d.pop();
         d.pop();
         assert!(d.frames.is_empty());
@@ -768,7 +1031,7 @@ mod tests {
         // the content *already drawn* in the enclosing layer, so encoding the
         // mask at `push_layer` — where the content does not exist yet — masks
         // nothing and reads back at full alpha. The frame therefore carries it.
-        let mut d = VelloDevice::new(8, 8, None);
+        let mut d = device(8, 8);
         let mask = AlphaMask::filled(8, 8, 128);
         d.push_layer(BlendMode::Normal, 1.0, Some(&mask));
         assert!(
@@ -829,7 +1092,7 @@ mod tests {
         // The `debug_assert` fires first in a debug build, which is the same
         // shape `pdfrum-raster-vello-cpu` takes, so the release behaviour is
         // asserted through the conversion the release path would reach.
-        let d = VelloDevice::new(8, 8, None);
+        let d = device(8, 8);
         let wrong = AlphaMask::filled(4, 4, 128);
         assert_ne!((wrong.width(), wrong.height()), (d.width, d.height));
         // What `push_layer`'s size guard consults, exercised without tripping

@@ -4,10 +4,14 @@
 //! three of them whatever it does with the result, so the cost of a render is
 //! all four and not just the dispatch:
 //!
-//! 1. allocate a storage texture the fine-rasterization stage can write,
+//! 1. take a pooled storage texture (or allocate one) the fine stage can write,
 //! 2. dispatch vello's pipelines into it,
-//! 3. `copy_texture_to_buffer` into a `MAP_READ` buffer,
+//! 3. `copy_texture_to_buffer` into a pooled `MAP_READ` buffer,
 //! 4. `map_async` and block the host until the GPU has caught up.
+//!
+//! [`crate::VelloBackend::render_to_view`] stops after step 2, which is the
+//! whole point of the present path: a GUI that already has a texture does not
+//! stall the host for pixels it will never read.
 //!
 //! Step 3 is where `wgpu`'s row-alignment rule bites: a buffer copy's
 //! `bytes_per_row` must be a multiple of 256, so a 100-pixel-wide target is
@@ -20,19 +24,11 @@ use vello::{RenderParams, Renderer, Scene};
 
 use crate::block;
 use crate::error::Error;
+use crate::pool::GpuPool;
 use crate::wgpu;
 
 /// `wgpu`'s required row alignment for a texture-to-buffer copy.
 const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-
-/// The texture format vello's fine stage writes and this reads.
-///
-/// `Rgba8Unorm` and not the `Srgb` variant: the engine's `Pixmap` holds
-/// premultiplied sRGB *bytes* with no transfer applied at the device seam, and
-/// asking the GPU for an sRGB view would apply one on write and another on
-/// read. The CPU backends do neither, so matching them is what keeps a Tier C
-/// difference about rasterization.
-const TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// What adapter a backend is running on.
 ///
@@ -101,71 +97,64 @@ impl std::fmt::Display for AdapterReport {
     }
 }
 
-/// Render `scene` and bring its pixels back to the host.
+/// Dispatch `scene` into `view`.
 ///
-/// # Errors
-///
-/// [`Error::Render`] if vello's dispatch failed, [`Error::Readback`] if the
-/// staging buffer could not be mapped.
-pub fn render_and_read(
+/// The view must be `Rgba8Unorm` with `STORAGE_BINDING` at `params`'s size.
+/// A swapchain image is almost never that — typically `Bgra8UnormSrgb` with
+/// `RENDER_ATTACHMENT` — so a GUI renders into an intermediate storage
+/// texture and blits. Stopping here is what keeps the host off the critical
+/// path.
+pub(crate) fn render_to_view(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     renderer: &mut Renderer,
     scene: &Scene,
-    width: u32,
-    height: u32,
+    view: &wgpu::TextureView,
     params: &RenderParams,
-) -> Result<Pixmap, Error> {
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("pdfrum-vello-gpu target"),
-        size: wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: TARGET_FORMAT,
-        // `STORAGE_BINDING` because vello's fine stage is a compute shader
-        // writing a storage texture, not a fragment shader writing an
-        // attachment.
-        usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-        view_formats: &[],
-    });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
+) -> Result<(), Error> {
     renderer
-        .render_to_texture(device, queue, scene, &view, params)
-        .map_err(|e| Error::Render(e.to_string()))?;
-
-    read_texture(device, queue, &texture, width, height)
+        .render_to_texture(device, queue, scene, view, params)
+        .map_err(|e| Error::Render(e.to_string()))
 }
 
 /// Copy a rendered texture into host memory as a [`Pixmap`].
-fn read_texture(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "origin plus size is the copy, and the pool has to travel with it"
+)]
+pub(crate) fn read_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
+    origin_x: u32,
+    origin_y: u32,
     width: u32,
     height: u32,
+    pool: &GpuPool,
 ) -> Result<Pixmap, Error> {
+    if width == 0 || height == 0 {
+        return Ok(Pixmap::new(width, height));
+    }
     let unpadded = width.saturating_mul(4);
     let padded = unpadded.next_multiple_of(COPY_BYTES_PER_ROW_ALIGNMENT);
     let size = u64::from(padded).saturating_mul(u64::from(height));
 
-    let staging = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("pdfrum-vello-gpu readback"),
-        size,
-        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
+    let staging = pool.acquire_buffer(device, size);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("pdfrum-vello-gpu readback"),
     });
     encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
+        wgpu::TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d {
+                x: origin_x,
+                y: origin_y,
+                z: 0,
+            },
+            aspect: wgpu::TextureAspect::All,
+        },
         wgpu::TexelCopyBufferInfo {
             buffer: &staging,
             layout: wgpu::TexelCopyBufferLayout {
@@ -207,18 +196,24 @@ fn read_texture(
 
     let view = slice.get_mapped_range();
     let mut out = Vec::with_capacity((unpadded as usize).saturating_mul(height as usize));
+    let mut missing_row = None;
     for row in 0..height {
         let start = (row as usize).saturating_mul(padded as usize);
         let end = start.saturating_add(unpadded as usize);
         let Some(bytes) = view.get(start..end) else {
-            return Err(Error::Readback(format!(
-                "row {row} outside the staging buffer"
-            )));
+            missing_row = Some(row);
+            break;
         };
         out.extend_from_slice(bytes);
     }
     drop(view);
     staging.unmap();
+    if let Some(row) = missing_row {
+        return Err(Error::Readback(format!(
+            "row {row} outside the staging buffer"
+        )));
+    }
+    pool.release_buffer(staging, size);
 
     Pixmap::from_vec(width, height, out)
         .ok_or_else(|| Error::Readback("readback did not fill the pixmap".to_owned()))

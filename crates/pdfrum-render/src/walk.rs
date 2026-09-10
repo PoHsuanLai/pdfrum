@@ -126,6 +126,80 @@ pub fn render_page_with<B: RasterBackend>(
     session: RenderSession<'_>,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
+    let device = render_page_to_device_with(page, opts, backend, session, diags)?;
+    Ok(backend.finish(device))
+}
+
+/// Record a page onto a backend device without rasterizing the root target.
+///
+/// Same walk as [`render_page`], but the caller owns the device afterwards:
+/// a GPU embedder dispatches it into a texture with
+/// `VelloBackend::render_to_view` and never reads pixels; a CPU caller
+/// still calls [`RasterBackend::finish`]. Offscreen `finish` calls inside
+/// the walk — groups, masks, pattern cells — are unchanged.
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_page::Page;
+/// use pdfrum_raster_tinyskia::TinySkiaBackend;
+/// use pdfrum_render::{RasterBackend, RenderOptions, render_page_to_device};
+///
+/// let backend = TinySkiaBackend::new();
+/// let device = render_page_to_device(
+///     &Page::empty(),
+///     &RenderOptions::default(),
+///     &backend,
+///     &mut Diagnostics::default(),
+/// )?;
+/// let pixmap = backend.finish(device);
+/// assert_eq!((pixmap.width(), pixmap.height()), (612, 792));
+/// # Ok::<(), pdfrum_render::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// As [`render_page`].
+pub fn render_page_to_device<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    diags: &mut Diagnostics,
+) -> Result<B::Device, Error> {
+    render_page_to_device_with(page, opts, backend, RenderSession::default(), diags)
+}
+
+/// [`render_page_to_device`] with a [`RenderSession`].
+///
+/// ```
+/// use pdfrum_common::Diagnostics;
+/// use pdfrum_page::Page;
+/// use pdfrum_raster_tinyskia::TinySkiaBackend;
+/// use pdfrum_render::{
+///     RasterBackend, RenderOptions, RenderSession, render_page_to_device_with,
+/// };
+///
+/// let backend = TinySkiaBackend::new();
+/// let device = render_page_to_device_with(
+///     &Page::empty(),
+///     &RenderOptions::default(),
+///     &backend,
+///     RenderSession::default(),
+///     &mut Diagnostics::default(),
+/// )?;
+/// let _ = backend.finish(device);
+/// # Ok::<(), pdfrum_render::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// As [`render_page`].
+pub fn render_page_to_device_with<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    session: RenderSession<'_>,
+    diags: &mut Diagnostics,
+) -> Result<B::Device, Error> {
     let RenderSession {
         caches,
         visible,
@@ -157,7 +231,7 @@ fn render_page_inner<B: RasterBackend>(
     caches: &mut RenderCaches,
     deadline: Option<&Deadline>,
     diags: &mut Diagnostics,
-) -> Result<Pixmap, Error> {
+) -> Result<B::Device, Error> {
     let (w, h) = target_size(page, opts)?;
     // Before the allocation, and again after the walk: a walk that stopped
     // on the deadline has left the device half-drawn, and the second read is
@@ -184,7 +258,7 @@ fn render_page_inner<B: RasterBackend>(
         diags,
     );
     check_deadline(deadline)?;
-    Ok(backend.finish(device))
+    Ok(device)
 }
 
 /// Whether the page renders onto a transparent background rather than white.
@@ -662,13 +736,39 @@ fn render_grouped<B: RasterBackend>(
         PageObject::Form(f) => f.object.transparency,
         _ => ctx.transparency,
     };
+    let knockout = match object {
+        PageObject::Form(f) => f.object.transparency.knockout,
+        _ => false,
+    };
+    // Isolated groups (no backdrop copy, no knockout) can composite as a
+    // native layer: clip to the group's bbox, `push_layer`, walk on the
+    // parent. That is the GPU win — no `finish` of the group's content.
+    // Knockout still needs per-object pixmap combine, and non-isolated
+    // still needs `remove_backdrop`. CPU backends leave this off so the
+    // conformance board does not move.
+    if backend.composite_isolated_groups_as_layers() && !needs_backdrop(transparency) && !knockout {
+        render_grouped_as_layer(
+            ctx,
+            device,
+            backend,
+            caches,
+            object,
+            children,
+            inputs,
+            transparency,
+            to_device,
+            device_box,
+            rect,
+            diags,
+        );
+        return;
+    }
     // Isolated means the group starts transparent; non-isolated means it
     // starts from a copy of what is already on the page. `[oracle-bug]`:
     // that copy is kept so it can be **removed again** below, which
     // `cpdf_renderstatus.cpp` never does — see `Pixmap::remove_backdrop`.
     let (mut sub, initial_backdrop) = if needs_backdrop(transparency) {
-        let backdrop = backend.snapshot(device);
-        let cropped = crop(&backdrop, rect);
+        let cropped = snapshot_group_backdrop(backend, device, rect);
         (backend.new_target_with_backdrop(&cropped), Some(cropped))
     } else {
         (backend.new_target(w, h, peniko::Color::TRANSPARENT), None)
@@ -736,6 +836,83 @@ fn render_grouped<B: RasterBackend>(
         1.0,
     );
     device.pop();
+}
+
+/// Isolated group as a native layer on the parent device.
+///
+/// The group's content is clipped to its bbox so a blend mode that reads
+/// the backdrop cannot darken pixels the group never painted — the pixmap
+/// path gets that for free by sizing the buffer to the bbox.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the layer path takes the same inputs as the pixmap path plus \
+              the bbox it clips to"
+)]
+fn render_grouped_as_layer<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &PageObject,
+    children: &Visibility,
+    inputs: GroupInputs,
+    transparency: pdfrum_page::Transparency,
+    to_device: Affine,
+    device_box: Rect,
+    rect: IntRect,
+    diags: &mut Diagnostics,
+) {
+    let state = object.state();
+    let inner_ctx = RenderCtx {
+        transparency,
+        in_group: true,
+        initial_fill: None,
+        initial_stroke: None,
+        ..ctx.deeper()
+    };
+    let finish = GroupFinish::of(inputs, transparency, ctx.in_group);
+    let mut layer_alpha = 1.0_f32;
+    if let Some(a) = finish.group_alpha {
+        layer_alpha *= a;
+    }
+    if let Some(a) = finish.initial_alpha {
+        layer_alpha *= a;
+    }
+
+    // Soft masks still rasterize to a coverage plane (that *is* pixels),
+    // then pad to the current target so `push_layer`'s device-sized
+    // invariant holds. The group's *content* stays on this device.
+    let mask = state.general.soft_mask.as_ref().and_then(|sm| {
+        let rendered = render_soft_mask(&inner_ctx, backend, caches, sm, rect, to_device, diags)?;
+        let (Ok(dw), Ok(dh)) = (
+            u32::try_from(outer_rect(device_box).width()),
+            u32::try_from(outer_rect(device_box).height()),
+        ) else {
+            return Some(rendered);
+        };
+        Some(rendered.placed_in(dw, dh, rect.left, rect.top))
+    });
+
+    device.push_clip_rect(rect.to_rect());
+    device.push_layer(state.general.blend, layer_alpha, mask.as_ref());
+    render_direct(
+        &inner_ctx, device, backend, caches, object, children, to_device, device_box, diags,
+    );
+    device.pop();
+    device.pop();
+}
+
+/// The parent pixels under a group's bbox, via [`RasterBackend::snapshot_rect`].
+fn snapshot_group_backdrop<B: RasterBackend>(
+    backend: &B,
+    device: &B::Device,
+    rect: IntRect,
+) -> Pixmap {
+    let origin_x = u32::try_from(rect.left).unwrap_or(0);
+    let origin_y = u32::try_from(rect.top).unwrap_or(0);
+    let width = u32::try_from(rect.width()).unwrap_or(0);
+    let height = u32::try_from(rect.height()).unwrap_or(0);
+    backend.snapshot_rect(device, origin_x, origin_y, width, height)
 }
 
 /// Render a soft mask's group and read it back as a device-sized coverage
@@ -811,29 +988,6 @@ fn render_soft_mask<B: RasterBackend>(
     }
     let rendered = backend.finish(device);
     Some(crate::softmask::readback(mask, &rendered))
-}
-
-/// Copy a sub-rectangle out of a pixmap.
-fn crop(source: &Pixmap, rect: IntRect) -> Pixmap {
-    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
-        return Pixmap::new(0, 0);
-    };
-    let mut out = Pixmap::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let (sx, sy) = (
-                i64::from(x) + i64::from(rect.left),
-                i64::from(y) + i64::from(rect.top),
-            );
-            let (Ok(sx), Ok(sy)) = (u32::try_from(sx), u32::try_from(sy)) else {
-                continue;
-            };
-            if let Some(px) = source.pixel(sx, sy) {
-                out.set_pixel(x, y, px);
-            }
-        }
-    }
-    out
 }
 
 /// Dispatch one object to its handler.
@@ -2856,15 +3010,7 @@ mod tests {
     fn crop_lifts_a_sub_rectangle() {
         let mut src = Pixmap::new(4, 4);
         src.set_pixel(2, 3, [1, 2, 3, 255]);
-        let out = crop(
-            &src,
-            IntRect {
-                left: 2,
-                top: 2,
-                right: 4,
-                bottom: 4,
-            },
-        );
+        let out = src.cropped(2, 2, 2, 2);
         assert_eq!((out.width(), out.height()), (2, 2));
         assert_eq!(out.pixel(0, 1), Some([1, 2, 3, 255]));
     }
@@ -2872,15 +3018,7 @@ mod tests {
     #[test]
     fn crop_of_an_out_of_range_rect_is_transparent() {
         let src = Pixmap::filled(2, 2, peniko::Color::from_rgba8(9, 9, 9, 255));
-        let out = crop(
-            &src,
-            IntRect {
-                left: 10,
-                top: 10,
-                right: 12,
-                bottom: 12,
-            },
-        );
+        let out = src.cropped(10, 10, 2, 2);
         assert_eq!(out.pixel(0, 0), Some([0, 0, 0, 0]));
     }
 
