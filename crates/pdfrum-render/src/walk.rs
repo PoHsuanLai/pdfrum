@@ -1715,12 +1715,12 @@ fn sole_color_image(objects: &[PageObject]) -> Option<&pdfrum_page::ImageObject>
     }
 }
 
-/// Blit an uncoloured Type 3 stencil as a glyph mask (`SetBitMask`).
+/// Draw a Type 3 sole-image the integer-stretch path could not handle.
 ///
-/// Two differences from walking the procedure as a form: the translation is
-/// snapped to whole pixels (`round(e)`, `round(f)`), and a clip the procedure
-/// accumulated is dropped with the form. Sampling is nearest — `StretchTo`
-/// with default resample options, then a 1:1 blit.
+/// A sheared image, a stencil with empty padding rows, and a colour image
+/// all miss that path. This is the same snapped, nearest-neighbour image
+/// draw as before: translation rounds to whole pixels, and a clip the
+/// procedure accumulated is dropped with the form.
 #[expect(
     clippy::too_many_arguments,
     reason = "the sole-image blit needs the same walk arguments as a char proc, \
@@ -1833,6 +1833,9 @@ fn render_type3_text<B: RasterBackend>(
     let mut ancestry: Vec<pdfrum_font::FontId> = ctx.type3_fonts.to_vec();
     ancestry.push(font.id());
 
+    // Sole-image stencils collect into one blit so overlapping glyphs share
+    // a coverage plane. Anything else flushes first.
+    let mut pending: Vec<crate::type3::PlacedMask> = Vec::new();
     for placed in crate::text::place_type3_chars(object, state, to_device) {
         let Some(metrics) = object.type3_metrics.get(&placed.code) else {
             continue;
@@ -1840,74 +1843,137 @@ fn render_type3_text<B: RasterBackend>(
         if metrics.objects.is_empty() || !is_available_matrix(placed.matrix) {
             continue;
         }
-        if !metrics.colored {
-            if let Some(image) = sole_stencil(&metrics.objects) {
-                render_type3_sole_stencil(
-                    ctx,
-                    device,
-                    backend,
-                    caches,
-                    image,
-                    state,
-                    placed.matrix,
-                    fill,
-                    device_box,
-                    diags,
-                );
-                continue;
+        draw_type3_glyph(
+            ctx,
+            device,
+            backend,
+            caches,
+            &mut pending,
+            metrics,
+            &placed,
+            state,
+            fill,
+            &ancestry,
+            device_box,
+            diags,
+        );
+    }
+    blit_type3_batch(device, &mut pending, fill);
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one glyph's dispatch needs the walk, the pending stencil batch, \
+              and the char-proc ancestry"
+)]
+fn draw_type3_glyph<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    pending: &mut Vec<crate::type3::PlacedMask>,
+    metrics: &pdfrum_page::Type3Metrics,
+    placed: &crate::text::PlacedType3Char,
+    state: &pdfrum_page::GraphicsState,
+    fill: Argb,
+    ancestry: &[pdfrum_font::FontId],
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    if !metrics.colored {
+        if let Some(image) = sole_stencil(&metrics.objects) {
+            if let Some(mask) = type3_stencil_glyph(backend, caches, image, placed.matrix) {
+                pending.push(mask);
+                return;
             }
-            if let Some(image) = sole_color_image(&metrics.objects) {
-                let tinted = pdfrum_page::ImageObject {
-                    image: Arc::new(color_as_fill_mask(&image.image, fill)),
-                    matrix: image.matrix,
-                    is_mask: false,
-                    oc: image.oc.clone(),
-                    source: image.source,
-                };
-                render_type3_sole_stencil(
-                    ctx,
-                    device,
-                    backend,
-                    caches,
-                    &tinted,
-                    state,
-                    placed.matrix,
-                    fill,
-                    device_box,
-                    diags,
-                );
-                continue;
-            }
-        }
-        let inner = RenderCtx {
-            opts: ctx.opts.for_type3_char_proc(),
-            type3: Some(crate::ctx::Type3Frame {
-                fill,
-                colored: metrics.colored,
-            }),
-            type3_fonts: &ancestry,
-            initial_fill: Some(fill),
-            initial_stroke: Some(fill),
-            ..ctx.deeper()
-        };
-        if fill.a == 255 {
-            render_object_list(
-                &inner,
+            blit_type3_batch(device, pending, fill);
+            render_type3_sole_stencil(
+                ctx,
                 device,
                 backend,
                 caches,
-                &metrics.objects,
-                &Visibility::all_visible(), // the font's objects, not the page's
+                image,
+                state,
                 placed.matrix,
+                fill,
                 device_box,
                 diags,
             );
-            continue;
+            return;
         }
-        render_translucent_char_proc(
-            &inner, device, backend, caches, metrics, &placed, fill, device_box, diags,
-        );
+        if let Some(image) = sole_color_image(&metrics.objects) {
+            blit_type3_batch(device, pending, fill);
+            let tinted = pdfrum_page::ImageObject {
+                image: Arc::new(color_as_fill_mask(&image.image, fill)),
+                matrix: image.matrix,
+                is_mask: false,
+                oc: image.oc.clone(),
+                source: image.source,
+            };
+            render_type3_sole_stencil(
+                ctx,
+                device,
+                backend,
+                caches,
+                &tinted,
+                state,
+                placed.matrix,
+                fill,
+                device_box,
+                diags,
+            );
+            return;
+        }
     }
+    blit_type3_batch(device, pending, fill);
+    let inner = RenderCtx {
+        opts: ctx.opts.for_type3_char_proc(),
+        type3: Some(crate::ctx::Type3Frame {
+            fill,
+            colored: metrics.colored,
+        }),
+        type3_fonts: ancestry,
+        initial_fill: Some(fill),
+        initial_stroke: Some(fill),
+        ..ctx.deeper()
+    };
+    if fill.a == 255 {
+        render_object_list(
+            &inner,
+            device,
+            backend,
+            caches,
+            &metrics.objects,
+            &Visibility::all_visible(), // the font's objects, not the page's
+            placed.matrix,
+            device_box,
+            diags,
+        );
+        return;
+    }
+    render_translucent_char_proc(
+        &inner, device, backend, caches, metrics, placed, fill, device_box, diags,
+    );
+}
+
+fn type3_stencil_glyph<B: RasterBackend>(
+    backend: &B,
+    caches: &mut RenderCaches,
+    image: &pdfrum_page::ImageObject,
+    char_to_device: Affine,
+) -> Option<crate::type3::PlacedMask> {
+    let blues = caches.type3_blues.for_matrix(char_to_device);
+    crate::type3::try_stretch(backend, image, char_to_device, blues)
+        .and_then(|glyph| glyph.place(char_to_device))
+}
+
+fn blit_type3_batch<D: crate::device::RenderDevice>(
+    device: &mut D,
+    pending: &mut Vec<crate::type3::PlacedMask>,
+    fill: Argb,
+) {
+    crate::type3::blit_batch(device, pending, fill);
+    pending.clear();
 }
 
 /// One type-3 glyph procedure drawn through its own buffer.

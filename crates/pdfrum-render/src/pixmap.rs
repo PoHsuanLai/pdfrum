@@ -1196,6 +1196,17 @@ mod tests {
     }
 
     #[test]
+    fn an_opaque_dest_times_a_mask_replaces_alpha_then_premultiplies() {
+        // An already-opaque pixel: RGB and A both scale by the mask.
+        let mut p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(10, 20, 30, 255));
+        p.multiply_alpha_mask(&AlphaMask::filled(1, 1, 128));
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([mul255(10, 128), mul255(20, 128), mul255(30, 128), 128])
+        );
+    }
+
+    #[test]
     fn multiply_alpha_one_is_exact_early_return() {
         let mut p = Pixmap::filled(2, 2, peniko::Color::from_rgba8(10, 20, 30, 200));
         let before = p.clone();
