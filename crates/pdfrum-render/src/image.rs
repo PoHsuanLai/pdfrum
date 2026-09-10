@@ -11,7 +11,9 @@
 use std::borrow::Cow;
 
 use kurbo::Affine;
-use pdfrum_page::{BlendMode, ColorSpace, Converted, ImageData, Pixels, Rgba8, Samples, Source};
+use pdfrum_page::{
+    BlendMode, Converted, Family, ImageData, ImageMask, Pixels, Rgba8, Samples, Source,
+};
 
 use crate::color::Argb;
 use crate::device::ImageQuality;
@@ -101,6 +103,46 @@ pub fn resample_quality(
     }
 }
 
+/// Whether this device matrix takes AGG's `StretchType::kOther` path.
+///
+/// A shear (`|b|` or `|c|` ≥ 0.5) or a zero on the diagonal sends the image
+/// through `CFX_ImageTransformer`, whose second pass is **always bilinear**
+/// — `/Interpolate` is not consulted. A near-quarter-turn (`kRotate`) is a
+/// swapped-axis stretch instead and keeps the ordinary interpolate heuristic.
+#[must_use]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..d are the affine matrix coefficients, named as in the PDF `cm` operands"
+)]
+pub fn takes_other_transform(m: Affine) -> bool {
+    let [a, b, c, d, _, _] = m.as_coeffs();
+    let sheared = b.abs() >= 0.5 || a == 0.0 || c.abs() >= 0.5 || d == 0.0;
+    if !sheared {
+        return false;
+    }
+    let rotate =
+        a.abs() < b.abs() / 20.0 && d.abs() < c.abs() / 20.0 && a.abs() < 0.5 && d.abs() < 0.5;
+    !rotate
+}
+
+/// [`resample_quality`], then the `kOther` override: a sheared matrix is
+/// bilinear regardless of `/Interpolate`.
+#[must_use]
+pub fn resample_quality_at(
+    image: &ImageData,
+    opts: &RenderOptions,
+    src_width: u32,
+    src_height: u32,
+    dest_width: i64,
+    dest_height: i64,
+    matrix: Affine,
+) -> ImageQuality {
+    if takes_other_transform(matrix) {
+        return ImageQuality::Bilinear;
+    }
+    resample_quality(image, opts, src_width, src_height, dest_width, dest_height)
+}
+
 /// Whether a device matrix is an integer-only translation.
 ///
 /// `vello_cpu` silently downgrades bilinear sampling to nearest in exactly
@@ -155,14 +197,10 @@ pub fn effective_quality(quality: ImageQuality, to_device: Affine) -> ImageQuali
               epsilon would apply the Darken approximation to files PDFium \
               composites Normal, changing the corpus"
 )]
-pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralState) -> BlendMode {
+pub fn overprint_blend(family: Family, state: &pdfrum_page::GeneralState) -> BlendMode {
     let subtractive = matches!(
-        space.map(ColorSpace::family),
-        Some(
-            pdfrum_page::Family::DeviceCmyk
-                | pdfrum_page::Family::Separation
-                | pdfrum_page::Family::DeviceN
-        )
+        family,
+        Family::DeviceCmyk | Family::Separation | Family::DeviceN
     );
     let eligible = subtractive
         && state.fill_overprint
@@ -174,6 +212,52 @@ pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralS
         BlendMode::Darken
     } else {
         state.blend
+    }
+}
+
+/// A colour image used as an uncoloured Type 3 sole-image: luminance is
+/// coverage, tinted with the outer text fill (`SetBitMask`).
+///
+/// `LoadBitmapFromSoleImageOfForm` realises the image's own samples, and
+/// the glyph blit then paints them as a mask in `t3_fill_color_` rather
+/// than as a picture. Walking the procedure as a form would keep the
+/// image's colours.
+#[must_use]
+pub fn color_as_fill_mask(image: &ImageData, fill: Argb) -> ImageData {
+    let src = to_pixmap(image, Argb::BLACK, None);
+    let pixels = (src.width() as usize).saturating_mul(src.height() as usize);
+    let mut rgb = vec![0u8; pixels.saturating_mul(3)];
+    let mut alpha = vec![0u8; pixels];
+    for y in 0..src.height() {
+        for x in 0..src.width() {
+            let Some([red, green, blue, _alpha]) = src.pixel(x, y) else {
+                continue;
+            };
+            let index = (y as usize)
+                .saturating_mul(src.width() as usize)
+                .saturating_add(x as usize);
+            if let Some(slot) = alpha.get_mut(index) {
+                *slot = crate::color::rgb_to_gray(red, green, blue);
+            }
+            let start = index.saturating_mul(3);
+            if let Some(dest) = rgb.get_mut(start..start.saturating_add(3)) {
+                dest.copy_from_slice(&[fill.r, fill.g, fill.b]);
+            }
+        }
+    }
+    ImageData {
+        width: src.width(),
+        height: src.height(),
+        samples: Samples::Whole(Pixels::Rgb8(rgb.into_boxed_slice())),
+        mask: Some(ImageMask::Alpha {
+            width: src.width(),
+            height: src.height(),
+            alpha: alpha.into_boxed_slice(),
+            stencil: false,
+        }),
+        matte: None,
+        interpolate: false,
+        family: Family::Unknown,
     }
 }
 
@@ -448,6 +532,7 @@ pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Cow<'_
         mask: None,
         matte: None,
         interpolate: false,
+        family: pdfrum_page::Family::Unknown,
     };
     Some((dict, plane))
 }
@@ -578,6 +663,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate,
+            family: pdfrum_page::Family::Unknown,
         }
     }
 
@@ -623,6 +709,34 @@ mod tests {
     }
 
     #[test]
+    fn a_sheared_matrix_takes_the_other_transform() {
+        // `16 64 64 16` — all four nonzero, |b| and |c| well past 0.5.
+        let shear = Affine::new([16.0, 64.0, 64.0, 16.0, 20.0, 120.0]);
+        assert!(takes_other_transform(shear));
+        // Axis-aligned scale keeps the interpolate heuristic.
+        assert!(!takes_other_transform(Affine::scale(2.0)));
+        // A quarter turn (`kRotate`) is a swapped-axis stretch, not kOther.
+        let rotate = Affine::new([0.0, 10.0, -10.0, 0.0, 0.0, 0.0]);
+        assert!(!takes_other_transform(rotate));
+    }
+
+    #[test]
+    fn k_other_forces_bilinear_without_interpolate() {
+        let img = gray_image(4, 4, false);
+        let opts = RenderOptions::default();
+        let shear = Affine::new([16.0, 64.0, 64.0, 16.0, 20.0, 120.0]);
+        assert_eq!(
+            resample_quality_at(&img, &opts, 4, 4, 66, 66, shear),
+            ImageQuality::Bilinear
+        );
+        // The same image axis-aligned stays nearest under the 8× enlargement.
+        assert_eq!(
+            resample_quality_at(&img, &opts, 4, 4, 66, 66, Affine::scale(16.0)),
+            ImageQuality::Nearest
+        );
+    }
+
+    #[test]
     fn huge_image_forces_bilinear_unless_halftoning() {
         // A 5000x5000 RGB image is 75 million bytes, past the threshold.
         let mut img = gray_image(5000, 5000, false);
@@ -650,36 +764,68 @@ mod tests {
             overprint_mode: 0,
             ..Default::default()
         };
-        let cmyk = ColorSpace::DeviceCmyk;
-        assert_eq!(overprint_blend(Some(&cmyk), &state), BlendMode::Darken);
+        let cmyk = Family::DeviceCmyk;
+        assert_eq!(overprint_blend(cmyk, &state), BlendMode::Darken);
 
         // Every clause of the gate, flipped one at a time.
         let mut alpha = state.clone();
         alpha.fill_alpha = 0.5;
-        assert_eq!(overprint_blend(Some(&cmyk), &alpha), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &alpha), BlendMode::Normal);
 
         let mut stroke = state.clone();
         stroke.stroke_alpha = 0.5;
-        assert_eq!(overprint_blend(Some(&cmyk), &stroke), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &stroke), BlendMode::Normal);
 
         let mut mode = state.clone();
         mode.overprint_mode = 1;
-        assert_eq!(overprint_blend(Some(&cmyk), &mode), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &mode), BlendMode::Normal);
 
         let mut off = state.clone();
         off.fill_overprint = false;
-        assert_eq!(overprint_blend(Some(&cmyk), &off), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &off), BlendMode::Normal);
 
         let mut blend = state.clone();
         blend.blend = BlendMode::Multiply;
-        assert_eq!(overprint_blend(Some(&cmyk), &blend), BlendMode::Multiply);
+        assert_eq!(overprint_blend(cmyk, &blend), BlendMode::Multiply);
 
         // An additive space never qualifies.
         assert_eq!(
-            overprint_blend(Some(&ColorSpace::DeviceRgb), &state),
+            overprint_blend(Family::DeviceRgb, &state),
             BlendMode::Normal
         );
-        assert_eq!(overprint_blend(None, &state), BlendMode::Normal);
+        assert_eq!(overprint_blend(Family::Unknown, &state), BlendMode::Normal);
+    }
+
+    #[test]
+    fn a_colour_image_becomes_a_luminance_mask_in_the_fill() {
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            samples: Samples::Whole(Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice())),
+            mask: None,
+            matte: None,
+            interpolate: false,
+            family: Family::Unknown,
+        };
+        let fill = Argb::opaque(0, 0, 255);
+        let masked = color_as_fill_mask(&img, fill);
+        let p = to_pixmap(&masked, Argb::BLACK, None);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([0, 0, 255, 255]),
+            "white source is full coverage of the fill"
+        );
+        let black = ImageData {
+            samples: Samples::Whole(Pixels::Rgb8(vec![0, 0, 0].into_boxed_slice())),
+            ..img
+        };
+        let masked = color_as_fill_mask(&black, fill);
+        let p = to_pixmap(&masked, Argb::BLACK, None);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([0, 0, 0, 0]),
+            "black source paints nothing"
+        );
     }
 
     #[test]
@@ -721,6 +867,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::opaque(255, 0, 0), None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]), "the set bit is ink");
@@ -745,6 +892,7 @@ mod tests {
             }),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
@@ -779,6 +927,7 @@ mod tests {
             mask: Some(mask.clone()),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         assert!(!is_coregistered(&mask, &img), "2x2 mask over a 1x1 base");
         let p = to_pixmap(&img, Argb::BLACK, None);
@@ -862,6 +1011,7 @@ mod tests {
                 mask: None,
                 matte: None,
                 interpolate: false,
+                family: pdfrum_page::Family::Unknown,
             };
             let out = to_pixmap(&image, Argb::opaque(0, 0, 0), None);
             for y in 0..h {
@@ -1066,6 +1216,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         assert_eq!(
             to_pixmap(&img, Argb::BLACK, Some(&func)).pixel(0, 0),
@@ -1127,6 +1278,7 @@ mod tests {
             }),
             matte: Some(Rgb::BLACK),
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         // (64 - 0) * 255 / 128 + 0 = 127, premultiplied by 128/255 = 63.
@@ -1158,6 +1310,7 @@ mod tests {
             }),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
@@ -1190,6 +1343,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]));

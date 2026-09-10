@@ -51,7 +51,7 @@ pub(crate) use mask::{ColorKey, matte_color};
 pub use packed::{Depth, Packed, Unpacked};
 pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Source};
 
-use crate::color::{ColorSpace, Rgb};
+use crate::color::{ColorSpace, Family, Rgb};
 use crate::error::Error;
 use crate::function::FunctionCache;
 use crate::names;
@@ -236,6 +236,11 @@ pub struct ImageData {
     pub matte: Option<Rgb>,
     /// `/Interpolate`, a hint the renderer may honour.
     pub interpolate: bool,
+    /// The colour-space family the dictionary named, **before** samples are
+    /// converted to RGB. Overprint's Darken approximation keys on this —
+    /// `DeviceCMYK` / `Separation` / `DeviceN` — and is invisible once the
+    /// pixels are already sRGB.
+    pub family: Family,
 }
 
 impl ImageData {
@@ -517,6 +522,7 @@ pub fn decode_image<R: Resolve>(
         mask,
         matte,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: space.as_ref().map_or(Family::Unknown, ColorSpace::family),
     })
 }
 
@@ -666,6 +672,7 @@ fn decode_stencil<R: Resolve>(
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: Family::Unknown,
     })
 }
 
@@ -795,6 +802,7 @@ fn stencil_from_jbig2<R: Resolve>(
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: Family::Unknown,
     })
 }
 #[cfg(not(feature = "jbig2"))]

@@ -1628,6 +1628,7 @@ mod tests {
                     mask: None,
                     matte: None,
                     interpolate: false,
+                    family: pdfrum_page::Family::Unknown,
                 };
                 let fill = crate::color::Argb::opaque(255, 255, 255);
                 let two_call = reduce_to(&crate::image::to_pixmap(&image, fill, None), dw, dh);
@@ -1659,6 +1660,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let fill = crate::color::Argb::opaque(200, 100, 50);
         for (dw, dh) in [(4_u32, 4_u32), (8, 3), (1, 1)] {

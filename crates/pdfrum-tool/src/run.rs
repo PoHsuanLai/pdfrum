@@ -402,7 +402,7 @@ fn walk_pages(
         // the form filler is editing must not be given the form-field
         // highlight, which is a fact about the *session* rather than about
         // any one appearance.
-        let (updates, focus, hover, popup) = match session.as_deref_mut() {
+        let (updates, focus, hover, popup, scrollbars) = match session.as_deref_mut() {
             Some(session) => {
                 let updates = dispatch::replay_page(session, index, script, streams.err);
                 let focus = session.focus_for_page(index);
@@ -415,9 +415,15 @@ fn walk_pages(
                 // showing, and the library publishes it rather than drawing
                 // it — this tool is the host that draws it, standing in for
                 // the oracle's `FPDF_FFLDraw`.
-                (updates, focus, hover, session.popup_for_page(index))
+                (
+                    updates,
+                    focus,
+                    hover,
+                    session.popup_for_page(index),
+                    session.scrollbars_for_page(index),
+                )
             }
-            None => (Vec::new(), None, None, None),
+            None => (Vec::new(), None, None, None, Vec::new()),
         };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
@@ -439,6 +445,7 @@ fn walk_pages(
                     focus,
                     hover,
                     popup,
+                    scrollbars,
                 },
             },
             options,

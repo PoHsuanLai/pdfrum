@@ -98,9 +98,10 @@ impl Rgb {
 
 /// The eleven colour space families, with the integer tags PDFium exposes
 /// through its public API.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Family {
     /// A space that failed to load.
+    #[default]
     Unknown = 0,
     /// `DeviceGray`.
     DeviceGray = 1,

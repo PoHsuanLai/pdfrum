@@ -21,6 +21,7 @@ mod cid;
 mod descriptor;
 mod encoding;
 mod error;
+mod fallback;
 mod glyphs;
 mod ids;
 mod load;
@@ -39,6 +40,7 @@ pub use cid::{CidTransform, Type0Font, cid_transform_to_float};
 pub use encoding::FaceEncoding;
 pub use encoding::adobe_name_from_unicode;
 pub use error::Error;
+pub use fallback::GlyphFallback;
 pub use glyphs::{
     Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource, SynthGlyph, em_adjust,
 };
@@ -283,6 +285,24 @@ mod tests {
         let a = cache.next_id();
         let b = cache.next_id();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn a_non_embedded_truetype_falls_back_to_arial_for_an_unmapped_code() {
+        // `bug_1442723`: `/Subtype /TrueType /BaseFont /Symbol` with no
+        // `/ToUnicode`. Codes the ladder cannot place take Arial, not `.notdef`.
+        let font = load(
+            &simple_dict("TrueType", "Symbol"),
+            &NoResolve,
+            &FontCache::new(),
+            &Limits::default(),
+            &mut Diagnostics::default(),
+        )
+        .expect("a simple font always constructs");
+        assert!(!font.should_use_own_glyph(None));
+        assert!(!font.should_use_own_glyph(Some(Gid(0))));
+        let fb = font.glyph_fallback().expect("Arial is a built-in stand-in");
+        assert!(fb.gid(&['A'], CharCode(u32::from(b'A'))).is_some());
     }
 }
 

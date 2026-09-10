@@ -545,6 +545,56 @@ impl Font {
             Self::Type3(_) => &GlyphSource::None,
         }
     }
+
+    /// Whether this character's glyph is drawn from this font (`ShouldUseFont`).
+    ///
+    /// A Type 3 font has no glyph indices and never takes `GetCharPosList`, so
+    /// it always answers true: there is no Arial stand-in for a content stream.
+    #[must_use]
+    pub fn should_use_own_glyph(&self, gid: Option<Gid>) -> bool {
+        match self {
+            Self::Type3(_) => true,
+            Self::Simple(f) => crate::fallback::should_use_own_glyph(
+                f.embedded,
+                f.is_truetype,
+                f.to_unicode.is_some(),
+                gid,
+            ),
+            Self::Type0(f) => crate::fallback::should_use_own_glyph(
+                f.embedded,
+                false,
+                f.to_unicode.is_some(),
+                gid,
+            ),
+        }
+    }
+
+    /// The Arial stand-in `GetCharPosList` draws when [`should_use_own_glyph`]
+    /// fails. Created on first miss; `None` if even Arial failed to load.
+    #[must_use]
+    pub fn glyph_fallback(&self) -> Option<&crate::GlyphFallback> {
+        match self {
+            Self::Type3(_) => None,
+            Self::Simple(f) => crate::fallback::ensure(
+                &f.fallback,
+                f.id,
+                f.is_truetype,
+                f.descriptor.flags,
+                f.descriptor.stem_v,
+                f.descriptor.italic_angle,
+                false,
+            ),
+            Self::Type0(f) => crate::fallback::ensure(
+                &f.fallback,
+                f.id,
+                false,
+                f.descriptor.flags,
+                f.descriptor.stem_v,
+                f.descriptor.italic_angle,
+                f.cmap.is_vertical(),
+            ),
+        }
+    }
 }
 
 /// The [`Font::decode`] iterator.

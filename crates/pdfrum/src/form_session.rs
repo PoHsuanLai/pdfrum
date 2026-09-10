@@ -835,6 +835,22 @@ impl<'a> FormSession<'a> {
         })
     }
 
+    /// Every list box on `page` that would show a scroll bar, with the
+    /// numbers a host paints it from.
+    ///
+    /// Empty when nothing on the page overflows. The library does not draw
+    /// the bars; this tool-facing getter is the other half of
+    /// [`Self::popup_for_page`].
+    #[must_use]
+    pub fn scrollbars_for_page(
+        &mut self,
+        page: impl Into<PageIndex>,
+    ) -> Vec<(pdfrum_form::AnnotId, pdfrum_form::ScrollView)> {
+        self.with_page(page, |inner, ctx| {
+            pdfrum_form::scroll_views_on_page(inner, ctx)
+        })
+    }
+
     /// Reports that the user picked row `index` of an open dropdown.
     ///
     /// The intent half of [`Self::popup_for_page`]: a host that drew the list

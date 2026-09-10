@@ -94,6 +94,20 @@ impl GlyphKey {
     }
 }
 
+fn fallback_params(
+    fallback: &crate::GlyphFallback,
+    dest_width: i32,
+    vertical: bool,
+) -> GlyphParams {
+    GlyphParams {
+        dest_width,
+        weight: fallback.subst.raw_weight(),
+        skew: fallback.subst.skew(),
+        vertical,
+        embolden: f64::from(fallback.subst.embolden_level_for_load()) * 1000.0 / 4096.0,
+    }
+}
+
 /// Memoized glyph outlines in 1000/em text space.
 ///
 /// A miss is cached too: a glyph that produced no outline is stored as `None`
@@ -135,6 +149,25 @@ impl GlyphCache {
     /// path copies every element.
     pub fn shared(&mut self, font: &Font, key: GlyphKey) -> Option<Arc<BezPath>> {
         self.entry(font, key).map(Arc::clone)
+    }
+
+    /// The outline of a glyph drawn from the Arial `ShouldUseFont` stand-in.
+    ///
+    /// The key must name [`crate::GlyphFallback::id`]; the host font's
+    /// identity would collide with Arial on any shared glyph index.
+    pub fn shared_fallback(
+        &mut self,
+        fallback: &crate::GlyphFallback,
+        vertical: bool,
+        key: GlyphKey,
+    ) -> Option<Arc<BezPath>> {
+        self.entries
+            .entry(key)
+            .or_insert_with(|| {
+                let params = fallback_params(fallback, key.dest_width, vertical);
+                fallback.glyphs.outline(key.gid, params).map(Arc::new)
+            })
+            .clone()
     }
 
     /// The stored entry, drawn on first request.
