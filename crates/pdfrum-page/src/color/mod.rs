@@ -210,29 +210,30 @@ impl ColorSpace {
     /// Whether an image's samples in this space have to be **run through the
     /// space** before they are colour.
     ///
-    /// Every family could reach a colour through the scalar conversion, but
-    /// most have a bulk shortcut that makes the trip unnecessary — and taking
-    /// the scalar conversion anyway would be a divergence rather than a fix,
-    /// because two of those shortcuts are *not* the scalar conversion.
-    /// `CalGray` copies the grey byte into all three channels; `CalRGB` is a
-    /// channel reversal that drops gamma and matrix entirely; `ICCBased` runs
-    /// the profile over bytes; and `Lab` rescales `L*a*b*` out of the **byte**
-    /// domain rather than out of the decoded component range. `Indexed` is
-    /// handled before this by its palette, and `Pattern` never carries image
-    /// samples at all.
+    /// The row pipeline already knows how to read device bytes: grey
+    /// replicated, RGB copied, CMYK through the Adobe table. `CalGray` and
+    /// `CalRGB` land on those same arms — grey is a copy, and `CalRGB`'s bulk
+    /// path is a channel reversal that drops gamma and matrix, which in RGB
+    /// order is the identity. Taking the scalar conversion for either would
+    /// be a divergence, not a fix.
     ///
-    /// What is left is `Separation` and `DeviceN`, whose samples are *tints*
-    /// driving a tint transform and have no device reading whatsoever. Those
-    /// take the generic per-pixel path, and the palette precomputation over
-    /// `1 << bits` entries when the sample depth allows it. ISO 32000-1
-    /// §8.6.6.4 and §8.6.6.5 say the same: the components are colorant tints,
-    /// and the tint transform is what turns them into colour.
+    /// Everything else is not a device reading. `Lab` rescales `L*a*b*` out
+    /// of the **byte** domain; a non-sRGB `ICCBased` runs the profile; a
+    /// `Separation` or `DeviceN` sample is a tint, not a colour. Those four
+    /// take [`translate_image_line`]. `Indexed` is handled before this by its
+    /// palette, and `Pattern` never carries image samples at all.
     ///
-    /// Crate-internal: this is `unpack`'s dispatch rule, not a fact about the
-    /// space a caller outside the image build has any use for.
+    /// Crate-internal: this is the image build's dispatch rule, not a fact
+    /// about the space a caller outside that build has any use for.
+    ///
+    /// [`translate_image_line`]: ColorSpace::translate_image_line
     #[must_use]
     pub(crate) fn needs_image_conversion(&self) -> bool {
-        matches!(self, Self::Separation(_) | Self::DeviceN(_))
+        match self {
+            Self::Separation(_) | Self::DeviceN(_) | Self::Lab(_) => true,
+            Self::IccBased(icc) => !icc.profile.is_srgb(),
+            _ => false,
+        }
     }
 
     /// Whether the space is a plain additive or subtractive colour space,
@@ -528,6 +529,26 @@ mod tests {
         assert_eq!(ColorSpace::DeviceGray.family(), Family::DeviceGray);
         assert!(!ColorSpace::DeviceRgb.is_special());
         assert!(ColorSpace::DeviceRgb.is_normal());
+    }
+
+    #[test]
+    fn image_conversion_is_for_spaces_that_are_not_a_device_reading() {
+        assert!(!ColorSpace::DeviceRgb.needs_image_conversion());
+        assert!(!ColorSpace::DeviceCmyk.needs_image_conversion());
+        assert!(!ColorSpace::DeviceGray.needs_image_conversion());
+        let lab = ColorSpace::Lab(Box::new(super::Lab {
+            white_point: [0.9642, 1.0, 0.82491],
+            black_point: [0.0; 3],
+            ranges: [-100.0, 100.0, -100.0, 100.0],
+        }));
+        assert!(lab.needs_image_conversion());
+        let cal = ColorSpace::CalRgb(Box::new(super::CalRgb {
+            white_point: [0.9505, 1.0, 1.089],
+            black_point: [0.0; 3],
+            gamma: None,
+            matrix: None,
+        }));
+        assert!(!cal.needs_image_conversion());
     }
 
     #[test]
