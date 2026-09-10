@@ -83,6 +83,41 @@ triangle glyph. Note that a format 0 subtable answers `Some(0)` rather than
 `None` for an unmapped code — the 256-byte array always has an entry.
 
 
+
+## `cid_keyed.cff` / `cid_keyed_otto.otf` — one CID-keyed CFF, two packagings
+
+**What they are.** A three-glyph CID-keyed CFF program, emitted twice: bare
+(230 B) and inside an `OTTO` shell with the usual `head`/`hhea`/`hmtx`/`maxp`/
+`post` beside its `CFF ` table (508 B). Every glyph draws a square. What makes
+them worth having is the charset: glyph 0 is CID 0, glyph 1 is CID 4000 and
+glyph 2 is CID 4001, so a caller that hands down a CID without putting it
+through the charset asks a three-glyph font for glyph 4000 and gets nothing.
+
+That is the shape of a subsetted CIDFontType0 embedded as `/FontFile3` with
+`/Subtype /OpenType`, which is what Acrobat and InDesign emit for CJK. The
+bare twin exists because FreeType's CFF driver gates the mapping on
+CID-keyedness alone — `cid_registry != 0xFFFF && charset.cids`, with no
+bare-versus-wrapped condition (`third_party/freetype/src/src/cff/cffgload.c:222-236`)
+— so a test needs both packagings to prove the gate is really that and not the
+packaging.
+
+**Where they come from.** Synthesized by `make.py` like the `tt_*` files;
+nothing is copied from the oracle checkout. The `OTTO` tag is stamped over the
+SFNT version after layout, so the file's `head.checkSumAdjustment` is the one
+computed for the TrueType tag — no reader verifies it, and the alternative
+would be a second checksum pass for no test's benefit.
+
+| fixture | bytes | glyphs | CIDs |
+|---|---|---|---|
+| `cid_keyed.cff` | 230 | 3 | 0, 4000, 4001 |
+| `cid_keyed_otto.otf` | 508 | 3 | the same program, `OTTO`-wrapped |
+
+Advances differ between the two on purpose rather than by accident: the SFNT
+reads `hmtx` (a uniform 600 across the skeleton) while the bare CFF reads each
+charstring's own width operand. That is a genuine difference between the
+packagings, so the test compares outlines and boxes and leaves advances alone.
+
+
 ## `roboto.ttf` — not synthesized
 
 Unlike the `tt_*.ttf` files above, this one is copied verbatim from the PDFium

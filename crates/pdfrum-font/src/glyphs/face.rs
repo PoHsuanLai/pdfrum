@@ -297,6 +297,41 @@ impl Face {
         read_fonts::ps::cff::CffFontRef::new(&self.bytes, 0, None).ok()
     }
 
+    /// The `CFF ` table of an SFNT-wrapped **CID-keyed** CFF, if that is what
+    /// this face holds.
+    ///
+    /// Opened as a bare program over the table's own bytes, because the only
+    /// thing wanted from it is its charset. Answers `None` for every other
+    /// face, including a `CFF `-flavoured OpenType that is not CID-keyed.
+    fn sfnt_cid_keyed_cff(&self) -> Option<read_fonts::ps::cff::CffFontRef<'_>> {
+        if self.backend != Backend::Sfnt {
+            return None;
+        }
+        let font = read_fonts::FontRef::from_index(&self.bytes, self.index).ok()?;
+        let table = font.table_data(read_fonts::types::Tag::new(b"CFF "))?;
+        let cff = read_fonts::ps::cff::CffFontRef::new_cff(table.as_bytes(), 0, None).ok()?;
+        cff.is_cid().then_some(cff)
+    }
+
+    /// The glyph index to actually draw for `gid`, whatever the packaging.
+    // For a bare CFF the caller already goes through `cff_glyph_id`. An
+    // SFNT-wrapped one needs the same mapping: FreeType's CFF driver puts the
+    // incoming index through the charset on CID-keyedness alone —
+    // `cid_registry != 0xFFFF && charset.cids`, with no bare-versus-wrapped
+    // condition (`third_party/freetype/src/src/cff/cffgload.c:222-236`) — and
+    // PDFium hands it a raw CID either way
+    // (`core/fpdfapi/font/cpdf_cidfont.cpp:787-789`). A subsetted CIDFontType0
+    // embedded as `/FontFile3 /Subtype /OpenType`, which is standard Acrobat
+    // and InDesign CJK output, is exactly that case: its glyphs are numbered
+    // 0..N while its CIDs run to five figures, so skipping the mapping asks a
+    // forty-glyph font for glyph 12345 and nothing draws.
+    fn drawn_glyph_id(&self, gid: Gid) -> read_fonts::types::GlyphId {
+        match self.sfnt_cid_keyed_cff() {
+            Some(cff) => Self::cff_glyph_id(&cff, gid),
+            None => read_fonts::types::GlyphId::new(u32::from(gid.0)),
+        }
+    }
+
     /// The index a bare CFF actually stores a glyph under.
     ///
     /// For an ordinary CFF this is the number it was handed. For a **CID-keyed**
@@ -585,7 +620,7 @@ impl Face {
         let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
         let glyph = font
             .outline_glyphs()
-            .get(skrifa::GlyphId::new(u32::from(gid.0)))?;
+            .get(skrifa::GlyphId::new(self.drawn_glyph_id(gid).to_u32()))?;
         let mut pen = PathPen::default();
         glyph
             .draw(DrawSettings::hinted(instance, false), &mut pen)
@@ -677,7 +712,7 @@ impl Face {
         let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
         let glyph = font
             .outline_glyphs()
-            .get(skrifa::GlyphId::new(u32::from(gid.0)))?;
+            .get(skrifa::GlyphId::new(self.drawn_glyph_id(gid).to_u32()))?;
         glyph
             .draw(
                 DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
@@ -717,7 +752,7 @@ impl Face {
         }
         let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
         font.glyph_metrics(Size::unscaled(), LocationRef::default())
-            .advance_width(skrifa::GlyphId::new(u32::from(gid.0)))
+            .advance_width(skrifa::GlyphId::new(self.drawn_glyph_id(gid).to_u32()))
     }
 
     /// A glyph's bounding box in font units, y-up.
@@ -750,7 +785,7 @@ impl Face {
             let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
             if let Some(b) = font
                 .glyph_metrics(Size::unscaled(), LocationRef::default())
-                .bounds(skrifa::GlyphId::new(u32::from(gid.0)))
+                .bounds(skrifa::GlyphId::new(self.drawn_glyph_id(gid).to_u32()))
             {
                 return Some(Rect::new(
                     f64::from(b.x_min),
@@ -1121,6 +1156,74 @@ mod tests {
         assert!(!face.is_truetype(), "a bare CFF has no glyf table");
         assert!(face.num_glyphs() > 100);
         assert_eq!(face.units_per_em(), 1000);
+    }
+
+    /// Both packagings of one CID-keyed CFF program reach the same glyph.
+    ///
+    /// FreeType maps a CID through the charset on CID-keyedness alone, with no
+    /// condition on whether the program arrived bare or inside an SFNT
+    /// (`third_party/freetype/src/src/cff/cffgload.c:222-236`), and PDFium
+    /// hands it the raw CID either way
+    /// (`core/fpdfapi/font/cpdf_cidfont.cpp:787-789`). The CIDs here are
+    /// four-figure numbers in a three-glyph font, so nothing draws at all
+    /// unless the mapping runs.
+    ///
+    /// Advances are not compared across the two: an SFNT reads `hmtx` and a
+    /// bare CFF reads the charstring's own width operand, which is a real
+    /// difference between the packagings and not this mapping's business.
+    #[test]
+    fn an_sfnt_wrapped_cid_keyed_cff_maps_its_cids_through_the_charset_like_a_bare_one() {
+        let bare = Face::new(crate::testfonts::load("cid_keyed.cff").into(), 0)
+            .expect("bare CFF is readable");
+        let otto = Face::new(crate::testfonts::load("cid_keyed_otto.otf").into(), 0)
+            .expect("OTTO is readable");
+        assert_eq!(otto.num_glyphs(), 3, "three glyphs, CIDs in the thousands");
+        for cid in [4000u16, 4001] {
+            let gid = Gid(cid);
+            let expected = bare.outline(gid).expect("bare draws the CID");
+            let drawn = otto.outline(gid).expect("OTTO draws the CID too");
+            assert_eq!(
+                pdfrum_common::kurbo::Shape::bounding_box(&drawn),
+                pdfrum_common::kurbo::Shape::bounding_box(&expected),
+                "outline, CID {cid}"
+            );
+            assert_eq!(
+                otto.glyph_bbox(gid),
+                bare.glyph_bbox(gid),
+                "bbox, CID {cid}"
+            );
+            assert_ne!(otto.advance(gid), None, "advance, CID {cid}");
+        }
+        // A CID this font does not carry stays unmapped rather than aliasing
+        // onto some other glyph's outline.
+        assert_eq!(
+            otto.glyph_bbox(Gid(9999)),
+            None,
+            "an absent CID draws nothing"
+        );
+    }
+
+    /// A CFF that is *not* CID-keyed keeps taking its glyph index literally —
+    /// FreeType's gate is `cid_registry != 0xFFFF`, and nothing else.
+    #[test]
+    fn a_non_cid_keyed_cff_is_not_put_through_the_charset() {
+        let bytes: Arc<[u8]> = Arc::from(crate::subst::standard_font_data(
+            crate::StandardFont::Helvetica,
+        ));
+        let face = Face::new(bytes, 0).expect("bare CFF is readable");
+        assert!(
+            face.sfnt_cid_keyed_cff().is_none(),
+            "bare, and not CID-keyed"
+        );
+        let named = face.name_index("A");
+        assert_ne!(named, 0, "Helvetica names its glyphs");
+        assert!(face.outline(Gid(named)).is_some());
+
+        // The SFNT side of the same rule: a CFF-flavoured OpenType that is not
+        // CID-keyed must not be put through a charset either.
+        let tt: Arc<[u8]> = crate::testfonts::load("tt_unicode_31.ttf").into();
+        let tt = Face::new(tt, 0).expect("TrueType is readable");
+        assert!(tt.sfnt_cid_keyed_cff().is_none(), "no CFF table at all");
     }
 
     #[test]
