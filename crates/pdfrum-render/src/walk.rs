@@ -1577,15 +1577,45 @@ fn draw_glyph_bitmap(
     let shape = Affine::new([a, b, c, d, 0.0, 0.0]);
     let key = crate::glyph::BitmapKey::new(glyph.key, shape);
 
+    // The bitmap side reads its *own* skew and embolden level, resolved
+    // against the device matrix (`CFX_Face::RenderGlyph`, `cfx_face.cpp:769`
+    // and `:806`), where the outline the glyph cache holds was adjusted with
+    // the path side's (`LoadGlyphPath`, `:869` and `:886`). So the two are
+    // asked separately and this one is applied here, in device pixels.
+    //
+    // `xx` and `xy` are the oracle's 16.16 `matrix.a / 64 * 65536` and
+    // `matrix.c / 64 * 65536`; ours differ only in that `shape` maps 1000/em
+    // rather than ems, which the ×1000 undoes.
+    let ft = |v: f64| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the C++ stores these in an FT_Fixed and truncates too; a \
+                      matrix past i32 belongs to a glyph the coordinate rule \
+                      has already rejected"
+        )]
+        let fixed = (v * 1000.0 / 64.0 * 65536.0) as i32;
+        fixed
+    };
+    // A weight of 1400 or more is past the render table, where the C++ returns
+    // a negative level and `RenderGlyph` bails out with no bitmap at all.
+    let Some(synth) = font.render_synth(ft(a), ft(c)) else {
+        return;
+    };
+
     let GlyphBlitCaches { bitmaps, scratch } = caches;
     let Some(lcd) = bitmaps.get_or_insert(key, || {
         // A hinted outline is worth up to ten counts a pixel at 6 pt and costs
         // a bytecode run, so it is requested only here — on a cache miss — and
         // never on the outline path, which the oracle also draws unhinted.
-        let outline = font
-            .hinted_glyph_path(glyph.key.gid)
-            .unwrap_or_else(|| (*glyph.outline).clone());
-        crate::glyph::render_lcd(&(shape * outline))
+        //
+        // The fallback is the cached outline, which already carries the *path*
+        // side's adjustments — so it takes only the shear-and-dilate-free
+        // mapping into device space, and `synth` is applied to the hinted
+        // outline alone.
+        match font.hinted_glyph_path(glyph.key.gid) {
+            Some(hinted) => crate::glyph::render_lcd(&synth.apply(shape * hinted)),
+            None => crate::glyph::render_lcd(&(shape * (*glyph.outline).clone())),
+        }
     }) else {
         return;
     };

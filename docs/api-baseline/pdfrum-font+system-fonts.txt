@@ -63,6 +63,7 @@ pub fn pdfrum_font::Font::is_unicode_compatible(&self) -> bool
 pub fn pdfrum_font::Font::is_vertical(&self) -> bool
 pub fn pdfrum_font::Font::japan1_transform(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::CidTransform>
 pub fn pdfrum_font::Font::load_standard(pdfrum_font::StandardFont, &pdfrum_font::FontCache) -> Self
+pub fn pdfrum_font::Font::render_synth(&self, i32, i32) -> core::option::Option<pdfrum_font::SynthGlyph>
 pub fn pdfrum_font::Font::string_width(&self, &[u8]) -> f32
 pub fn pdfrum_font::Font::subst(&self) -> core::option::Option<&pdfrum_font::SubstFont>
 pub fn pdfrum_font::Font::type3(&self) -> core::option::Option<&pdfrum_font::Type3Font>
@@ -224,6 +225,13 @@ pub pdfrum_font::SubstitutionOptions::croscore_font_names: bool
 pub pdfrum_font::SubstitutionOptions::font_dirs: alloc::vec::Vec<std::path::PathBuf>
 pub pdfrum_font::SubstitutionOptions::skip_font_enumeration: bool
 pub pdfrum_font::SubstitutionOptions::system_fonts: bool
+pub struct pdfrum_font::SynthGlyph
+pub pdfrum_font::SynthGlyph::embolden: f64
+pub pdfrum_font::SynthGlyph::skew: i32
+pub pdfrum_font::SynthGlyph::vertical: bool
+impl pdfrum_font::SynthGlyph
+pub const pdfrum_font::SynthGlyph::NONE: Self
+pub fn pdfrum_font::SynthGlyph::apply(self, kurbo::bezpath::BezPath) -> kurbo::bezpath::BezPath
 pub struct pdfrum_font::Type0Font
 pub struct pdfrum_font::Type3Font
 pub pdfrum_font::Type3Font::font_matrix: kurbo::affine::Affine

@@ -9,7 +9,6 @@
 //! output.
 
 use super::charset::Charset;
-#[cfg(test)]
 use super::tables::{ANGLE_SKEW, WEIGHT_POW, WEIGHT_POW_11, WEIGHT_POW_SHIFT_JIS};
 
 /// The record a substitution produces.
@@ -52,7 +51,6 @@ impl SubstFont {
 
     /// The weight in effect, which for a CID font in a CJK substitution is the
     /// separately-tracked CJK weight (`GetEffectiveWeight`).
-    #[cfg(test)]
     #[must_use]
     pub(crate) fn effective_weight(&self, is_cid_font: bool) -> i32 {
         if self.subst_cjk && is_cid_font {
@@ -66,7 +64,6 @@ impl SubstFont {
     ///
     /// A table lookup by `-italic_angle`, saturating at **-58** for a positive
     /// angle or one past the table's 30 entries.
-    #[cfg(test)]
     #[must_use]
     pub(crate) fn skew(&self) -> i32 {
         skew_from_angle(self.italic_angle)
@@ -74,7 +71,6 @@ impl SubstFont {
 
     /// The CJK shear: a fixed -15° when the CJK substitution asked for italic,
     /// and none otherwise.
-    #[cfg(test)]
     #[must_use]
     pub(crate) fn skew_cjk(&self) -> i32 {
         skew_from_angle(if self.italic_cjk { -15 } else { 0 })
@@ -82,7 +78,6 @@ impl SubstFont {
 
     /// The shear actually applied, which for a CID font in a CJK substitution
     /// is the CJK one.
-    #[cfg(test)]
     #[must_use]
     pub(crate) fn effective_skew(&self, is_cid_font: bool) -> i32 {
         if self.subst_cjk && is_cid_font {
@@ -103,7 +98,6 @@ impl SubstFont {
     // please the lint would make the pair harder to read, not easier.
     #[allow(clippy::similar_names)]
     #[must_use]
-    #[cfg(test)]
     pub(crate) fn embolden_level_for_render(
         &self,
         is_cid_font: bool,
@@ -129,7 +123,6 @@ impl SubstFont {
     /// failing past 99.
     ///
     /// Note it also reads the plain weight, not the effective one.
-    #[cfg(test)]
     #[must_use]
     pub(crate) fn embolden_level_for_load(&self) -> i32 {
         if self.is_builtin_generic {
@@ -228,9 +221,8 @@ impl SubstFont {
 }
 
 /// The shear for an italic angle (`GetSkewFromAngle`).
-#[cfg(test)]
 #[must_use]
-pub fn skew_from_angle(angle: i32) -> i32 {
+pub(crate) fn skew_from_angle(angle: i32) -> i32 {
     // A positive angle, the `i32::MIN` whose negation overflows, and anything
     // past the table all take the terminal value.
     if angle > 0 || angle == i32::MIN {
@@ -243,7 +235,6 @@ pub fn skew_from_angle(angle: i32) -> i32 {
 /// The render-path dilation table lookup. `None` past the table, where the
 /// C++ returns -1 and its caller abandons the glyph.
 #[must_use]
-#[cfg(test)]
 fn weight_level(index: usize, shift_jis: bool) -> Option<i32> {
     if index >= 100 {
         return None;
@@ -259,7 +250,6 @@ fn weight_level(index: usize, shift_jis: bool) -> Option<i32> {
 /// The load-path dilation table lookup, whose Shift-JIS arm is additionally
 /// rescaled by `65536 / 36655`.
 #[must_use]
-#[cfg(test)]
 fn weight_level_for_load(index: usize, shift_jis: bool) -> i32 {
     if shift_jis {
         WEIGHT_POW_SHIFT_JIS
