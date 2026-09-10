@@ -20,7 +20,7 @@ use crate::{CharCode, CharItem, Cid, Error, FontCache, FontId, Gid, names, width
 use pdfrum_cmap::{CMap, CidCoding, CidSet};
 use pdfrum_common::kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_object::{Dict, Object, Resolve};
+use pdfrum_object::{Dict, Object, Resolve, Resolved};
 use smallvec::SmallVec;
 
 pub use crate::widths::VerticalMetrics;
@@ -525,12 +525,19 @@ fn build(
         embedded = false;
     }
 
-    // `/CIDToGIDMap` is read non-resolving for the name form: PDFium checks
-    // the direct object's type before resolving, so an indirect `/Identity`
-    // reads as absent.
-    let cid_to_gid = match cid_dict.raw(names::CID_TO_GID_MAP) {
+    // `/CIDToGIDMap` is read *through* a reference: the C++ reaches it with
+    // `GetDirectObjectFor`, whose `GetDirectInternal` follows an indirect
+    // reference before anything looks at the type
+    // (`core/fpdfapi/parser/cpdf_dictionary.cpp:89-93`), so `/CIDToGIDMap
+    // 12 0 R` pointing at `/Identity` is the Identity mapping just as the
+    // direct name is (`core/fpdfapi/font/cpdf_cidfont.cpp:507-518`).
+    let cid_to_gid = match cid_dict
+        .get(names::CID_TO_GID_MAP, r)
+        .as_ref()
+        .map(Resolved::get)
+    {
         Some(Object::Name(n)) if n.as_bytes() == b"Identity" && embedded => CidToGid::Identity,
-        Some(Object::Stream(_) | Object::Ref(_)) => {
+        Some(Object::Stream(_)) => {
             match cid_dict.stream(names::CID_TO_GID_MAP, r) {
                 Some(s) => {
                     let bytes = pdfrum_filters::decode_chain(&s, 0, r, limits, diags).data;
