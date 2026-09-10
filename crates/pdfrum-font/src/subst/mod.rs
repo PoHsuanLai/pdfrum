@@ -497,8 +497,11 @@ fn resolve_inner(
     }
     let _ = &mut is_style_available;
 
-    // Step 11 — rung 1: ask the database.
-    if let Some(h) = db.find_font(weight, is_italic, charset, pitch_family, &family_str, true)
+    // Step 11 — rung 1: ask the database. This is `MapFont`, not `FindFont`:
+    // the platform's system-font info gets first refusal, and on Linux it
+    // answers the four CJK charsets from its own preference lists before any
+    // scoring runs (`fx_linux_impl.cpp:95-152`).
+    if let Some(h) = db.map_font(weight, is_italic, charset, pitch_family, &family_str)
         && let Some(s) = external(db, h, weight, is_italic, italic_angle, charset, &mut subst)
     {
         return Substitution {

@@ -147,6 +147,117 @@ pub fn find_family_name_match(family: &str, installed: &str) -> bool {
         .is_some_and(u8::is_ascii_lowercase)
 }
 
+/// The four Japanese preference rows (`kJpFontTable`,
+/// `fx_linux_impl.cpp:35-40`), each ordered best-first.
+///
+/// The oracle indexes one table by a row enum; a row is only ever reached by
+/// name, so the rows are the constants and there is no index to get wrong.
+const JP_FONT_PGOTHIC: &[&str] = &[
+    "MS PGothic",
+    "TakaoPGothic",
+    "VL PGothic",
+    "IPAPGothic",
+    "VL Gothic",
+];
+const JP_FONT_GOTHIC: &[&str] = &[
+    "MS Gothic",
+    "TakaoGothic",
+    "VL Gothic",
+    "IPAGothic",
+    "Kochi Gothic",
+];
+const JP_FONT_PMINCHO: &[&str] = &[
+    "MS PMincho",
+    "TakaoPMincho",
+    "IPAPMincho",
+    "VL Gothic",
+    "Kochi Mincho",
+];
+const JP_FONT_MINCHO: &[&str] = &[
+    "MS Mincho",
+    "TakaoMincho",
+    "IPAMincho",
+    "VL Gothic",
+    "Kochi Mincho",
+];
+
+/// `kGbFontList` — Simplified Chinese (`fx_linux_impl.cpp:42-46`).
+const GB_FONT_LIST: &[&str] = &[
+    "AR PL UMing CN Light",
+    "WenQuanYi Micro Hei",
+    "AR PL UKai CN",
+];
+
+/// `kB5FontList` — Traditional Chinese (`fx_linux_impl.cpp:47-51`).
+const B5_FONT_LIST: &[&str] = &[
+    "AR PL UMing TW Light",
+    "WenQuanYi Micro Hei",
+    "AR PL UKai TW",
+];
+
+/// `kHGFontList` — Korean (`fx_linux_impl.cpp:52-54`).
+const HG_FONT_LIST: &[&str] = &["UnDotum"];
+
+/// The Shift-JIS half-width katakana spellings `GetJapanesePreference` looks
+/// for alongside the ASCII ones, as they appear in a Shift-JIS `/BaseFont`.
+///
+/// The oracle writes them as raw byte escapes; they are ゴシック, Ｐゴシック,
+/// 明朝 and Ｐ明朝. A face name reaching us is bytes, so the comparison is on
+/// the same bytes rather than on decoded text.
+const JP_GOTHIC_SJIS: &[u8] = b"\x83\x53\x83\x56\x83\x62\x83\x4e";
+const JP_PGOTHIC_SJIS: &[u8] = b"\x82\x6f\x83\x53\x83\x56\x83\x62\x83\x4e";
+const JP_MINCHO_SJIS: &[u8] = b"\x96\xbe\x92\xa9";
+const JP_PMINCHO_SJIS: &[u8] = b"\x82\x6f\x96\xbe\x92\xa9";
+
+/// Does a byte string contain a subsequence?
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+/// Which preference row a Shift-JIS request takes (`GetJapanesePreference`,
+/// `fx_linux_impl.cpp:58-78`).
+///
+/// The family name decides when it says Gothic or Mincho in either ASCII or
+/// Shift-JIS. When it says neither, weight and pitch stand in: a bold
+/// non-Roman request is treated as sans (`PGothic`), anything else as serif
+/// (`PMincho`).
+fn japanese_preference(face: &str, weight: i32, pitch: PitchFamily) -> &'static [&'static str] {
+    let bytes = face.as_bytes();
+    if face.contains("Gothic") || contains_bytes(bytes, JP_GOTHIC_SJIS) {
+        if face.contains("PGothic") || contains_bytes(bytes, JP_PGOTHIC_SJIS) {
+            return JP_FONT_PGOTHIC;
+        }
+        return JP_FONT_GOTHIC;
+    }
+    if face.contains("Mincho") || contains_bytes(bytes, JP_MINCHO_SJIS) {
+        if face.contains("PMincho") || contains_bytes(bytes, JP_PMINCHO_SJIS) {
+            return JP_FONT_PMINCHO;
+        }
+        return JP_FONT_MINCHO;
+    }
+    if !pitch.has(PitchFamily::ROMAN) && weight > 400 {
+        return JP_FONT_PGOTHIC;
+    }
+    JP_FONT_PMINCHO
+}
+
+/// The preference list a CJK charset is answered from, or `None` for a charset
+/// that is not one of the four the oracle special-cases.
+fn cjk_preference_list(
+    charset: Charset,
+    face: &str,
+    weight: i32,
+    pitch: PitchFamily,
+) -> Option<&'static [&'static str]> {
+    match charset {
+        Charset::ShiftJis => Some(japanese_preference(face, weight, pitch)),
+        Charset::ChineseSimplified => Some(GB_FONT_LIST),
+        Charset::ChineseTraditional => Some(B5_FONT_LIST),
+        Charset::Hangul => Some(HG_FONT_LIST),
+        _ => None,
+    }
+}
+
 /// A source of installed faces.
 ///
 /// A genuine seam: there are two real implementations —
@@ -222,6 +333,40 @@ pub trait FontDb {
             return self.font_by_name("Courier New");
         }
         None
+    }
+
+    /// Answer a request the way the platform's system-font info does
+    /// (`CFX_LinuxFontInfo::MapFont`, `fx_linux_impl.cpp:95-152`).
+    ///
+    /// The four CJK charsets never reach the scoring scan on their own terms.
+    /// Each names a hard-coded list of the families a Linux box is likely to
+    /// have, and the **first installed** one wins outright — no scoring, no
+    /// name matching. A non-embedded `/MSung-Light` names a family no Linux
+    /// machine has, so without this the name filter rejects every face here
+    /// and the ladder ends up two rungs down, at *whichever* face happens to
+    /// claim the charset first — a real CJK face, but not the oracle's.
+    ///
+    /// Only when no list entry is installed does the scan run, and then with
+    /// `must_match_name = false`: for a CJK charset the requested family stops
+    /// being a filter at all, because a face that covers the script is worth
+    /// more than one that shares a name.
+    fn map_font(
+        &self,
+        weight: i32,
+        italic: bool,
+        charset: Charset,
+        pitch: PitchFamily,
+        family: &str,
+    ) -> Option<FaceHandle> {
+        let Some(list) = cjk_preference_list(charset, family, weight, pitch) else {
+            return self.find_font(weight, italic, charset, pitch, family, true);
+        };
+        for name in list {
+            if let Some(h) = self.font_by_name(name) {
+                return Some(h);
+            }
+        }
+        self.find_font(weight, italic, charset, pitch, family, false)
     }
 
     /// An exact-name lookup, which two rungs of the ladder use directly.
