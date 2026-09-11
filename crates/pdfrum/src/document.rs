@@ -153,13 +153,17 @@ impl Document {
 
     /// Opens the file at `path`, trying `password`.
     ///
+    /// Takes a `&str`, a `String`, a `&[u8]` or a `Vec<u8>`: PDF passwords
+    /// are byte strings and need not be UTF-8, matching
+    /// [`OpenOptionsBuilder::password`].
+    ///
     /// ```
     /// use pdfrum::{Document, Error};
     ///
     /// const ENCRYPTED: &str = "tests/fixtures/encrypted.pdf";
     ///
     /// // The user password opens it.
-    /// let doc = Document::open_with_password(ENCRYPTED, b"1234")?;
+    /// let doc = Document::open_with_password(ENCRYPTED, "1234")?;
     /// assert_eq!(doc.page_count(), 1);
     ///
     /// // Anything else is the one error worth prompting again on.
@@ -176,11 +180,14 @@ impl Document {
     /// does not open the file — the variant to match on to decide whether to
     /// prompt again. Everything else an open can fail with is
     /// [`Error::Open`](crate::Error::Open).
-    pub fn open_with_password(path: impl AsRef<Path>, password: &[u8]) -> Result<Document> {
+    pub fn open_with_password(
+        path: impl AsRef<Path>,
+        password: impl AsRef<[u8]>,
+    ) -> Result<Document> {
         Document::open_with(
             path,
             &OpenOptions {
-                password: Some(password.to_vec()),
+                password: Some(password.as_ref().to_vec()),
                 ..OpenOptions::default()
             },
         )

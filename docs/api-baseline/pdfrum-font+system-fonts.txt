@@ -198,8 +198,12 @@ pub struct pdfrum_font::FontId(pub u64)
 pub struct pdfrum_font::Gid(pub u16)
 impl core::convert::From<pdfrum_font::Gid> for pdfrum_type1::Gid
 pub fn pdfrum_type1::Gid::from(pdfrum_font::Gid) -> Self
+impl core::convert::From<pdfrum_font::Gid> for u16
+pub fn u16::from(pdfrum_font::Gid) -> Self
 impl core::convert::From<pdfrum_type1::Gid> for pdfrum_font::Gid
 pub fn pdfrum_font::Gid::from(pdfrum_type1::Gid) -> Self
+impl core::convert::From<u16> for pdfrum_font::Gid
+pub fn pdfrum_font::Gid::from(u16) -> Self
 pub struct pdfrum_font::GlyphCache
 impl pdfrum_font::GlyphCache
 pub fn pdfrum_font::GlyphCache::new() -> Self
