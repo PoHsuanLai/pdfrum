@@ -228,7 +228,7 @@ pub fn pdfrum::Annotation<'_>::is_hidden(&self) -> bool
 pub fn pdfrum::Annotation<'_>::modified(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Annotation<'_>::name(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Annotation<'_>::prints(&self) -> bool
-pub fn pdfrum::Annotation<'_>::quad_points(&self) -> alloc::vec::Vec<kurbo::rect::Rect>
+pub fn pdfrum::Annotation<'_>::quad_points(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = kurbo::rect::Rect> + '_
 pub fn pdfrum::Annotation<'_>::raw_rect(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Annotation<'_>::rect(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Annotation<'_>::subtype(&self) -> pdfrum_doc::annot::Subtype
@@ -259,7 +259,7 @@ pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embe
 pub fn pdfrum::DocEdit<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::image::raw::PixelFormat) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::embed_jpeg(&mut self, &[u8]) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::import_pages(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
-pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, (f64, f64)) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, kurbo::size::Size) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum_page::page_edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::set_metadata(&mut self, &pdfrum::Metadata)
@@ -382,7 +382,7 @@ pub fn pdfrum::FormSession<'a>::focus_at(&mut self, impl core::convert::Into<pdf
 pub fn pdfrum::FormSession<'a>::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::FormSession<'a>::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::focused_text(&self) -> core::option::Option<alloc::string::String>
-pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
+pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::FormSession<'a>::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
@@ -453,7 +453,7 @@ pub fn pdfrum::OwnedFormSession::focus_at(&mut self, impl core::convert::Into<pd
 pub fn pdfrum::OwnedFormSession::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::OwnedFormSession::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::OwnedFormSession::focused_text(&self) -> core::option::Option<alloc::string::String>
-pub fn pdfrum::OwnedFormSession::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
+pub fn pdfrum::OwnedFormSession::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::OwnedFormSession::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::OwnedFormSession::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)

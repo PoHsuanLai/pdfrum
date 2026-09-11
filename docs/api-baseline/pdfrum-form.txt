@@ -280,7 +280,7 @@ pub pdfrum_form::field::ChoiceState::selected: alloc::collections::btree::set::B
 pub pdfrum_form::field::ChoiceState::top_visible: usize
 impl pdfrum_form::field::ChoiceState
 pub fn pdfrum_form::field::ChoiceState::focused_text(&self) -> alloc::string::String
-pub fn pdfrum_form::field::ChoiceState::new(alloc::vec::Vec<pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
+pub fn pdfrum_form::field::ChoiceState::new(impl core::iter::traits::collect::IntoIterator<Item = pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
 pub struct pdfrum_form::field::TextConfig
 pub pdfrum_form::field::TextConfig::auto_scroll: bool
 pub pdfrum_form::field::TextConfig::comb: bool
@@ -497,7 +497,7 @@ pub pdfrum_form::ChoiceState::selected: alloc::collections::btree::set::BTreeSet
 pub pdfrum_form::ChoiceState::top_visible: usize
 impl pdfrum_form::field::ChoiceState
 pub fn pdfrum_form::field::ChoiceState::focused_text(&self) -> alloc::string::String
-pub fn pdfrum_form::field::ChoiceState::new(alloc::vec::Vec<pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
+pub fn pdfrum_form::field::ChoiceState::new(impl core::iter::traits::collect::IntoIterator<Item = pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
 pub struct pdfrum_form::CommitOutcome
 pub pdfrum_form::CommitOutcome::committed: bool
 pub pdfrum_form::CommitOutcome::display: core::option::Option<alloc::string::String>
