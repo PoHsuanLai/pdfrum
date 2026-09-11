@@ -1,0 +1,406 @@
+//! Creating page annotations and attaching them to a page's `/Annots`.
+//!
+//! Appearance streams (`/AP`) are not written: a reader that needs one draws
+//! from the annotation's own properties, matching what Rotero writes today.
+
+use kurbo::{Point, Rect};
+use peniko::Color;
+use pdfrum_common::PageIndex;
+use pdfrum_object::{Array, Dict, Name, ObjRef, Object, PdfString, Resolve, encode_text};
+
+use crate::doc::EditDoc;
+use crate::error::Error;
+use crate::names;
+
+/// An annotation write either applies or names why it could not.
+type Result<T> = core::result::Result<T, Error>;
+
+/// The Print bit of `/F` (ISO 32000-1 §12.5.3): annotations appear when the
+/// page is printed.
+const FLAG_PRINT: i64 = 4;
+
+/// One quadrilateral for a text-markup annotation (`/QuadPoints`).
+///
+/// Eight numbers are written in **top-left, top-right, bottom-left,
+/// bottom-right** order — the order Rotero writes and the order
+/// [`pdfrum_doc::annot`] reads as left/bottom = bl, right/top = tr.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Quad {
+    /// Top-left corner in page space.
+    pub top_left: Point,
+    /// Top-right corner in page space.
+    pub top_right: Point,
+    /// Bottom-left corner in page space.
+    pub bottom_left: Point,
+    /// Bottom-right corner in page space.
+    pub bottom_right: Point,
+}
+
+impl Quad {
+    /// An axis-aligned quadrilateral from a rectangle: corners in tl, tr, bl,
+    /// br order.
+    ///
+    /// ```
+    /// use pdfrum_edit::Quad;
+    /// use kurbo::Rect;
+    ///
+    /// let q = Quad::from_rect(Rect::new(10.0, 20.0, 110.0, 40.0));
+    /// assert_eq!(q.top_left, kurbo::Point::new(10.0, 40.0));
+    /// assert_eq!(q.bottom_right, kurbo::Point::new(110.0, 20.0));
+    /// ```
+    #[must_use]
+    pub fn from_rect(rect: Rect) -> Self {
+        let rect = rect.abs();
+        Self {
+            top_left: Point::new(rect.x0, rect.y1),
+            top_right: Point::new(rect.x1, rect.y1),
+            bottom_left: Point::new(rect.x0, rect.y0),
+            bottom_right: Point::new(rect.x1, rect.y0),
+        }
+    }
+}
+
+/// What kind of annotation to create and attach to a page.
+///
+/// Each variant carries the keys Rotero's `write_annotations` needs today.
+/// Appearance streams are not produced.
+///
+/// ```
+/// use pdfrum::{AnnotSpec, Color, Document, Quad, Rect, SaveOptions};
+///
+/// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+/// let mut edit = doc.edit();
+/// let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
+/// edit.add_annotation(
+///     0,
+///     AnnotSpec::Highlight {
+///         rect,
+///         color: Color::from_rgb8(255, 230, 0),
+///         quads: vec![Quad::from_rect(rect)],
+///         contents: Some("note".into()),
+///     },
+/// )?;
+/// let mut bytes = Vec::new();
+/// edit.write_to(&mut bytes, &SaveOptions::default())?;
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AnnotSpec {
+    /// A highlight over one or more text runs (`/Subtype /Highlight`).
+    ///
+    /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    Highlight {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Text runs covered; each becomes eight numbers in tl, tr, bl, br
+        /// order.
+        quads: Vec<Quad>,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// A sticky-note text annotation (`/Subtype /Text`).
+    ///
+    /// Writes `/Name /Comment` and `/Open false`.
+    Text {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// A square / area annotation (`/Subtype /Square`).
+    ///
+    /// Writes `/BS << /Type /Border /W 2 /S /S >>`.
+    Square {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// An underline over one or more text runs (`/Subtype /Underline`).
+    ///
+    /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    Underline {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Text runs covered; each becomes eight numbers in tl, tr, bl, br
+        /// order.
+        quads: Vec<Quad>,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// Freehand ink strokes (`/Subtype /Ink`).
+    ///
+    /// Writes `/InkList` as an array of strokes (each a flat array of x,y
+    /// pairs) and `/BS << /W 2 /S /S >>`.
+    Ink {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Strokes in page space; each stroke is a sequence of points.
+        strokes: Vec<Vec<Point>>,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// A free-text annotation (`/Subtype /FreeText`).
+    ///
+    /// `/Contents` and `/DA` are both required.
+    FreeText {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// The visible text (`/Contents`).
+        contents: String,
+        /// Default appearance string (`/DA`), e.g.
+        /// `"0 0 0 rg /Helvetica 12 Tf"`.
+        da: String,
+    },
+}
+
+/// Adds an annotation described by `spec` to `page`, returning the new
+/// annotation's object reference.
+///
+/// The annotation is written as a new indirect object (`/Type /Annot`,
+/// `/Subtype`, `/Rect`, `/C`, `/F` with the Print bit) and appended to the
+/// page's `/Annots`: a missing array is created; an indirect array is
+/// extended in place; an inline array is rewritten on the page. `/P` is set
+/// to the page object.
+///
+/// # Errors
+///
+/// - [`Error::PageIndexOutOfRange`] when `page` is outside the document.
+/// - [`Error::InlinePage`] when the page has no object of its own.
+/// - [`Error::EmptyQuadPoints`] when a highlight or underline has no quads.
+pub fn add_annotation(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    spec: AnnotSpec,
+) -> Result<ObjRef> {
+    let page = page.into();
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    let dict = build_dict(spec, page_ref)?;
+    let annot_ref = edit.add(Object::Dict(dict));
+    attach_to_page(edit, page_ref, &mut page_dict, annot_ref);
+    Ok(annot_ref)
+}
+
+/// Builds the annotation dictionary for `spec`, with `/P` naming `page_ref`.
+fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
+    match spec {
+        AnnotSpec::Highlight {
+            rect,
+            color,
+            quads,
+            contents,
+        } => {
+            if quads.is_empty() {
+                return Err(Error::EmptyQuadPoints);
+            }
+            let mut dict = common(names::HIGHLIGHT, rect, color, page_ref);
+            dict.insert(names::QUAD_POINTS.clone(), Object::Array(quad_points(&quads)));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Text {
+            rect,
+            color,
+            contents,
+        } => {
+            let mut dict = common(names::TEXT, rect, color, page_ref);
+            dict.insert(names::NAME.clone(), Object::Name(names::COMMENT.clone()));
+            dict.insert(names::OPEN.clone(), Object::Bool(false));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Square {
+            rect,
+            color,
+            contents,
+        } => {
+            let mut dict = common(names::SQUARE, rect, color, page_ref);
+            dict.insert(names::BS.clone(), Object::Dict(border_style(true)));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Underline {
+            rect,
+            color,
+            quads,
+            contents,
+        } => {
+            if quads.is_empty() {
+                return Err(Error::EmptyQuadPoints);
+            }
+            let mut dict = common(names::UNDERLINE, rect, color, page_ref);
+            dict.insert(names::QUAD_POINTS.clone(), Object::Array(quad_points(&quads)));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Ink {
+            rect,
+            color,
+            strokes,
+            contents,
+        } => {
+            let mut dict = common(names::INK, rect, color, page_ref);
+            dict.insert(names::INK_LIST.clone(), Object::Array(ink_list(&strokes)));
+            dict.insert(names::BS.clone(), Object::Dict(border_style(false)));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::FreeText {
+            rect,
+            color,
+            contents,
+            da,
+        } => {
+            let mut dict = common(names::FREE_TEXT, rect, color, page_ref);
+            dict.insert(names::CONTENTS.clone(), Object::Str(pdf_string(&contents)));
+            dict.insert(names::DA.clone(), Object::Str(pdf_string(&da)));
+            Ok(dict)
+        }
+    }
+}
+
+/// `/Type /Annot`, `/Subtype`, `/Rect`, `/C`, `/F` Print, and `/P`.
+fn common(subtype: &Name, rect: Rect, color: Color, page_ref: ObjRef) -> Dict {
+    let mut dict = Dict::new();
+    dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
+    dict.insert(names::SUBTYPE.clone(), Object::Name(subtype.clone()));
+    dict.insert(names::RECT.clone(), rect_object(rect));
+    dict.insert(names::C.clone(), color_object(color));
+    dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
+    dict.insert(names::P.clone(), Object::Ref(page_ref));
+    dict
+}
+
+/// Appends `annot_ref` to the page's `/Annots`, creating or extending as
+/// needed. When `/Annots` is already an indirect array, that array is
+/// replaced and the page dictionary is left alone.
+fn attach_to_page(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    annot_ref: ObjRef,
+) {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let mut array = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+                .unwrap_or_default();
+            array.push(Object::Ref(annot_ref));
+            edit.replace(array_ref, Object::Array(array));
+        }
+        Some(Object::Array(mut array)) => {
+            array.push(Object::Ref(annot_ref));
+            page_dict.insert(annots_key, Object::Array(array));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+        }
+        _ => {
+            page_dict.insert(
+                annots_key,
+                Object::Array(Array::of([Object::Ref(annot_ref)])),
+            );
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+        }
+    }
+}
+
+fn insert_contents(dict: &mut Dict, contents: Option<&str>) {
+    if let Some(text) = contents.filter(|t| !t.is_empty()) {
+        dict.insert(names::CONTENTS.clone(), Object::Str(pdf_string(text)));
+    }
+}
+
+/// PDF text string: `PDFDocEncoding` when it fits, otherwise UTF-16BE with a
+/// byte-order mark — the same encoding [`encode_text`] produces for Info
+/// strings and attachments.
+fn pdf_string(text: &str) -> PdfString {
+    PdfString::literal(encode_text(text))
+}
+
+fn rect_object(rect: Rect) -> Object {
+    let rect = rect.abs();
+    Object::Array(Array::of([
+        Object::Real(as_f32(rect.x0)),
+        Object::Real(as_f32(rect.y0)),
+        Object::Real(as_f32(rect.x1)),
+        Object::Real(as_f32(rect.y1)),
+    ]))
+}
+
+fn color_object(color: Color) -> Object {
+    let [r, g, b, _] = color.components;
+    Object::Array(Array::of([
+        Object::Real(r.clamp(0.0, 1.0)),
+        Object::Real(g.clamp(0.0, 1.0)),
+        Object::Real(b.clamp(0.0, 1.0)),
+    ]))
+}
+
+/// Flat `/QuadPoints` array: eight numbers per quad in tl, tr, bl, br order.
+fn quad_points(quads: &[Quad]) -> Array {
+    let mut out = Array::new();
+    for quad in quads {
+        for point in [
+            quad.top_left,
+            quad.top_right,
+            quad.bottom_left,
+            quad.bottom_right,
+        ] {
+            out.push(Object::Real(as_f32(point.x)));
+            out.push(Object::Real(as_f32(point.y)));
+        }
+    }
+    out
+}
+
+/// `/InkList`: array of strokes, each a flat array of x,y pairs.
+fn ink_list(strokes: &[Vec<Point>]) -> Array {
+    let mut out = Array::new();
+    for stroke in strokes {
+        let mut points = Array::new();
+        for point in stroke {
+            points.push(Object::Real(as_f32(point.x)));
+            points.push(Object::Real(as_f32(point.y)));
+        }
+        out.push(Object::Array(points));
+    }
+    out
+}
+
+/// Border style: Square gets `/Type /Border`; Ink does not (matching Rotero).
+fn border_style(with_type: bool) -> Dict {
+    let mut bs = Dict::new();
+    if with_type {
+        bs.insert(names::TYPE.clone(), Object::Name(names::BORDER.clone()));
+    }
+    bs.insert(names::W.clone(), Object::Real(2.0));
+    bs.insert(names::S.clone(), Object::Name(names::S.clone()));
+    bs
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "PDF reals are f32; page-space points fit"
+)]
+fn as_f32(value: f64) -> f32 {
+    value as f32
+}
