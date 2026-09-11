@@ -65,6 +65,18 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Gid(pub u16);
 
+impl From<u16> for Gid {
+    fn from(g: u16) -> Self {
+        Self(g)
+    }
+}
+
+impl From<Gid> for u16 {
+    fn from(g: Gid) -> Self {
+        g.0
+    }
+}
+
 /// A parsed Type 1 font program.
 ///
 /// A record, not an engine: the fields below are everything the program said,

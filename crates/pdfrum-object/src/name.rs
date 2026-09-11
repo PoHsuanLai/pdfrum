@@ -105,6 +105,18 @@ impl From<&str> for Name {
     }
 }
 
+impl From<Vec<u8>> for Name {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::new(bytes)
+    }
+}
+
+impl From<String> for Name {
+    fn from(s: String) -> Self {
+        Self::new(s.into_bytes())
+    }
+}
+
 // PDFium's classifier also calls `0x80` and `0xFF` whitespace; both are
 // already at or above `0x80`, so they escape either way and the distinction
 // is invisible to `name_encode`.
@@ -262,6 +274,8 @@ mod tests {
     #[test]
     fn static_and_owned_names_compare_equal() {
         assert_eq!(Name::from_static(b"Type"), Name::from("Type"));
+        assert_eq!(Name::from(b"Type".to_vec()), Name::from("Type"));
+        assert_eq!(Name::from(String::from("Type")), Name::from("Type"));
     }
 
     #[test]

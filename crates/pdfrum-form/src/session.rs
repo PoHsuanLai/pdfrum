@@ -20,8 +20,22 @@ use crate::field::FieldState;
 
 /// Which field a session is talking about: an index into the form's field
 /// list.
+///
+/// `From<u32>` exists so `impl Into<FieldId>` arguments accept a literal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FieldId(pub u32);
+
+impl From<u32> for FieldId {
+    fn from(n: u32) -> Self {
+        Self(n)
+    }
+}
+
+impl From<FieldId> for u32 {
+    fn from(id: FieldId) -> Self {
+        id.0
+    }
+}
 
 /// Which annotation: a page and its index in that page's **raw `/Annots`
 /// array**.
@@ -250,6 +264,16 @@ impl FormSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_literal_converts_the_way_an_impl_into_argument_needs() {
+        fn takes(id: impl Into<FieldId>) -> FieldId {
+            id.into()
+        }
+        assert_eq!(takes(0), FieldId(0));
+        assert_eq!(takes(FieldId(3)), FieldId(3));
+        assert_eq!(u32::from(FieldId(3)), 3);
+    }
 
     #[test]
     fn a_fresh_session_has_no_focus_and_no_state() {

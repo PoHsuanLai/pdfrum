@@ -5,6 +5,18 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Changed
+
+- `Table::row` takes any iterator of string-like cells, so a CLI table can
+  be filled from string slices. `Response::one` is the one-update constructor
+  every caller was spelling as `with(vec![…])`. `Face::single` takes
+  `impl Into<Vec<u8>>` for both the alias and the bytes.
+- Lossless wrappers grow the `From`/`AsRef` impls they already were:
+  `Name` from owned bytes and strings, `GlyphName` as bytes, `Array` from
+  and into `Vec<Object>`, `PdfString` as bytes, `Gid` and `FieldId` from
+  their integers. `Document::open_with_password` takes the same password
+  spellings as the options builder.
+
 ## [0.1.1] - 2026-09-10
 
 ### Added
