@@ -379,6 +379,25 @@ impl TextPage {
     }
 
     /// [`TextPage::find`] with explicit options.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pdfrum_text::{FindOptions, TextIndex, TextPage};
+    /// let page = TextPage {
+    ///     search_text: "Hello, world!".chars().collect(),
+    ///     ..TextPage::default()
+    /// };
+    /// let at = TextIndex::new;
+    /// let hits: Vec<_> = page
+    ///     .find_with("WORLD", FindOptions { match_case: true, ..FindOptions::default() })
+    ///     .collect();
+    /// assert!(hits.is_empty());
+    /// let hits: Vec<_> = page
+    ///     .find_with("world", FindOptions { match_case: true, ..FindOptions::default() })
+    ///     .collect();
+    /// assert_eq!(hits, [at(7)..at(12)]);
+    /// ```
     pub fn find_with<'a>(
         &'a self,
         needle: &str,
