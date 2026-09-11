@@ -8,7 +8,7 @@
 # the argument differs from `[workspace.package]`.
 #
 #   ./scripts/prepare-release.nu           # cut for the version already in Cargo.toml
-#   ./scripts/prepare-release.nu 0.1.1     # bump, then cut
+#   ./scripts/prepare-release.nu 0.2.0     # bump, then cut
 #   ./scripts/prepare-release.nu --notes   # print the GitHub Release body; no edits
 #
 # It does not commit, tag, or publish. Commit the result, open a PR, merge to

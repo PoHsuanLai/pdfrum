@@ -157,21 +157,52 @@ fn clicking_the_second_visible_row_selects_the_second_option() {
 /// equal intervals, and that interval is not 12.
 #[test]
 fn a_row_is_the_laid_out_line_tall_not_the_font_size() {
+    // The widget is `/Rect [100 350 200 380]` less its one-unit border.
+    const TOP: f64 = 379.0;
+    const BOTTOM: f64 = 351.0;
+    const EPSILON: f64 = 1e-4;
+
     let doc = document();
 
-    // Walk down the widget and record where the selected row changes.
-    let mut boundaries = Vec::new();
-    let mut previous: Option<Vec<usize>> = None;
-    let mut y = 379.0_f64;
-    while y > 351.0 {
+    let row_at = |y: f64| -> Option<usize> {
         let mut session = FormSession::new(&doc);
         click(&mut session, y);
-        let rows = selected_rows(&session, 26);
-        if previous.as_ref().is_some_and(|was| *was != rows) {
-            boundaries.push(y);
+        selected_rows(&session, 26).first().copied()
+    };
+
+    // `above` and `below` select different rows, so an edge lies between
+    // them. Monotonic across a single edge, so halving finds it.
+    let bisect = |mut above: f64, mut below: f64| -> f64 {
+        let start = row_at(above);
+        while above - below > EPSILON {
+            let mid = f64::midpoint(above, below);
+            if row_at(mid) == start {
+                above = mid;
+            } else {
+                below = mid;
+            }
         }
-        previous = Some(rows);
-        y -= 0.05;
+        f64::midpoint(above, below)
+    };
+
+    assert!(
+        row_at(TOP).is_some(),
+        "the top of the client rectangle must land on a row"
+    );
+
+    // Edge to edge, so each bisection brackets exactly one boundary.
+    let mut boundaries = Vec::new();
+    let mut above = TOP;
+    for _ in 0..2 {
+        assert_ne!(
+            row_at(above),
+            row_at(BOTTOM),
+            "an edge must lie between {above} and {BOTTOM}"
+        );
+        let edge = bisect(above, BOTTOM);
+        boundaries.push(edge);
+        // Past the edge, so the next starts inside the next row.
+        above = edge - EPSILON * 2.0;
     }
 
     assert_eq!(

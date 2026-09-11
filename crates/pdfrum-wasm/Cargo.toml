@@ -48,7 +48,7 @@ crate-type = ["cdylib", "rlib"]
 # `default-features = false` on an inherited dependency, and turning the
 # facade's defaults off is the whole point of this row: `system-fonts` is in
 # that default set and cannot be compiled for this target.
-pdfrum = { path = "../pdfrum", version = "=0.1.1", default-features = false, features = [
+pdfrum = { path = "../pdfrum", version = "=0.2.0", default-features = false, features = [
     "vello-cpu",
     "codecs-all",
     "forms",

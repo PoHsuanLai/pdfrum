@@ -11,8 +11,8 @@ behind it.
 use pdfrum_object::{Array, Dict, NoResolve, Object, names};
 
 let page = Dict::from_pairs([
-    (names::TYPE.clone(), Object::Name(names::PAGE.clone())),
-    (names::RECT.clone(), Object::Array(Array::of([0, 0, 612, 792].map(Object::from)))),
+    (names::TYPE, Object::from(names::PAGE)),
+    (names::RECT, Object::from(Array::of([0, 0, 612, 792]))),
 ]);
 assert_eq!(page.rect(names::RECT, &NoResolve).width(), 612.0);
 ```

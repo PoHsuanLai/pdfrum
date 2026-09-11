@@ -28,7 +28,7 @@ use crate::names;
 ///     (Name::from("Contents"), Object::Str(PdfString::literal(b"a note"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([10, 300, 30, 320].map(Object::from))),
+///         Object::Array(Array::of([10, 300, 30, 320])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(
@@ -72,7 +72,7 @@ impl AnnotList {
     ///     (Name::from("Contents"), Object::Str(PdfString::literal(b"a note"))),
     ///     (
     ///         Name::from("Rect"),
-    ///         Object::Array(Array::of([10, 300, 30, 320].map(Object::from))),
+    ///         Object::Array(Array::of([10, 300, 30, 320])),
     ///     ),
     /// ]);
     /// let page = Dict::from_pairs([(

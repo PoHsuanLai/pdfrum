@@ -7,12 +7,12 @@
 //!
 //! ```
 //! use pdfrum_doc::color::Color;
-//! use pdfrum_object::{Array, Object};
+//! use pdfrum_object::Array;
 //!
-//! let rgb = Array::of([0.25, 0.5, 1.0].map(Object::from));
+//! let rgb = Array::of([0.25_f32, 0.5, 1.0]);
 //! assert_eq!(Color::from_array(&rgb), Color::Rgb(0.25, 0.5, 1.0));
 //! // Two components name no space.
-//! let two = Array::of([0.25, 0.5].map(Object::from));
+//! let two = Array::of([0.25_f32, 0.5]);
 //! assert_eq!(Color::from_array(&two), Color::Transparent);
 //! ```
 
@@ -46,9 +46,9 @@ impl Color {
     ///
     /// ```
     /// use pdfrum_doc::color::Color;
-    /// use pdfrum_object::{Array, Object};
+    /// use pdfrum_object::Array;
     ///
-    /// let grey = Array::of([0.5].map(Object::from));
+    /// let grey = Array::of([0.5_f32]);
     /// assert_eq!(Color::from_array(&grey), Color::Gray(0.5));
     /// // An empty array says "no colour", not "damaged".
     /// assert_eq!(Color::from_array(&Array::new()), Color::Transparent);

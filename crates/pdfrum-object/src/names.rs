@@ -8,8 +8,8 @@
 //! ```
 //! use pdfrum_object::{Dict, Object, names};
 //!
-//! let dict = Dict::from_pairs([(names::TYPE.clone(), Object::Name(names::PAGE.clone()))]);
-//! assert_eq!(dict.raw(names::TYPE), Some(&Object::Name(names::PAGE.clone())));
+//! let dict = Dict::from_pairs([(names::TYPE, names::PAGE)]);
+//! assert_eq!(dict.raw(names::TYPE), Some(&Object::from(names::PAGE)));
 //! ```
 
 use crate::names;
