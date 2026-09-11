@@ -1,8 +1,9 @@
 # pdfrum-raster-vello-cpu
 
 [`vello_cpu`](https://crates.io/crates/vello_cpu) behind
-[`pdfrum_render::RasterBackend`]. The facade's default rasterizer: pure Rust,
-no threads, no GPU handshake, and the one backend a `wasm32` build can use.
+[`pdfrum_render::RasterBackend`]. The CPU rasterizer the facade ships with
+`vello-cpu` (on by default): pure Rust, no threads, no GPU handshake, and
+the one backend a `wasm32` build can use.
 
 ```rust
 use pdfrum_raster_vello_cpu::VelloCpuBackend;

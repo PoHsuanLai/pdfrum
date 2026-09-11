@@ -40,7 +40,7 @@ Open a file once. Ask it questions (Rendering is one of them).
   is useful
 - **Forms** — read values, fill them, run a live session
 - **Outline, links, annotations, tagged structure**
-- **Pixels** — name a rasterizer; defaults to [`vello_cpu`](https://crates.io/crates/vello_cpu)
+- **Pixels** — name a rasterizer (`page.render(VelloCpuBackend)`); [`vello_cpu`](https://crates.io/crates/vello_cpu) is the default feature, not a silent fallback
 - **A new file** — edit, stamp, merge, flatten, save full or incremental
 
 A file a browser would open, we open, and tell you where it's broken.

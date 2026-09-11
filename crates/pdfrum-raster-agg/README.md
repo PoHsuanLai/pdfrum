@@ -20,7 +20,7 @@ with them — `tiny-skia` supersamples four times per axis, so a diagonal edge
 has seventeen coverage levels and a half-covered pixel quantises to 8/16
 rather than to a half. Over the corpus that is a persistent few-count spread
 along every non-axis-aligned edge. `AggBackend` closes it; `vello_cpu` stays
-the facade default, because an API caller wants a fast production rasterizer
+the production CPU rasterizer, because an API caller wants speed
 rather than an oracle-matching one.
 
 [`AggBackend`] is stateless — every [`AggDevice`] target is independent, so

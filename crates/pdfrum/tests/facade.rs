@@ -317,10 +317,9 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one() {
     assert_eq!(fresh, shared);
 }
 
-/// `render` is `render_on` with the default backend and a fresh session, and
-/// `text` is `text_on` with a fresh one — byte for byte, not merely close.
-/// The convenience forms are the general one with a default argument and
-/// nothing else.
+/// `render_with` is `render_on` with a fresh session, and `text` is `text_on`
+/// with a fresh one — byte for byte, not merely close. The convenience forms
+/// are the general one with a default argument and nothing else.
 #[test]
 fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
     let doc = Document::open(BOOKMARKS).expect("open");
@@ -334,7 +333,7 @@ fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
             .expect("render_on");
         assert_eq!(
             convenience, general,
-            "render is render_on with a fresh session"
+            "render_with is render_on with a fresh session"
         );
 
         let text = page.text().to_string();

@@ -148,8 +148,8 @@ pub use pdfrum_raster_tinyskia::TinySkiaBackend;
 /// default build carries.
 #[cfg(feature = "vello-gpu")]
 pub use pdfrum_raster_vello::VelloBackend as VelloGpuBackend;
-/// The default rasterizer, behind the `vello-cpu` feature that is on by
-/// default: what a caller passes to [`Page::render`] unless it chose another.
+/// The CPU rasterizer, behind the `vello-cpu` feature that is on by default.
+/// A typical call is [`Page::render`]`(VelloCpuBackend)`.
 #[cfg(feature = "vello-cpu")]
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 #[cfg(feature = "edit")]
