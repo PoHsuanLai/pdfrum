@@ -45,3 +45,12 @@
 "resources/javascript/foreground_task.in#js-transcript" = { why = "the fixture calls `gc`, a V8 debug builtin that is not a language feature and reaches nothing the PDF scripting model defines", cite = "crates/pdfrum-form/src/script/tests.rs `no_io_is_reachable_from_a_script`" }
 "resources/javascript/v8_features.in#js-transcript" = { why = "the golden asserts `typeof gc = function`, which holds only inside V8", cite = "crates/pdfrum-form/src/script/tests.rs `no_io_is_reachable_from_a_script`" }
 "resources/javascript/array_buffer.in#js-transcript" = { why = "the golden pins V8's `Array buffer allocation failed` wording for an allocation both engines refuse", cite = "ECMA-262 §25.1.3.1 (RangeError is required, its message is not)" }
+
+# ISO 32000-1 §8.9.5.3 permits interpolation; it does not license darkening
+# every reconstructed sample by two levels. The oracle's dest-space bilinear
+# takes complements against 255 on a mod-256 residue, so a constant region
+# comes back v-2. pdfrum's taps sum to 256 and preserve the identity.
+"resources/pixel/image_transformer_other.in" = { why = "the oracle's dest-space bilinear complements against 255 on a mod-256 residue, so a constant region is two levels darker than the source the page named", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
+"resources/pixel/image_transformer_other.pdf" = { why = "the oracle's dest-space bilinear complements against 255 on a mod-256 residue, so a constant region is two levels darker than the source the page named", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
+"resources/rotated_image.in" = { why = "the same dest-space bilinear darkens a sheared image two levels, including at sample points where the filter must be an identity", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
+"resources/rotated_image.pdf" = { why = "the same dest-space bilinear darkens a sheared image two levels, including at sample points where the filter must be an identity", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }

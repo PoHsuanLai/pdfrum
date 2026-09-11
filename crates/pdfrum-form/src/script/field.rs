@@ -1149,40 +1149,50 @@ fn get_undefined(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsV
     Ok(JsValue::undefined())
 }
 
-/// The key a `Field` object carries its border style under.
-///
-/// A real setter — one of the ten that write — and the value is per field
-/// rather than per object, so it lives on the model. An unrecognized spelling
-/// is **silently ignored** rather than refused.
-const BORDER_STYLES: [&str; 5] = ["solid", "dashed", "beveled", "inset", "underline"];
-
 /// `Field.borderStyle`.
 fn get_border_style(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let Some(object) = this.as_object() else {
-        return Ok(JsValue::from(boa_engine::js_string!("solid")));
-    };
-    object.get(boa_engine::js_string!(BORDER_KEY), context)
+    let style = read(this, context, "borderStyle", |field| {
+        if field.border_style.is_empty() {
+            "solid".to_string()
+        } else {
+            field.border_style.clone()
+        }
+    })?;
+    Ok(JsValue::from(boa_engine::js_string!(style)))
 }
 
 /// `Field.borderStyle = s` — an unrecognized spelling changes nothing.
 fn set_border_style(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let text = string_of(&args.get_or_undefined(0).clone(), context)?;
-    if !BORDER_STYLES.contains(&text.as_str()) {
+    let Some(style) = parse_border_style(&text) else {
         return Ok(JsValue::undefined());
-    }
-    if let Some(object) = this.as_object() {
-        object.set(
-            boa_engine::js_string!(BORDER_KEY),
-            JsValue::from(boa_engine::js_string!(text)),
-            false,
-            context,
-        )?;
+    };
+    let Some(index) = index_of(this, context) else {
+        return Ok(JsValue::undefined());
+    };
+    if let Some(host) = host(context) {
+        let mut state = host.borrow_mut();
+        if let Some(field) = state.document.fields.get_mut(index) {
+            field.border_style.clone_from(&text);
+        }
+        state
+            .border_style_writes
+            .push((u32::try_from(index).unwrap_or(u32::MAX), style));
     }
     Ok(JsValue::undefined())
 }
 
-/// The key [`get_border_style`] reads.
-const BORDER_KEY: &str = "__pdfrum_field_border";
+/// The five spellings `SetBorderStyle` accepts (`fxjs/cjs_field.cpp:244-257`).
+fn parse_border_style(text: &str) -> Option<pdfrum_doc::ap::BorderStyle> {
+    match text {
+        "solid" => Some(pdfrum_doc::ap::BorderStyle::Solid),
+        "dashed" => Some(pdfrum_doc::ap::BorderStyle::Dash),
+        "beveled" => Some(pdfrum_doc::ap::BorderStyle::Beveled),
+        "inset" => Some(pdfrum_doc::ap::BorderStyle::Inset),
+        "underline" => Some(pdfrum_doc::ap::BorderStyle::Underline),
+        _ => None,
+    }
+}
 
 /// The key a `Field` object carries its own `delay` flag under.
 const DELAY_KEY: &str = "__pdfrum_field_delay";
@@ -1286,11 +1296,6 @@ pub(crate) fn build(index: usize, name: &str, context: &mut Context) -> JsResult
     object.create_data_property_or_throw(
         boa_engine::js_string!(DELAY_KEY),
         JsValue::from(false),
-        context,
-    )?;
-    object.create_data_property_or_throw(
-        boa_engine::js_string!(BORDER_KEY),
-        JsValue::from(boa_engine::js_string!("solid")),
         context,
     )?;
     object.create_data_property_or_throw(

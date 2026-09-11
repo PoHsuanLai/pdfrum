@@ -195,6 +195,12 @@ pub struct FormSession {
     pub formatted: BTreeMap<FieldId, String>,
     /// The switches.
     pub config: SessionConfig,
+    /// `Field.borderStyle` writes a script made, keyed by field.
+    ///
+    /// Spent into appearance generation rather than written into `/BS`: the
+    /// dictionary stays as the file left it, and a regenerated stream sees
+    /// the new style through [`pdfrum_doc::ap::widget::LiveInput`].
+    pub border_styles: BTreeMap<FieldId, pdfrum_doc::ap::BorderStyle>,
 }
 
 impl FormSession {

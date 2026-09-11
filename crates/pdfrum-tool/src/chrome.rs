@@ -128,6 +128,8 @@ pub fn push_popup<R: Resolve>(
             live: None,
             substitute: fonts.substitute(pdfrum_font::Charset::Hebrew),
             appearance_state: None,
+            border_style: None,
+            center_rows: true,
         },
     ) else {
         return;
@@ -169,6 +171,288 @@ pub fn push_popup<R: Resolve>(
         build_form_object_with(&stream, matrix, &resources, r, ctx, limits, diags, true)
     {
         page.objects.push(object);
+    }
+}
+
+/// The scroll bar's width, and the gap the C++ leaves on the right
+/// (`CPWL_Wnd::RepositionChildWnd`: `right - kWidth` … `right - 1`).
+const SCROLLBAR_WIDTH: f32 = 12.0;
+const SCROLLBAR_RIGHT_INSET: f32 = 1.0;
+const SCROLLBAR_BUTTON: f32 = 9.0;
+const SCROLLBAR_THUMB_MIN: f32 = 2.0;
+/// `CPWL_ScrollBar::kTransparency`.
+const SCROLLBAR_ALPHA: f32 = 150.0 / 255.0;
+
+/// Paints a list-box scroll bar over the widget, as `CPWL_ScrollBar` does.
+///
+/// The live appearance already reserved the 12-unit strip; this is the
+/// occupant. A no-op when the bar would have no area.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same sinks `push_popup` carries, plus the widget and the \
+              view the bar is measured from"
+)]
+pub fn push_scrollbar<R: Resolve>(
+    page: &mut Page,
+    view: &pdfrum::ScrollView,
+    widget: &Dict,
+    catalog: &Dict,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) {
+    let _ = catalog;
+    let Some(placed) = scrollbar_rect(widget, r) else {
+        return;
+    };
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a widget's client is a few hundred PDF units, well inside f32"
+    )]
+    let (width, height) = (placed.width() as f32, placed.height() as f32);
+    if width <= 0.0 || height <= 0.0 {
+        return;
+    }
+    let generated = scrollbar_ap(view, width, height);
+    let stream = Stream::new(
+        ap::stream_dict(&generated),
+        ByteSpan::from(generated.stream.clone()),
+    );
+    let resources = Resources::for_page(page.resources.clone());
+    let matrix = pdfrum_doc::geom::match_rect(
+        pdfrum_doc::geom::normalize(placed),
+        pdfrum_doc::geom::transform_rect(generated.matrix, generated.bbox),
+    );
+    if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
+        return;
+    }
+    if let Some(object) =
+        build_form_object_with(&stream, matrix, &resources, r, ctx, limits, diags, true)
+    {
+        page.objects.push(object);
+    }
+}
+
+/// The bar's **page-space** rectangle: the 12-unit strip inside the widget's
+/// client, inset 1 unit from the right as `RepositionChildWnd` does.
+///
+/// `client_rect` is appearance space (the widget box at the origin). Mapping
+/// through [`pdfrum_doc::geom::match_rect`] is what `push_popup` already
+/// does with a page-space destination — without it the bar lands at y≈0
+/// instead of inside `/Rect`, which is `scrollable_widgets1`.
+fn scrollbar_rect<R: Resolve>(widget: &Dict, r: &R) -> Option<kurbo::Rect> {
+    let client = ap::field_body::client_rect(widget, r);
+    let right = pdfrum_doc::geom::right(client);
+    let left = right - SCROLLBAR_WIDTH;
+    let bar = pdfrum_doc::geom::rect(
+        left,
+        pdfrum_doc::geom::bottom(client),
+        right - SCROLLBAR_RIGHT_INSET,
+        pdfrum_doc::geom::top(client),
+    );
+    if pdfrum_doc::geom::width(bar) <= 0.0 || pdfrum_doc::geom::height(bar) <= 0.0 {
+        return None;
+    }
+    let page = widget.rect(pdfrum_object::names::RECT, r);
+    let rotation = ap::widget::widget_rotation(widget, r);
+    let (ap_w, ap_h) = if rotation.swaps_axes() {
+        (
+            pdfrum_doc::geom::height(page),
+            pdfrum_doc::geom::width(page),
+        )
+    } else {
+        (
+            pdfrum_doc::geom::width(page),
+            pdfrum_doc::geom::height(page),
+        )
+    };
+    let ap_box = pdfrum_doc::geom::rect(0.0, 0.0, ap_w, ap_h);
+    let matrix = pdfrum_doc::geom::match_rect(pdfrum_doc::geom::normalize(page), ap_box);
+    Some(pdfrum_doc::geom::transform_rect(matrix, bar))
+}
+
+/// The bar as a form whose bbox sits at the origin.
+fn scrollbar_ap(view: &pdfrum::ScrollView, width: f32, height: f32) -> ap::GeneratedAp {
+    let mut out = String::new();
+    out.push_str("q\n/GS1 gs\n");
+    // Track: white fill, two grey 1-unit rules inset 2 units.
+    out.push_str("1 1 1 rg\n0 0 ");
+    push_num(&mut out, width);
+    push_num(&mut out, height);
+    out.push_str("re f\n0.392 0.392 0.392 RG\n1 w\n");
+    let x_left = 2.0_f32.min(width);
+    let x_right = (width - 2.0).max(0.0);
+    push_num(&mut out, x_left);
+    push_num(&mut out, height - 2.0);
+    out.push_str("m\n");
+    push_num(&mut out, x_left);
+    push_num(&mut out, 2.0);
+    out.push_str("l S\n");
+    push_num(&mut out, x_right);
+    push_num(&mut out, height - 2.0);
+    out.push_str("m\n");
+    push_num(&mut out, x_right);
+    push_num(&mut out, 2.0);
+    out.push_str("l S\n");
+
+    let button = if height > SCROLLBAR_BUTTON * 2.0 + SCROLLBAR_THUMB_MIN + 2.0 {
+        SCROLLBAR_BUTTON
+    } else {
+        ((height - SCROLLBAR_THUMB_MIN - 2.0) / 2.0).max(0.0)
+    };
+    if button > 0.0 {
+        emit_sb_button(&mut out, 0.0, height - button, width, button, true);
+        emit_sb_button(&mut out, 0.0, 0.0, width, button, false);
+        emit_sb_thumb(&mut out, view, width, height, button);
+    }
+    out.push_str("Q\n");
+
+    let mut gs = Dict::new();
+    gs.push(Name::from(b"ca".as_slice()), Object::Real(SCROLLBAR_ALPHA));
+    gs.push(Name::from(b"CA".as_slice()), Object::Real(SCROLLBAR_ALPHA));
+    let mut gs_map = Dict::new();
+    gs_map.push(Name::from(b"GS1".as_slice()), Object::Dict(gs));
+    let mut resources = Dict::new();
+    resources.push(Name::from(b"ExtGState".as_slice()), Object::Dict(gs_map));
+
+    ap::GeneratedAp {
+        stream: out.into_bytes(),
+        bbox: kurbo::Rect::new(0.0, 0.0, f64::from(width), f64::from(height)),
+        matrix: kurbo::Affine::IDENTITY,
+        resources,
+        rect_override: None,
+        as_override: None,
+    }
+}
+
+fn push_num(out: &mut String, value: f32) {
+    let _ = std::fmt::Write::write_fmt(out, format_args!("{value} "));
+}
+
+/// One end-cap button: grey border, light fill, white chevron.
+fn emit_sb_button(out: &mut String, x: f32, y: f32, w: f32, h: f32, up: bool) {
+    out.push_str("0.392 0.392 0.392 RG\n0 w\n");
+    push_num(out, x);
+    push_num(out, y);
+    push_num(out, w);
+    push_num(out, h);
+    out.push_str("re S\n1 1 1 RG\n1 w\n");
+    push_num(out, x + 0.5);
+    push_num(out, y + 0.5);
+    push_num(out, w - 1.0);
+    push_num(out, h - 1.0);
+    out.push_str("re S\n");
+    // Interior: the `DrawShadow` ramp approximated as a light grey fill.
+    out.push_str("0.863 0.863 0.863 rg\n");
+    push_num(out, x + 1.0);
+    push_num(out, y + 1.0);
+    push_num(out, (w - 2.0).max(0.0));
+    push_num(out, (h - 2.0).max(0.0));
+    out.push_str("re f\n");
+    if h <= 6.0 {
+        return;
+    }
+    // Chevron, from `kOffsetsMin` / `kOffsets` in `cpwl_sbbutton.cpp`.
+    out.push_str("1 1 1 rg\n");
+    let origin_x = x + 1.5;
+    let origin_y = y;
+    let pts: [(f32, f32); 7] = if up {
+        [
+            (2.5, 4.0),
+            (2.5, 3.0),
+            (4.5, 5.0),
+            (6.5, 3.0),
+            (6.5, 4.0),
+            (4.5, 6.0),
+            (2.5, 4.0),
+        ]
+    } else {
+        [
+            (2.5, 5.0),
+            (2.5, 6.0),
+            (4.5, 4.0),
+            (6.5, 6.0),
+            (6.5, 5.0),
+            (4.5, 3.0),
+            (2.5, 5.0),
+        ]
+    };
+    if let Some(&(dx, dy)) = pts.first() {
+        push_num(out, origin_x + dx);
+        push_num(out, origin_y + dy);
+        out.push_str("m\n");
+    }
+    for &(dx, dy) in pts.iter().skip(1) {
+        push_num(out, origin_x + dx);
+        push_num(out, origin_y + dy);
+        out.push_str("l\n");
+    }
+    out.push_str("f\n");
+}
+
+/// The thumb, sized from [`pdfrum::ScrollView`] the way `TrueToFace` is.
+fn emit_sb_thumb(
+    out: &mut String,
+    view: &pdfrum::ScrollView,
+    width: f32,
+    height: f32,
+    button: f32,
+) {
+    let area_bottom = button + 1.0;
+    let area_top = height - button - 1.0;
+    if area_top - area_bottom <= SCROLLBAR_THUMB_MIN {
+        return;
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a list box's row count is a few dozen, exactly representable in f32"
+    )]
+    let total = view.total.max(1) as f32;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "visible and top_visible are bounded by total"
+    )]
+    let visible = (view.visible_rows as f32).clamp(1.0, total);
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "visible and top_visible are bounded by total"
+    )]
+    let top = (view.top_visible as f32).min(total - visible).max(0.0);
+    let span = area_top - area_bottom;
+    let fact = total.max(1.0);
+    let thumb_top = area_top - top * span / fact;
+    let mut thumb_bottom = area_top - (top + visible) * span / fact;
+    if thumb_top - thumb_bottom < SCROLLBAR_THUMB_MIN {
+        thumb_bottom = thumb_top - SCROLLBAR_THUMB_MIN;
+    }
+    if thumb_bottom < area_bottom {
+        thumb_bottom = area_bottom;
+    }
+    let h = (thumb_top - thumb_bottom).max(SCROLLBAR_THUMB_MIN);
+    out.push_str("0.824 0.824 0.824 rg\n");
+    push_num(out, 0.0);
+    push_num(out, thumb_bottom);
+    push_num(out, width);
+    push_num(out, h);
+    out.push_str("re f\n");
+    if h <= 8.0 {
+        return;
+    }
+    out.push_str("0.471 0.471 0.471 RG\n1 w\n");
+    let mid_x = width / 2.0;
+    let mid_y = thumb_bottom + h / 2.0;
+    let left = mid_x - 2.5;
+    let right = mid_x + 2.5;
+    let mut y = mid_y - 2.25;
+    for _ in 0..3 {
+        push_num(out, left);
+        push_num(out, y);
+        out.push_str("m\n");
+        push_num(out, right);
+        push_num(out, y);
+        out.push_str("l S\n");
+        y += 2.0;
     }
 }
 

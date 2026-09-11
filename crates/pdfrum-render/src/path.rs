@@ -451,6 +451,47 @@ pub fn outer_rect(r: Rect) -> IntRect {
     }
 }
 
+/// The integer range that covers a float span with the least edge error.
+///
+/// Length is `ceil(hi - lo)`. The start is whichever of `floor(lo)` and
+/// `ceil(lo)` puts both ends closer to the float span; a tie keeps the
+/// floor. This is a smaller rect than [`outer_rect`] whenever the span
+/// sits closer to a whole-pixel grid than to the outer one, and it is the
+/// dest rect a sheared image's reverse-map fills.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the clamp bounds every finite coordinate before the narrowing"
+)]
+pub fn closest_rect(r: Rect) -> IntRect {
+    let pair = |lo: f64, hi: f64| -> (i32, i32) {
+        if !lo.is_finite() || !hi.is_finite() {
+            return (0, 0);
+        }
+        let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
+        let length = (hi - lo).ceil();
+        let floor = lo.floor();
+        let ceil = lo.ceil();
+        let error_floor = (lo - floor) + (hi - floor - length).abs();
+        let error_ceil = (ceil - lo) + (hi - ceil - length).abs();
+        let start = if error_floor > error_ceil {
+            ceil
+        } else {
+            floor
+        };
+        let clamp = |v: f64| v.clamp(f64::from(i32::MIN) / 2.0, f64::from(i32::MAX) / 2.0);
+        (clamp(start) as i32, clamp(start + length) as i32)
+    };
+    let (left, right) = pair(r.x0, r.x1);
+    let (top, bottom) = pair(r.y0, r.y1);
+    IntRect {
+        left,
+        top,
+        right,
+        bottom,
+    }
+}
+
 /// The axis-aligned rectangle fill fast path, reproduced exactly.
 ///
 /// An axis-aligned rectangle in PDFium is **never antialiased** unless
@@ -867,5 +908,20 @@ mod tests {
                 bottom: 4
             }
         );
+    }
+
+    #[test]
+    fn closest_rect_picks_the_lower_error_start() {
+        // Integer edges agree with the outer rect.
+        assert_eq!(
+            closest_rect(Rect::new(1.0, 2.0, 4.0, 6.0)),
+            outer_rect(Rect::new(1.0, 2.0, 4.0, 6.0))
+        );
+        // A span of 10.0 starting at 0.1: length 10, floor error is smaller.
+        let r = closest_rect(Rect::new(0.1, 0.1, 10.1, 10.1));
+        assert_eq!(r.width(), 10);
+        assert_eq!(r.height(), 10);
+        assert_eq!(r.left, 0);
+        assert_eq!(r.top, 0);
     }
 }

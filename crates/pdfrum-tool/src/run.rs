@@ -145,22 +145,20 @@ pub fn process_file(
         write!(streams.out, "{}", feature.line())?;
     }
 
-    // The form-fill environment, when there is a script to drive it. Opened
-    // from the same bytes and the same password: a session over a *different*
-    // reading of the file would route clicks against annotations the render
-    // path never saw. A file the facade refuses — which cannot happen when
-    // the parser accepted it, since both call the same loader — leaves the
-    // session absent, and the events then parse and count exactly as before.
-    let facade = (!parsed_events.is_empty())
-        .then(|| {
-            pdfrum::Document::from_bytes_with(Arc::clone(&bytes), &{
-                let mut options = pdfrum::OpenOptions::default();
-                options.password.clone_from(&load.password);
-                options
-            })
-            .ok()
-        })
-        .flatten();
+    // The form-fill environment `--send-events` always installs, even when
+    // the sibling `.evt` is empty: `pdfium_test` still builds an
+    // `FPDF_FORMHANDLE`, runs `/OpenAction`, and loads each page's widgets
+    // (`bug_1445426`, `bug_1447268`). Opened from the same bytes and the
+    // same password: a session over a *different* reading of the file would
+    // route clicks against annotations the render path never saw. A file
+    // the facade refuses — which cannot happen when the parser accepted it,
+    // since both call the same loader — leaves the session absent, and the
+    // events then parse and count exactly as before.
+    let facade = open_facade(
+        &bytes,
+        &load,
+        options.send_events || !parsed_events.is_empty(),
+    );
     // One build context for the whole file, so its font, colorspace and image
     // caches are shared across pages the way the oracle's document-wide caches
     // are — and so that the session below and the page walk resolve
@@ -175,12 +173,7 @@ pub fn process_file(
     // carry a *default* substitution and measure the same `/Arial` as the
     // built-in base-14 Helvetica, putting its caret a device row off.
     let mut ctx = BuildContext::with_substitution(substitution_options(options));
-    // One session for the whole document, as the oracle holds one
-    // `FPDF_FORMHANDLE` for the whole document: what page 0's script leaves
-    // focused is what page 1's script starts from.
-    let mut session = facade
-        .as_ref()
-        .map(|facade| pdfrum::FormSession::with_context(facade, &mut ctx));
+    let mut session = form_session(facade.as_ref(), options, &mut ctx);
 
     let counts = walk_pages(
         &doc,
@@ -360,6 +353,61 @@ fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
     }
 }
 
+/// The second reading `--send-events` opens through the facade, sharing
+/// `bytes` with the parser so a large file is not copied.
+fn open_facade(bytes: &Arc<[u8]>, load: &LoadOptions, needed: bool) -> Option<pdfrum::Document> {
+    needed
+        .then(|| {
+            pdfrum::Document::from_bytes_with(Arc::clone(bytes), &{
+                let mut options = pdfrum::OpenOptions::default();
+                options.password.clone_from(&load.password);
+                options
+            })
+            .ok()
+        })
+        .flatten()
+}
+
+/// One session for the whole document, as the oracle holds one
+/// `FPDF_FORMHANDLE`: what page 0's script leaves focused is what page 1's
+/// script starts from.
+///
+/// `--send-events` is a **scripted** session sharing `ctx`, so `/OpenAction`
+/// and each field's `/AA` actually run and rewrite the appearances the PNG
+/// path then draws. `with_context` is `NoScripts` and would leave those
+/// actions silent (`bug_1445426`, `bug_1447268`).
+#[cfg(feature = "javascript")]
+fn form_session<'a>(
+    facade: Option<&'a pdfrum::Document>,
+    options: &Options,
+    ctx: &mut BuildContext,
+) -> Option<pdfrum::FormSession<'a>> {
+    let mut session = if options.send_events {
+        facade.and_then(|facade| {
+            let config = match options.time {
+                Some(seconds) => pdfrum::ScriptConfig::frozen_at(seconds),
+                None => pdfrum::ScriptConfig::wall_clock(),
+            };
+            pdfrum::FormSession::with_scripts_in(facade, &config, ctx).ok()
+        })
+    } else {
+        facade.map(|facade| pdfrum::FormSession::with_context(facade, ctx))
+    };
+    if let Some(session) = session.as_mut() {
+        session.open_document();
+    }
+    session
+}
+
+#[cfg(not(feature = "javascript"))]
+fn form_session<'a>(
+    facade: Option<&'a pdfrum::Document>,
+    _options: &Options,
+    ctx: &mut BuildContext,
+) -> Option<pdfrum::FormSession<'a>> {
+    facade.map(|facade| pdfrum::FormSession::with_context(facade, ctx))
+}
+
 /// Visits the selected pages, dumping each one.
 ///
 /// `script` and `session` are `--send-events`'s: the whole script is replayed
@@ -402,9 +450,21 @@ fn walk_pages(
         // the form filler is editing must not be given the form-field
         // highlight, which is a fact about the *session* rather than about
         // any one appearance.
-        let (updates, focus, hover, popup) = match session.as_deref_mut() {
+        let (updates, focus, hover, popup, scrollbars) = match session.as_deref_mut() {
             Some(session) => {
-                let updates = dispatch::replay_page(session, index, script, streams.err);
+                // `GetPage`: `FORM_OnAfterLoadPage` then
+                // `FORM_DoPageAAction(…, OPEN)`, before `SendPageEvents`.
+                session.load_page(index);
+                #[cfg(feature = "javascript")]
+                {
+                    session.page_opened(index);
+                    session.honour_focus_requests();
+                }
+                let _ = dispatch::replay_page(session, index, script, streams.err);
+                // `FPDF_FFLDraw` paints the live PWL of whatever is focused,
+                // including focus taken in `/OpenAction` with no later click.
+                // Event deltas miss that (`bug_1445426`, `bug_1447268`).
+                let updates = session.appearances_for_page(index);
                 let focus = session.focus_for_page(index);
                 // Hover is read after the replay, like focus: the script's
                 // last `mousemove` is what leaves a note card open, and a
@@ -415,9 +475,15 @@ fn walk_pages(
                 // showing, and the library publishes it rather than drawing
                 // it — this tool is the host that draws it, standing in for
                 // the oracle's `FPDF_FFLDraw`.
-                (updates, focus, hover, session.popup_for_page(index))
+                (
+                    updates,
+                    focus,
+                    hover,
+                    session.popup_for_page(index),
+                    session.scrollbars_for_page(index),
+                )
             }
-            None => (Vec::new(), None, None, None),
+            None => (Vec::new(), None, None, None, Vec::new()),
         };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
@@ -439,6 +505,7 @@ fn walk_pages(
                     focus,
                     hover,
                     popup,
+                    scrollbars,
                 },
             },
             options,
@@ -448,6 +515,19 @@ fn walk_pages(
             ctx,
         );
         write!(streams.out, "{extra}")?;
+        // `ProcessPage` then `FORM_DoPageAAction(CLOSE)` and
+        // `FORM_OnBeforeClosePage`: kill focus only if it lives on this page.
+        #[cfg(feature = "javascript")]
+        if let Some(session) = session.as_deref_mut() {
+            session.page_closed(index);
+            session.honour_focus_requests();
+            if session
+                .focused_annot()
+                .is_some_and(|annot| u32::from(annot.page) == index)
+            {
+                let _ = session.blur();
+            }
+        }
         counts.processed += 1;
     }
     Ok(counts)

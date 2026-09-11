@@ -11,12 +11,14 @@
 use std::borrow::Cow;
 
 use kurbo::Affine;
-use pdfrum_page::{BlendMode, ColorSpace, Converted, ImageData, Pixels, Rgba8, Samples, Source};
+use pdfrum_page::{
+    BlendMode, Converted, Family, ImageData, ImageMask, Pixels, Rgba8, Samples, Source,
+};
 
 use crate::color::Argb;
 use crate::device::ImageQuality;
 use crate::options::RenderOptions;
-use crate::pixmap::{Pixmap, mul255};
+use crate::pixmap::{AlphaMask, Pixmap, mul255, unpremultiply_rgb};
 
 /// Above this many bytes, bilinear interpolation is forced on unless
 /// halftoning was requested.
@@ -101,6 +103,46 @@ pub fn resample_quality(
     }
 }
 
+/// Whether this device matrix is sheared enough to reverse-map dest pixels.
+///
+/// A shear (`|b|` or `|c|` ≥ 0.5) or a zero on the diagonal cannot stretch
+/// onto an integer axis-aligned rect. Those draws fill the unit square's
+/// closest dest rect by inverse-mapping each pixel. A near-quarter-turn is
+/// a swapped-axis stretch instead and keeps the interpolate heuristic.
+#[must_use]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..d are the affine matrix coefficients, named as in the PDF `cm` operands"
+)]
+pub fn takes_other_transform(m: Affine) -> bool {
+    let [a, b, c, d, _, _] = m.as_coeffs();
+    let sheared = b.abs() >= 0.5 || a == 0.0 || c.abs() >= 0.5 || d == 0.0;
+    if !sheared {
+        return false;
+    }
+    let rotate =
+        a.abs() < b.abs() / 20.0 && d.abs() < c.abs() / 20.0 && a.abs() < 0.5 && d.abs() < 0.5;
+    !rotate
+}
+
+/// [`resample_quality`], then the `kOther` override: a sheared matrix is
+/// bilinear regardless of `/Interpolate`.
+#[must_use]
+pub fn resample_quality_at(
+    image: &ImageData,
+    opts: &RenderOptions,
+    src_width: u32,
+    src_height: u32,
+    dest_width: i64,
+    dest_height: i64,
+    matrix: Affine,
+) -> ImageQuality {
+    if takes_other_transform(matrix) {
+        return ImageQuality::Bilinear;
+    }
+    resample_quality(image, opts, src_width, src_height, dest_width, dest_height)
+}
+
 /// Whether a device matrix is an integer-only translation.
 ///
 /// `vello_cpu` silently downgrades bilinear sampling to nearest in exactly
@@ -155,14 +197,10 @@ pub fn effective_quality(quality: ImageQuality, to_device: Affine) -> ImageQuali
               epsilon would apply the Darken approximation to files PDFium \
               composites Normal, changing the corpus"
 )]
-pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralState) -> BlendMode {
+pub fn overprint_blend(family: Family, state: &pdfrum_page::GeneralState) -> BlendMode {
     let subtractive = matches!(
-        space.map(ColorSpace::family),
-        Some(
-            pdfrum_page::Family::DeviceCmyk
-                | pdfrum_page::Family::Separation
-                | pdfrum_page::Family::DeviceN
-        )
+        family,
+        Family::DeviceCmyk | Family::Separation | Family::DeviceN
     );
     let eligible = subtractive
         && state.fill_overprint
@@ -174,6 +212,52 @@ pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralS
         BlendMode::Darken
     } else {
         state.blend
+    }
+}
+
+/// A colour image used as an uncoloured Type 3 sole-image: luminance is
+/// coverage, tinted with the outer text fill (`SetBitMask`).
+///
+/// `LoadBitmapFromSoleImageOfForm` realises the image's own samples, and
+/// the glyph blit then paints them as a mask in `t3_fill_color_` rather
+/// than as a picture. Walking the procedure as a form would keep the
+/// image's colours.
+#[must_use]
+pub fn color_as_fill_mask(image: &ImageData, fill: Argb) -> ImageData {
+    let src = to_pixmap(image, Argb::BLACK, None);
+    let pixels = (src.width() as usize).saturating_mul(src.height() as usize);
+    let mut rgb = vec![0u8; pixels.saturating_mul(3)];
+    let mut alpha = vec![0u8; pixels];
+    for y in 0..src.height() {
+        for x in 0..src.width() {
+            let Some([red, green, blue, _alpha]) = src.pixel(x, y) else {
+                continue;
+            };
+            let index = (y as usize)
+                .saturating_mul(src.width() as usize)
+                .saturating_add(x as usize);
+            if let Some(slot) = alpha.get_mut(index) {
+                *slot = crate::color::rgb_to_gray(red, green, blue);
+            }
+            let start = index.saturating_mul(3);
+            if let Some(dest) = rgb.get_mut(start..start.saturating_add(3)) {
+                dest.copy_from_slice(&[fill.r, fill.g, fill.b]);
+            }
+        }
+    }
+    ImageData {
+        width: src.width(),
+        height: src.height(),
+        samples: Samples::Whole(Pixels::Rgb8(rgb.into_boxed_slice())),
+        mask: Some(ImageMask::Alpha {
+            width: src.width(),
+            height: src.height(),
+            alpha: alpha.into_boxed_slice(),
+            stencil: false,
+        }),
+        matte: None,
+        interpolate: false,
+        family: Family::Unknown,
     }
 }
 
@@ -298,7 +382,13 @@ impl<'a> RowFinish<'a> {
         transfer: Option<&'a crate::transfer::TransferFunc<'a>>,
     ) -> Self {
         Self {
-            fused: image.mask.as_ref().filter(|m| is_coregistered(m, image)),
+            // A `/Matte` SMask is un-premultiplied *after* both planes are
+            // stretched (`DrawMaskedImage`). Folding it here would sample the
+            // mask at source and skip that path.
+            fused: image
+                .mask
+                .as_ref()
+                .filter(|m| image.matte.is_none() && is_coregistered(m, image)),
             stencil: image.samples.is_stencil().then_some(stencil_color),
             matte: image.matte.map(pdfrum_page::Rgb::to_bytes),
             // A stencil takes the transfer function through its *colour*
@@ -448,6 +538,7 @@ pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Cow<'_
         mask: None,
         matte: None,
         interpolate: false,
+        family: pdfrum_page::Family::Unknown,
     };
     Some((dict, plane))
 }
@@ -561,6 +652,48 @@ pub fn matte_source(sample: [u8; 3], mask: u8, matte: [u8; 3]) -> [u8; 3] {
     out
 }
 
+/// Fold a stretched coverage plane into a stretched dest, as `DrawMaskedImage`
+/// does after both planes have been resampled to the device.
+///
+/// The dest is our premultiplied buffer; the oracle dest is straight and
+/// opaque. Recover the sample's own colour first, optionally undo `/Matte`
+/// against that colour, then **replace** alpha with the mask and premultiply.
+/// Scaling the dest's existing alpha by the mask would count the rasterizer's
+/// coverage of the base twice — once in dest A, again in the mask.
+///
+/// A dest pixel the base never wrote (`A = 0`) is left transparent: there is
+/// no sample to recover. A zero mask clears the pixel.
+pub fn apply_stretched_mask(pixels: &mut Pixmap, mask: &AlphaMask, matte: Option<[u8; 3]>) {
+    if mask.width() != pixels.width() || mask.height() != pixels.height() {
+        return;
+    }
+    for (chunk, &coverage) in pixels
+        .data_mut()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(mask.data())
+    {
+        let dest_a = chunk[3];
+        if dest_a == 0 {
+            continue;
+        }
+        let straight = unpremultiply_rgb(chunk[0], chunk[1], chunk[2], dest_a);
+        let rgb = match matte {
+            Some(matte) => matte_source(straight, coverage, matte),
+            None => straight,
+        };
+        if coverage == 0 {
+            *chunk = [0, 0, 0, 0];
+            continue;
+        }
+        chunk[0] = mul255(rgb[0], coverage);
+        chunk[1] = mul255(rgb[1], coverage);
+        chunk[2] = mul255(rgb[2], coverage);
+        chunk[3] = coverage;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pdfrum_page::GeneralState;
@@ -578,6 +711,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate,
+            family: pdfrum_page::Family::Unknown,
         }
     }
 
@@ -623,6 +757,34 @@ mod tests {
     }
 
     #[test]
+    fn a_sheared_matrix_takes_the_other_transform() {
+        // `16 64 64 16` — all four nonzero, |b| and |c| well past 0.5.
+        let shear = Affine::new([16.0, 64.0, 64.0, 16.0, 20.0, 120.0]);
+        assert!(takes_other_transform(shear));
+        // Axis-aligned scale keeps the interpolate heuristic.
+        assert!(!takes_other_transform(Affine::scale(2.0)));
+        // A quarter turn (`kRotate`) is a swapped-axis stretch, not kOther.
+        let rotate = Affine::new([0.0, 10.0, -10.0, 0.0, 0.0, 0.0]);
+        assert!(!takes_other_transform(rotate));
+    }
+
+    #[test]
+    fn a_sheared_draw_forces_bilinear_without_interpolate() {
+        let img = gray_image(4, 4, false);
+        let opts = RenderOptions::default();
+        let shear = Affine::new([16.0, 64.0, 64.0, 16.0, 20.0, 120.0]);
+        assert_eq!(
+            resample_quality_at(&img, &opts, 4, 4, 66, 66, shear),
+            ImageQuality::Bilinear
+        );
+        // The same image axis-aligned stays nearest under the 8× enlargement.
+        assert_eq!(
+            resample_quality_at(&img, &opts, 4, 4, 66, 66, Affine::scale(16.0)),
+            ImageQuality::Nearest
+        );
+    }
+
+    #[test]
     fn huge_image_forces_bilinear_unless_halftoning() {
         // A 5000x5000 RGB image is 75 million bytes, past the threshold.
         let mut img = gray_image(5000, 5000, false);
@@ -650,36 +812,68 @@ mod tests {
             overprint_mode: 0,
             ..Default::default()
         };
-        let cmyk = ColorSpace::DeviceCmyk;
-        assert_eq!(overprint_blend(Some(&cmyk), &state), BlendMode::Darken);
+        let cmyk = Family::DeviceCmyk;
+        assert_eq!(overprint_blend(cmyk, &state), BlendMode::Darken);
 
         // Every clause of the gate, flipped one at a time.
         let mut alpha = state.clone();
         alpha.fill_alpha = 0.5;
-        assert_eq!(overprint_blend(Some(&cmyk), &alpha), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &alpha), BlendMode::Normal);
 
         let mut stroke = state.clone();
         stroke.stroke_alpha = 0.5;
-        assert_eq!(overprint_blend(Some(&cmyk), &stroke), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &stroke), BlendMode::Normal);
 
         let mut mode = state.clone();
         mode.overprint_mode = 1;
-        assert_eq!(overprint_blend(Some(&cmyk), &mode), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &mode), BlendMode::Normal);
 
         let mut off = state.clone();
         off.fill_overprint = false;
-        assert_eq!(overprint_blend(Some(&cmyk), &off), BlendMode::Normal);
+        assert_eq!(overprint_blend(cmyk, &off), BlendMode::Normal);
 
         let mut blend = state.clone();
         blend.blend = BlendMode::Multiply;
-        assert_eq!(overprint_blend(Some(&cmyk), &blend), BlendMode::Multiply);
+        assert_eq!(overprint_blend(cmyk, &blend), BlendMode::Multiply);
 
         // An additive space never qualifies.
         assert_eq!(
-            overprint_blend(Some(&ColorSpace::DeviceRgb), &state),
+            overprint_blend(Family::DeviceRgb, &state),
             BlendMode::Normal
         );
-        assert_eq!(overprint_blend(None, &state), BlendMode::Normal);
+        assert_eq!(overprint_blend(Family::Unknown, &state), BlendMode::Normal);
+    }
+
+    #[test]
+    fn a_colour_image_becomes_a_luminance_mask_in_the_fill() {
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            samples: Samples::Whole(Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice())),
+            mask: None,
+            matte: None,
+            interpolate: false,
+            family: Family::Unknown,
+        };
+        let fill = Argb::opaque(0, 0, 255);
+        let masked = color_as_fill_mask(&img, fill);
+        let p = to_pixmap(&masked, Argb::BLACK, None);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([0, 0, 255, 255]),
+            "white source is full coverage of the fill"
+        );
+        let black = ImageData {
+            samples: Samples::Whole(Pixels::Rgb8(vec![0, 0, 0].into_boxed_slice())),
+            ..img
+        };
+        let masked = color_as_fill_mask(&black, fill);
+        let p = to_pixmap(&masked, Argb::BLACK, None);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([0, 0, 0, 0]),
+            "black source paints nothing"
+        );
     }
 
     #[test]
@@ -721,6 +915,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::opaque(255, 0, 0), None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]), "the set bit is ink");
@@ -745,6 +940,7 @@ mod tests {
             }),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
@@ -779,6 +975,7 @@ mod tests {
             mask: Some(mask.clone()),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         assert!(!is_coregistered(&mask, &img), "2x2 mask over a 1x1 base");
         let p = to_pixmap(&img, Argb::BLACK, None);
@@ -862,6 +1059,7 @@ mod tests {
                 mask: None,
                 matte: None,
                 interpolate: false,
+                family: pdfrum_page::Family::Unknown,
             };
             let out = to_pixmap(&image, Argb::opaque(0, 0, 0), None);
             for y in 0..h {
@@ -1066,6 +1264,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         assert_eq!(
             to_pixmap(&img, Argb::BLACK, Some(&func)).pixel(0, 0),
@@ -1112,9 +1311,57 @@ mod tests {
     }
 
     #[test]
-    fn a_matte_image_un_premultiplies_before_the_mask_becomes_alpha() {
-        // Half-covered mid grey pre-blended against black: the source colour
-        // was twice as bright as the sample, and the mask is still the alpha.
+    fn an_opaque_dest_times_a_mask_replaces_alpha_then_premultiplies() {
+        // Dest A is 255, so un-premultiply is the identity and the mask
+        // becomes A. RGB scales by the mask.
+        let mut pixels = Pixmap::filled(1, 1, peniko::Color::from_rgba8(10, 20, 30, 255));
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 128), None);
+        assert_eq!(
+            pixels.pixel(0, 0),
+            Some([mul255(10, 128), mul255(20, 128), mul255(30, 128), 128])
+        );
+    }
+
+    #[test]
+    fn a_partial_dest_recovers_straight_colour_before_the_mask() {
+        // Premul red at dest A 128 is (128, 0, 0, 128). The mask is 64.
+        // Scaling dest A by the mask would yield A 64 and RGB 64. Recovering
+        // the sample first yields straight (255, 0, 0), then A 64, RGB 64.
+        let mut pixels = Pixmap::from_vec(1, 1, vec![128, 0, 0, 128]).expect("one pixel");
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 64), None);
+        assert_eq!(pixels.pixel(0, 0), Some([64, 0, 0, 64]));
+    }
+
+    #[test]
+    fn a_dest_the_base_never_wrote_stays_transparent() {
+        let mut pixels = Pixmap::new(1, 1);
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 200), None);
+        assert_eq!(pixels.pixel(0, 0), Some([0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn matte_runs_on_the_recovered_sample_not_the_premul_bytes() {
+        // Premul (50, 0, 0, 128) is straight (100, 0, 0). Matte 0, mask 128:
+        // (100-0)*255/128 + 0 = 199, then premul by 128.
+        let mut pixels = Pixmap::from_vec(1, 1, vec![50, 0, 0, 128]).expect("one pixel");
+        apply_stretched_mask(&mut pixels, &AlphaMask::filled(1, 1, 128), Some([0, 0, 0]));
+        let recovered = matte_source([100, 0, 0], 128, [0, 0, 0]);
+        assert_eq!(
+            pixels.pixel(0, 0),
+            Some([
+                mul255(recovered[0], 128),
+                mul255(recovered[1], 128),
+                mul255(recovered[2], 128),
+                128
+            ])
+        );
+    }
+
+    #[test]
+    fn a_matte_image_is_not_un_premultiplied_at_source() {
+        // `DrawMaskedImage` un-premultiplies after both planes are stretched.
+        // Folding `/Matte` into the source pixmap would sample the mask at
+        // source and skip that path (`bug_1395648`).
         let img = ImageData {
             width: 1,
             height: 1,
@@ -1127,19 +1374,10 @@ mod tests {
             }),
             matte: Some(Rgb::BLACK),
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
-        // (64 - 0) * 255 / 128 + 0 = 127, premultiplied by 128/255 = 63.
-        let source = u8::try_from(64 * 255 / 128).expect("in range");
-        assert_eq!(
-            p.pixel(0, 0),
-            Some([
-                mul255(source, 128),
-                mul255(source, 128),
-                mul255(source, 128),
-                128
-            ])
-        );
+        assert_eq!(p.pixel(0, 0), Some([64, 64, 64, 255]));
     }
 
     #[test]
@@ -1158,6 +1396,7 @@ mod tests {
             }),
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
@@ -1190,6 +1429,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]));

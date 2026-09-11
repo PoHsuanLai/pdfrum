@@ -305,6 +305,17 @@ pub struct LiveInput<'a> {
     /// the generator does with it is `is_checked_with`'s single comparison
     /// against `Off`, so any non-`Off` bytes draw the on-state shape.
     pub appearance_state: Option<&'a [u8]>,
+    /// A session's `Field.borderStyle` write, overriding the widget's `/BS
+    /// /S`. [`None`] reads `/BS` as before.
+    ///
+    /// The setter records a request rather than mutating the dictionary from
+    /// inside the script; the host spends it here so the regenerated
+    /// appearance sees the new style and the file is left alone.
+    pub border_style: Option<BorderStyle>,
+    /// Vertically centre each list row in its plate (`SetAlignmentV(1)`).
+    /// The stored list-box appearance stacks from the top; a combo popup
+    /// is a `CPWL_ListBox` and centres.
+    pub center_rows: bool,
 }
 
 /// The same again, for a widget a form session is currently editing.
@@ -349,6 +360,8 @@ pub(crate) fn generate_with_live<R: Resolve>(
             // silent change of behaviour.
             substitute: None,
             appearance_state: None,
+            border_style: None,
+            center_rows: false,
         },
     )
 }
@@ -410,7 +423,7 @@ fn build<R: Resolve>(
         out.raw("re f\nQ\n");
     }
 
-    let info = widget_border(dict, r);
+    let info = border_info(dict, r, input.border_style);
     let border = crate::ap::border::border_path(rect, info, border_color);
     if !border.is_empty() {
         out.raw("q\n");
@@ -449,6 +462,7 @@ fn build<R: Resolve>(
             r,
             input.caret_and_selection,
             input.live,
+            input.center_rows,
         )
     });
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
@@ -622,6 +636,16 @@ pub fn widget_rotation<R: Resolve>(dict: &Dict, r: &R) -> geom::WidgetRotation {
 /// colour.
 #[must_use]
 pub fn widget_border<R: Resolve>(dict: &Dict, r: &R) -> BorderStyleInfo {
+    border_info(dict, r, None)
+}
+
+/// [`widget_border`], with a session's `Field.borderStyle` allowed to
+/// override `/BS /S`.
+///
+/// Width and dash still come from the dictionary. A beveled or inset
+/// override doubles the width the same way `/S /B` and `/S /I` do when they
+/// are read from the file.
+fn border_info<R: Resolve>(dict: &Dict, r: &R, style: Option<BorderStyle>) -> BorderStyleInfo {
     let bs = dict.dict(names::BS, r);
     let mut info = crate::ap::border::border_style_info(bs.as_ref(), r);
     if bs.is_none() {
@@ -631,12 +655,27 @@ pub fn widget_border<R: Resolve>(dict: &Dict, r: &R) -> BorderStyleInfo {
             dash: Dash::default(),
         };
     }
+    let Some(style) = style else {
+        return info;
+    };
+    let width = crate::ap::border::border_width(dict, r);
+    let mut info = BorderStyleInfo {
+        width,
+        style,
+        dash: info.dash,
+    };
+    if matches!(style, BorderStyle::Beveled | BorderStyle::Inset) {
+        info.width *= 2.0;
+    }
     info
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{checked_ap_state, generate, needs_appearance, needs_appearance_in, rotated_rect};
+    use super::{
+        BorderStyle, checked_ap_state, generate, needs_appearance, needs_appearance_in,
+        rotated_rect,
+    };
     use crate::geom;
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
 
@@ -1258,5 +1297,45 @@ mod tests {
         assert!(!super::is_checked(&bare, &NoResolve));
         assert!(!super::is_checked_with(&bare, &NoResolve, Some(b"Off")));
         assert!(super::is_checked_with(&bare, &NoResolve, Some(b"Yes")));
+    }
+
+    /// A session's `Field.borderStyle` write changes the chrome without
+    /// mutating `/BS`. Dashed is the spelling `Bug765384` assigns.
+    #[test]
+    fn a_sessions_border_style_overrides_the_dictionarys_own() {
+        let catalog = Dict::new();
+        let cache = pdfrum_font::FontCache::new();
+        let font = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
+        let width = |code: u32| crate::ap::TextFont::char_width(&font, code);
+        let text = crate::ap::TextFont {
+            metrics: crate::ap::TextFont::metrics_of(&font, &width),
+            font: &font,
+        };
+        let dict = widget(&[
+            ("FT", Object::Name(Name::from("Tx"))),
+            ("MK", Object::Dict(dict(&[("BC", numbers(&[0.0]))]))),
+        ]);
+        let draw = |style: Option<BorderStyle>| {
+            super::generate_with_live_faces(
+                &dict,
+                &catalog,
+                &text,
+                &NoResolve,
+                super::LiveInput {
+                    border_style: style,
+                    ..super::LiveInput::default()
+                },
+            )
+            .expect("is a widget")
+            .stream
+        };
+        let solid = draw(None);
+        let dashed = draw(Some(BorderStyle::Dash));
+        assert_ne!(solid, dashed, "the override must change the stream");
+        assert!(
+            String::from_utf8_lossy(&dashed).contains(" d\n"),
+            "a dashed override writes a dash pattern: {}",
+            String::from_utf8_lossy(&dashed)
+        );
     }
 }
