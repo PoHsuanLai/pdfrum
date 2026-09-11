@@ -5,6 +5,16 @@ first crates.io release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-11
+
+### Added
+
+- GPU viewers that already hold a `wgpu` device can record with
+  `render_page_to_device` and present with `VelloBackend::render_to_view`
+  / `render_to_texture` — no `map_async`, no host pixmap. Isolated groups
+  stay on the parent as native layers; a texture/buffer pool (cap 8)
+  reuses GPU resources across pages.
+
 ### Changed
 
 - `Page::render` takes the rasterizer by value and uses default options, so
@@ -47,6 +57,33 @@ first crates.io release.
   and into `Vec<Object>`, `PdfString` as bytes, `Gid` and `FieldId` from
   their integers. `Document::open_with_password` takes the same password
   spellings as the options builder.
+
+### Fixed
+
+- Hint-reliant CJK faces (DynaLab stroke-assembled, FreeType's "tricky"
+  list) run the TrueType interpreter at `Target::Mono`, keyed off the
+  face rather than whether one composite carries bytecode.
+- Glyph width is capped in LCD subpixels, matching FreeType's tripled
+  `FT_PIXEL_MODE_LCD` columns, so a wide glyph the oracle skips is
+  skipped here too.
+- A substituted face that is not the slant or the weight the document
+  asked for is sheared and dilated the way the oracle synthesises italic
+  and bold.
+- Style tokens an aborted suffix parse already applied (`Bold` in
+  `Foo,Bold,Italic`) stay on the substitution instead of being discarded.
+- Every CID character box grows its top edge by a sixty-fourth, matching
+  `CFX_Face::GetCharBBox`.
+- An indirect `/CIDToGIDMap /Identity` is resolved before its type is
+  read, and a CID-keyed CFF wrapped as OTTO maps CIDs through the charset
+  the way a bare CFF already did.
+- Non-embedded CJK fonts pick a face from the platform preference lists
+  before the generic scorer, and drop the name filter when none of those
+  names is installed.
+- Remaining structural misses vs the oracle: Arial fallback when a
+  simple or CID font has no glyph, bilinear stretch on a sheared image,
+  Darken overprint on a subtractive family, Type 3 uncoloured stroke and
+  colour sole-images as luminance masks, `Field.borderStyle` writing the
+  widget, and the list-box scrollbar chrome in `pdfrum-tool`.
 
 ## [0.1.1] - 2026-09-10
 
@@ -145,6 +182,7 @@ first crates.io release.
 - Weakest rendering: vertical text, uncoloured tiling patterns, and image
   transformers.
 
-[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PoHsuanLai/pdfrum/releases/tag/v0.1.0
