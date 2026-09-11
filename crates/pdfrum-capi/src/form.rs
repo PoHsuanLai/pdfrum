@@ -257,9 +257,9 @@ pub unsafe extern "C" fn pdfrum_form_field(
                 return Err(Failure::Argument("null out"));
             }
             let replayed = form.replayed()?;
-            let fields = replayed.fields();
-            let field = fields
-                .get(index)
+            let field = replayed
+                .fields()
+                .nth(index)
                 .ok_or(Failure::Argument("index out of range"))?;
             let name = field.name().to_owned();
             let value = field.value();

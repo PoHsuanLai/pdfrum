@@ -427,7 +427,7 @@ pub fn pdfrum_doc::nav::encode_file_name(&str) -> alloc::string::String
 pub fn pdfrum_doc::nav::hidden_by_open_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::Hidden
 pub fn pdfrum_doc::nav::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::nav::outline_bookmarks<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::Bookmark>
-pub fn pdfrum_doc::nav::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::Link>>
+pub fn pdfrum_doc::nav::page_links<'a, R: pdfrum_object::resolve::Resolve>(&'a pdfrum_object::dict::Dict, &'a R) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = core::option::Option<pdfrum_doc::Link>> + 'a
 pub mod pdfrum_doc::page_label
 pub fn pdfrum_doc::page_label::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
 pub mod pdfrum_doc::pdfa

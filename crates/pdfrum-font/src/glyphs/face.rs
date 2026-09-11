@@ -388,8 +388,8 @@ impl Face {
     /// The `(platform, encoding)` pairs the `cmap` table declares, in table
     /// order — which is the order every ladder scans them in.
     #[must_use]
-    pub fn charmaps(&self) -> Vec<CharmapId> {
-        self.charmaps.clone()
+    pub fn charmaps(&self) -> &[CharmapId] {
+        &self.charmaps
     }
 
     /// The glyph a code selects through `charmap`. Zero on any miss.

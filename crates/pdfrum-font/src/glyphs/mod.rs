@@ -38,6 +38,10 @@ pub enum GlyphSource {
     None,
 }
 
+/// A Type 1 face exposes a synthesized Unicode charmap first and its own
+/// encoding second — the shape `UseType1Charmap` expects.
+const TYPE1_CHARMAPS: [CharmapId; 2] = [CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM];
+
 /// The parameters that change what a glyph *looks like*, beyond its index.
 ///
 /// The first two reach the *face*: for an ordinary face they are inert, but a
@@ -175,13 +179,13 @@ impl GlyphSource {
     /// The charmaps the face declares, as `(platform, encoding)` pairs in
     /// table order.
     #[must_use]
-    pub fn charmaps(&self) -> Vec<CharmapId> {
+    pub fn charmaps(&self) -> &[CharmapId] {
         match self {
             Self::Fontations(f) => f.charmaps(),
             // A Type 1 face exposes a synthesized Unicode charmap first and
             // its own encoding second — the shape `UseType1Charmap` expects.
-            Self::Type1(_) => vec![CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM],
-            Self::None => Vec::new(),
+            Self::Type1(_) => &TYPE1_CHARMAPS,
+            Self::None => &[],
         }
     }
 

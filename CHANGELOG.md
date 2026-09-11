@@ -7,6 +7,12 @@ first crates.io release.
 
 ### Changed
 
+- Collection APIs that were a `map`/`filter` over data already in memory
+  now return an iterator or a slice instead of a `Vec`: `Document::revisions`,
+  `Form::fields`, `Page::annotations`, `OwnedPage::annotations`,
+  `page_links`, `Face::charmaps`, `GlyphSource::charmaps`, and
+  `ContentsShape::elements`. `Array::to_numbers` is removed; callers already
+  use `number_at_or_zero` at a known index.
 - `Table::row` takes any iterator of string-like cells, so a CLI table can
   be filled from string slices. `Response::one` is the one-update constructor
   every caller was spelling as `with(vec![…])`. `Face::single` takes
