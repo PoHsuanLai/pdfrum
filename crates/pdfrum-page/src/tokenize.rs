@@ -918,7 +918,7 @@ mod tests {
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(s.bytes.len(), MAX_STRING_LEN);
+        assert_eq!(s.as_bytes().len(), MAX_STRING_LEN);
     }
 
     #[test]
@@ -928,25 +928,25 @@ mod tests {
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, &[0x1a, 0x2b]);
+        assert_eq!(s.as_bytes(), &[0x1a, 0x2b]);
 
         let got = elements(b"<1A2b");
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, &[0x1a, 0x2b]);
+        assert_eq!(s.as_bytes(), &[0x1a, 0x2b]);
 
         let got = elements(b"<1A2>asdf");
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, &[0x1a, 0x20]);
+        assert_eq!(s.as_bytes(), &[0x1a, 0x20]);
 
         let got = elements(b"<>");
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert!(s.bytes.is_empty());
+        assert!(s.as_bytes().is_empty());
     }
 
     #[test]
@@ -1005,13 +1005,13 @@ mod tests {
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, b"a(b)c\nA\\");
+        assert_eq!(s.as_bytes(), b"a(b)c\nA\\");
 
         let got = elements(b"(outer (inner) done)");
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, b"outer (inner) done");
+        assert_eq!(s.as_bytes(), b"outer (inner) done");
     }
 
     #[test]
@@ -1020,6 +1020,6 @@ mod tests {
         let Some(Element::Object(Object::Str(s))) = got.first() else {
             panic!("expected a string, got {got:?}");
         };
-        assert_eq!(&*s.bytes, b"ab");
+        assert_eq!(s.as_bytes(), b"ab");
     }
 }

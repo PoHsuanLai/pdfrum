@@ -109,12 +109,10 @@ impl Annotation<'_> {
     ///
     /// Empty for an annotation that has none.
     #[must_use]
-    pub fn quad_points(&self) -> Vec<kurbo::Rect> {
+    pub fn quad_points(&self) -> impl ExactSizeIterator<Item = kurbo::Rect> + '_ {
         let array = self.inner.quad_points.as_ref();
         let count = pdfrum_doc::annot::quad_point_count(array);
-        (0..count)
-            .map(|index| pdfrum_doc::annot::rect_from_quad_points(array, index))
-            .collect()
+        (0..count).map(move |index| pdfrum_doc::annot::rect_from_quad_points(array, index))
     }
 
     /// **Escape hatch — requires no second dependency.** The annotation's own

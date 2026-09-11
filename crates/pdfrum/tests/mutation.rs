@@ -628,13 +628,11 @@ fn an_incremental_save_of_an_edited_page_appends_and_still_reflects_the_edit() {
 // would pass every count assertion above.
 #[test]
 fn an_edited_page_renders_and_renders_differently() {
-    use pdfrum::RenderOptions;
-
     let doc = Document::open(RECTANGLES).expect("open");
     let before = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
 
     let mut page = doc.page(0).expect("page").edit();
@@ -645,7 +643,7 @@ fn an_edited_page_renders_and_renders_differently() {
     let after = saved
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
 
     assert_eq!(
@@ -666,13 +664,11 @@ fn an_edited_page_renders_and_renders_differently() {
 // renders identically to the unedited one.
 #[test]
 fn a_saved_but_unedited_page_renders_identically() {
-    use pdfrum::RenderOptions;
-
     let doc = Document::open(RECTANGLES).expect("open");
     let before = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
 
     let page = doc.page(0).expect("page").edit();
@@ -680,7 +676,7 @@ fn a_saved_but_unedited_page_renders_identically() {
     let after = saved
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
 
     let differing = (0..before.height())

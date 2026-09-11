@@ -69,8 +69,8 @@ pub struct PathBuilder {
     pub stroke: Option<peniko::Color>,
     /// The stroke width in page units.
     pub line_width: f32,
-    /// Whether the fill uses the even-odd rule rather than the nonzero one.
-    pub even_odd: bool,
+    /// The fill rule, used only when [`PathBuilder::fill`] is `Some`.
+    pub fill_rule: crate::Fill,
     /// A further transform on the path, composed after it.
     pub matrix: Affine,
 }
@@ -82,7 +82,7 @@ impl Default for PathBuilder {
             fill: Some(peniko::Color::BLACK),
             stroke: None,
             line_width: 1.0,
-            even_odd: false,
+            fill_rule: crate::Fill::NonZero,
             matrix: Affine::IDENTITY,
         }
     }
@@ -119,10 +119,10 @@ impl PathBuilder {
             state.general.stroke_alpha = alpha;
         }
         state.stroke_params.width = self.line_width;
-        let fill_rule = match (self.fill.is_some(), self.even_odd) {
+        let fill_rule = match (self.fill.is_some(), self.fill_rule) {
             (false, _) => FillRule::None,
-            (true, false) => FillRule::Winding,
-            (true, true) => FillRule::EvenOdd,
+            (true, crate::Fill::NonZero) => FillRule::Winding,
+            (true, crate::Fill::EvenOdd) => FillRule::EvenOdd,
         };
         PageObject::Path(Box::new(Content::new(
             PathObject {

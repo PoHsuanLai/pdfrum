@@ -219,7 +219,6 @@ impl AggDevice {
         // every one of them to have the answer thrown away.
         self.raster.keep_rows(0..target_rows(self.base.height()));
         self.raster.add_path(path, FLATTEN_TOLERANCE);
-        let rule = to_scanline_rule(rule);
         let coverage = to_coverage(aa);
         // Split the borrow: `raster` and the target live in the same struct,
         // and the sweep needs one while the paint closure needs the other.
@@ -392,10 +391,8 @@ impl AggDevice {
         // nothing and keeps it tight.
         let mut first = h;
         let mut last = 0_u32;
-        self.raster.sweep(
-            to_scanline_rule(rule),
-            to_coverage(aa),
-            |x, len, y, alpha| {
+        self.raster
+            .sweep(rule, to_coverage(aa), |x, len, y, alpha| {
                 let (Ok(row), Ok(w_i32)) = (u32::try_from(y), i32::try_from(w)) else {
                     return;
                 };
@@ -425,8 +422,7 @@ impl AggDevice {
                 if let Some(span) = mask.data_mut().get_mut(lo..hi) {
                     span.fill(alpha);
                 }
-            },
-        );
+            });
         (mask, first..last.max(first))
     }
 
@@ -516,14 +512,6 @@ fn whole(value: f64) -> Option<i32> {
         let n = value as i32;
         n
     })
-}
-
-/// The rasterizer's fill rule for the trait's.
-fn to_scanline_rule(rule: FillRule) -> scanline::FillRule {
-    match rule {
-        FillRule::Winding => scanline::FillRule::NonZero,
-        FillRule::EvenOdd => scanline::FillRule::EvenOdd,
-    }
 }
 
 /// A device height as the exclusive row bound the rasterizer takes.

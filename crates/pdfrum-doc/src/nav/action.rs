@@ -508,7 +508,7 @@ impl Action {
     pub fn javascript<R: Resolve>(&self, r: &R) -> Option<String> {
         let value = self.dict.get(names::JS, r).map(|v| v.get().clone())?;
         match value {
-            Object::Str(text) => Some(decode_text(&text.bytes).into_owned()),
+            Object::Str(text) => Some(decode_text(text.as_bytes()).into_owned()),
             Object::Stream(stream) => {
                 let mut diags = Diagnostics::default();
                 let decoded =

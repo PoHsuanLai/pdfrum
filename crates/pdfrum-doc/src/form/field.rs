@@ -2160,7 +2160,7 @@ mod tests {
     fn a_document_with_no_calculation_order_calculates_nothing() {
         assert_eq!(order_of(None), Vec::<usize>::new());
         // An empty array is the same answer arrived at the other way.
-        assert_eq!(order_of(Some(Object::Array(Array::of([])))), Vec::new());
+        assert_eq!(order_of(Some(Object::Array(Array::new()))), Vec::new());
     }
 
     /// The array's order is the answer, and it need not be `/Fields`' order.

@@ -41,11 +41,7 @@ fn show(
     }
     let page = doc.page(index)?;
     let scale = fit_scale(page.width(), columns, term.graphics);
-    let pixmap = page.render_on(
-        &VelloCpuBackend::new(),
-        &RenderOptions::scaled(scale),
-        session,
-    )?;
+    let pixmap = page.render_on(VelloCpuBackend, &RenderOptions::scaled(scale), session)?;
     let bytes = term::picture(&pixmap, term.graphics, columns, 0);
     let mut stdout = std::io::stdout().lock();
     stdout.write_all(&bytes).context("cannot write to stdout")?;
@@ -174,7 +170,7 @@ fn render_frame(
     let layout = layout((page.width(), page.height()), key, term::screen(), graphics);
     let pixmap = page
         .render_on(
-            &VelloCpuBackend::new(),
+            VelloCpuBackend,
             &RenderOptions::scaled(layout.scale),
             session,
         )
@@ -568,7 +564,7 @@ fn find_from(doc: &Document, needle: &str, from: u32, count: u32) -> Option<u32>
     };
     (0..count).map(|i| (from + i) % count).find(|&i| {
         doc.page(i)
-            .is_ok_and(|page| page.text().find(needle, options).next().is_some())
+            .is_ok_and(|page| page.text().find_with(needle, options).next().is_some())
     })
 }
 
@@ -712,7 +708,7 @@ pub fn find(
         let text = page.text();
         let full = text.slice(..);
         let chars: Vec<char> = full.chars().collect();
-        for range in text.find(needle, options) {
+        for range in text.find_with(needle, options) {
             let start = usize::from(range.start);
             let end = usize::from(range.end);
             let line_start = chars.get(..start).map_or(0, |before| {

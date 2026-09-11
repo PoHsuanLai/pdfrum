@@ -1000,16 +1000,18 @@ impl<R: Resolve> Interp<'_, R> {
                     diags.record(Severity::Suspicious, DiagKind::BadTextRenderMode, None);
                 }
             },
-            Op::ShowText(s) => self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags),
+            Op::ShowText(s) => {
+                self.show_text(&[(Box::from(s.as_bytes()), 0.0)], 0.0, ctx, limits, diags);
+            }
             Op::NextLineShowText(s) => {
                 self.cursor.next_line(f64::from(self.state.text.leading));
-                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags);
+                self.show_text(&[(Box::from(s.as_bytes()), 0.0)], 0.0, ctx, limits, diags);
             }
             Op::SetSpacingShowText(word, char_space, s) => {
                 self.state.text.word_space = *word;
                 self.state.text.char_space = *char_space;
                 self.cursor.next_line(f64::from(self.state.text.leading));
-                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags);
+                self.show_text(&[(Box::from(s.as_bytes()), 0.0)], 0.0, ctx, limits, diags);
             }
             Op::ShowTextAdjusted(array) => {
                 if array.valid {

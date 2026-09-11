@@ -103,7 +103,7 @@ impl Page {
         let (width, height) = self.render_size(scale)?;
         let mut facade = pdfrum::RenderOptions::scaled(scale);
         facade.annotations = options.unwrap_or_default().with_annotations;
-        let pixmap = self.0.render(&backend(), &facade)?;
+        let pixmap = self.0.render_with(backend(), &facade)?;
         Ok(RenderResult {
             width,
             height,
@@ -180,7 +180,7 @@ impl Page {
         };
         self.0
             .text()
-            .find(needle, options)
+            .find_with(needle, options)
             .map(|range| Hit {
                 start: range.start.get(),
                 end: range.end.get(),

@@ -670,7 +670,21 @@ impl Pixmap {
 
     /// The straight-alpha BGRA bytes the oracle hashes and encodes.
     ///
-    /// `opaque` forces the alpha byte to `0xFF` without touching the colours.
+    /// Straight-alpha BGRA bytes, four per pixel.
+    ///
+    /// ```
+    /// use pdfrum_render::Pixmap;
+    ///
+    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
+    /// assert_eq!(red.to_straight_bgra(), vec![0, 0, 255, 255]);
+    /// ```
+    #[must_use]
+    pub fn to_straight_bgra(&self) -> Vec<u8> {
+        self.bgra(false)
+    }
+
+    /// Straight BGRA with the alpha byte forced to `0xFF`.
+    ///
     /// A page with no transparency is rendered into a 32bpp buffer whose
     /// fourth byte is padding, and a hash taken over these bytes sees that
     /// padding as `0xFF` rather than as whatever the render left there.
@@ -678,17 +692,15 @@ impl Pixmap {
     /// ```
     /// use pdfrum_render::Pixmap;
     ///
-    /// let red = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 255));
-    /// // Blue, green, red, alpha.
-    /// assert_eq!(red.to_straight_bgra(false), vec![0, 0, 255, 255]);
-    ///
-    /// // `opaque` forces the alpha byte without touching the colours, which
-    /// // is what a hash over a 32bpp buffer with padding sees.
     /// let clear = Pixmap::new(1, 1);
-    /// assert_eq!(clear.to_straight_bgra(true), vec![0, 0, 0, 255]);
+    /// assert_eq!(clear.to_opaque_bgra(), vec![0, 0, 0, 255]);
     /// ```
     #[must_use]
-    pub fn to_straight_bgra(&self, opaque: bool) -> Vec<u8> {
+    pub fn to_opaque_bgra(&self) -> Vec<u8> {
+        self.bgra(true)
+    }
+
+    fn bgra(&self, opaque: bool) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
         for &[r, g, b, a] in self.data.as_chunks::<4>().0 {
             let [r, g, b] = unpremultiply_rgb(r, g, b, a);
@@ -1328,7 +1340,7 @@ mod tests {
         // pdfium_test asks for FPDFBitmap_BGRx on a page with no transparency
         // and the golden MD5 is over that buffer, padding byte included.
         let p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(1, 2, 3, 255));
-        assert_eq!(p.to_straight_bgra(true), vec![3, 2, 1, 0xFF]);
+        assert_eq!(p.to_opaque_bgra(), vec![3, 2, 1, 0xFF]);
     }
 
     #[test]

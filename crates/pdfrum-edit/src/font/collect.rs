@@ -198,7 +198,7 @@ fn scan_page(
                 current = loaded.get(name).and_then(Clone::clone);
             }
             Op::ShowText(s) | Op::NextLineShowText(s) | Op::SetSpacingShowText(_, _, s) => {
-                add_used(current.as_ref(), &s.bytes, found);
+                add_used(current.as_ref(), s.as_bytes(), found);
             }
             Op::ShowTextAdjusted(array) => {
                 for item in &array.items {
