@@ -5,15 +5,16 @@
 
 #[expect(unused_imports, reason = "the shared keys are re-exported as one set")]
 pub(crate) use pdfrum_object::names::{
-    ART_BOX, ASCENT, AUTHOR, BASE_FONT, BBOX, BITS_PER_COMPONENT, BLEED_BOX, BM, CA, CA_LOWER,
-    CAP_HEIGHT, CID_SYSTEM_INFO, CID_TO_GID_MAP, COLOR_SPACE, COLUMNS, CONTENTS, COUNT, CREATOR,
-    CROP_BOX, DCT_DECODE, DECODE, DECODE_PARMS, DESCENDANT_FONTS, DESCENT, ENCODING, ENCRYPT,
-    EXT_G_STATE, FILTER, FIRST, FIRST_CHAR, FLAGS, FLATE_DECODE, FONT, FONT_BBOX, FONT_DESCRIPTOR,
-    FONT_FILE, FONT_FILE2, FONT_FILE3, FORM, FORM_TYPE, FT, HEIGHT, ID, IMAGE, IMAGE_MASK, INDEX,
-    INFO, ITALIC_ANGLE, JPX_DECODE, KEYWORDS, KIDS, LAST_CHAR, LENGTH, MATRIX, MEDIA_BOX, METADATA,
-    N, NORMAL, ORDERING, PAGE, PAGES, PARENT, PREV, PROPERTIES, R, RESOURCES, ROOT, ROTATE, SIZE,
-    SMASK, STANDARD, STEM_V, SUBJECT, SUBTYPE, TITLE, TO_UNICODE, TRIM_BOX, TRUE_TYPE, TYPE, TYPE1,
-    VIEWER_PREFERENCES, W, WIDTH, WIDTHS, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
+    ANNOTS, ART_BOX, ASCENT, AUTHOR, BASE_FONT, BBOX, BITS_PER_COMPONENT, BLEED_BOX, BM, BORDER, C,
+    CA, CA_LOWER, CAP_HEIGHT, CID_SYSTEM_INFO, CID_TO_GID_MAP, COLOR_SPACE, COLUMNS, CONTENTS, COUNT,
+    CREATOR, CROP_BOX, DA, DCT_DECODE, DECODE, DECODE_PARMS, DESCENDANT_FONTS, DESCENT, ENCODING,
+    ENCRYPT, EXT_G_STATE, F, FILTER, FIRST, FIRST_CHAR, FLAGS, FLATE_DECODE, FONT, FONT_BBOX,
+    FONT_DESCRIPTOR, FONT_FILE, FONT_FILE2, FONT_FILE3, FORM, FORM_TYPE, FT, HEIGHT, ID, IMAGE,
+    IMAGE_MASK, INDEX, INFO, INK_LIST, ITALIC_ANGLE, JPX_DECODE, KEYWORDS, KIDS, LAST_CHAR, LENGTH,
+    MATRIX, MEDIA_BOX, METADATA, N, NORMAL, ORDERING, P, PAGE, PAGES, PARENT, PREV, PROPERTIES,
+    QUAD_POINTS, R, RECT, RESOURCES, ROOT, ROTATE, S, SIZE, SMASK, STANDARD, STEM_V, SUBJECT, SUBTYPE,
+    TITLE, TO_UNICODE, TRIM_BOX, TRUE_TYPE, TYPE, TYPE1, VIEWER_PREFERENCES, W, WIDTH, WIDTHS,
+    WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -60,4 +61,29 @@ pdfrum_object::names! {
     LENGTH2 = "Length2";
     /// Trailer portion of a Type 1 program (`/Length3`).
     LENGTH3 = "Length3";
+
+    // ---- Annotations (ISO 32000-1 §12.5) ----
+
+    /// An annotation dictionary's `/Type` value (`/Annot`).
+    ANNOT = "Annot";
+    /// Border style dictionary (`/BS`).
+    BS = "BS";
+    /// Icon name for a text annotation (`/Name`).
+    NAME = "Name";
+    /// Whether a text annotation's pop-up starts open (`/Open`).
+    OPEN = "Open";
+    /// Comment icon name (`/Comment`).
+    COMMENT = "Comment";
+    /// Highlight subtype (`/Highlight`).
+    HIGHLIGHT = "Highlight";
+    /// Text (sticky note) subtype (`/Text`).
+    TEXT = "Text";
+    /// Square subtype (`/Square`).
+    SQUARE = "Square";
+    /// Underline subtype (`/Underline`).
+    UNDERLINE = "Underline";
+    /// Ink subtype (`/Ink`).
+    INK = "Ink";
+    /// Free-text subtype (`/FreeText`).
+    FREE_TEXT = "FreeText";
 }
