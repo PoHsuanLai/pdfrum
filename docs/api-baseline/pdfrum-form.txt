@@ -518,6 +518,10 @@ pub struct pdfrum_form::DragAnchor
 pub pdfrum_form::DragAnchor::field: pdfrum_form::FieldId
 pub pdfrum_form::DragAnchor::start: pdfrum_doc::vt::hit::Place
 pub struct pdfrum_form::FieldId(pub u32)
+impl core::convert::From<pdfrum_form::FieldId> for u32
+pub fn u32::from(pdfrum_form::FieldId) -> Self
+impl core::convert::From<u32> for pdfrum_form::FieldId
+pub fn pdfrum_form::FieldId::from(u32) -> Self
 pub struct pdfrum_form::FieldRef
 pub pdfrum_form::FieldRef::index: core::option::Option<u32>
 pub pdfrum_form::FieldRef::name: alloc::string::String
@@ -655,6 +659,7 @@ pub fn pdfrum_form::Response::absorb(&mut self, pdfrum_form::Response)
 pub fn pdfrum_form::Response::actions(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&pdfrum_doc::nav::action::Action, pdfrum_form::Modifiers)>
 pub fn pdfrum_form::Response::consumed() -> pdfrum_form::Response
 pub fn pdfrum_form::Response::ignored() -> pdfrum_form::Response
+pub fn pdfrum_form::Response::one(pdfrum_form::AppearanceUpdate) -> pdfrum_form::Response
 pub fn pdfrum_form::Response::push(&mut self, pdfrum_form::AppearanceUpdate)
 pub fn pdfrum_form::Response::with(alloc::vec::Vec<pdfrum_form::AppearanceUpdate>) -> pdfrum_form::Response
 pub struct pdfrum_form::ScrollView
