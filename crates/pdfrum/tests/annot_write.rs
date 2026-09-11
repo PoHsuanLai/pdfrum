@@ -8,10 +8,7 @@
 
 use std::sync::Arc;
 
-use pdfrum::{
-    AnnotSpec, Color, Document, Point, Quad, Rect, SaveOptions, Subtype,
-};
-
+use pdfrum::{AnnotSpec, Color, Document, Point, Quad, Rect, SaveOptions, Subtype};
 
 fn save_reopen(edit: &pdfrum::DocEdit<'_>) -> Document {
     let mut bytes = Vec::new();
@@ -81,7 +78,10 @@ fn text_note_writes_comment_icon_and_contents() {
     assert_eq!(annot.subtype(), Subtype::Text);
     assert_eq!(annot.contents().as_deref(), Some("sticky"));
     assert_eq!(
-        annot.dict().name(&pdfrum::Name::from("Name")).map(pdfrum::Name::as_bytes),
+        annot
+            .dict()
+            .name(&pdfrum::Name::from("Name"))
+            .map(pdfrum::Name::as_bytes),
         Some(&b"Comment"[..])
     );
     assert_eq!(annot.dict().bool(&pdfrum::Name::from("Open")), Some(false));
@@ -113,7 +113,10 @@ fn square_writes_border_style() {
         .dict()
         .dict(&pdfrum::Name::from("BS"), saved.parser())
         .expect("BS");
-    assert_eq!(bs.number(&pdfrum::Name::from("W"), saved.parser()), Some(2.0));
+    assert_eq!(
+        bs.number(&pdfrum::Name::from("W"), saved.parser()),
+        Some(2.0)
+    );
 }
 
 #[test]
@@ -149,7 +152,11 @@ fn ink_writes_inklist_strokes() {
     let mut edit = doc.edit();
     let rect = Rect::new(40.0, 40.0, 120.0, 120.0);
     let strokes = vec![
-        vec![Point::new(40.0, 40.0), Point::new(80.0, 90.0), Point::new(120.0, 50.0)],
+        vec![
+            Point::new(40.0, 40.0),
+            Point::new(80.0, 90.0),
+            Point::new(120.0, 50.0),
+        ],
         vec![Point::new(50.0, 100.0), Point::new(110.0, 110.0)],
     ];
     edit.add_annotation(
@@ -293,4 +300,3 @@ fn appending_to_existing_annots_keeps_prior_entries() {
     assert_eq!(after.len(), before + 1);
     assert_eq!(*after.last().expect("last"), Subtype::Text);
 }
-
