@@ -10,7 +10,7 @@ construction rather than by approximation.
 use pdfrum_raster_agg::AggBackend;
 use pdfrum_render::RasterBackend;
 
-let backend = AggBackend::new();
+let backend = AggBackend;
 let mut device = backend.new_target(8, 8, peniko::Color::WHITE);
 ```
 

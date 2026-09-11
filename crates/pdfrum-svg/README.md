@@ -15,7 +15,7 @@ use pdfrum_svg::page_to_svg;
 let converted = page_to_svg(
     &Page::empty(),
     &RenderOptions::default(),
-    &TinySkiaBackend::new(),
+    &TinySkiaBackend,
     &mut Diagnostics::default(),
 )?;
 assert!(converted.svg.contains("<svg"));
@@ -41,7 +41,7 @@ outputs are in one coordinate system and can be diffed pixel for pixel.
 [`SvgPage::svg`] is a `String`, not a file — this crate has no opinion about
 where it goes.
 
-From the facade: `Page::to_svg`, feature `svg-export`.
+From the facade: `page.to_svg(TinySkiaBackend)`, feature `svg-export`.
 
 Part of [pdfrum](https://crates.io/crates/pdfrum). `#![forbid(unsafe_code)]`.
 

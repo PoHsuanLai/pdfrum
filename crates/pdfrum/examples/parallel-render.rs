@@ -59,7 +59,7 @@ fn run(input: &Path, scale: f64) -> Result<(), Error> {
 
     // One backend for every worker: it is `Sync` and holds no per-page state,
     // so unlike a session it is shared rather than cloned.
-    let backend = VelloCpuBackend::new();
+    let backend = VelloCpuBackend;
 
     let started = Instant::now();
     let serial: Vec<Pixmap> = {

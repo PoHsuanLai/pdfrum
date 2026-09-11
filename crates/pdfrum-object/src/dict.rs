@@ -57,8 +57,8 @@ use crate::{Array, Name, Object, PdfString, Resolve, Resolved, Stream};
 /// use pdfrum_object::{Dict, NoResolve, Object, names};
 ///
 /// let dict = Dict::from_pairs([
-///     (names::TYPE.clone(), Object::Name(names::PAGE.clone())),
-///     (names::COUNT.clone(), Object::Int(3)),
+///     (names::TYPE, Object::from(names::PAGE)),
+///     (names::COUNT, Object::from(3)),
 /// ]);
 /// assert_eq!(dict.name(names::TYPE), Some(names::PAGE));
 /// assert_eq!(dict.int(names::COUNT, &NoResolve), Some(3));

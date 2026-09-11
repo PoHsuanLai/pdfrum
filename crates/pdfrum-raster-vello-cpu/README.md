@@ -8,7 +8,7 @@ no threads, no GPU handshake, and the one backend a `wasm32` build can use.
 use pdfrum_raster_vello_cpu::VelloCpuBackend;
 use pdfrum_render::RasterBackend;
 
-let backend = VelloCpuBackend::new();
+let backend = VelloCpuBackend;
 let mut device = backend.new_target(4, 4, peniko::Color::WHITE);
 ```
 

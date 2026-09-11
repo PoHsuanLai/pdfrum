@@ -8,7 +8,7 @@ pipeline, or any app that has to open a file. JavaScript is off by default
 (`javascript` feature). No XFA, no viewer.
 
 ```toml
-pdfrum = "0.1"
+pdfrum = "0.2"
 ```
 
 ```rust
