@@ -749,18 +749,14 @@ impl<'a> DocEdit<'a> {
     /// Returns the new annotation's object reference.
     ///
     /// ```
-    /// use pdfrum::{AnnotSpec, Color, Document, Quad, Rect, SaveOptions};
+    /// use pdfrum::{AnnotSpec, Color, Document, Rect, SaveOptions};
     ///
     /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let mut edit = doc.edit();
     /// let rect = Rect::new(50.0, 50.0, 150.0, 70.0);
     /// edit.add_annotation(
     ///     0,
-    ///     AnnotSpec::Text {
-    ///         rect,
-    ///         color: Color::from_rgb8(255, 200, 0),
-    ///         contents: Some("hello".into()),
-    ///     },
+    ///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("hello"),
     /// )?;
     /// let mut bytes = Vec::new();
     /// edit.write_to(&mut bytes, &SaveOptions::default())?;
