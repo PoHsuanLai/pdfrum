@@ -303,23 +303,20 @@ pub use pdfrum_text::Error as TextError;
 /// A straight (non-premultiplied) 32-bit draw colour: the type all four of
 /// [`ColorScheme`]'s fields are.
 ///
-/// [`ColorMode::Forced`] needs one for each of [`ColorScheme`]'s four fields,
-/// and `ColorScheme` has no `Default` and no constructor.
+/// [`ColorMode::Forced`] needs a [`ColorScheme`]: [`ColorScheme::all`] for one
+/// colour everywhere, [`ColorScheme::new`] when fills and strokes differ.
 ///
 /// ```
 /// use pdfrum::{Argb, ColorMode, ColorScheme, Document, RenderOptions, VelloCpuBackend};
 ///
-/// // Black on white, forced over whatever the file's own colours are.
-/// let black = Argb { a: 255, r: 0, g: 0, b: 0 };
-/// let white = Argb { a: 255, r: 255, g: 255, b: 255 };
-///
+/// // Black fills, white text strokes, forced over the file's own colours.
 /// let options = RenderOptions::builder()
-///     .color_mode(ColorMode::Forced(ColorScheme {
-///         path_fill: black,
-///         path_stroke: black,
-///         text_fill: black,
-///         text_stroke: white,
-///     }))
+///     .color_mode(ColorMode::Forced(ColorScheme::new(
+///         Argb::BLACK,
+///         Argb::BLACK,
+///         Argb::BLACK,
+///         Argb::WHITE,
+///     )))
 ///     .build();
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;

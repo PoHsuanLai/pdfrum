@@ -902,11 +902,11 @@ impl Document {
     /// A page that will not load, as [`Document::page`] reports it.
     pub fn markdown_blocks(
         &self,
-        pages: impl IntoIterator<Item = PageIndex>,
+        pages: impl IntoIterator<Item = impl Into<PageIndex>>,
     ) -> Result<Vec<Vec<crate::Block>>> {
         let pages: Vec<Page<'_>> = pages
             .into_iter()
-            .map(|index| self.page(index))
+            .map(|index| self.page(index.into()))
             .collect::<Result<_>>()?;
         let inputs: Vec<_> = pages
             .iter()

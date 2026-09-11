@@ -51,15 +51,15 @@ impl Array {
     /// An array of these values, in order. The counterpart of
     /// [`Dict::from_pairs`].
     #[must_use]
-    pub fn of(values: impl IntoIterator<Item = Object>) -> Self {
-        values.into_iter().collect()
+    pub fn of(values: impl IntoIterator<Item = impl Into<Object>>) -> Self {
+        values.into_iter().map(Into::into).collect()
     }
 
     /// Append an element.
     ///
     /// Any object, a stream included — see the type-level note on §7.3.8.1.
-    pub fn push(&mut self, value: Object) {
-        self.0.push(value);
+    pub fn push(&mut self, value: impl Into<Object>) {
+        self.0.push(value.into());
     }
 
     /// Inserts `value` at `index`, shifting later items; `index == len()`

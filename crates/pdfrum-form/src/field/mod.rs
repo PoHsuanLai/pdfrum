@@ -352,9 +352,12 @@ impl ChoiceState {
     /// assert_eq!(state.focused_text(), "");
     /// ```
     #[must_use]
-    pub fn new(options: Vec<ChoiceOption>, config: ChoiceConfig) -> ChoiceState {
+    pub fn new(
+        options: impl IntoIterator<Item = ChoiceOption>,
+        config: ChoiceConfig,
+    ) -> ChoiceState {
         ChoiceState {
-            options,
+            options: options.into_iter().collect(),
             config,
             ..ChoiceState::default()
         }

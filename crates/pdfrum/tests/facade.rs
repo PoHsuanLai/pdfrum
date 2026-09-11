@@ -400,11 +400,11 @@ fn search_is_case_insensitive_by_default_and_case_sensitive_on_request() {
     let doc = Document::open(HELLO).expect("open");
     let text = doc.page(0).expect("page").text();
 
-    let insensitive: Vec<_> = text.find("WORLD", FindOptions::default()).collect();
+    let insensitive: Vec<_> = text.find("WORLD").collect();
     assert_eq!(insensitive.len(), 2, "both greetings");
 
     let sensitive: Vec<_> = text
-        .find(
+        .find_with(
             "WORLD",
             FindOptions {
                 match_case: true,
@@ -419,10 +419,7 @@ fn search_is_case_insensitive_by_default_and_case_sensitive_on_request() {
 fn a_search_hit_maps_back_to_boxes_on_the_page() {
     let doc = Document::open(HELLO).expect("open");
     let text = doc.page(0).expect("page").text();
-    let hit = text
-        .find("Hello", FindOptions::default())
-        .next()
-        .expect("a hit");
+    let hit = text.find("Hello").next().expect("a hit");
     // `find` counts in the search text and `rects` counts in the character
     // list; the page's own map is what bridges them, and after the types
     // will not let a caller skip it.
@@ -541,7 +538,7 @@ fn a_pages_annotations_are_read_with_their_geometry_and_flags() {
     assert_eq!(widget.subtype(), Subtype::Widget);
     assert_eq!(widget.rect(), kurbo::Rect::new(100.0, 100.0, 200.0, 130.0));
     assert!(!widget.is_hidden());
-    assert!(widget.quad_points().is_empty(), "a widget has no quads");
+    assert_eq!(widget.quad_points().len(), 0, "a widget has no quads");
     // The escape hatch reaches the keys the facade does not surface.
     assert!(widget.dict().contains_key(&pdfrum_object::Name::from("FT")));
 }

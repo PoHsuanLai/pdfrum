@@ -434,7 +434,11 @@ pub fn rasterize<R: Resolve>(
 pub fn encode(pixmap: &Pixmap, has_transparency: bool) -> Rendered {
     // The hash is over the 32-bit BGRA buffer — BGRx for an opaque page,
     // whose padding byte the white clear leaves at 0xFF.
-    let buffer = pixmap.to_straight_bgra(!has_transparency);
+    let buffer = if has_transparency {
+        pixmap.to_straight_bgra()
+    } else {
+        pixmap.to_opaque_bgra()
+    };
     let digest = md5_hex(&buffer);
     let png = if has_transparency {
         encode_png(

@@ -180,7 +180,7 @@ impl Page {
         };
         self.0
             .text()
-            .find(needle, options)
+            .find_with(needle, options)
             .map(|range| Hit {
                 start: range.start.get(),
                 end: range.end.get(),

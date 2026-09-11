@@ -82,7 +82,7 @@ pub fn extract_page<R: Resolve>(
 /// `Doc.getPageNumWords`.
 ///
 /// A different reading of "word" from extraction's, and deliberately so —
-/// see `pdfrum_text::words`. A page that will not build yields no words,
+/// see `pdfrum_text::content_words`. A page that will not build yields no words,
 /// which is what an empty page gives.
 ///
 /// Behind the `javascript` feature because `--js-transcript` is its only caller:
@@ -97,7 +97,7 @@ pub fn page_words<R: Resolve>(
     let limits = Limits::default();
     let mut diags = Diagnostics::default();
     let built = crate::content::build(page, resolver, ctx, &limits, &mut diags);
-    pdfrum_text::words(&built)
+    pdfrum_text::content_words(&built)
 }
 
 /// Whether the document asks for right-to-left reading order

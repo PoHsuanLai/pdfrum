@@ -114,7 +114,8 @@ mod tests {
         assert_eq!(out.bool(&Name::from("Bool")), Some(true));
         assert_eq!(out.direct_int(&Name::from("Num")), Some(1));
         assert_eq!(
-            out.string(&Name::from("Str")).map(|s| s.bytes.to_vec()),
+            out.string(&Name::from("Str"))
+                .map(|s| s.as_bytes().to_vec()),
             Some(b"str".to_vec())
         );
         assert_eq!(out.name(&Name::from("Name")), Some(&Name::from("name")));

@@ -353,10 +353,7 @@ fn a_search_whose_needle_can_never_match_terminates() {
     // where an unbounded version would spin.
     let page = extract("BT /F1 12 Tf 20 100 Td (aaaa) Tj ET");
     for needle in [" zzz", " ", "", "a a a a a"] {
-        let hits = page
-            .find(needle, pdfrum_text::FindOptions::default())
-            .take(100)
-            .count();
+        let hits = page.find(needle).take(100).count();
         assert!(hits <= 100, "{needle:?}");
     }
 }

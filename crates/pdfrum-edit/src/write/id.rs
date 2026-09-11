@@ -243,7 +243,7 @@ mod tests {
         let get = |i: usize| {
             id.array
                 .string_at(i)
-                .map(|s| s.bytes.to_vec())
+                .map(|s| s.as_bytes().to_vec())
                 .unwrap_or_default()
         };
         (get(0), get(1))
@@ -367,8 +367,12 @@ mod tests {
         let id = build(ctx(None, None, false), seed());
         for i in 0..2 {
             let s = id.array.string_at(i).expect("a string");
-            assert!(s.hex, "the trailer spells /ID in hex");
-            assert_eq!(s.bytes.len(), 16);
+            assert_eq!(
+                s.syntax(),
+                pdfrum_object::StringSyntax::Hex,
+                "the trailer spells /ID in hex"
+            );
+            assert_eq!(s.as_bytes().len(), 16);
         }
     }
 

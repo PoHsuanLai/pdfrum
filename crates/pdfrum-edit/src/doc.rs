@@ -27,6 +27,8 @@ use pdfrum_object::{Dict, ObjRef, Object, Resolve, names};
 use pdfrum_page::PageEdit;
 use pdfrum_parser::Document;
 
+use crate::Error;
+
 /// A document plus the edits made to it.
 ///
 /// Cheap to create and to drop: it borrows the base and owns only what
@@ -152,9 +154,13 @@ impl<'a> EditDoc<'a> {
     /// When `index` is outside the document.
     pub fn page_state(
         &self,
-        index: PageIndex,
-    ) -> Result<Option<(ObjRef, Dict, Dict)>, pdfrum_parser::Error> {
-        let page = self.base().page(index)?;
+        index: impl Into<PageIndex>,
+    ) -> Result<Option<(ObjRef, Dict, Dict)>, Error> {
+        let index = index.into();
+        let page = self
+            .base()
+            .page(index)
+            .map_err(|_| Error::PageIndexOutOfRange(index))?;
         let Some(reference) = page.reference else {
             return Ok(None);
         };
@@ -190,7 +196,7 @@ impl<'a> EditDoc<'a> {
         &mut self,
         page: &PageEdit,
         shared: &crate::ShareCounts,
-    ) -> Result<(), pdfrum_parser::Error> {
+    ) -> Result<(), Error> {
         let Some((reference, dict, resources)) = self.page_state(page.index())? else {
             // Rather than half-apply the change, leave the page as it was.
             return Ok(());

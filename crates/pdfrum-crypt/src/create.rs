@@ -255,7 +255,7 @@ mod tests {
             .string(&pdfrum_object::Name::from("Perms"))
             .expect("standard_r6 writes /Perms");
         let mut block = [0u8; 16];
-        block.copy_from_slice(perms.bytes.as_ref());
+        block.copy_from_slice(perms.as_bytes());
         crate::primitives::aes_cbc_decrypt(&[0xAA; 32], &[0u8; 16], &mut block)
             .expect("the file key decrypts /Perms");
         assert_eq!(&block[12..16], &[0xBB; 4], "Algorithm 10's four bytes");

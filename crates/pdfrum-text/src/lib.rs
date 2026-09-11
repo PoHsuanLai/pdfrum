@@ -368,13 +368,18 @@ impl TextPage {
     ///     ..TextPage::default()
     /// };
     /// let at = TextIndex::new;
-    /// let hits: Vec<_> = page.find("world", FindOptions::default()).collect();
+    /// let hits: Vec<_> = page.find("world").collect();
     /// assert_eq!(hits, [at(7)..at(12)]);
     /// // The default is case-insensitive.
-    /// let hits: Vec<_> = page.find("WORLD", FindOptions::default()).collect();
+    /// let hits: Vec<_> = page.find("WORLD").collect();
     /// assert_eq!(hits, [at(7)..at(12)]);
     /// ```
-    pub fn find<'a>(
+    pub fn find<'a>(&'a self, needle: &str) -> impl Iterator<Item = Range<TextIndex>> + 'a {
+        self.find_with(needle, FindOptions::default())
+    }
+
+    /// [`TextPage::find`] with explicit options.
+    pub fn find_with<'a>(
         &'a self,
         needle: &str,
         options: FindOptions,
@@ -747,13 +752,13 @@ impl TextPage {
 /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
 /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
 /// assert_eq!(
-///     pdfrum_text::words(&built),
+///     pdfrum_text::content_words(&built),
 ///     ["Hello, ", "world!", "Goodbye, ", "world!"],
 /// );
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[must_use]
-pub fn words(page: &Page) -> Vec<String> {
+pub fn content_words(page: &Page) -> Vec<String> {
     /// `IsLatinWord`: neither a space nor past the cutoff.
     fn continues_a_word(unicode: u32) -> bool {
         unicode != 0x20 && unicode <= 0x28FF

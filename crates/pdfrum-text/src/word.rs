@@ -6,7 +6,7 @@
 //! laid out again — every field is read off the [`TextPage`] the extractor
 //! already built, so the split costs one pass over `chars`.
 //!
-//! This is **not** the scripting API's word list ([`crate::words`]), which
+//! This is **not** the scripting API's word list ([`crate::content_words`]), which
 //! walks the content stream as written and splits on a different rule.
 
 use crate::TextPage;

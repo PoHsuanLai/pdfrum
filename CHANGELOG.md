@@ -13,6 +13,25 @@ first crates.io release.
   threads a session. A backend that holds a device is passed by reference
   (`page.render(&gpu)`) through a blanket `RasterBackend` impl for `&T`.
   The same split applies to `to_svg` / `to_svg_with`.
+- `scanline::FillRule` is `pdfrum_render::FillRule`: `Winding` / `EvenOdd`,
+  the same type the backend trait uses. AGG no longer maps names.
+- `ColorScheme::new` / `ColorScheme::all` and `Argb::new` / `Argb::WHITE`.
+- `FormSession::hover_for_page` returns `Option<AnnotId>`.
+- `DocEdit::n_up` takes a `Size` for the sheet.
+- `TextPage::find(needle)` uses default options; `find_with` takes flags.
+- `Annotation::quad_points` yields an iterator.
+- `Array::of` / `Dict::from_pairs` take `Into<Object>` / `Into<Name>`.
+- `Dict::text` follows `byte_string` and reads through `as_direct()`.
+- `PdfString` bytes and syntax are methods; fields are private.
+- `EditDoc::page_state` / `apply_page` return `edit::Error`.
+- Remaining edit page-index arguments take `impl Into<PageIndex>`.
+- `Pixmap::to_straight_bgra` / `to_opaque_bgra` replace the `opaque: bool`.
+- `PathBuilder::fill_rule` is `Fill` rather than `even_odd: bool`.
+- `ObjectIndex` has `new` / `get` / `From` / `Display`.
+- `pdfrum_text::content_words` is the content-stream word split, distinct
+  from `TextPage::words`.
+- `LoadOptions::with_password` takes the same spellings as the facade.
+- `ChoiceState::new` takes any iterator of options.
 - Collection APIs that were a `map`/`filter` over data already in memory
   now return an iterator or a slice instead of a `Vec`: `Document::revisions`,
   `Form::fields`, `Page::annotations`, `OwnedPage::annotations`,
