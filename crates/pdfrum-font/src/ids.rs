@@ -20,6 +20,18 @@ pub use pdfrum_cmap::{CharCode, Cid};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Gid(pub u16);
 
+impl From<u16> for Gid {
+    fn from(g: u16) -> Self {
+        Self(g)
+    }
+}
+
+impl From<Gid> for u16 {
+    fn from(g: Gid) -> Self {
+        g.0
+    }
+}
+
 impl From<pdfrum_type1::Gid> for Gid {
     fn from(g: pdfrum_type1::Gid) -> Self {
         Self(g.0)
@@ -79,9 +91,27 @@ impl fmt::Debug for GlyphName {
     }
 }
 
+impl AsRef<[u8]> for GlyphName {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
 impl From<&str> for GlyphName {
     fn from(s: &str) -> Self {
         Self::new(s.as_bytes().to_vec())
+    }
+}
+
+impl From<&[u8]> for GlyphName {
+    fn from(bytes: &[u8]) -> Self {
+        Self::new(bytes.to_vec())
+    }
+}
+
+impl From<Vec<u8>> for GlyphName {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::new(bytes)
     }
 }
 
@@ -283,15 +313,22 @@ mod tests {
     fn glyph_names_keep_their_bytes() {
         let n = GlyphName::from("quotesingle");
         assert_eq!(n.as_bytes(), b"quotesingle");
+        assert_eq!(n.as_ref(), b"quotesingle");
         assert_eq!(n.as_str(), Some("quotesingle"));
+        assert_eq!(
+            GlyphName::from(&b"quotesingle"[..]).as_bytes(),
+            b"quotesingle"
+        );
         // A name that is not UTF-8 is still a name; it just matches no table.
-        let raw = GlyphName::new(vec![0xff, 0xfe]);
+        let raw = GlyphName::from(vec![0xff, 0xfe]);
         assert_eq!(raw.as_str(), None);
     }
 
     #[test]
     fn gid_round_trips_through_the_type1_newtype() {
-        let g = Gid(42);
+        let g = Gid::from(42u16);
+        assert_eq!(u16::from(g), 42);
         assert_eq!(Gid::from(pdfrum_type1::Gid::from(g)), g);
+        assert_eq!(Gid::from(pdfrum_type1::Gid::from(42u16)), Gid(42));
     }
 }

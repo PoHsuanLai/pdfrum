@@ -260,13 +260,36 @@ impl Array {
     }
 }
 
+impl AsRef<[Object]> for Array {
+    fn as_ref(&self) -> &[Object] {
+        self.as_slice()
+    }
+}
+
+impl From<Vec<Object>> for Array {
+    fn from(values: Vec<Object>) -> Self {
+        Self(values)
+    }
+}
+
+impl From<Array> for Vec<Object> {
+    fn from(array: Array) -> Self {
+        array.0
+    }
+}
+
 impl FromIterator<Object> for Array {
     fn from_iter<I: IntoIterator<Item = Object>>(iter: I) -> Self {
-        let mut array = Self::new();
-        for value in iter {
-            array.push(value);
-        }
-        array
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl IntoIterator for Array {
+    type Item = Object;
+    type IntoIter = std::vec::IntoIter<Object>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -290,6 +313,22 @@ mod tests {
     use super::Array;
     use crate::test_resolve::TestStore;
     use crate::{Dict, Name, NoResolve, ObjRef, Object, PdfString, Stream, names};
+
+    #[test]
+    fn from_and_into_vec_are_the_elements() {
+        let values = vec![Object::Int(1), Object::Int(2)];
+        let array = Array::from(values);
+        assert_eq!(array.as_ref(), &[Object::Int(1), Object::Int(2)]);
+        let back: Vec<Object> = array.into();
+        assert_eq!(back, [Object::Int(1), Object::Int(2)]);
+    }
+
+    #[test]
+    fn into_iterator_yields_the_objects() {
+        let array = Array::of([Object::Int(1), Object::Name("x".into())]);
+        let got: Vec<_> = array.into_iter().collect();
+        assert_eq!(got, [Object::Int(1), Object::Name("x".into())]);
+    }
 
     // From cpdf_array_unittest.cpp:18-37.
     #[test]

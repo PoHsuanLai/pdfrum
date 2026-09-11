@@ -28,6 +28,10 @@ pub pdfrum_type1::FontFile::length2: u32
 pub pdfrum_type1::FontFile::length3: u32
 pub pdfrum_type1::FontFile::program: alloc::vec::Vec<u8>
 pub struct pdfrum_type1::Gid(pub u16)
+impl core::convert::From<pdfrum_type1::Gid> for u16
+pub fn u16::from(pdfrum_type1::Gid) -> Self
+impl core::convert::From<u16> for pdfrum_type1::Gid
+pub fn pdfrum_type1::Gid::from(u16) -> Self
 pub struct pdfrum_type1::Glyph
 pub pdfrum_type1::Glyph::advance: f32
 pub pdfrum_type1::Glyph::left_side_bearing: f32

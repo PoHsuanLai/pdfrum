@@ -65,11 +65,11 @@ impl Face {
     /// stream carries exactly one `Tf` — which is what the appearances that
     /// predate the second face already contain.
     #[must_use]
-    pub fn single(alias: &[u8], bytes: Vec<u8>) -> Face {
+    pub fn single(alias: impl Into<Vec<u8>>, bytes: impl Into<Vec<u8>>) -> Face {
         Face {
             index: 0,
-            alias: alias.to_vec(),
-            bytes,
+            alias: alias.into(),
+            bytes: bytes.into(),
         }
     }
 }
