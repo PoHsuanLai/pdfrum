@@ -728,7 +728,7 @@ pub enum Coverage {
 }
 
 /// The fill rule [`Rasterizer::sweep`] takes — the same
-/// [`FillRule`](crate::FillRule) the backend trait uses.
+/// [`FillRule`] the backend trait uses.
 ///
 /// ```
 /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
