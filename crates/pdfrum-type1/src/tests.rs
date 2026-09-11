@@ -20,6 +20,11 @@ use crate::eexec;
 use pdfrum_common::kurbo::Shape;
 use pdfrum_common::{DiagKind, Diagnostics, Limits};
 
+#[test]
+fn gid_round_trips_through_u16() {
+    assert_eq!(u16::from(Gid::from(7u16)), 7);
+}
+
 /// A charstring assembled from readable pieces.
 fn charstring(items: &[i32], ops: &[(usize, u8)]) -> Vec<u8> {
     // `items` are numbers; `ops` are `(insert-after-this-many-numbers, opcode)`.

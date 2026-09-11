@@ -297,7 +297,7 @@ pub fn pdfrum::Document::is_encrypted(&self) -> bool
 pub fn pdfrum::Document::metadata(&self) -> pdfrum::Metadata
 pub fn pdfrum::Document::open(impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::open_with(impl core::convert::AsRef<std::path::Path>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
-pub fn pdfrum::Document::open_with_password(impl core::convert::AsRef<std::path::Path>, &[u8]) -> pdfrum::Result<pdfrum::Document>
+pub fn pdfrum::Document::open_with_password(impl core::convert::AsRef<std::path::Path>, impl core::convert::AsRef<[u8]>) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::outline(&self) -> pdfrum::Outline<'_>
 pub fn pdfrum::Document::owner_permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum::Document::page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::Page<'_>>

@@ -437,7 +437,7 @@ fn mouse_move<R: Resolve>(
     // bare move can change about a field's appearance.
     if let Some(anchor) = session.drag {
         return match drag_to(session, ctx, anchor, at) {
-            Some(update) => Response::with(vec![update]),
+            Some(update) => Response::one(update),
             None => Response::consumed(),
         };
     }
@@ -573,7 +573,7 @@ fn mouse_up<R: Resolve>(
     }
 
     if let Some(update) = finished {
-        return Response::with(vec![update]);
+        return Response::one(update);
     }
     // The release inside an open dropdown is what *commits* the row — see
     // `release_in_popup` for why the press only hovers it.
@@ -899,13 +899,13 @@ fn annot_key<R: Resolve>(
     let Some(action) = action_of(ctx, annot) else {
         return Response::ignored();
     };
-    Response::with(vec![AppearanceUpdate::new(
+    Response::one(AppearanceUpdate::new(
         annot,
         UpdateKind::ActionRequested {
             action: Box::new(action),
             modifiers,
         },
-    )])
+    ))
 }
 
 /// The action an annotation carries, from its `/A`.
@@ -3209,7 +3209,7 @@ fn redraw<R: Resolve>(
     id: AnnotId,
 ) -> Response {
     match appearance_of(session, ctx, field, id) {
-        Some(update) => Response::with(vec![update]),
+        Some(update) => Response::one(update),
         None => Response::consumed(),
     }
 }

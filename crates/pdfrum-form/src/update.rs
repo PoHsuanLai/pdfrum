@@ -144,7 +144,18 @@ impl Response {
         }
     }
 
-    /// An event that was handled and changed something.
+    /// An event that was handled and produced one update.
+    #[must_use]
+    pub fn one(update: AppearanceUpdate) -> Response {
+        Response {
+            consumed: true,
+            updates: vec![update],
+        }
+    }
+
+    /// An event that was handled and produced several updates.
+    ///
+    /// [`Response::one`] when there is only one.
     #[must_use]
     pub fn with(updates: Vec<AppearanceUpdate>) -> Response {
         Response {
@@ -219,17 +230,17 @@ mod tests {
 
     #[test]
     fn folding_responses_keeps_both_orders() {
-        let mut first = Response::with(vec![AppearanceUpdate::new(
+        let mut first = Response::one(AppearanceUpdate::new(
             annot(),
             UpdateKind::RevertedToFileAppearance,
-        )]);
-        let second = Response::with(vec![AppearanceUpdate::new(
+        ));
+        let second = Response::one(AppearanceUpdate::new(
             AnnotId::new(0, 4),
             UpdateKind::FocusChanged {
                 from: None,
                 to: Some(AnnotId::new(0, 4)),
             },
-        )]);
+        ));
 
         first.absorb(second);
         let order: Vec<AnnotId> = first.updates.iter().map(|u| u.annot).collect();
@@ -275,10 +286,10 @@ mod tests {
 
     #[test]
     fn a_response_with_no_actions_yields_none() {
-        let response = Response::with(vec![AppearanceUpdate::new(
+        let response = Response::one(AppearanceUpdate::new(
             annot(),
             UpdateKind::RevertedToFileAppearance,
-        )]);
+        ));
         assert_eq!(response.actions().count(), 0);
     }
 

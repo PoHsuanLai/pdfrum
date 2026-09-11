@@ -132,6 +132,12 @@ impl PdfString {
     }
 }
 
+impl AsRef<[u8]> for PdfString {
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
 impl std::fmt::Debug for PdfString {
     /// Prints the string the way a file spells it, so an object dump reads
     /// like the PDF it came from rather than like a byte array.
@@ -460,6 +466,12 @@ mod tests {
         assert_eq!(PDF_DOC_ENCODING[0xA0], 0x20AC);
         assert_eq!(PDF_DOC_ENCODING[0xAD], 0x0000);
         assert_eq!(PDF_DOC_ENCODING[0xFF], 0x00FF);
+    }
+
+    #[test]
+    fn a_string_is_its_bytes() {
+        let s = PdfString::literal(b"hi");
+        assert_eq!(s.as_ref(), b"hi");
     }
 
     #[test]

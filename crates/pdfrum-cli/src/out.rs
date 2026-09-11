@@ -492,8 +492,8 @@ impl Table {
     }
 
     /// Add one row; missing trailing cells are empty.
-    pub fn row(&mut self, cells: Vec<String>) {
-        self.rows.push(cells);
+    pub fn row(&mut self, cells: impl IntoIterator<Item = impl Into<String>>) {
+        self.rows.push(cells.into_iter().map(Into::into).collect());
     }
 
     pub fn is_empty(&self) -> bool {
@@ -668,13 +668,8 @@ mod tests {
             ("NOTE", Align::Left),
             ("SIZE", Align::Right),
         ]);
-        table.row(vec!["1".into(), "a".into(), String::new(), "3 B".into()]);
-        table.row(vec![
-            "10".into(),
-            "bcd".into(),
-            String::new(),
-            "1.2 KB".into(),
-        ]);
+        table.row(["1", "a", "", "3 B"]);
+        table.row(["10", "bcd", "", "1.2 KB"]);
         // The layout, without going through stdout: the same fit() the
         // printer uses, over the same kept columns and widths.
         assert_eq!(fit("PAGE", 4, Align::Right), "PAGE");
