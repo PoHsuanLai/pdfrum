@@ -743,7 +743,7 @@ impl<'a> DocEdit<'a> {
     /// Create an annotation on `page` and append it to the page's `/Annots`.
     ///
     /// Covers the six subtypes Rotero writes today — `Highlight`, `Text` (note),
-    /// `Square` (area), `Underline`, `Ink`, and `FreeText` — via [`AnnotSpec`].
+    /// `Square` (area), `Underline`, `Ink`, and `FreeText` — via [`crate::AnnotSpec`].
     /// Appearance streams are not generated.
     ///
     /// Returns the new annotation's object reference.
