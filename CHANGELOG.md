@@ -7,6 +7,12 @@ first crates.io release.
 
 ### Changed
 
+- `Page::render` takes the rasterizer by value and uses default options, so
+  `page.render(VelloCpuBackend)` names the backend without constructing a
+  handle. `render_with` is the explicit-options form; `render_on` still
+  threads a session. A backend that holds a device is passed by reference
+  (`page.render(&gpu)`) through a blanket `RasterBackend` impl for `&T`.
+  The same split applies to `to_svg` / `to_svg_with`.
 - Collection APIs that were a `map`/`filter` over data already in memory
   now return an iterator or a slice instead of a `Vec`: `Document::revisions`,
   `Form::fields`, `Page::annotations`, `OwnedPage::annotations`,

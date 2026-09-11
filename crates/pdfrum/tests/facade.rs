@@ -173,7 +173,7 @@ fn the_render_scale_decides_the_output_size() {
     let page = doc.page(0).expect("page");
     for (scale, expected) in [(1.0, 200), (0.5, 100), (3.0, 600)] {
         let pixmap = page
-            .render(&VelloCpuBackend::new(), &RenderOptions::scaled(scale))
+            .render_with(VelloCpuBackend, &RenderOptions::scaled(scale))
             .expect("render");
         assert_eq!((pixmap.width(), pixmap.height()), (expected, expected));
     }
@@ -185,9 +185,7 @@ fn fit_scales_a_page_into_a_box_without_distorting_it() {
     let page = doc.page(0).expect("page");
     // 612x792 into 100x100 must fit the *tall* axis.
     let options = RenderOptions::fit(page.width(), page.height(), 100, 100);
-    let pixmap = page
-        .render(&VelloCpuBackend::new(), &options)
-        .expect("render");
+    let pixmap = page.render_with(VelloCpuBackend, &options).expect("render");
     assert!(pixmap.width() <= 100 && pixmap.height() <= 100);
     assert_eq!(pixmap.height(), 100, "the tall axis is the binding one");
 }
@@ -198,7 +196,7 @@ fn a_zero_sized_render_is_an_error_rather_than_an_empty_image() {
     let err = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::scaled(0.0))
+        .render_with(VelloCpuBackend, &RenderOptions::scaled(0.0))
         .expect_err("a zero-scale target has no pixels");
     assert!(matches!(err, pdfrum::Error::Render(_)), "got {err:?}");
 }
@@ -213,21 +211,21 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
     // caller who wants one writes.
     let vello = page
         .render_on(
-            &pdfrum::VelloCpuBackend::new(),
+            pdfrum::VelloCpuBackend,
             &opts,
             &mut pdfrum::RenderSession::new(),
         )
         .expect("render");
     let tiny = page
         .render_on(
-            &pdfrum_raster_tinyskia::TinySkiaBackend::new(),
+            pdfrum_raster_tinyskia::TinySkiaBackend,
             &opts,
             &mut pdfrum::RenderSession::new(),
         )
         .expect("render");
     let exact = page
         .render_on(
-            &pdfrum_raster_agg::AggBackend::new(),
+            pdfrum_raster_agg::AggBackend,
             &opts,
             &mut pdfrum::RenderSession::new(),
         )
@@ -253,12 +251,8 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
 fn rendering_is_deterministic() {
     let doc = Document::open(HELLO).expect("open");
     let page = doc.page(0).expect("page");
-    let once = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .expect("render");
-    let twice = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .expect("render");
+    let once = page.render(VelloCpuBackend).expect("render");
+    let twice = page.render(VelloCpuBackend).expect("render");
     assert_eq!(once, twice);
 }
 
@@ -268,7 +262,7 @@ fn a_forced_background_replaces_the_pages_own() {
     let pixmap = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &{
+        .render_with(VelloCpuBackend, &{
             let mut __o = RenderOptions::default();
             __o.background = Some(peniko::Color::from_rgba8(0, 0, 255, 255));
             __o
@@ -284,11 +278,9 @@ fn a_forced_background_replaces_the_pages_own() {
 fn a_render_can_leave_the_annotations_out() {
     let doc = Document::open(FORM).expect("open");
     let page = doc.page(0).expect("page");
-    let with = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .expect("render");
+    let with = page.render(VelloCpuBackend).expect("render");
     let without = page
-        .render(&VelloCpuBackend::new(), &{
+        .render_with(VelloCpuBackend, &{
             let mut __o = RenderOptions::default();
             __o.annotations = false;
             __o
@@ -309,10 +301,7 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one() {
 
     let fresh: Vec<_> = doc
         .pages()
-        .map(|page| {
-            page.render(&VelloCpuBackend::new(), &options)
-                .expect("render")
-        })
+        .map(|page| page.render_with(VelloCpuBackend, &options).expect("render"))
         .collect();
 
     let backend = pdfrum::VelloCpuBackend::new();
@@ -320,7 +309,7 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one() {
     let shared: Vec<_> = doc
         .pages()
         .map(|page| {
-            page.render_on(&backend, &options, &mut session)
+            page.render_on(backend, &options, &mut session)
                 .expect("render")
         })
         .collect();
@@ -339,11 +328,9 @@ fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
     let backend = pdfrum::VelloCpuBackend::new();
 
     for page in doc.pages() {
-        let convenience = page
-            .render(&VelloCpuBackend::new(), &options)
-            .expect("render");
+        let convenience = page.render_with(VelloCpuBackend, &options).expect("render");
         let general = page
-            .render_on(&backend, &options, &mut pdfrum::RenderSession::new())
+            .render_on(backend, &options, &mut pdfrum::RenderSession::new())
             .expect("render_on");
         assert_eq!(
             convenience, general,
@@ -374,10 +361,10 @@ fn a_sessions_build_half_still_carries_substitution_options() {
     let mut plain = pdfrum::RenderSession::new();
     for page in doc.pages() {
         let configured = page
-            .render_on(&backend, &options, &mut session)
+            .render_on(backend, &options, &mut session)
             .expect("render");
         let default = page
-            .render_on(&backend, &options, &mut plain)
+            .render_on(backend, &options, &mut plain)
             .expect("render");
         assert_eq!(configured, default);
 
@@ -716,7 +703,7 @@ fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
         reopened
             .page(0)
             .expect("page")
-            .render(&VelloCpuBackend::new(), &RenderOptions::default())
+            .render(VelloCpuBackend)
             .is_ok()
     );
 
@@ -816,7 +803,7 @@ fn a_saved_document_renders_the_same_pixels_as_its_original() {
     let before = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("render");
     doc.save(&out).expect("save");
 
@@ -824,7 +811,7 @@ fn a_saved_document_renders_the_same_pixels_as_its_original() {
     let after = reopened
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("render");
     assert_eq!(
         before, after,
@@ -987,25 +974,19 @@ fn pages_render_in_parallel_to_the_same_pixels_as_in_series() {
 
     let serial: Vec<_> = pages
         .iter()
-        .map(|page| {
-            page.render(&VelloCpuBackend::new(), &options)
-                .expect("render")
-        })
+        .map(|page| page.render_with(VelloCpuBackend, &options).expect("render"))
         .collect();
 
     let parallel: Vec<_> = pages
         .par_iter()
-        .map(|page| {
-            page.render(&VelloCpuBackend::new(), &options)
-                .expect("render")
-        })
+        .map(|page| page.render_with(VelloCpuBackend, &options).expect("render"))
         .collect();
 
     let backend = pdfrum::VelloCpuBackend::new();
     let per_worker_session: Vec<_> = pages
         .par_iter()
         .map_init(pdfrum::RenderSession::new, |session, page| {
-            page.render_on(&backend, &options, session).expect("render")
+            page.render_on(backend, &options, session).expect("render")
         })
         .collect();
 
@@ -1022,10 +1003,7 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
 
     let fresh: Vec<_> = doc
         .pages()
-        .map(|page| {
-            page.render(&VelloCpuBackend::new(), &options)
-                .expect("render")
-        })
+        .map(|page| page.render_with(VelloCpuBackend, &options).expect("render"))
         .collect();
 
     // One session across both pages: the second page draws with a glyph cache
@@ -1036,7 +1014,7 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
     let shared: Vec<_> = doc
         .pages()
         .map(|page| {
-            page.render_on(&backend, &options, &mut session)
+            page.render_on(backend, &options, &mut session)
                 .expect("render")
         })
         .collect();
@@ -1062,12 +1040,12 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
     let alone_small = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &small)
+        .render_with(VelloCpuBackend, &small)
         .expect("small render");
     let alone_large = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &large)
+        .render_with(VelloCpuBackend, &large)
         .expect("large render");
 
     // Then both through one session, small first, so the large render meets a
@@ -1077,12 +1055,12 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
     let shared_small = doc
         .page(0)
         .expect("page")
-        .render_on(&backend, &small, &mut session)
+        .render_on(backend, &small, &mut session)
         .expect("small render");
     let shared_large = doc
         .page(0)
         .expect("page")
-        .render_on(&backend, &large, &mut session)
+        .render_on(backend, &large, &mut session)
         .expect("large render");
 
     assert_eq!(
@@ -1106,12 +1084,12 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
     let large_first = doc
         .page(0)
         .expect("page")
-        .render_on(&backend, &large, &mut reversed)
+        .render_on(backend, &large, &mut reversed)
         .expect("large render");
     let small_after = doc
         .page(0)
         .expect("page")
-        .render_on(&backend, &small, &mut reversed)
+        .render_on(backend, &small, &mut reversed)
         .expect("small render");
     assert_eq!(alone_large, large_first);
     assert_eq!(
@@ -1173,7 +1151,7 @@ fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
 
     for page in doc.pages() {
         let pixmap = page
-            .render_on(&backend, &RenderOptions::default(), &mut session)
+            .render_on(backend, &RenderOptions::default(), &mut session)
             .expect("render");
         let text = page.text_on(&mut session).to_string();
         assert!(pixmap.width() > 0);
@@ -1207,7 +1185,7 @@ fn a_repair_found_after_the_load_reaches_the_document_wide_view() {
     let _ = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("render");
 
     assert!(
@@ -1231,7 +1209,7 @@ fn a_repair_this_crates_own_reads_make_reaches_the_view_too() {
     let _ = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("render");
 
     assert!(
@@ -1259,7 +1237,7 @@ fn the_document_wide_view_grows_as_the_document_is_used() {
     let before = doc.all_diagnostics().recorded();
     for page in doc.pages() {
         let _ = page.text();
-        let _ = page.render(&VelloCpuBackend::new(), &RenderOptions::default());
+        let _ = page.render(VelloCpuBackend);
     }
     let after = doc.all_diagnostics().recorded();
     assert!(
@@ -1293,7 +1271,7 @@ fn a_document_can_be_shared_across_threads_by_reference() {
                 scope.spawn(move || {
                     doc.page(index)
                         .expect("page")
-                        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+                        .render(VelloCpuBackend)
                         .expect("render")
                         .width()
                 })
@@ -1319,7 +1297,7 @@ fn every_error_prints_a_message_naming_its_domain() {
     let no_pixels = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::scaled(0.0))
+        .render_with(VelloCpuBackend, &RenderOptions::scaled(0.0))
         .expect_err("err");
     assert!(no_pixels.to_string().contains("cannot render page"));
 }
@@ -1351,7 +1329,7 @@ fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
     let page = doc.page(0).expect("page");
 
     let via_facade = page
-        .render(&VelloCpuBackend::new(), &{
+        .render_with(VelloCpuBackend, &{
             let mut __o = RenderOptions::default();
             __o.smooth_paths = false;
             __o.annotations = false;
@@ -1387,7 +1365,7 @@ fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
 
     // And the flag is not inert: the default (smoothed) render differs.
     let smoothed = page
-        .render(&VelloCpuBackend::new(), &{
+        .render_with(VelloCpuBackend, &{
             let mut __o = RenderOptions::default();
             __o.annotations = false;
             __o

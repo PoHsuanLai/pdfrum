@@ -288,13 +288,12 @@ impl Document {
     /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
     ///
     /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// let backend = VelloCpuBackend::new();
     ///
     /// // Two sessions, one set of loaded fonts.
     /// let mut first = doc.render_session();
     /// let mut second = doc.render_session();
-    /// let a = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut first)?;
-    /// let b = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut second)?;
+    /// let a = doc.page(0)?.render_on(VelloCpuBackend, &RenderOptions::default(), &mut first)?;
+    /// let b = doc.page(0)?.render_on(VelloCpuBackend, &RenderOptions::default(), &mut second)?;
     /// assert_eq!(a.width(), b.width());
     /// # Ok::<(), pdfrum::Error>(())
     /// ```

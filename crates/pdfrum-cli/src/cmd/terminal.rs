@@ -41,11 +41,7 @@ fn show(
     }
     let page = doc.page(index)?;
     let scale = fit_scale(page.width(), columns, term.graphics);
-    let pixmap = page.render_on(
-        &VelloCpuBackend::new(),
-        &RenderOptions::scaled(scale),
-        session,
-    )?;
+    let pixmap = page.render_on(VelloCpuBackend, &RenderOptions::scaled(scale), session)?;
     let bytes = term::picture(&pixmap, term.graphics, columns, 0);
     let mut stdout = std::io::stdout().lock();
     stdout.write_all(&bytes).context("cannot write to stdout")?;
@@ -174,7 +170,7 @@ fn render_frame(
     let layout = layout((page.width(), page.height()), key, term::screen(), graphics);
     let pixmap = page
         .render_on(
-            &VelloCpuBackend::new(),
+            VelloCpuBackend,
             &RenderOptions::scaled(layout.scale),
             session,
         )

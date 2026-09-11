@@ -323,7 +323,7 @@ pub use pdfrum_text::Error as TextError;
 ///     .build();
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-/// let pixmap = doc.page(0)?.render(&VelloCpuBackend::new(), &options)?;
+/// let pixmap = doc.page(0)?.render_with(VelloCpuBackend, &options)?;
 /// assert!(pixmap.width() > 0);
 /// # Ok::<(), pdfrum::Error>(())
 /// ```

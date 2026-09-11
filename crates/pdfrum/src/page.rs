@@ -142,18 +142,18 @@ impl<'a> Page<'a> {
     }
 
     /// Renders the page to a pixel buffer on the rasterizer you name, with
-    /// caches of its own that it throws away afterwards.
+    /// default options and caches of its own that it throws away afterwards.
     ///
-    /// The backend is an argument, never a default: `VelloCpuBackend` is
-    /// the one the `vello-cpu` feature (on by default) provides, and the
-    /// `tiny-skia`, `agg` and `vello-gpu` features provide the others. For a
-    /// run over many pages, use [`Page::render_on`] with one
-    /// [`RenderSession`].
+    /// The backend is an argument, never a default: name it so the choice is
+    /// visible. Stateless CPU backends are unit structs, so
+    /// `page.render(VelloCpuBackend)` is the whole spelling. A backend that
+    /// holds a device is passed by reference, `page.render(&gpu)`.
+    /// `VelloCpuBackend` is the one the `vello-cpu` feature (on by default)
+    /// provides; `tiny-skia`, `agg` and `vello-gpu` provide the others.
     ///
-    /// The image is sized by [`RenderOptions::transform`]: the default
-    /// identity transform gives one pixel per PDF point, and
-    /// `Affine::scale(2.0)` gives a 2x image. The page's own crop box and
-    /// `/Rotate` are applied for you.
+    /// Default options: one pixel per PDF point, colour, annotations on.
+    /// [`Page::render_with`] when they are not the defaults. For a run over
+    /// many pages, [`Page::render_on`] with one [`RenderSession`].
     ///
     /// # Errors
     ///
@@ -166,25 +166,42 @@ impl<'a> Page<'a> {
     /// diagnostic and the rest of the page still renders.
     ///
     /// ```
-    /// use pdfrum::{Affine, Document, RenderOptions, VelloCpuBackend};
+    /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
     ///
     /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let page = doc.page(0)?;
-    /// let backend = VelloCpuBackend::new();
     ///
-    /// let pixmap = page.render(&backend, &RenderOptions::default())?;
+    /// let pixmap = page.render(VelloCpuBackend)?;
     /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
     ///
     /// // Twice the size, same page.
-    /// let big = page.render(&backend, &RenderOptions::builder().scale(2.0).build())?;
+    /// let big = page.render_with(VelloCpuBackend, &RenderOptions::builder().scale(2.0).build())?;
     /// assert_eq!((big.width(), big.height()), (400, 400));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn render<B: RasterBackend>(&self, backend: &B, options: &RenderOptions) -> Result<Pixmap> {
+    pub fn render<B: RasterBackend>(&self, backend: B) -> Result<Pixmap> {
+        self.render_with(backend, &RenderOptions::default())
+    }
+
+    /// [`Page::render`] with explicit options.
+    ///
+    /// The image is sized by [`RenderOptions::transform`]: the default
+    /// identity transform gives one pixel per PDF point, and
+    /// `Affine::scale(2.0)` gives a 2x image. The page's own crop box and
+    /// `/Rotate` are applied for you.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_with<B: RasterBackend>(
+        &self,
+        backend: B,
+        options: &RenderOptions,
+    ) -> Result<Pixmap> {
         self.render_on(backend, options, &mut RenderSession::default())
     }
 
-    /// [`Page::render`] reusing a caller-owned [`RenderSession`].
+    /// [`Page::render_with`] reusing a caller-owned [`RenderSession`].
     ///
     /// A backend rasterizes paths and images, it does not interpret PDF. The
     /// session carries the caches a run over many pages of one document
@@ -195,7 +212,7 @@ impl<'a> Page<'a> {
     /// As [`Page::render`].
     pub fn render_on<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
@@ -208,25 +225,38 @@ impl<'a> Page<'a> {
     /// The page as an SVG document, rasterizing with `backend` only what SVG
     /// cannot say — behind the default-off `svg-export` feature.
     ///
+    /// Default options, as [`Page::render`]. [`Page::to_svg_with`] when they
+    /// are not the defaults.
+    ///
     /// The result carries the document *and* a [`RasterReport`](crate::svg::RasterReport)
     /// naming every region that had to become pixels, because a vector export
     /// that silently embedded a bitmap would look like a success. The
     /// document's `viewBox` is the device box [`Page::render`] fills under the
-    /// same `options`, so the two are directly comparable.
+    /// same options, so the two are directly comparable.
     ///
     /// # Errors
     ///
     /// As [`Page::render`].
     #[cfg(feature = "svg-export")]
-    pub fn to_svg<B: RasterBackend>(
+    pub fn to_svg<B: RasterBackend>(&self, backend: B) -> Result<crate::svg::SvgPage> {
+        self.to_svg_with(backend, &RenderOptions::default())
+    }
+
+    /// [`Page::to_svg`] with explicit options.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    #[cfg(feature = "svg-export")]
+    pub fn to_svg_with<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         options: &RenderOptions,
     ) -> Result<crate::svg::SvgPage> {
         self.to_svg_on(backend, options, &mut RenderSession::default())
     }
 
-    /// [`Page::to_svg`] reusing a caller-owned [`RenderSession`].
+    /// [`Page::to_svg_with`] reusing a caller-owned [`RenderSession`].
     ///
     /// # Errors
     ///
@@ -234,7 +264,7 @@ impl<'a> Page<'a> {
     #[cfg(feature = "svg-export")]
     pub fn to_svg_on<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<crate::svg::SvgPage> {
@@ -653,13 +683,12 @@ impl<'a> Page<'a> {
 /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-/// let backend = VelloCpuBackend::new();
 /// let mut session = RenderSession::new();
 /// let prepared = doc.page(0)?.prepare(&RenderOptions::default(), &mut session);
 ///
 /// // Interpreted once, drawn twice.
-/// let first = prepared.render_on(&backend, &mut session)?;
-/// let second = prepared.render_on(&backend, &mut session)?;
+/// let first = prepared.render_on(VelloCpuBackend, &mut session)?;
+/// let second = prepared.render_on(VelloCpuBackend, &mut session)?;
 /// assert_eq!(first.data(), second.data());
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
@@ -678,7 +707,7 @@ impl PreparedPage<'_> {
     /// # Errors
     ///
     /// As [`Page::render`].
-    pub fn render<B: RasterBackend>(&self, backend: &B) -> Result<Pixmap> {
+    pub fn render<B: RasterBackend>(&self, backend: B) -> Result<Pixmap> {
         self.render_on(backend, &mut RenderSession::default())
     }
 
@@ -690,7 +719,7 @@ impl PreparedPage<'_> {
     /// As [`Page::render`].
     pub fn render_on<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
         // Checked here as well as in `Page::render_on`: `prepare` is
@@ -707,7 +736,7 @@ impl PreparedPage<'_> {
             pdfrum_render::render_page_with(
                 &self.graph,
                 &inner,
-                backend,
+                &backend,
                 render_session,
                 &mut diags,
             )
@@ -730,7 +759,7 @@ impl PreparedPage<'_> {
     ///
     /// As [`Page::render`].
     #[cfg(feature = "svg-export")]
-    pub fn to_svg<B: RasterBackend>(&self, backend: &B) -> Result<crate::svg::SvgPage> {
+    pub fn to_svg<B: RasterBackend>(&self, backend: B) -> Result<crate::svg::SvgPage> {
         self.to_svg_on(backend, &mut RenderSession::default())
     }
 
@@ -747,7 +776,7 @@ impl PreparedPage<'_> {
     #[cfg(feature = "svg-export")]
     pub fn to_svg_on<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         session: &mut RenderSession,
     ) -> Result<crate::svg::SvgPage> {
         check_pixel_cap(&self.doc.limits, self.graph.display_size(), &self.options)?;
@@ -759,7 +788,7 @@ impl PreparedPage<'_> {
             ..Default::default()
         };
         let converted =
-            pdfrum_svg::page_to_svg_with(&self.graph, &inner, backend, render_session, &mut diags);
+            pdfrum_svg::page_to_svg_with(&self.graph, &inner, &backend, render_session, &mut diags);
         self.doc.note(&diags);
         converted.map_err(|error| match error {
             pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),

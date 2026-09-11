@@ -66,7 +66,7 @@ fn run(input: &Path, scale: f64) -> Result<(), Error> {
         let mut session = RenderSession::new();
         pages
             .iter()
-            .map(|page| page.render_on(&backend, &options, &mut session))
+            .map(|page| page.render_on(backend, &options, &mut session))
             .collect::<Result<_, _>>()?
     };
     let serial_time = started.elapsed();
@@ -77,7 +77,7 @@ fn run(input: &Path, scale: f64) -> Result<(), Error> {
     let parallel: Vec<Pixmap> = pages
         .par_iter()
         .map_init(RenderSession::new, |session, page| {
-            page.render_on(&backend, &options, session)
+            page.render_on(backend, &options, session)
         })
         .collect::<Result<_, _>>()?;
     let parallel_time = started.elapsed();

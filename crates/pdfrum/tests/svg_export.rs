@@ -22,9 +22,11 @@ fn a_page_exports_to_svg_through_the_facade() {
     let backend = VelloCpuBackend::new();
 
     let pixels = page
-        .render(&backend, &options)
+        .render_with(backend, &options)
         .expect("the page rasterizes");
-    let converted = page.to_svg(&backend, &options).expect("the page converts");
+    let converted = page
+        .to_svg_with(backend, &options)
+        .expect("the page converts");
 
     assert!(converted.svg.starts_with("<svg "), "a root element");
     assert!(converted.svg.contains("</svg>"), "a closed document");
@@ -58,10 +60,10 @@ fn preparing_first_gives_the_same_document() {
     let backend = VelloCpuBackend::new();
     let mut session = pdfrum::RenderSession::new();
 
-    let direct = page.to_svg(&backend, &options).expect("converts");
+    let direct = page.to_svg_with(backend, &options).expect("converts");
     let prepared = page
         .prepare(&options, &mut session)
-        .to_svg_on(&backend, &mut session)
+        .to_svg_on(backend, &mut session)
         .expect("converts");
     assert_eq!(direct.svg, prepared.svg);
     assert_eq!(direct.report, prepared.report);

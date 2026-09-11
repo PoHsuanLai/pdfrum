@@ -170,7 +170,7 @@ fn render_all_gpu(path: &Path, ctx: &Ctx<'_>) -> Result<usize> {
     let mut session = session(&doc, ctx);
     for index in 0..pages {
         doc.page(index as u32)?
-            .render_on(&backend, &options, &mut session)?;
+            .render_on(backend, &options, &mut session)?;
     }
     Ok(pages)
 }
@@ -195,7 +195,7 @@ where
                     let mut session = session(doc, ctx);
                     for index in (first..pages).step_by(threads) {
                         doc.page(index as u32)?
-                            .render_on(&backend, options, &mut session)?;
+                            .render_on(backend, options, &mut session)?;
                     }
                     Ok(())
                 })

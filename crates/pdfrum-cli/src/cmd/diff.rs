@@ -196,7 +196,7 @@ fn render(
         return Ok(None);
     };
     Ok(Some(page.render_on(
-        &backend,
+        backend,
         &RenderOptions::scaled(scale),
         session,
     )?))

@@ -35,12 +35,12 @@ fn an_owned_page_renders_byte_identically_to_the_borrowed_one() {
     let borrowed = doc
         .page(0)
         .expect("page")
-        .render(&backend, &options)
+        .render_with(backend, &options)
         .expect("render");
     let owned = doc
         .page_owned(0)
         .expect("page")
-        .render(&backend, &options)
+        .render_with(backend, &options)
         .expect("render");
 
     assert_eq!(
@@ -100,7 +100,7 @@ fn eight_owned_pages_render_concurrently() {
     let reference = doc
         .page(0)
         .expect("page")
-        .render(&backend, &options)
+        .render_with(backend, &options)
         .expect("render");
 
     let pages: Vec<OwnedPage> = (0..8).map(|_| doc.page_owned(0).expect("page")).collect();
@@ -113,7 +113,7 @@ fn eight_owned_pages_render_concurrently() {
                 scope.spawn(|| {
                     let backend = VelloCpuBackend::new();
                     let mut session = RenderSession::new();
-                    page.render_on(&backend, &RenderOptions::default(), &mut session)
+                    page.render_on(backend, &RenderOptions::default(), &mut session)
                         .expect("render")
                 })
             })

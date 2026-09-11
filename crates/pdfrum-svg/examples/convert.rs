@@ -11,7 +11,7 @@
 // Through the facade alone, which is the shortest path a caller has: the
 // `svg-export` feature puts `Page::to_svg` on the facade's own page type, so nothing
 // here names an engine crate.
-use pdfrum::{Document, RenderOptions, TinySkiaBackend};
+use pdfrum::{Document, TinySkiaBackend};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
@@ -23,8 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let doc = Document::open(path)?;
     let page = doc.page(index)?;
-    let tiny = TinySkiaBackend::new();
-    let converted = page.to_svg(&tiny, &RenderOptions::default())?;
+    let converted = page.to_svg(TinySkiaBackend)?;
 
     for (cause, n) in converted.report.counts() {
         eprintln!("{:<20} {n}", cause.name());
