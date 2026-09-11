@@ -75,7 +75,7 @@ fn main() {
         let warm: Vec<Pixmap> = pages
             .par_iter()
             .map_init(RenderSession::new, |session, page| {
-                page.render_on(&backend, &options, session).ok()
+                page.render_on(backend, &options, session).ok()
             })
             .flatten()
             .collect();
@@ -87,7 +87,7 @@ fn main() {
             let out: Vec<Pixmap> = pages
                 .par_iter()
                 .map_init(RenderSession::new, |session, page| {
-                    page.render_on(&backend, &options, session).ok()
+                    page.render_on(backend, &options, session).ok()
                 })
                 .flatten()
                 .collect();

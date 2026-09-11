@@ -81,8 +81,13 @@ impl Dict {
 
     /// A dictionary from key-value pairs, keeping their order.
     #[must_use]
-    pub fn from_pairs(pairs: impl IntoIterator<Item = (Name, Object)>) -> Self {
-        pairs.into_iter().collect()
+    pub fn from_pairs(
+        pairs: impl IntoIterator<Item = (impl Into<Name>, impl Into<Object>)>,
+    ) -> Self {
+        pairs
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect()
     }
 
     /// Append a pair, keeping any earlier entry with the same key.
@@ -91,13 +96,15 @@ impl Dict {
     /// duplicate key without losing what the file actually said.
     ///
     /// Any object, a stream included — see the type-level note on §7.3.8.1.
-    pub fn push(&mut self, key: Name, value: Object) {
-        self.0.push((key, value));
+    pub fn push(&mut self, key: impl Into<Name>, value: impl Into<Object>) {
+        self.0.push((key.into(), value.into()));
     }
 
     /// Sets `key` to `value`: replaces the existing entry in place, keeping
     /// its position, or appends.
-    pub fn insert(&mut self, key: Name, value: Object) {
+    pub fn insert(&mut self, key: impl Into<Name>, value: impl Into<Object>) {
+        let key = key.into();
+        let value = value.into();
         if let Some(entry) = self.0.iter_mut().find(|entry| entry.0 == key) {
             entry.1 = value;
         } else {
@@ -231,7 +238,7 @@ impl Dict {
     /// An entry read as text — see [`Object::to_text`].
     #[must_use]
     pub fn text(&self, key: &Name, r: &impl Resolve) -> Option<String> {
-        Some(self.get(key, r)?.to_text())
+        Some(self.get(key, r)?.as_direct()?.to_text())
     }
 
     /// The dictionary an entry holds, following one level of indirection.

@@ -14,8 +14,8 @@ use std::process::Command;
 use std::sync::Arc;
 
 use pdfrum::{
-    Color, Document, IdSource, PageObject, PixelFormat, RenderOptions, SaveOptions, StampOptions,
-    StampPosition, VelloCpuBackend,
+    Color, Document, IdSource, PageObject, PixelFormat, SaveOptions, StampOptions, StampPosition,
+    VelloCpuBackend,
 };
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
@@ -56,7 +56,7 @@ fn word_box(page: &pdfrum::Page<'_>, text: &str) -> pdfrum::Rect {
 fn pixels(doc: &Document, index: u32) -> Vec<u8> {
     doc.page(index)
         .unwrap()
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .unwrap()
         .data()
         .to_vec()

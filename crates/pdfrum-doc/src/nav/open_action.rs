@@ -171,7 +171,7 @@ fn apply_hide<R: Resolve>(action: &Action, form: &Form, hidden: &mut Hidden, r: 
         let Object::Str(text) = named else {
             continue;
         };
-        let name = decode_text(&text.bytes).into_owned();
+        let name = decode_text(text.as_bytes()).into_owned();
         let Some(field) = form.field(&name) else {
             continue;
         };

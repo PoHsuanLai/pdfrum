@@ -305,9 +305,9 @@ fn render_one(
     session: &mut RenderSession,
 ) -> pdfrum::Result<pdfrum::Pixmap> {
     match args.backend {
-        Backend::Agg => page.render_on(&AggBackend::new(), options, session),
-        Backend::TinySkia => page.render_on(&TinySkiaBackend::new(), options, session),
-        Backend::VelloCpu => page.render_on(&VelloCpuBackend::new(), options, session),
+        Backend::Agg => page.render_on(AggBackend, options, session),
+        Backend::TinySkia => page.render_on(TinySkiaBackend, options, session),
+        Backend::VelloCpu => page.render_on(VelloCpuBackend, options, session),
     }
 }
 
@@ -319,9 +319,9 @@ fn draw_one(
     session: &mut RenderSession,
 ) -> pdfrum::Result<pdfrum::Pixmap> {
     match args.backend {
-        Backend::Agg => page.render_on(&AggBackend::new(), session),
-        Backend::TinySkia => page.render_on(&TinySkiaBackend::new(), session),
-        Backend::VelloCpu => page.render_on(&VelloCpuBackend::new(), session),
+        Backend::Agg => page.render_on(AggBackend, session),
+        Backend::TinySkia => page.render_on(TinySkiaBackend, session),
+        Backend::VelloCpu => page.render_on(VelloCpuBackend, session),
     }
 }
 

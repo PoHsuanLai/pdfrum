@@ -408,7 +408,13 @@ pub fn nup(req: &Nup<'_>, term: Term) -> Result<ExitCode> {
     let selected = pages::select(spec, doc.page_count())?;
     let dest = Document::blank(sheet.0, sheet.1)?;
     let mut edit = dest.edit();
-    edit.n_up(&doc, selected.iter().copied(), grid.0, grid.1, sheet)?;
+    edit.n_up(
+        &doc,
+        selected.iter().copied(),
+        grid.0,
+        grid.1,
+        pdfrum::Size::new(sheet.0, sheet.1),
+    )?;
     edit.delete_pages([0u32])?;
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
@@ -474,7 +480,13 @@ pub fn booklet(
     let sheet = (2.0 * w, h);
     let dest = Document::blank(sheet.0, sheet.1)?;
     let mut edit = dest.edit();
-    edit.n_up(&padded, booklet_order(padded_count), 2, 1, sheet)?;
+    edit.n_up(
+        &padded,
+        booklet_order(padded_count),
+        2,
+        1,
+        pdfrum::Size::new(sheet.0, sheet.1),
+    )?;
     edit.delete_pages([0u32])?;
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;

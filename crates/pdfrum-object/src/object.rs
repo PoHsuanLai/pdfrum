@@ -257,7 +257,7 @@ impl Object {
             Self::Bool(false) => b"false".to_vec(),
             Self::Int(v) => fmt_int(*v).into_bytes(),
             Self::Real(v) => fmt_number(*v).into_bytes(),
-            Self::Str(s) => s.bytes.to_vec(),
+            Self::Str(s) => s.as_bytes().to_vec(),
             Self::Name(n) => n.as_bytes().to_vec(),
             Self::Null | Self::Array(_) | Self::Dict(_) | Self::Stream(_) | Self::Ref(_) => {
                 Vec::new()
@@ -428,6 +428,18 @@ impl From<f32> for Object {
 impl From<Name> for Object {
     fn from(v: Name) -> Self {
         Self::Name(v)
+    }
+}
+
+impl From<&Name> for Object {
+    fn from(v: &Name) -> Self {
+        Self::Name(v.clone())
+    }
+}
+
+impl From<u32> for Object {
+    fn from(v: u32) -> Self {
+        Self::Int(i64::from(v))
     }
 }
 

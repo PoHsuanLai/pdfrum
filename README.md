@@ -22,7 +22,7 @@ use pdfrum::{Document, RenderOptions, VelloCpuBackend};
 
 let doc = Document::open("report.pdf")?;
 for page in doc.pages() {
-    let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::scaled(2.0))?;
+    let pixmap = page.render_with(VelloCpuBackend, &RenderOptions::scaled(2.0))?;
     let text = page.text().to_string();
     println!("page {}: {}×{}, {} chars",
         page.index(), pixmap.width(), pixmap.height(), text.len());
@@ -86,7 +86,7 @@ let backend = VelloCpuBackend::new();
 let pixmaps: Vec<_> = pages
     .par_iter()
     .map_init(RenderSession::new, |session, page| {
-        page.render_on(&backend, &RenderOptions::default(), session)
+        page.render_on(backend, &RenderOptions::default(), session)
     })
     .collect::<Result<_, _>>()?;
 # Ok::<(), pdfrum::Error>(())

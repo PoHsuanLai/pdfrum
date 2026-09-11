@@ -67,6 +67,20 @@ impl Argb {
         b: 0,
     };
 
+    /// Opaque white.
+    pub const WHITE: Self = Self {
+        a: 255,
+        r: 255,
+        g: 255,
+        b: 255,
+    };
+
+    /// A colour from straight RGBA bytes.
+    #[must_use]
+    pub const fn new(a: u8, r: u8, g: u8, b: u8) -> Self {
+        Self { a, r, g, b }
+    }
+
     /// An opaque colour from RGB bytes.
     #[must_use]
     pub const fn opaque(r: u8, g: u8, b: u8) -> Self {

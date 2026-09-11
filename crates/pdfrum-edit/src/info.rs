@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(info.text(names::TITLE, &edit).as_deref(), Some("New"));
         assert!(!info.contains_key(names::AUTHOR));
         assert_eq!(
-            info.string(names::SUBJECT).map(|s| s.bytes.to_vec()),
+            info.string(names::SUBJECT).map(|s| s.as_bytes().to_vec()),
             Some(b"\xFE\xFF\x7F\x51\x98\x75".to_vec()),
             "outside PDFDocEncoding goes out as UTF-16BE with a mark"
         );

@@ -63,7 +63,7 @@ pub fn json(object: &Object) -> serde_json::Value {
             if is_text(&text) {
                 json!({ "string": text })
             } else {
-                json!({ "hex": crate::out::hex(&s.bytes) })
+                json!({ "hex": crate::out::hex(s.as_bytes()) })
             }
         }
         Object::Name(n) => json!({ "name": n.as_text() }),
@@ -266,7 +266,7 @@ fn paint_tokens(out: &mut String, text: &str, term: Term) {
 /// and the merged trailer of a revision chain is one such dictionary — so
 /// a printer and a digest ask for the effective view.
 pub fn effective(dict: &Dict) -> Dict {
-    let mut out = Dict::from_pairs([]);
+    let mut out = Dict::new();
     for (key, value) in dict.iter() {
         out.insert(key.clone(), value.clone());
     }
@@ -303,16 +303,16 @@ fn name(out: &mut String, n: &Name) {
 }
 
 fn string(out: &mut String, s: &PdfString) {
-    if s.hex {
+    if s.is_hex() {
         out.push('<');
-        for b in &s.bytes {
+        for b in s.as_bytes() {
             let _ = write!(out, "{b:02X}");
         }
         out.push('>');
         return;
     }
     out.push('(');
-    for &b in &s.bytes {
+    for &b in s.as_bytes() {
         match b {
             b'(' | b')' | b'\\' => {
                 out.push('\\');

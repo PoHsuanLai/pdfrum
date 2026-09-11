@@ -237,7 +237,7 @@ pub trait RasterBackend {
     /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
     /// use pdfrum_render::RasterBackend;
     ///
-    /// let backend = VelloCpuBackend::new();
+    /// let backend = VelloCpuBackend;
     /// let device = backend.new_target(4, 4, peniko::Color::WHITE);
     /// let crop = backend.snapshot_rect(&device, 1, 1, 2, 2);
     /// assert_eq!((crop.width(), crop.height()), (2, 2));
@@ -266,10 +266,52 @@ pub trait RasterBackend {
     /// use pdfrum_raster_vello_cpu::VelloCpuBackend;
     /// use pdfrum_render::RasterBackend;
     ///
-    /// assert!(!VelloCpuBackend::new().composite_isolated_groups_as_layers());
+    /// assert!(!VelloCpuBackend.composite_isolated_groups_as_layers());
+    /// assert!(!(&VelloCpuBackend).composite_isolated_groups_as_layers());
     /// ```
     fn composite_isolated_groups_as_layers(&self) -> bool {
         false
+    }
+}
+
+/// A reference to a backend is a backend.
+///
+/// Stateless CPU backends are unit structs, so a caller writes
+/// `page.render(VelloCpuBackend)`. A backend that holds a device is passed
+/// by reference, `page.render(&gpu)`, through this impl — the rasterizer is
+/// still named, and nothing is moved.
+impl<T: RasterBackend + ?Sized> RasterBackend for &T {
+    type Device = T::Device;
+
+    fn new_target(&self, w: u32, h: u32, clear: peniko::Color) -> Self::Device {
+        (**self).new_target(w, h, clear)
+    }
+
+    fn new_target_with_backdrop(&self, base: &Pixmap) -> Self::Device {
+        (**self).new_target_with_backdrop(base)
+    }
+
+    fn snapshot(&self, d: &Self::Device) -> Pixmap {
+        (**self).snapshot(d)
+    }
+
+    fn finish(&self, d: Self::Device) -> Pixmap {
+        (**self).finish(d)
+    }
+
+    fn snapshot_rect(
+        &self,
+        d: &Self::Device,
+        origin_x: u32,
+        origin_y: u32,
+        width: u32,
+        height: u32,
+    ) -> Pixmap {
+        (**self).snapshot_rect(d, origin_x, origin_y, width, height)
+    }
+
+    fn composite_isolated_groups_as_layers(&self) -> bool {
+        (**self).composite_isolated_groups_as_layers()
     }
 }
 

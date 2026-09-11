@@ -397,7 +397,7 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
     let pixmap = doc
         .page(0)
         .expect("page 0")
-        .render(&VelloCpuBackend::new(), &options)
+        .render_with(VelloCpuBackend, &options)
         .expect("forced-colour render");
     assert!(pixmap.width() > 0 && pixmap.height() > 0);
 }

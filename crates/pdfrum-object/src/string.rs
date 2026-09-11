@@ -71,20 +71,20 @@ pub enum StringSyntax {
 ///
 /// let s = PdfString::literal(b"A simple test");
 /// assert_eq!(s.as_text(), "A simple test");
-/// assert!(!s.hex);
+/// assert_eq!(s.syntax(), pdfrum_object::StringSyntax::Literal);
 ///
 /// // A UTF-16BE byte-order mark selects the Unicode reading.
 /// let unicode = PdfString::hex(b"\xFE\xFF\x03\x30\x03\x31");
 /// assert_eq!(unicode.as_text(), "\u{0330}\u{0331}");
-/// assert!(unicode.hex);
+/// assert_eq!(unicode.syntax(), pdfrum_object::StringSyntax::Hex);
 /// ```
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PdfString {
     /// The string's bytes, escapes already resolved.
-    pub bytes: Box<[u8]>,
+    bytes: Box<[u8]>,
     /// Whether the source syntax was `<hex>` rather than `(literal)`.
     /// Round-tripped by the writer; never affects meaning.
-    pub hex: bool,
+    hex: bool,
 }
 
 impl PdfString {
@@ -115,6 +115,28 @@ impl PdfString {
         }
     }
 
+    /// The string's bytes, escapes already resolved.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Whether the source syntax was `<hex>` rather than `(literal)`.
+    #[must_use]
+    pub fn syntax(&self) -> StringSyntax {
+        if self.hex {
+            StringSyntax::Hex
+        } else {
+            StringSyntax::Literal
+        }
+    }
+
+    /// `true` when [`PdfString::syntax`] is [`StringSyntax::Hex`].
+    #[must_use]
+    pub fn is_hex(&self) -> bool {
+        self.hex
+    }
+
     /// Interpret the bytes as text — see [`decode_text`].
     #[must_use]
     pub fn as_text(&self) -> Cow<'_, str> {
@@ -134,7 +156,7 @@ impl PdfString {
 
 impl AsRef<[u8]> for PdfString {
     fn as_ref(&self) -> &[u8] {
-        &self.bytes
+        self.as_bytes()
     }
 }
 
@@ -477,11 +499,11 @@ mod tests {
     #[test]
     fn string_syntax_round_trips_through_the_encoder() {
         let literal = PdfString::new(b"a(b)\\c\n", StringSyntax::Literal);
-        assert!(!literal.hex);
+        assert_eq!(literal.syntax(), StringSyntax::Literal);
         assert_eq!(literal.encode(), b"(a\\(b\\)\\\\c\\n)");
 
         let hex = PdfString::new(b"\x12\xAC", StringSyntax::Hex);
-        assert!(hex.hex);
+        assert_eq!(hex.syntax(), StringSyntax::Hex);
         assert_eq!(hex.encode(), b"<12AC>");
     }
 

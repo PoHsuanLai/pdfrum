@@ -175,7 +175,7 @@ impl StructElement {
         self.dict
             .raw(names::ID)
             .and_then(Object::as_string)
-            .map(|s| s.bytes.to_vec())
+            .map(|s| s.as_bytes().to_vec())
     }
 
     /// `/Lang`, read without resolving and filtered to a string.
@@ -187,7 +187,7 @@ impl StructElement {
         self.dict
             .raw(names::LANG)
             .and_then(Object::as_string)
-            .map(|s| s.bytes.to_vec())
+            .map(|s| s.as_bytes().to_vec())
     }
 
     /// The `/MCID` a kid names, or `None` for a kid that is not content.

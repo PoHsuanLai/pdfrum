@@ -469,7 +469,9 @@ fn walk_pages(
                 // Hover is read after the replay, like focus: the script's
                 // last `mousemove` is what leaves a note card open, and a
                 // highlight's card is reachable no other way.
-                let hover = session.hover_for_page(index);
+                let hover = session
+                    .hover_for_page(index)
+                    .map(|id| usize::try_from(id.index).unwrap_or(usize::MAX));
                 // And so is the open dropdown, for the same reason: the
                 // script's last click is what leaves a combo box's list
                 // showing, and the library publishes it rather than drawing

@@ -105,7 +105,7 @@ impl FromOperands for TextArray {
                 let items = a
                     .iter()
                     .filter_map(|o| match o {
-                        Object::Str(s) => Some(TextItem::Show(s.bytes.clone())),
+                        Object::Str(s) => Some(TextItem::Show(s.as_bytes().into())),
                         Object::Int(_) | Object::Real(_) => {
                             o.number().map(TextItem::Adjust)
                         }

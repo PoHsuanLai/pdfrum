@@ -53,6 +53,30 @@ pub struct ColorScheme {
     pub text_stroke: Argb,
 }
 
+impl ColorScheme {
+    /// A scheme that names each replacement colour.
+    #[must_use]
+    pub const fn new(
+        path_fill: Argb,
+        path_stroke: Argb,
+        text_fill: Argb,
+        text_stroke: Argb,
+    ) -> Self {
+        Self {
+            path_fill,
+            path_stroke,
+            text_fill,
+            text_stroke,
+        }
+    }
+
+    /// The same colour for every path and text fill and stroke.
+    #[must_use]
+    pub const fn all(color: Argb) -> Self {
+        Self::new(color, color, color, color)
+    }
+}
+
 /// How glyphs are antialiased.
 ///
 /// [`TextAa::Grayscale`] is the oracle's own choice on an ordinary page: the

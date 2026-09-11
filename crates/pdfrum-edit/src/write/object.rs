@@ -82,11 +82,11 @@ pub(crate) fn write_name(out: &mut Vec<u8>, name: &Name) {
 
 fn write_string(out: &mut Vec<u8>, s: &PdfString, enc: Option<&Encryptor<'_>>, exempt: Exempt) {
     let bytes = match (enc, exempt) {
-        (Some(e), Exempt::No) => e.encrypt(CryptClass::String, &s.bytes),
-        _ => s.bytes.to_vec(),
+        (Some(e), Exempt::No) => e.encrypt(CryptClass::String, s.as_bytes()),
+        _ => s.as_bytes().to_vec(),
     };
     // The spelling round-trips: a file that wrote `<48656C6C6F>` gets it back.
-    if s.hex {
+    if s.is_hex() {
         out.extend_from_slice(&encode_string_hex(&bytes));
     } else {
         out.extend_from_slice(&encode_string_literal(&bytes));

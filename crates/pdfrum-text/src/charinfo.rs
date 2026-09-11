@@ -77,8 +77,40 @@ pub struct CharBox {
 /// them, so the index is unique across the whole page.
 // An index rather than a pointer, the cross-reference from
 // a character back to the object that drew it is data, not a back-edge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ObjectIndex(pub u32);
+
+impl ObjectIndex {
+    /// The object at this position in the walk.
+    #[must_use]
+    pub const fn new(index: u32) -> Self {
+        Self(index)
+    }
+
+    /// The position as a plain number.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for ObjectIndex {
+    fn from(index: u32) -> Self {
+        Self(index)
+    }
+}
+
+impl From<ObjectIndex> for u32 {
+    fn from(index: ObjectIndex) -> Self {
+        index.0
+    }
+}
+
+impl std::fmt::Display for ObjectIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl CharBox {
     /// Whether this character is one

@@ -30,9 +30,7 @@ fn flattened_matches(name: &str, expected: &str) -> Result<(), Box<dyn std::erro
     let mut edit = doc.edit();
     assert_eq!(edit.flatten(0, FlattenMode::Print)?, Flattened::Done);
     let (_, flat) = saved(&edit)?;
-    let plain = flat
-        .page(0)?
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())?;
+    let plain = flat.page(0)?.render(VelloCpuBackend)?;
     let (width, height, rgba) = expected_rgba(expected)?;
     assert_eq!(
         (plain.width(), plain.height()),
@@ -170,7 +168,7 @@ fn a_flattened_page_is_not_blank() {
     let annotated = doc
         .page(0)
         .unwrap()
-        .render(&VelloCpuBackend::new(), &with_annotations())
+        .render_with(VelloCpuBackend, &with_annotations())
         .unwrap();
     let mut edit = doc.edit();
     assert_eq!(
@@ -178,11 +176,7 @@ fn a_flattened_page_is_not_blank() {
         Flattened::Done
     );
     let (_, flat) = saved(&edit).unwrap();
-    let plain = flat
-        .page(0)
-        .unwrap()
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .unwrap();
+    let plain = flat.page(0).unwrap().render(VelloCpuBackend).unwrap();
     let before = dark_pixels(&annotated);
     let after = dark_pixels(&plain);
     assert!(!after.is_empty(), "the flattened page is blank");

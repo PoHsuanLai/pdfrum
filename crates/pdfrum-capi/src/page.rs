@@ -178,7 +178,7 @@ pub unsafe extern "C" fn pdfrum_page_render(
             }
             let pixmap = page
                 .0
-                .render(&backend(), &pdfrum::RenderOptions::scaled(scale))?;
+                .render_with(backend(), &pdfrum::RenderOptions::scaled(scale))?;
             // The facade's pixmap is premultiplied; the header promises
             // straight alpha, which is what a caller compositing with its own
             // rules expects and what PDFium's `FPDFBitmap_BGRA` is not.

@@ -51,7 +51,7 @@ impl Color {
     /// let grey = Array::of([0.5].map(Object::from));
     /// assert_eq!(Color::from_array(&grey), Color::Gray(0.5));
     /// // An empty array says "no colour", not "damaged".
-    /// assert_eq!(Color::from_array(&Array::of([])), Color::Transparent);
+    /// assert_eq!(Color::from_array(&Array::new()), Color::Transparent);
     /// ```
     #[must_use]
     pub fn from_array(array: &Array) -> Color {

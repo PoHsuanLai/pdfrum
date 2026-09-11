@@ -33,13 +33,13 @@ use crate::{
 ///
 /// ```
 /// use std::sync::Arc;
-/// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
+/// use pdfrum::{Document, VelloCpuBackend};
 ///
 /// let doc = Arc::new(Document::open("tests/fixtures/hello_world.pdf")?);
 /// let page = doc.page_owned(0)?;
 /// drop(doc); // the page keeps the document alive
 ///
-/// let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::default())?;
+/// let pixmap = page.render(VelloCpuBackend)?;
 /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
 /// assert!(page.text().to_string().contains("Hello, world!"));
 /// # Ok::<(), pdfrum::Error>(())
@@ -262,20 +262,32 @@ impl OwnedPage {
     ///
     /// ```
     /// use std::sync::Arc;
-    /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
+    /// use pdfrum::{Document, VelloCpuBackend};
     ///
     /// let doc = Arc::new(Document::open("tests/fixtures/hello_world.pdf")?);
-    /// let backend = VelloCpuBackend::new();
-    /// let owned = doc.page_owned(0)?.render(&backend, &RenderOptions::default())?;
-    /// let borrowed = doc.page(0)?.render(&backend, &RenderOptions::default())?;
+    /// let owned = doc.page_owned(0)?.render(VelloCpuBackend)?;
+    /// let borrowed = doc.page(0)?.render(VelloCpuBackend)?;
     /// assert_eq!(owned.data(), borrowed.data());
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn render<B: RasterBackend>(&self, backend: &B, options: &RenderOptions) -> Result<Pixmap> {
-        self.page().render(backend, options)
+    pub fn render<B: RasterBackend>(&self, backend: B) -> Result<Pixmap> {
+        self.page().render(backend)
     }
 
-    /// [`OwnedPage::render`] reusing a caller-owned [`RenderSession`] — as
+    /// [`OwnedPage::render`] with explicit options — as [`Page::render_with`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_with<B: RasterBackend>(
+        &self,
+        backend: B,
+        options: &RenderOptions,
+    ) -> Result<Pixmap> {
+        self.page().render_with(backend, options)
+    }
+
+    /// [`OwnedPage::render_with`] reusing a caller-owned [`RenderSession`] — as
     /// [`Page::render_on`].
     ///
     /// # Errors
@@ -287,17 +299,16 @@ impl OwnedPage {
     /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
     ///
     /// let doc = Arc::new(Document::open("tests/fixtures/hello_world_2_pages.pdf")?);
-    /// let backend = VelloCpuBackend::new();
     /// let mut session = RenderSession::new();
     /// for page in doc.pages_owned() {
-    ///     let pixmap = page?.render_on(&backend, &RenderOptions::default(), &mut session)?;
+    ///     let pixmap = page?.render_on(VelloCpuBackend, &RenderOptions::default(), &mut session)?;
     ///     assert!(pixmap.width() > 0);
     /// }
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     pub fn render_on<B: RasterBackend>(
         &self,
-        backend: &B,
+        backend: B,
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {

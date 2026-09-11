@@ -121,7 +121,7 @@ impl Cell {
 /// rasterizer.close_polygon();
 ///
 /// let mut spans = Vec::new();
-/// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+/// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, alpha| {
 ///     spans.push((x, y, len, alpha));
 /// });
 ///
@@ -204,7 +204,7 @@ impl Rasterizer {
     /// rasterizer.close_polygon();
     ///
     /// let mut spans = Vec::new();
-    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    /// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, alpha| {
     ///     spans.push((x, y, len, alpha));
     /// });
     ///
@@ -250,7 +250,7 @@ impl Rasterizer {
     /// rasterizer.close_polygon();
     ///
     /// let mut rows = Vec::new();
-    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |_, _, y, _| rows.push(y));
+    /// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |_, _, y, _| rows.push(y));
     /// // Byte-for-byte the spans an unrestricted rasterizer emits for row 0.
     /// assert_eq!(rows, [0]);
     /// ```
@@ -304,7 +304,7 @@ impl Rasterizer {
     /// rasterizer.close_polygon();
     ///
     /// let mut spans = Vec::new();
-    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    /// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, alpha| {
     ///     spans.push((x, y, len, alpha));
     /// });
     ///
@@ -365,7 +365,7 @@ impl Rasterizer {
     ///         rasterizer.close_polygon();
     ///     }
     ///     let mut spans = Vec::new();
-    ///     rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, a| {
+    ///     rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, a| {
     ///         spans.push((x, y, len, a));
     ///     });
     ///     spans
@@ -395,7 +395,7 @@ impl Rasterizer {
     /// rasterizer.add_path(&path, 0.25);
     ///
     /// let mut spans = Vec::new();
-    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, a| {
+    /// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, a| {
     ///     spans.push((x, y, len, a));
     /// });
     /// assert_eq!(spans, [(0, 0, 4, 255), (0, 1, 4, 255)]);
@@ -670,7 +670,7 @@ impl Rasterizer {
     /// rasterizer.close_polygon();
     ///
     /// let mut spans = Vec::new();
-    /// rasterizer.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    /// rasterizer.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, alpha| {
     ///     spans.push((x, y, len, alpha));
     /// });
     ///
@@ -710,7 +710,7 @@ impl Rasterizer {
 ///     rasterizer.line_to(0.0, 1.0);
 ///     rasterizer.close_polygon();
 ///     let mut out = 0u8;
-///     rasterizer.sweep(FillRule::NonZero, coverage, |_, _, _, a| out = a);
+///     rasterizer.sweep(FillRule::Winding, coverage, |_, _, _, a| out = a);
 ///     out
 /// };
 /// assert!(alpha(Coverage::Exact) < 255);
@@ -727,12 +727,13 @@ pub enum Coverage {
     Full,
 }
 
-/// Which winding rule decides a path's interior.
+/// The fill rule [`Rasterizer::sweep`] takes — the same
+/// [`FillRule`] the backend trait uses.
 ///
 /// ```
 /// use pdfrum_render::scanline::{Coverage, FillRule, Rasterizer};
 ///
-/// // Two nested squares wound the same way: non-zero fills the hole,
+/// // Two nested squares wound the same way: winding fills the hole,
 /// // even-odd leaves it clear.
 /// let covered = |rule| {
 ///     let mut rasterizer = Rasterizer::new();
@@ -751,17 +752,10 @@ pub enum Coverage {
 ///     });
 ///     len
 /// };
-/// assert_eq!(covered(FillRule::NonZero), 6);
+/// assert_eq!(covered(FillRule::Winding), 6);
 /// assert_eq!(covered(FillRule::EvenOdd), 4);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FillRule {
-    /// Non-zero winding: covered where the signed crossing count is not zero.
-    #[default]
-    NonZero,
-    /// Even-odd: covered where the crossing count is odd.
-    EvenOdd,
-}
+pub use crate::FillRule;
 
 /// Sweep one scanline's cells into spans.
 ///
@@ -965,7 +959,7 @@ mod tests {
         }
         raster.add_path(path, 0.1);
         let mut cells = 0usize;
-        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        raster.sweep(FillRule::Winding, Coverage::Exact, |_, _, _, _| {});
         for (_, row) in raster.store.rows() {
             cells += row.len();
         }
@@ -988,7 +982,7 @@ mod tests {
             &rect(1.0, 1.0, 3.0, 3.0),
             4,
             4,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Exact,
         );
         assert_eq!(cov.first().copied(), Some(0), "outside");
@@ -1005,7 +999,7 @@ mod tests {
             &rect(0.0, 0.0, 0.5, 1.0),
             1,
             1,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Exact,
         );
         assert_eq!(cov.first().copied(), Some(128));
@@ -1021,7 +1015,7 @@ mod tests {
                 &rect(0.0, 0.0, frac, 1.0),
                 1,
                 1,
-                FillRule::NonZero,
+                FillRule::Winding,
                 Coverage::Exact,
             );
             assert_eq!(
@@ -1037,7 +1031,7 @@ mod tests {
         // `floor(1.0 * 256)` is 256, which does not fit a byte; the clamp is
         // the only thing keeping it out, and it is why full cover is 255.
         assert_eq!(
-            coverage_to_alpha(1 << 17, FillRule::NonZero, Coverage::Exact),
+            coverage_to_alpha(1 << 17, FillRule::Winding, Coverage::Exact),
             255
         );
     }
@@ -1049,7 +1043,7 @@ mod tests {
         let mut p = rect(0.0, 0.0, 6.0, 6.0);
         p.extend(rect(2.0, 2.0, 4.0, 4.0).iter());
         let eo = coverage(&p, 6, 6, FillRule::EvenOdd, Coverage::Exact);
-        let nz = coverage(&p, 6, 6, FillRule::NonZero, Coverage::Exact);
+        let nz = coverage(&p, 6, 6, FillRule::Winding, Coverage::Exact);
         // (3,3) is inside both squares.
         assert_eq!(eo.get(3 * 6 + 3).copied(), Some(0), "even-odd punches out");
         assert_eq!(nz.get(3 * 6 + 3).copied(), Some(255), "non-zero fills");
@@ -1067,14 +1061,14 @@ mod tests {
             &rect(0.0, 0.0, 0.6, 1.0),
             1,
             1,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Thresholded,
         );
         let under = coverage(
             &rect(0.0, 0.0, 0.4, 1.0),
             1,
             1,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Thresholded,
         );
         assert_eq!(over.first().copied(), Some(255));
@@ -1094,7 +1088,7 @@ mod tests {
                 &rect(0.0, 0.0, frac, 1.0),
                 1,
                 1,
-                FillRule::NonZero,
+                FillRule::Winding,
                 Coverage::Full,
             );
             assert_eq!(
@@ -1109,7 +1103,7 @@ mod tests {
             &rect(2.0, 2.0, 3.0, 3.0),
             1,
             1,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Full,
         );
         assert_eq!(miss.first().copied(), Some(0));
@@ -1126,7 +1120,7 @@ mod tests {
         p.line_to((32.0, 0.0));
         p.line_to((0.0, 32.0));
         p.close_path();
-        let cov = coverage(&p, 32, 32, FillRule::NonZero, Coverage::Exact);
+        let cov = coverage(&p, 32, 32, FillRule::Winding, Coverage::Exact);
         let mut levels: Vec<u8> = cov
             .iter()
             .copied()
@@ -1149,7 +1143,7 @@ mod tests {
         p.line_to((64.0, 0.0));
         p.line_to((64.0, 5.0));
         p.close_path();
-        let cov = coverage(&p, 64, 8, FillRule::NonZero, Coverage::Exact);
+        let cov = coverage(&p, 64, 8, FillRule::Winding, Coverage::Exact);
         let mut levels: Vec<u8> = cov
             .iter()
             .copied()
@@ -1172,7 +1166,7 @@ mod tests {
             &rect(0.0, 0.0, 4.0, 4.0),
             4,
             4,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Exact,
         );
         let mut ccw = kurbo::BezPath::new();
@@ -1181,7 +1175,7 @@ mod tests {
         ccw.line_to((4.0, 4.0));
         ccw.line_to((4.0, 0.0));
         ccw.close_path();
-        assert_eq!(cw, coverage(&ccw, 4, 4, FillRule::NonZero, Coverage::Exact));
+        assert_eq!(cw, coverage(&ccw, 4, 4, FillRule::Winding, Coverage::Exact));
     }
 
     #[test]
@@ -1197,11 +1191,11 @@ mod tests {
             &rect(0.0, 0.0, 4.0, 4.0),
             4,
             4,
-            FillRule::NonZero,
+            FillRule::Winding,
             Coverage::Exact,
         );
         assert_eq!(
-            coverage(&open, 4, 4, FillRule::NonZero, Coverage::Exact),
+            coverage(&open, 4, 4, FillRule::Winding, Coverage::Exact),
             closed
         );
     }
@@ -1227,7 +1221,7 @@ mod tests {
         let mut r = Rasterizer::new();
         r.add_path(&kurbo::BezPath::new(), 0.1);
         let mut spans = 0;
-        r.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| spans += 1);
+        r.sweep(FillRule::Winding, Coverage::Exact, |_, _, _, _| spans += 1);
         assert_eq!(spans, 0);
     }
 
@@ -1248,7 +1242,7 @@ mod tests {
         p.line_to((13.0, 14.0));
         p.line_to((1.0, 12.0));
         p.close_path();
-        let cov = coverage(&p, 16, 16, FillRule::NonZero, Coverage::Exact);
+        let cov = coverage(&p, 16, 16, FillRule::Winding, Coverage::Exact);
         let painted: f64 = cov.iter().map(|&a| f64::from(a) / 256.0).sum();
         // Shoelace over the four vertices.
         let pts = [(2.0, 1.0), (14.0, 3.0), (13.0, 14.0), (1.0, 12.0)];
@@ -1301,7 +1295,7 @@ mod tests {
         // rules and all three coverage modes, because the band is upstream of
         // every one of them.
         for (name, path) in off_target_paths() {
-            for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+            for rule in [FillRule::Winding, FillRule::EvenOdd] {
                 for mode in [Coverage::Exact, Coverage::Thresholded, Coverage::Full] {
                     let spec = coverage(&path, 8, 8, rule, mode);
                     let banded = banded_coverage(&path, 8, 8, rule, mode);
@@ -1317,7 +1311,7 @@ mod tests {
         // still agree, or the band would be hiding a difference behind the
         // rows it drops.
         let path = rect(1.25, 1.75, 6.5, 5.5);
-        for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+        for rule in [FillRule::Winding, FillRule::EvenOdd] {
             for mode in [Coverage::Exact, Coverage::Thresholded, Coverage::Full] {
                 assert_eq!(
                     coverage(&path, 8, 8, rule, mode),
@@ -1335,10 +1329,10 @@ mod tests {
         // painted across rows 6 and 7 of an eight-row plane, so row 7 is both
         // the last kept row and the one an off-by-one drops.
         let path = rect(1.0, 6.0, 7.0, 8.0);
-        let banded = banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact);
+        let banded = banded_coverage(&path, 8, 8, FillRule::Winding, Coverage::Exact);
         assert_eq!(banded.get(8 * 7 + 3).copied(), Some(255), "the last row");
         assert_eq!(
-            coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            coverage(&path, 8, 8, FillRule::Winding, Coverage::Exact),
             banded
         );
     }
@@ -1347,11 +1341,11 @@ mod tests {
     fn the_band_keeps_the_targets_first_row() {
         // The other end, for the same reason.
         let path = rect(1.0, -4.0, 7.0, 1.0);
-        let banded = banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact);
+        let banded = banded_coverage(&path, 8, 8, FillRule::Winding, Coverage::Exact);
         assert_eq!(banded.first().copied(), Some(0), "column 0 is outside");
         assert_eq!(banded.get(3).copied(), Some(255), "the first row");
         assert_eq!(
-            coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            coverage(&path, 8, 8, FillRule::Winding, Coverage::Exact),
             banded
         );
     }
@@ -1392,7 +1386,7 @@ mod tests {
         // by returning on every row.
         let path = rect(2.0, -900.0, 6.0, -100.0);
         assert_eq!(
-            banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            banded_coverage(&path, 8, 8, FillRule::Winding, Coverage::Exact),
             vec![0u8; 64]
         );
         assert_eq!(banked(&path, Some(0..8)), 0);
@@ -1408,7 +1402,7 @@ mod tests {
         for (name, path) in off_target_paths() {
             let mut raster = Rasterizer::new();
             raster.add_path(&path, 0.1);
-            raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+            raster.sweep(FillRule::Winding, Coverage::Exact, |_, _, _, _| {});
             for (y, row) in raster.store.rows() {
                 let cover: i32 = row.iter().map(|c| c.cover).sum();
                 assert_eq!(cover, 0, "{name} leaves cover on row {y}");
@@ -1424,10 +1418,10 @@ mod tests {
         let mut raster = Rasterizer::new();
         raster.keep_rows(0..8);
         raster.add_path(&rect(2.0, -900.0, 6.0, 900.0), 0.1);
-        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        raster.sweep(FillRule::Winding, Coverage::Exact, |_, _, _, _| {});
         raster.reset();
         raster.add_path(&rect(2.0, -900.0, 6.0, 900.0), 0.1);
-        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        raster.sweep(FillRule::Winding, Coverage::Exact, |_, _, _, _| {});
         let cells: usize = raster.store.rows().map(|(_, row)| row.len()).sum();
         assert!(cells <= 32, "the band survives a reset, got {cells}");
     }

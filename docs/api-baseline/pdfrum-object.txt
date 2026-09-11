@@ -234,6 +234,8 @@ pub fn pdfrum_object::Object::number(&self) -> core::option::Option<f32>
 pub fn pdfrum_object::Object::resolve<'a>(&'a self, &impl pdfrum_object::Resolve) -> core::result::Result<pdfrum_object::Resolved<'a>, pdfrum_object::Error>
 pub fn pdfrum_object::Object::to_byte_string(&self) -> alloc::vec::Vec<u8>
 pub fn pdfrum_object::Object::to_text(&self) -> alloc::string::String
+impl core::convert::From<&pdfrum_object::Name> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(&pdfrum_object::Name) -> Self
 impl core::convert::From<bool> for pdfrum_object::Object
 pub fn pdfrum_object::Object::from(bool) -> Self
 impl core::convert::From<f32> for pdfrum_object::Object
@@ -254,6 +256,8 @@ impl core::convert::From<pdfrum_object::PdfString> for pdfrum_object::Object
 pub fn pdfrum_object::Object::from(pdfrum_object::PdfString) -> Self
 impl core::convert::From<pdfrum_object::Stream> for pdfrum_object::Object
 pub fn pdfrum_object::Object::from(pdfrum_object::Stream) -> Self
+impl core::convert::From<u32> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(u32) -> Self
 impl core::iter::traits::collect::FromIterator<pdfrum_object::Object> for pdfrum_object::Array
 pub fn pdfrum_object::Array::from_iter<I: core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>>(I) -> Self
 pub enum pdfrum_object::Resolved<'a>
@@ -291,8 +295,8 @@ pub fn pdfrum_object::Array::new() -> Self
 pub fn pdfrum_object::Array::number_at(&self, usize) -> core::option::Option<f32>
 pub fn pdfrum_object::Array::number_at_or_zero(&self, usize) -> f32
 pub fn pdfrum_object::Array::number_obj_at(&self, usize) -> core::option::Option<&pdfrum_object::Object>
-pub fn pdfrum_object::Array::of(impl core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>) -> Self
-pub fn pdfrum_object::Array::push(&mut self, pdfrum_object::Object)
+pub fn pdfrum_object::Array::of(impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_object::Object>>) -> Self
+pub fn pdfrum_object::Array::push(&mut self, impl core::convert::Into<pdfrum_object::Object>)
 pub fn pdfrum_object::Array::raw_at(&self, usize) -> core::option::Option<&pdfrum_object::Object>
 pub fn pdfrum_object::Array::reference_at(&self, usize) -> core::option::Option<pdfrum_object::ObjRef>
 pub fn pdfrum_object::Array::remove(&mut self, usize) -> core::option::Option<pdfrum_object::Object>
@@ -348,9 +352,9 @@ pub fn pdfrum_object::Dict::byte_string(&self, &pdfrum_object::Name, &impl pdfru
 pub fn pdfrum_object::Dict::contains_key(&self, &pdfrum_object::Name) -> bool
 pub fn pdfrum_object::Dict::dict(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Dict>
 pub fn pdfrum_object::Dict::direct_int(&self, &pdfrum_object::Name) -> core::option::Option<i64>
-pub fn pdfrum_object::Dict::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (pdfrum_object::Name, pdfrum_object::Object)>) -> Self
+pub fn pdfrum_object::Dict::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (impl core::convert::Into<pdfrum_object::Name>, impl core::convert::Into<pdfrum_object::Object>)>) -> Self
 pub fn pdfrum_object::Dict::get<'a>(&'a self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Resolved<'a>>
-pub fn pdfrum_object::Dict::insert(&mut self, pdfrum_object::Name, pdfrum_object::Object)
+pub fn pdfrum_object::Dict::insert(&mut self, impl core::convert::Into<pdfrum_object::Name>, impl core::convert::Into<pdfrum_object::Object>)
 pub fn pdfrum_object::Dict::int(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<i64>
 pub fn pdfrum_object::Dict::is_empty(&self) -> bool
 pub fn pdfrum_object::Dict::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = &(pdfrum_object::Name, pdfrum_object::Object)>
@@ -361,7 +365,7 @@ pub fn pdfrum_object::Dict::name(&self, &pdfrum_object::Name) -> core::option::O
 pub fn pdfrum_object::Dict::new() -> Self
 pub fn pdfrum_object::Dict::number(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<f32>
 pub fn pdfrum_object::Dict::number_obj(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Object>
-pub fn pdfrum_object::Dict::push(&mut self, pdfrum_object::Name, pdfrum_object::Object)
+pub fn pdfrum_object::Dict::push(&mut self, impl core::convert::Into<pdfrum_object::Name>, impl core::convert::Into<pdfrum_object::Object>)
 pub fn pdfrum_object::Dict::raw(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Object>
 pub fn pdfrum_object::Dict::rect(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> kurbo::rect::Rect
 pub fn pdfrum_object::Dict::reference(&self, &pdfrum_object::Name) -> core::option::Option<pdfrum_object::ObjRef>
@@ -390,6 +394,10 @@ impl core::convert::AsRef<[u8]> for pdfrum_object::Name
 pub fn pdfrum_object::Name::as_ref(&self) -> &[u8]
 impl core::convert::From<&[u8]> for pdfrum_object::Name
 pub fn pdfrum_object::Name::from(&[u8]) -> Self
+impl core::convert::From<&pdfrum_object::Name> for pdfrum_object::Name
+pub fn pdfrum_object::Name::from(&pdfrum_object::Name) -> Self
+impl core::convert::From<&pdfrum_object::Name> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(&pdfrum_object::Name) -> Self
 impl core::convert::From<&str> for pdfrum_object::Name
 pub fn pdfrum_object::Name::from(&str) -> Self
 impl core::convert::From<alloc::string::String> for pdfrum_object::Name
@@ -412,14 +420,15 @@ pub const fn pdfrum_object::ObjRef::new(u32, u16) -> Self
 impl core::convert::From<pdfrum_object::ObjRef> for pdfrum_object::Object
 pub fn pdfrum_object::Object::from(pdfrum_object::ObjRef) -> Self
 pub struct pdfrum_object::PdfString
-pub pdfrum_object::PdfString::bytes: alloc::boxed::Box<[u8]>
-pub pdfrum_object::PdfString::hex: bool
 impl pdfrum_object::PdfString
+pub fn pdfrum_object::PdfString::as_bytes(&self) -> &[u8]
 pub fn pdfrum_object::PdfString::as_text(&self) -> alloc::borrow::Cow<'_, str>
 pub fn pdfrum_object::PdfString::encode(&self) -> alloc::vec::Vec<u8>
 pub fn pdfrum_object::PdfString::hex(impl core::convert::AsRef<[u8]>) -> Self
+pub fn pdfrum_object::PdfString::is_hex(&self) -> bool
 pub fn pdfrum_object::PdfString::literal(impl core::convert::AsRef<[u8]>) -> Self
 pub fn pdfrum_object::PdfString::new(impl core::convert::AsRef<[u8]>, pdfrum_object::StringSyntax) -> Self
+pub fn pdfrum_object::PdfString::syntax(&self) -> pdfrum_object::StringSyntax
 impl core::convert::AsRef<[u8]> for pdfrum_object::PdfString
 pub fn pdfrum_object::PdfString::as_ref(&self) -> &[u8]
 impl core::convert::From<pdfrum_object::PdfString> for pdfrum_object::Object

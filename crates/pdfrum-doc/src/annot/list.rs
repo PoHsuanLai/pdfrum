@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(
             popup
                 .and_then(|popup| popup.dict.string(pdfrum_object::names::CONTENTS))
-                .map(|s| s.bytes.to_vec()),
+                .map(|s| s.as_bytes().to_vec()),
             Some(b"Aa\xE4\xA0".to_vec())
         );
     }

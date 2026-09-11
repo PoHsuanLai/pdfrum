@@ -124,7 +124,7 @@ fn reload(bytes: &[u8], password: Option<&[u8]>) -> Option<Document> {
 /// actually touches.
 fn strings(obj: &Object, into: &mut Vec<Vec<u8>>) {
     match obj {
-        Object::Str(s) => into.push(s.bytes.to_vec()),
+        Object::Str(s) => into.push(s.as_bytes().to_vec()),
         Object::Array(a) => a.iter().for_each(|v| strings(v, into)),
         Object::Dict(d) => d.iter().for_each(|(_, v)| strings(v, into)),
         Object::Stream(s) => s.dict.iter().for_each(|(_, v)| strings(v, into)),
@@ -252,7 +252,7 @@ fn the_encryption_dictionary_survives_as_plaintext() {
         };
         let wanted: Vec<Vec<u8>> = original
             .iter()
-            .filter_map(|(_, v)| v.as_string().map(|s| s.bytes.to_vec()))
+            .filter_map(|(_, v)| v.as_string().map(|s| s.as_bytes().to_vec()))
             .collect();
         assert!(!wanted.is_empty(), "{name}'s /Encrypt holds no strings");
 
@@ -263,7 +263,7 @@ fn the_encryption_dictionary_survives_as_plaintext() {
             .unwrap_or_else(|| unreachable!("{name} saved without an /Encrypt"));
         let got: Vec<Vec<u8>> = written
             .iter()
-            .filter_map(|(_, v)| v.as_string().map(|s| s.bytes.to_vec()))
+            .filter_map(|(_, v)| v.as_string().map(|s| s.as_bytes().to_vec()))
             .collect();
         assert_eq!(got, wanted, "{name}'s /Encrypt was enciphered");
     }

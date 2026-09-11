@@ -6,13 +6,13 @@ interpreted page-object graph the renderer walks and never rasterizes, so
 extracting text from a page costs no pixels and needs no backend.
 
 ```rust
-use pdfrum_text::{FindOptions, TextIndex, TextPage};
+use pdfrum_text::{TextIndex, TextPage};
 
 let page = TextPage {
     search_text: "Hello, world!".chars().collect(),
     ..TextPage::default()
 };
-let hit = page.find("world", FindOptions::default()).next().expect("a match");
+let hit = page.find("world").next().expect("a match");
 assert_eq!(hit, TextIndex::new(7)..TextIndex::new(12));
 ```
 

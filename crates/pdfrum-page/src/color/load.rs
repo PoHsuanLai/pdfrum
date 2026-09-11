@@ -370,7 +370,7 @@ fn load_indexed<R: Resolve>(
     // The table may be a string or a stream; anything else leaves it empty
     // *without* failing the load, so every lookup then finds no colour.
     let lookup: Box<[u8]> = match array.get(3, ctx.resolver).as_deref() {
-        Some(Object::Str(s)) => s.bytes.clone(),
+        Some(Object::Str(s)) => s.as_bytes().into(),
         Some(Object::Stream(stream)) => decode_chain(stream, 0, ctx.resolver, ctx.limits, diags)
             .data
             .into(),

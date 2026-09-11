@@ -57,6 +57,15 @@ pub fn pdfrum_text::IndexMap::text_index_at_or_after(&self, pdfrum_text::CharInd
 pub fn pdfrum_text::IndexMap::text_index_end(&self, pdfrum_text::CharIndex) -> pdfrum_text::TextIndex
 pub fn pdfrum_text::IndexMap::text_len(&self) -> usize
 pub struct pdfrum_text::ObjectIndex(pub u32)
+impl pdfrum_text::ObjectIndex
+pub const fn pdfrum_text::ObjectIndex::get(self) -> u32
+pub const fn pdfrum_text::ObjectIndex::new(u32) -> Self
+impl core::convert::From<pdfrum_text::ObjectIndex> for u32
+pub fn u32::from(pdfrum_text::ObjectIndex) -> Self
+impl core::convert::From<u32> for pdfrum_text::ObjectIndex
+pub fn pdfrum_text::ObjectIndex::from(u32) -> Self
+impl core::fmt::Display for pdfrum_text::ObjectIndex
+pub fn pdfrum_text::ObjectIndex::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_text::TextIndex(_)
 impl pdfrum_text::TextIndex
 pub const fn pdfrum_text::TextIndex::get(self) -> usize
@@ -75,7 +84,8 @@ pub pdfrum_text::TextPage::search_text: alloc::vec::Vec<char>
 impl pdfrum_text::TextPage
 pub fn pdfrum_text::TextPage::char(&self, pdfrum_text::CharIndex) -> core::result::Result<&pdfrum_text::CharBox, pdfrum_text::Error>
 pub fn pdfrum_text::TextPage::char_count(&self) -> usize
-pub fn pdfrum_text::TextPage::find<'a>(&'a self, &str, pdfrum_text::FindOptions) -> impl core::iter::traits::iterator::Iterator<Item = core::ops::range::Range<pdfrum_text::TextIndex>> + 'a
+pub fn pdfrum_text::TextPage::find<'a>(&'a self, &str) -> impl core::iter::traits::iterator::Iterator<Item = core::ops::range::Range<pdfrum_text::TextIndex>> + 'a
+pub fn pdfrum_text::TextPage::find_with<'a>(&'a self, &str, pdfrum_text::FindOptions) -> impl core::iter::traits::iterator::Iterator<Item = core::ops::range::Range<pdfrum_text::TextIndex>> + 'a
 pub fn pdfrum_text::TextPage::font_name(&self, pdfrum_text::CharIndex) -> core::option::Option<&str>
 pub fn pdfrum_text::TextPage::index_at(&self, kurbo::point::Point, kurbo::size::Size) -> core::option::Option<pdfrum_text::CharIndex>
 pub fn pdfrum_text::TextPage::rects(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::vec::Vec<kurbo::rect::Rect>
@@ -118,5 +128,5 @@ pub pdfrum_text::Word::range: core::ops::range::Range<pdfrum_text::CharIndex>
 pub pdfrum_text::Word::rect: kurbo::rect::Rect
 pub pdfrum_text::Word::size: f64
 pub pdfrum_text::Word::text: alloc::string::String
+pub fn pdfrum_text::content_words(&pdfrum_page::page::Page) -> alloc::vec::Vec<alloc::string::String>
 pub fn pdfrum_text::extract<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, &pdfrum_text::ExtractOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_text::TextPage
-pub fn pdfrum_text::words(&pdfrum_page::page::Page) -> alloc::vec::Vec<alloc::string::String>

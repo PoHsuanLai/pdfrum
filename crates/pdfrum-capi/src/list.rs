@@ -661,7 +661,7 @@ impl pdfrum_hits {
                 match_case: !ignore_case,
                 ..pdfrum::FindOptions::default()
             };
-            for range in page.text().find(needle, options) {
+            for range in page.text().find_with(needle, options) {
                 list.items.push(pdfrum_hit {
                     start: range.start.get(),
                     end: range.end.get(),

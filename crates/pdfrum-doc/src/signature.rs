@@ -238,7 +238,7 @@ impl Signature {
         object
             .get()
             .as_string()
-            .map(|s| String::from_utf8_lossy(&s.bytes).into_owned())
+            .map(|s| String::from_utf8_lossy(s.as_bytes()).into_owned())
     }
 
     /// The `DocMDP` permission level (ISO 32000-1 §12.8.2.2): 1, 2 or 3 from

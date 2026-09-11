@@ -361,14 +361,14 @@ fn a_hyphen_sentinel_can_land_mid_string() {
     let page = fixture!("bug_431824298.pdf");
     assert_eq!(page.chars.len(), 18);
     assert_eq!(page.chars[15].unicode, 0x02);
-    assert_eq!(page.find("-world-", FindOptions::default()).count(), 0);
+    assert_eq!(page.find("-world-").count(), 0);
     // `[oracle-bug]` The sentinel is dropped from the search corpus, so
     // the halves it separates match as one word. Upstream finds nothing here
     // (`cpdf_textpagefind.cpp:262` searches the buffer with a plain `Find`),
     // while repairing the very same sentinel for links at
     // `cpdf_linkextract.cpp:154-155`.
     assert_eq!(
-        page.find("world\u{501f}", FindOptions::default()).count(),
+        page.find("world\u{501f}").count(),
         1,
         "the word the line break split is found joined"
     );
@@ -586,7 +586,7 @@ fn invisible_spaces_are_extracted_as_the_spaces_they_draw() {
 fn searching_finds_both_occurrences_and_honours_the_flags() {
     let page = fixture!("hello_world.pdf");
     let find = |needle: &str, options: FindOptions| -> Vec<std::ops::Range<usize>> {
-        page.find(needle, options)
+        page.find_with(needle, options)
             .map(|hit| hit.start.get()..hit.end.get())
             .collect()
     };
@@ -616,7 +616,7 @@ fn a_needle_with_spaces_spans_the_generated_line_break() {
     // separators, so one space consumes the two-character CRLF.
     let page = fixture!("hello_world.pdf");
     let find = |needle: &str| -> Vec<std::ops::Range<usize>> {
-        page.find(needle, FindOptions::default())
+        page.find(needle)
             .map(|hit| hit.start.get()..hit.end.get())
             .collect()
     };
@@ -637,7 +637,7 @@ fn case_insensitive_matching_reaches_latin_extended() {
     let page = fixture!("latin_extended.pdf");
     for needle in ["\u{0102}", "\u{0103}"] {
         let hits: Vec<_> = page
-            .find(needle, FindOptions::default())
+            .find(needle)
             .map(|hit| hit.start.get()..hit.end.get())
             .collect();
         assert_eq!(hits, [2..3, 3..4], "{needle}");
@@ -900,7 +900,7 @@ fn extraction_never_panics_on_any_resource_fixture() {
             // Exercise the query half too, which has its own index
             // arithmetic.
             let _ = page.web_links();
-            let _ = page.find("e", FindOptions::default()).count();
+            let _ = page.find("e").count();
             let _ = page.rects(..);
             let _ = units(&page);
         }

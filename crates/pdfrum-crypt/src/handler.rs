@@ -644,6 +644,6 @@ fn signature_valued(dict: &Dict, key: &Name) -> bool {
         value.as_name().is_some_and(|n| n == names::SIG)
             || value
                 .as_string()
-                .is_some_and(|s| &*s.bytes == names::SIG.as_bytes())
+                .is_some_and(|s| s.as_bytes() == names::SIG.as_bytes())
     })
 }
