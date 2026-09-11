@@ -11,7 +11,7 @@ that true rather than aspirational.
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_render::RasterBackend;
 
-let backend = TinySkiaBackend::new();
+let backend = TinySkiaBackend;
 let mut device = backend.new_target(8, 8, peniko::Color::WHITE);
 ```
 

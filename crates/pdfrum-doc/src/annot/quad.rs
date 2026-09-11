@@ -19,12 +19,12 @@ use crate::geom;
 ///
 /// ```
 /// use pdfrum_doc::annot::quad_point_count;
-/// use pdfrum_object::{Array, Object};
+/// use pdfrum_object::Array;
 ///
-/// let one = Array::of([0, 8, 10, 8, 0, 0, 10, 0].map(Object::from));
+/// let one = Array::of([0, 8, 10, 8, 0, 0, 10, 0]);
 /// assert_eq!(quad_point_count(Some(&one)), 1);
 /// // A trailing partial quadrilateral does not count.
-/// let partial = Array::of([0, 8, 10, 8, 0].map(Object::from));
+/// let partial = Array::of([0, 8, 10, 8, 0]);
 /// assert_eq!(quad_point_count(Some(&partial)), 0);
 /// assert_eq!(quad_point_count(None), 0);
 /// ```
@@ -48,10 +48,10 @@ pub(crate) fn rect_from_quad_points_array(array: &Array, index: usize) -> Rect {
 /// ```
 /// use pdfrum_doc::annot::rect_from_quad_points;
 /// use pdfrum_doc::geom;
-/// use pdfrum_object::{Array, Object};
+/// use pdfrum_object::Array;
 ///
 /// // `[x1 y1 x2 y2 x3 y3 x4 y4]`: (x3, y3) is left/bottom, (x2, y2) right/top.
-/// let quad = Array::of([0, 8, 10, 8, 0, 0, 10, 0].map(Object::from));
+/// let quad = Array::of([0, 8, 10, 8, 0, 0, 10, 0]);
 /// assert_eq!(rect_from_quad_points(Some(&quad), 0), geom::rect(0.0, 0.0, 10.0, 8.0));
 /// // Past the end is the zero rectangle, not the last quadrilateral.
 /// assert_eq!(rect_from_quad_points(Some(&quad), 1), kurbo::Rect::ZERO);

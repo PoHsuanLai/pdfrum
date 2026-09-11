@@ -33,7 +33,7 @@ impl Link {
     ///
     /// let link = Link::new(Dict::from_pairs([(
     ///     Name::from("Rect"),
-    ///     Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+    ///     Object::Array(Array::of([0, 700, 200, 780])),
     /// )]));
     /// assert_eq!(link.rect(&NoResolve), geom::rect(0.0, 700.0, 200.0, 780.0));
     /// ```
@@ -52,7 +52,7 @@ impl Link {
     ///     (Name::from("Subtype"), Object::Name(Name::from("Link"))),
     ///     (
     ///         Name::from("Rect"),
-    ///         Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+    ///         Object::Array(Array::of([0, 700, 200, 780])),
     ///     ),
     /// ]);
     /// let page = Dict::from_pairs([(
@@ -137,7 +137,7 @@ impl Link {
 ///     (Name::from("Subtype"), Object::Name(Name::from("Link"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 700, 200, 780].map(Object::from))),
+///         Object::Array(Array::of([0, 700, 200, 780])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(

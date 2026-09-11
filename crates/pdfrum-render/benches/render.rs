@@ -122,7 +122,7 @@ fn cold_tinyskia(c: &mut Criterion) {
     cold(c, "render-cold-tinyskia", &TinySkiaBackend::new());
 }
 
-/// The `vello_cpu` default backend, cold.
+/// The `vello_cpu` production rasterizer, cold.
 fn cold_vello_cpu(c: &mut Criterion) {
     cold(c, "render-cold-vello-cpu", &VelloCpuBackend::new());
 }
@@ -137,7 +137,7 @@ fn warm_tinyskia(c: &mut Criterion) {
     warm(c, "render-warm-tinyskia", &TinySkiaBackend::new());
 }
 
-/// The `vello_cpu` default backend, warm.
+/// The `vello_cpu` production rasterizer, warm.
 fn warm_vello_cpu(c: &mut Criterion) {
     warm(c, "render-warm-vello-cpu", &VelloCpuBackend::new());
 }

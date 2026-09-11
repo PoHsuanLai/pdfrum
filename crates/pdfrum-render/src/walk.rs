@@ -149,7 +149,7 @@ pub fn render_page_with<B: RasterBackend>(
 /// use pdfrum_raster_tinyskia::TinySkiaBackend;
 /// use pdfrum_render::{RasterBackend, RenderOptions, render_page_to_device};
 ///
-/// let backend = TinySkiaBackend::new();
+/// let backend = TinySkiaBackend;
 /// let device = render_page_to_device(
 ///     &Page::empty(),
 ///     &RenderOptions::default(),
@@ -183,7 +183,7 @@ pub fn render_page_to_device<B: RasterBackend>(
 ///     RasterBackend, RenderOptions, RenderSession, render_page_to_device_with,
 /// };
 ///
-/// let backend = TinySkiaBackend::new();
+/// let backend = TinySkiaBackend;
 /// let device = render_page_to_device_with(
 ///     &Page::empty(),
 ///     &RenderOptions::default(),

@@ -81,7 +81,7 @@ pub struct SvgPage {
 /// let converted = page_to_svg(
 ///     &Page::empty(),
 ///     &RenderOptions::default(),
-///     &TinySkiaBackend::new(),
+///     &TinySkiaBackend,
 ///     &mut Diagnostics::default(),
 /// )?;
 /// assert!(converted.svg.starts_with("<svg "));
@@ -119,7 +119,7 @@ pub fn page_to_svg<B: RasterBackend>(
 /// let converted = page_to_svg_with(
 ///     &Page::empty(),
 ///     &RenderOptions::default(),
-///     &TinySkiaBackend::new(),
+///     &TinySkiaBackend,
 ///     RenderSession::default(),
 ///     &mut Diagnostics::default(),
 /// )?;
@@ -155,7 +155,7 @@ mod tests {
         let converted = page_to_svg(
             &Page::empty(),
             &RenderOptions::default(),
-            &TinySkiaBackend::new(),
+            &TinySkiaBackend,
             &mut Diagnostics::default(),
         )
         .expect("an empty US Letter page renders");
@@ -167,7 +167,7 @@ mod tests {
     fn a_borrowed_backend_is_enough() {
         // `SvgBackend<&B>` is what `page_to_svg` builds, so a caller keeps
         // their rasterizer rather than handing it over.
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         for _ in 0..2 {
             let converted = page_to_svg(
                 &Page::empty(),

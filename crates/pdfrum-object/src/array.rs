@@ -216,10 +216,10 @@ impl Array {
     /// themselves.
     ///
     /// ```
-    /// use pdfrum_object::{Array, Object};
+    /// use pdfrum_object::Array;
     /// use pdfrum_common::kurbo::Rect;
     ///
-    /// let media_box = Array::of([0, 0, 612, 792].map(Object::from));
+    /// let media_box = Array::of([0, 0, 612, 792]);
     /// assert_eq!(media_box.as_rect(), Rect::new(0.0, 0.0, 612.0, 792.0));
     /// ```
     #[must_use]

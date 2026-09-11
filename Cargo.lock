@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "conformance"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1911,7 +1911,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pdfrum"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
@@ -1943,7 +1943,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-bench"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum",
@@ -1960,14 +1960,14 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-capi"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "pdfrum",
 ]
 
 [[package]]
 name = "pdfrum-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-cmap"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "pdfrum-common",
  "pdfrum-object",
@@ -1993,18 +1993,18 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-common"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
 ]
 
 [[package]]
 name = "pdfrum-corpus"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "pdfrum-crypt"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "aes",
  "cbc",
@@ -2021,7 +2021,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-doc"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
@@ -2037,7 +2037,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-edit"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "getrandom",
@@ -2064,7 +2064,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-filters"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "hayro-ccitt",
  "miniz_oxide 0.9.1",
@@ -2076,7 +2076,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-font"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fontdb",
  "pdfrum-cmap",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-form"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "boa_engine",
  "kurbo",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-markdown"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum",
@@ -2122,7 +2122,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-object"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "pdfrum-common",
@@ -2133,7 +2133,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-page"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "hayro-jbig2",
@@ -2154,7 +2154,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-parser"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "pdfrum",
@@ -2168,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-raster-agg"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-page",
@@ -2178,7 +2178,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-raster-tinyskia"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-page",
@@ -2189,7 +2189,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-raster-vello"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum",
@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-raster-vello-cpu"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-page",
@@ -2219,7 +2219,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-render"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "kurbo",
@@ -2241,14 +2241,14 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-script"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "pdfrum-svg"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum",
@@ -2264,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-text"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "kurbo",
@@ -2282,7 +2282,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-tool"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "kurbo",
@@ -2309,7 +2309,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-type1"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "pdfrum-common",
  "read-fonts 0.43.3",
@@ -2318,7 +2318,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-wasm"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "getrandom",
  "js-sys",
