@@ -204,7 +204,7 @@ fn node_limits(limits: &Array, diags: &mut Diagnostics) -> (String, String) {
     let read = |index: usize| {
         limits
             .string_at(index)
-            .map(|s| decode_text(&s.bytes).into_owned())
+            .map(|s| decode_text(s.as_bytes()).into_owned())
             .unwrap_or_default()
     };
     let (low, high) = (read(0), read(1));
@@ -283,7 +283,7 @@ fn search_by_name<R: Resolve>(
         for pair in 0..leaf.len() / 2 {
             let at = leaf
                 .string_at(pair * 2)
-                .map(|s| decode_text(&s.bytes).into_owned())
+                .map(|s| decode_text(s.as_bytes()).into_owned())
                 .unwrap_or_default();
             if at.as_str() > key {
                 break;
@@ -339,7 +339,7 @@ fn search_by_index<R: Resolve>(
         let value = leaf.get(slot + 1, r)?.get().clone();
         let key = leaf
             .string_at(slot)
-            .map(|s| decode_text(&s.bytes).into_owned())
+            .map(|s| decode_text(s.as_bytes()).into_owned())
             .unwrap_or_default();
         return Some((key, value));
     }

@@ -58,7 +58,7 @@ fn a_render_above_the_pixel_cap_is_refused_before_anything_is_allocated() {
     let page = doc.page(0).expect("page");
     let started = Instant::now();
     let error = page
-        .render(&VelloCpuBackend::new(), &huge())
+        .render_with(VelloCpuBackend, &huge())
         .expect_err("400 megapixels is above a 100-megapixel cap");
     // A 20000 x 20000 target is 1.6 GB of pixmap; refusing it takes no time
     // at all, and the bound here is generous enough for a loaded machine.
@@ -92,11 +92,11 @@ fn a_prepared_page_is_refused_at_the_draw() {
     // `prepare` is infallible; the cap is applied when the page is drawn.
     let prepared = page.prepare(&huge(), &mut session);
     assert!(matches!(
-        prepared.render_on(&VelloCpuBackend::new(), &mut session),
+        prepared.render_on(VelloCpuBackend, &mut session),
         Err(Error::Limit(LimitExceeded::RenderPixels { .. }))
     ));
     assert!(matches!(
-        prepared.render(&VelloCpuBackend::new()),
+        prepared.render(VelloCpuBackend),
         Err(Error::Limit(LimitExceeded::RenderPixels { .. }))
     ));
 }
@@ -106,20 +106,17 @@ fn a_render_under_the_cap_succeeds() {
     let doc = capped(100_000_000);
     let page = doc.page(0).expect("page");
     let pixmap = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("40000 px is under the cap");
     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
     // Exactly at the cap is under it: the cap is the most a render may have.
     let doc = capped(40_000);
     let page = doc.page(0).expect("page");
-    assert!(
-        page.render(&VelloCpuBackend::new(), &RenderOptions::default())
-            .is_ok()
-    );
+    assert!(page.render(VelloCpuBackend).is_ok());
     let doc = capped(39_999);
     let page = doc.page(0).expect("page");
     assert!(matches!(
-        page.render(&VelloCpuBackend::new(), &RenderOptions::default()),
+        page.render(VelloCpuBackend),
         Err(Error::Limit(LimitExceeded::RenderPixels {
             width: 200,
             height: 200,
@@ -161,8 +158,11 @@ fn a_generous_deadline_changes_nothing() {
     let backend = VelloCpuBackend::new();
     let options = RenderOptions::default();
     assert_eq!(
-        page.render(&backend, &options).expect("render").data(),
-        reference.render(&backend, &options).expect("render").data()
+        page.render_with(backend, &options).expect("render").data(),
+        reference
+            .render_with(backend, &options)
+            .expect("render")
+            .data()
     );
     assert_eq!(page.text().to_string(), reference.text().to_string());
     assert!(!page.text().to_string().is_empty());
@@ -176,9 +176,7 @@ fn a_deadline_that_passes_after_the_open_stops_every_later_operation() {
     std::thread::sleep(Duration::from_millis(250));
 
     // A render fails at the engine's entry, naming the page.
-    let error = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .expect_err("out of time");
+    let error = page.render(VelloCpuBackend).expect_err("out of time");
     assert!(matches!(
         error,
         Error::Limit(LimitExceeded::Time {
@@ -215,14 +213,11 @@ fn a_caller_can_stop_the_work_by_hand() {
     let doc = open_guide(stop.clone()).expect("open");
     let page = doc.page(0).expect("page");
     assert!(
-        page.render(&VelloCpuBackend::new(), &RenderOptions::default())
-            .is_ok(),
+        page.render(VelloCpuBackend).is_ok(),
         "nothing is raised yet"
     );
     stop.stop();
-    let error = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
-        .expect_err("stopped");
+    let error = page.render(VelloCpuBackend).expect_err("stopped");
     assert!(matches!(
         error,
         Error::Limit(LimitExceeded::Stopped {
@@ -257,7 +252,7 @@ fn a_caller_can_stop_the_work_from_another_thread() {
     // and how many renders finish before it is the machine's business.
     let backend = VelloCpuBackend::new();
     let error = loop {
-        if let Err(error) = page.render(&backend, &RenderOptions::default()) {
+        if let Err(error) = page.render(backend) {
             break error;
         }
     };
@@ -276,7 +271,7 @@ fn the_default_limits_cap_nothing() {
     let doc = open_with(Limits::default());
     let page = doc.page(0).expect("page");
     let pixmap = page
-        .render(&VelloCpuBackend::new(), &RenderOptions::scaled(4.0))
+        .render_with(VelloCpuBackend, &RenderOptions::scaled(4.0))
         .expect("no cap by default");
     assert_eq!((pixmap.width(), pixmap.height()), (800, 800));
 }

@@ -420,7 +420,7 @@ fn decrypt_node(
             if in_sig {
                 Object::Str(s)
             } else {
-                let plain = handler.decrypt(obj, CryptClass::String, &s.bytes);
+                let plain = handler.decrypt(obj, CryptClass::String, s.as_bytes());
                 Object::Str(PdfString::new(plain, syntax_of(&s)))
             }
         }
@@ -591,7 +591,7 @@ fn rewrite_at(handler: &SecurityHandler, obj: ObjRef, object: Object, path: &[St
 /// Keep a string's source spelling across the rewrite, since the writer
 /// round-trips it.
 fn syntax_of(s: &PdfString) -> pdfrum_object::StringSyntax {
-    if s.hex {
+    if s.syntax() == pdfrum_object::StringSyntax::Hex {
         pdfrum_object::StringSyntax::Hex
     } else {
         pdfrum_object::StringSyntax::Literal

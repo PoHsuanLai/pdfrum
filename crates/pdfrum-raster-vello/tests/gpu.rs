@@ -438,12 +438,8 @@ fn the_facade_renders_a_page_on_this_backend() {
     .expect("open");
     let page = doc.page(0).expect("page");
     let pixmap = page
-        .render_on(
-            &backend,
-            &pdfrum::RenderOptions::default(),
-            &mut pdfrum::RenderSession::new(),
-        )
-        .expect("the GPU backend satisfies Page::render_on's bound");
+        .render(&backend)
+        .expect("the GPU backend satisfies Page::render's bound");
     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
 }
 

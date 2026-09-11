@@ -20,13 +20,12 @@ use pdfrum_render::RenderCaches;
 /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 ///
 /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-/// let backend = VelloCpuBackend::new();
 /// let mut session = RenderSession::new();
 ///
 /// // Both pages share one set of caches: the fonts are parsed once, and so
 /// // are the glyph outlines drawn from them.
 /// for page in doc.pages() {
-///     let pixmap = page.render_on(&backend, &RenderOptions::default(), &mut session)?;
+///     let pixmap = page.render_on(VelloCpuBackend, &RenderOptions::default(), &mut session)?;
 ///     assert!(pixmap.width() > 0);
 /// }
 /// # Ok::<(), pdfrum::Error>(())

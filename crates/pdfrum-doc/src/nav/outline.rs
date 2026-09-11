@@ -54,7 +54,7 @@ impl Bookmark {
         let Some(raw) = self
             .dict
             .get(obj_names::TITLE, r)
-            .and_then(|v| v.get().as_string().map(|s| s.bytes.to_vec()))
+            .and_then(|v| v.get().as_string().map(|s| s.as_bytes().to_vec()))
         else {
             return String::new();
         };

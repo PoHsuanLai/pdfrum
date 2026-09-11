@@ -11,7 +11,7 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use pdfrum::{Document, FindOptions};
+use pdfrum::Document;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,7 +51,7 @@ fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
                 println!("{text}");
             }
             Some(needle) => {
-                for range in text.find(needle, FindOptions::default()) {
+                for range in text.find(needle) {
                     // `find` reports offsets into the *search* text, which is
                     // not the same sequence as the character list — control
                     // characters and placeholders are stripped from one and

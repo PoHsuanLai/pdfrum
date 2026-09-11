@@ -152,14 +152,14 @@ pub fn pdfrum_edit::EditDoc<'_>::stamp_image(&mut self, &pdfrum_edit::EmbeddedIm
 pub fn pdfrum_edit::EditDoc<'_>::stamp_text(&mut self, &str, &pdfrum_edit::StampOptions, &pdfrum_common::limits::Limits) -> core::result::Result<(), pdfrum_edit::Error>
 impl<'a> pdfrum_edit::EditDoc<'a>
 pub fn pdfrum_edit::EditDoc<'a>::add(&mut self, pdfrum_object::object::Object) -> pdfrum_object::object::ObjRef
-pub fn pdfrum_edit::EditDoc<'a>::apply_page(&mut self, &pdfrum_page::page_edit::PageEdit, &pdfrum_edit::ShareCounts) -> core::result::Result<(), pdfrum_parser::error::Error>
+pub fn pdfrum_edit::EditDoc<'a>::apply_page(&mut self, &pdfrum_page::page_edit::PageEdit, &pdfrum_edit::ShareCounts) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'a>::base(&self) -> &'a pdfrum_parser::doc::Document
 pub fn pdfrum_edit::EditDoc<'a>::edited(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &alloc::sync::Arc<pdfrum_object::object::Object>)>
 pub fn pdfrum_edit::EditDoc<'a>::is_edited(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::is_removed(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::last_object_number(&self) -> u32
 pub fn pdfrum_edit::EditDoc<'a>::new(&'a pdfrum_parser::doc::Document) -> Self
-pub fn pdfrum_edit::EditDoc<'a>::page_state(&self, pdfrum_common::page_index::PageIndex) -> core::result::Result<core::option::Option<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_object::dict::Dict)>, pdfrum_parser::error::Error>
+pub fn pdfrum_edit::EditDoc<'a>::page_state(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<core::option::Option<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_object::dict::Dict)>, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'a>::remove(&mut self, pdfrum_object::object::ObjRef)
 pub fn pdfrum_edit::EditDoc<'a>::replace(&mut self, pdfrum_object::object::ObjRef, pdfrum_object::object::Object)
 impl pdfrum_object::resolve::Resolve for pdfrum_edit::EditDoc<'_>
@@ -236,8 +236,8 @@ pub struct pdfrum_edit::PageRewrite
 pub pdfrum_edit::PageRewrite::resources: pdfrum_object::dict::Dict
 pub pdfrum_edit::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::Regenerated>
 pub struct pdfrum_edit::PathBuilder
-pub pdfrum_edit::PathBuilder::even_odd: bool
 pub pdfrum_edit::PathBuilder::fill: core::option::Option<peniko::Color>
+pub pdfrum_edit::PathBuilder::fill_rule: pdfrum_edit::Fill
 pub pdfrum_edit::PathBuilder::line_width: f32
 pub pdfrum_edit::PathBuilder::matrix: kurbo::affine::Affine
 pub pdfrum_edit::PathBuilder::path: kurbo::bezpath::BezPath
@@ -320,7 +320,7 @@ pub fn pdfrum_edit::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8
 pub struct pdfrum_edit::UnknownFlattenMode(_)
 pub struct pdfrum_edit::UnknownStampPosition(_)
 pub fn pdfrum_edit::add_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<usize, pdfrum_edit::Error>
-pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, u32) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
+pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
 pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
@@ -337,8 +337,8 @@ pub fn pdfrum_edit::set_attachment_description(&mut pdfrum_edit::EditDoc<'_>, &p
 pub fn pdfrum_edit::set_attachment_file(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &[u8]) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_attachment_param(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
-pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
-pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, i32) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
 pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> f64
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>

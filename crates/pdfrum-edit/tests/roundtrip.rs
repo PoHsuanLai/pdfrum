@@ -756,7 +756,7 @@ fn the_first_id_element_survives_a_save() {
     let first = |d: &Document| {
         d.trailer()
             .array(names::ID, d)
-            .and_then(|a| a.string_at(0).map(|s| s.bytes.to_vec()))
+            .and_then(|a| a.string_at(0).map(|s| s.as_bytes().to_vec()))
     };
     assert_eq!(first(&doc), first(&reloaded));
     assert!(first(&doc).is_some(), "the fixture has an /ID");

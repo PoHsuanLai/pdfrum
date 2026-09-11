@@ -63,7 +63,7 @@ impl FileSpec {
     #[must_use]
     pub fn file_name<R: Resolve>(&self, r: &R) -> String {
         match &self.object {
-            Object::Str(text) => decode_file_name(&latin1(&text.bytes)),
+            Object::Str(text) => decode_file_name(&latin1(text.as_bytes())),
             Object::Dict(dict) => decode_file_name(&dict_file_name(dict, r)),
             _ => String::new(),
         }
@@ -128,7 +128,7 @@ fn is_url<R: Resolve>(dict: &Dict, r: &R) -> bool {
 fn dict_file_name<R: Resolve>(dict: &Dict, r: &R) -> String {
     let as_string = |key: &Name| {
         dict.get(key, r)
-            .and_then(|v| v.get().as_string().map(|s| s.bytes.to_vec()))
+            .and_then(|v| v.get().as_string().map(|s| s.as_bytes().to_vec()))
     };
 
     // `/UF` is PDF text; everything else is Latin-1.

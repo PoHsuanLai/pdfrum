@@ -423,7 +423,7 @@ pub(crate) fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
     // one, and costs a comparison per cell.
     ras.keep_rows(0..height);
     ras.add_path(&placed, FLATTEN_TOLERANCE);
-    ras.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
+    ras.sweep(FillRule::Winding, Coverage::Exact, |x, len, y, alpha| {
         if y < 0 || y >= height {
             return;
         }

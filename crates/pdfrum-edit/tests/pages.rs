@@ -89,7 +89,7 @@ fn tags(doc: &Document) -> Vec<String> {
                 .dict
                 .raw(&pdfrum_object::Name::from("Tag"))
                 .and_then(Object::as_string)
-                .map(|s| String::from_utf8_lossy(&s.bytes).into_owned())
+                .map(|s| String::from_utf8_lossy(s.as_bytes()).into_owned())
                 .unwrap_or_default()
         })
         .collect()
@@ -139,8 +139,8 @@ fn a_blank_page_lands_where_asked_with_its_media_box() {
     let bytes = flat(2);
     let doc = open(&bytes);
     let mut edit = EditDoc::new(&doc);
-    add_blank_page(&mut edit, 100.0, 200.0, 1).expect("adds");
-    add_blank_page(&mut edit, 300.0, 300.0, 99).expect("appends");
+    add_blank_page(&mut edit, 100.0, 200.0, 1u32).expect("adds");
+    add_blank_page(&mut edit, 300.0, 300.0, 99u32).expect("appends");
     let saved = commit(&edit);
     assert_eq!(saved.page_count(), 4);
     assert_eq!(tags(&saved), ["p0", "", "p1", ""]);

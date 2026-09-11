@@ -31,7 +31,7 @@ pub struct DocumentModel {
     ///
     /// **Installed by the caller**, like everything else here: counting them
     /// needs a parsed content stream, which this model deliberately does not
-    /// hold. `pdfrum_text::words` is the reader for a `pdfrum` page, and an
+    /// hold. `pdfrum_text::content_words` is the reader for a `pdfrum` page, and an
     /// empty list is the honest answer for a caller that did not supply one —
     /// `getPageNumWords` then answers 0, which is what an empty page gives.
     pub page_words: Vec<Vec<String>>,

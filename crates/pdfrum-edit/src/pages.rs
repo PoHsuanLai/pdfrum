@@ -54,8 +54,9 @@ pub fn add_blank_page(
     dest: &mut EditDoc<'_>,
     width: f32,
     height: f32,
-    at: u32,
+    at: impl Into<PageIndex>,
 ) -> Result<ObjRef, Error> {
+    let at = u32::from(at.into());
     let pages_node = init_dest(dest)?;
     let page = Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::PAGE.clone())),
@@ -163,9 +164,10 @@ fn decrement_counts(dest: &mut EditDoc<'_>, mut node_ref: ObjRef) {
 /// written inline.
 pub fn set_page_rotation(
     dest: &mut EditDoc<'_>,
-    index: PageIndex,
+    index: impl Into<PageIndex>,
     degrees: i32,
 ) -> Result<(), Error> {
+    let index = index.into();
     // Nearest multiple of 90, then modulo a full turn: 45 rounds up, -90
     // is 270.
     let quarter_turns =
@@ -183,10 +185,11 @@ pub fn set_page_rotation(
 /// As [`set_page_rotation`].
 pub fn set_page_box(
     dest: &mut EditDoc<'_>,
-    index: PageIndex,
+    index: impl Into<PageIndex>,
     which: PageBox,
     rect: [f32; 4],
 ) -> Result<(), Error> {
+    let index = index.into();
     edit_page(dest, index, |page| {
         page.insert(which.key().clone(), rect_object(rect));
     })

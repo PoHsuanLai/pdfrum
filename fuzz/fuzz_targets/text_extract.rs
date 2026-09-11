@@ -79,7 +79,7 @@ fuzz_target!(|data: &[u8]| {
             let _ = text.rects(..);
             let _ = text.slice(..);
             let _ = text
-                .find("e", FindOptions::default())
+                .find("e")
                 .take(64)
                 .count();
         }

@@ -29,7 +29,7 @@ pub fn render_page(
     let page = doc.page(index)?;
     let mut options = RenderOptions::scaled(scale);
     options.annotations = annotations;
-    Ok(page.render_on(&VelloCpuBackend::new(), &options, session)?)
+    Ok(page.render_on(VelloCpuBackend, &options, session)?)
 }
 
 /// Everything a render was asked for.

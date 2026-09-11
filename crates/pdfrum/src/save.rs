@@ -949,8 +949,8 @@ impl DocEdit<'_> {
     }
 
     /// Lay `pages` of `source` out `columns` by `rows` per sheet of `sheet`
-    /// points, inserting the sheets at the front of this document — N-up
-    /// imposition, the way `FPDF_ImportNPagesToOne` does it.
+    /// (width × height in points), inserting the sheets at the front of this
+    /// document — N-up imposition, the way `FPDF_ImportNPagesToOne` does it.
     ///
     /// # Errors
     ///
@@ -966,14 +966,14 @@ impl DocEdit<'_> {
         pages: impl IntoIterator<Item = impl Into<PageIndex>>,
         columns: u32,
         rows: u32,
-        sheet: (f64, f64),
+        sheet: kurbo::Size,
     ) -> Result<()> {
         pdfrum_edit::n_page_to_one(
             &mut self.inner,
             &source.inner,
             &pdfrum_edit::PageRange::of(pages),
             &pdfrum_edit::NUpOptions {
-                sheet: (sheet.0 as f32, sheet.1 as f32),
+                sheet: (sheet.width as f32, sheet.height as f32),
                 grid: (columns, rows),
             },
         )?;

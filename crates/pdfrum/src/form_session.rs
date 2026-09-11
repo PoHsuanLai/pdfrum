@@ -157,10 +157,13 @@ impl State {
     }
 
     /// The state half of [`FormSession::hover_for_page`].
-    pub(crate) fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
+    pub(crate) fn hover_for_page(
+        &self,
+        page: impl Into<PageIndex>,
+    ) -> Option<pdfrum_form::AnnotId> {
         let page = page.into();
         let hover = self.inner.hover?;
-        (hover.page == page).then_some(hover.index as usize)
+        (hover.page == page).then_some(hover)
     }
 
     /// The state half of [`FormSession::can_undo`].
@@ -918,11 +921,11 @@ impl<'a> FormSession<'a> {
     /// highlight is the case that matters, because its note card is *only*
     /// reachable this way — nothing a file can say opens one.
     ///
-    /// The result is a **raw `/Annots` index**, the key space
+    /// The result is a raw `/Annots` identity, the key space
     /// [`pdfrum_doc::AnnotOverlay::set_hover`] wants. `None` when the pointer
     /// is over nothing, or over an annotation on another page.
     #[must_use]
-    pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
+    pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<pdfrum_form::AnnotId> {
         self.state.hover_for_page(page)
     }
 

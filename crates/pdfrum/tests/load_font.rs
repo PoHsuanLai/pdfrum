@@ -27,8 +27,8 @@ use std::process::Command;
 use std::sync::Arc;
 
 use pdfrum::{
-    Affine, Dict, Document, FontEncoding, ObjRef, Point, RenderOptions, Resolve, SaveOptions,
-    StandardFont, TextBuilder, VelloCpuBackend,
+    Affine, Dict, Document, FontEncoding, ObjRef, Point, Resolve, SaveOptions, StandardFont,
+    TextBuilder, VelloCpuBackend,
 };
 use pdfrum_object::Name;
 
@@ -94,7 +94,7 @@ fn pixels(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
     let pix = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
     (pix.width(), pix.height(), pix.data().to_vec())
 }
@@ -157,7 +157,7 @@ fn embed_composite_writes_hello_extracts_and_renders() {
     let original = doc
         .page(0)
         .expect("page")
-        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .render(VelloCpuBackend)
         .expect("renders");
     let original_dark = dark_pixels(original.data());
 
@@ -266,7 +266,7 @@ fn standard_fourteen_round_trips_hello() {
     let original_dark = dark_pixels(
         doc.page(0)
             .expect("page")
-            .render(&VelloCpuBackend::new(), &RenderOptions::default())
+            .render(VelloCpuBackend)
             .expect("renders")
             .data(),
     );

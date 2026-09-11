@@ -83,6 +83,17 @@ pub struct LoadOptions {
     pub limits: Limits,
 }
 
+impl LoadOptions {
+    /// Try this password — a `&str`, a `String`, a `&[u8]` or a `Vec<u8>`.
+    ///
+    /// PDF passwords are byte strings and need not be UTF-8.
+    #[must_use]
+    pub fn with_password(mut self, password: impl AsRef<[u8]>) -> Self {
+        self.password = Some(password.as_ref().to_vec());
+        self
+    }
+}
+
 /// One page's dictionary, with the attributes it inherits already resolved.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageDict {
@@ -343,7 +354,7 @@ fn build_security(
 
     let file_id = trailer
         .array(names::ID, &NoResolve)
-        .and_then(|a| a.string_at(0).map(|s| s.bytes.to_vec()))
+        .and_then(|a| a.string_at(0).map(|s| s.as_bytes().to_vec()))
         .unwrap_or_default();
     let password = opts.password.clone().unwrap_or_default();
 

@@ -50,7 +50,7 @@ fn run(input: &Path, out_dir: &Path, scale: f64) -> Result<usize, Box<dyn std::e
     let options = RenderOptions::scaled(scale);
     let mut written = 0;
     for page in doc.pages() {
-        let pixmap = page.render(&VelloCpuBackend::new(), &options)?;
+        let pixmap = page.render_with(VelloCpuBackend, &options)?;
         let path = out_dir.join(format!("page-{:04}.png", page.index().get() + 1));
         write_png(&path, &pixmap)?;
         println!(

@@ -233,7 +233,7 @@ pub fn pdfrum::Annotation<'_>::is_hidden(&self) -> bool
 pub fn pdfrum::Annotation<'_>::modified(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Annotation<'_>::name(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Annotation<'_>::prints(&self) -> bool
-pub fn pdfrum::Annotation<'_>::quad_points(&self) -> alloc::vec::Vec<kurbo::rect::Rect>
+pub fn pdfrum::Annotation<'_>::quad_points(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = kurbo::rect::Rect> + '_
 pub fn pdfrum::Annotation<'_>::raw_rect(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Annotation<'_>::rect(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Annotation<'_>::subtype(&self) -> pdfrum_doc::annot::Subtype
@@ -264,7 +264,7 @@ pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embe
 pub fn pdfrum::DocEdit<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::image::raw::PixelFormat) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::embed_jpeg(&mut self, &[u8]) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::import_pages(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
-pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, (f64, f64)) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, kurbo::size::Size) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum_page::page_edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::set_metadata(&mut self, &pdfrum::Metadata)
@@ -333,7 +333,7 @@ pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write,
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum::Document
 pub fn pdfrum::Document::markdown(&self) -> alloc::string::String
-pub fn pdfrum::Document::markdown_blocks(&self, impl core::iter::traits::collect::IntoIterator<Item = pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<alloc::vec::Vec<alloc::vec::Vec<pdfrum_markdown::ast::Block>>>
+pub fn pdfrum::Document::markdown_blocks(&self, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>) -> pdfrum::Result<alloc::vec::Vec<alloc::vec::Vec<pdfrum_markdown::ast::Block>>>
 pub fn pdfrum::Document::markdown_pages(&self) -> alloc::vec::Vec<alloc::string::String>
 impl pdfrum::Document
 pub fn pdfrum::Document::page_owned(&alloc::sync::Arc<Self>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::OwnedPage>
@@ -391,7 +391,7 @@ pub fn pdfrum::FormSession<'a>::focus_at(&mut self, impl core::convert::Into<pdf
 pub fn pdfrum::FormSession<'a>::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::FormSession<'a>::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::focused_text(&self) -> core::option::Option<alloc::string::String>
-pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
+pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::FormSession<'a>::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
@@ -462,7 +462,7 @@ pub fn pdfrum::OwnedFormSession::focus_at(&mut self, impl core::convert::Into<pd
 pub fn pdfrum::OwnedFormSession::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::OwnedFormSession::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::OwnedFormSession::focused_text(&self) -> core::option::Option<alloc::string::String>
-pub fn pdfrum::OwnedFormSession::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
+pub fn pdfrum::OwnedFormSession::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::OwnedFormSession::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::OwnedFormSession::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
@@ -494,8 +494,9 @@ pub fn pdfrum::OwnedPage::markdown(&self) -> alloc::string::String
 pub fn pdfrum::OwnedPage::markdown_blocks(&self) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
 pub fn pdfrum::OwnedPage::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::OwnedPage::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
-pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render_with<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::OwnedPage::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::OwnedPage::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::OwnedPage::text(&self) -> pdfrum_text::TextPage
@@ -526,8 +527,9 @@ pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
 pub fn pdfrum::Page<'a>::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
 pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::PreparedPage<'a>
-pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render_with<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::Page<'a>::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
@@ -548,8 +550,8 @@ pub pdfrum::PageLink::rect: kurbo::rect::Rect
 pub pdfrum::PageLink::target: pdfrum::LinkTarget
 pub struct pdfrum::PreparedPage<'a>
 impl pdfrum::PreparedPage<'_>
-pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, &B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub struct pdfrum::RawImage
 pub pdfrum::RawImage::data: alloc::vec::Vec<u8>
 pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding

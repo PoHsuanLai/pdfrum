@@ -230,12 +230,12 @@ impl OwnedFormSession {
     ///
     /// ```
     /// use std::sync::Arc;
-    /// use pdfrum::{Document, FormSession, Modifiers, Point};
+    /// use pdfrum::{AnnotId, Document, FormSession, Modifiers, Point};
     ///
     /// let doc = Arc::new(Document::open("tests/fixtures/text_form.pdf")?);
     /// let mut session = FormSession::owned(doc);
     /// session.mouse_move(0, Point::new(120.0, 115.0), Modifiers::NONE);
-    /// assert_eq!(session.hover_for_page(0), Some(0));
+    /// assert_eq!(session.hover_for_page(0), Some(AnnotId::new(0, 0)));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     pub fn mouse_move(
@@ -536,7 +536,7 @@ impl OwnedFormSession {
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     #[must_use]
-    pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
+    pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<pdfrum_form::AnnotId> {
         self.state.hover_for_page(page)
     }
 

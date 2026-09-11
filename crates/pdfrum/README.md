@@ -19,7 +19,7 @@ let doc = Document::open(concat!(
     "/tests/fixtures/hello_world.pdf"
 ))?;
 for page in doc.pages() {
-    let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::scaled(2.0))?;
+    let pixmap = page.render_with(VelloCpuBackend, &RenderOptions::scaled(2.0))?;
     let text = page.text().to_string();
     assert_eq!((pixmap.width(), pixmap.height()), (400, 400));
     assert!(text.contains("Hello, world!"));

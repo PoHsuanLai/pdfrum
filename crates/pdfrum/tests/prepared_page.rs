@@ -24,13 +24,13 @@ fn a_prepared_page_draws_the_bytes_the_page_draws() {
         let options = with_annotations();
 
         let direct = page
-            .render_on(&backend, &options, &mut RenderSession::new())
+            .render_on(backend, &options, &mut RenderSession::new())
             .unwrap();
 
         let mut session = RenderSession::new();
         let prepared = page.prepare(&options, &mut session);
-        let first = prepared.render_on(&backend, &mut session).unwrap();
-        let second = prepared.render_on(&backend, &mut session).unwrap();
+        let first = prepared.render_on(backend, &mut session).unwrap();
+        let second = prepared.render_on(backend, &mut session).unwrap();
 
         assert_eq!(
             direct.data(),
@@ -61,8 +61,8 @@ fn a_prepared_page_is_prepared_for_its_options() {
         &mut session,
     );
 
-    let small = one_to_one.render(&VelloCpuBackend::new()).unwrap();
-    let big = doubled.render(&VelloCpuBackend::new()).unwrap();
+    let small = one_to_one.render(VelloCpuBackend).unwrap();
+    let big = doubled.render(VelloCpuBackend).unwrap();
     assert_eq!(
         (big.width(), big.height()),
         (small.width() * 2, small.height() * 2)
@@ -77,10 +77,10 @@ fn render_on_and_prepare_warm_the_same_session() {
     let options = with_annotations();
     let mut session = RenderSession::new();
 
-    let cold = page.render_on(&backend, &options, &mut session).unwrap();
+    let cold = page.render_on(backend, &options, &mut session).unwrap();
     let warm = page
         .prepare(&options, &mut session)
-        .render_on(&backend, &mut session)
+        .render_on(backend, &mut session)
         .unwrap();
     assert_eq!(cold.data(), warm.data());
 }

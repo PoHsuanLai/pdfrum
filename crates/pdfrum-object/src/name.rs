@@ -117,6 +117,12 @@ impl From<String> for Name {
     }
 }
 
+impl From<&Name> for Name {
+    fn from(n: &Name) -> Self {
+        n.clone()
+    }
+}
+
 // PDFium's classifier also calls `0x80` and `0xFF` whitespace; both are
 // already at or above `0x80`, so they escape either way and the distinction
 // is invisible to `name_encode`.

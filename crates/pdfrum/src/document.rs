@@ -288,13 +288,12 @@ impl Document {
     /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
     ///
     /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// let backend = VelloCpuBackend::new();
     ///
     /// // Two sessions, one set of loaded fonts.
     /// let mut first = doc.render_session();
     /// let mut second = doc.render_session();
-    /// let a = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut first)?;
-    /// let b = doc.page(0)?.render_on(&backend, &RenderOptions::default(), &mut second)?;
+    /// let a = doc.page(0)?.render_on(VelloCpuBackend, &RenderOptions::default(), &mut first)?;
+    /// let b = doc.page(0)?.render_on(VelloCpuBackend, &RenderOptions::default(), &mut second)?;
     /// assert_eq!(a.width(), b.width());
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
@@ -806,7 +805,7 @@ impl Document {
         let element = |index| {
             array
                 .get(index, &self.inner)
-                .and_then(|entry| entry.get().as_string().map(|s| s.bytes.to_vec()))
+                .and_then(|entry| entry.get().as_string().map(|s| s.as_bytes().to_vec()))
         };
         Some([element(0)?, element(1)?])
     }
@@ -1075,11 +1074,13 @@ impl Attachment<'_> {
         Some(match object.get() {
             // A checksum written as a hex string is shown as that hex string,
             // brackets and all, rather than as the sixteen bytes it decodes to.
-            pdfrum_object::Object::Str(string) if key.as_bytes() == b"CheckSum" && string.hex => {
+            pdfrum_object::Object::Str(string)
+                if key.as_bytes() == b"CheckSum" && string.is_hex() =>
+            {
                 use std::fmt::Write as _;
-                let mut hex = String::with_capacity(string.bytes.len() * 2 + 2);
+                let mut hex = String::with_capacity(string.as_bytes().len() * 2 + 2);
                 hex.push('<');
-                for byte in &string.bytes {
+                for byte in string.as_bytes() {
                     let _ = write!(hex, "{byte:02X}");
                 }
                 hex.push('>');
