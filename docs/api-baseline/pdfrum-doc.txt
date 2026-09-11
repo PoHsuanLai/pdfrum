@@ -127,7 +127,9 @@ pub fn pdfrum_doc::ap::freetext::default_appearance<R: pdfrum_object::resolve::R
 pub mod pdfrum_doc::ap::widget
 pub struct pdfrum_doc::ap::widget::LiveInput<'a>
 pub pdfrum_doc::ap::widget::LiveInput::appearance_state: core::option::Option<&'a [u8]>
+pub pdfrum_doc::ap::widget::LiveInput::border_style: core::option::Option<pdfrum_doc::ap::BorderStyle>
 pub pdfrum_doc::ap::widget::LiveInput::caret_and_selection: core::option::Option<&'a pdfrum_doc::ap::field_body::Highlight>
+pub pdfrum_doc::ap::widget::LiveInput::center_rows: bool
 pub pdfrum_doc::ap::widget::LiveInput::live: core::option::Option<&'a pdfrum_doc::ap::field_body::LiveState<'a>>
 pub pdfrum_doc::ap::widget::LiveInput::substitute: core::option::Option<pdfrum_doc::ap::Substitute<'a>>
 pub fn pdfrum_doc::ap::widget::generate_with_live_faces<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, pdfrum_doc::ap::widget::LiveInput<'_>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
@@ -137,6 +139,12 @@ pub enum pdfrum_doc::ap::Appearance
 pub pdfrum_doc::ap::Appearance::Generated(pdfrum_doc::ap::GeneratedAp)
 pub pdfrum_doc::ap::Appearance::Suppressed
 pub pdfrum_doc::ap::Appearance::Untouched
+pub enum pdfrum_doc::ap::BorderStyle
+pub pdfrum_doc::ap::BorderStyle::Beveled
+pub pdfrum_doc::ap::BorderStyle::Dash
+pub pdfrum_doc::ap::BorderStyle::Inset
+pub pdfrum_doc::ap::BorderStyle::Solid
+pub pdfrum_doc::ap::BorderStyle::Underline
 pub enum pdfrum_doc::ap::FocusBox
 pub pdfrum_doc::ap::FocusBox::Inflated
 pub pdfrum_doc::ap::FocusBox::None

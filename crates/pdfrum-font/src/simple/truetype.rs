@@ -62,10 +62,16 @@ pub(super) fn load_glyph_map(
         if has_any_glyph(glyph_index) {
             if base != FontEncoding::Builtin {
                 for c in 0..=255u8 {
-                    if let Some(name) = ctx.char_name(c)
-                        && let Some(slot) = unicodes.get_mut(usize::from(c))
-                    {
+                    let idx = usize::from(c);
+                    let Some(slot) = unicodes.get_mut(idx) else {
+                        continue;
+                    };
+                    if let Some(name) = ctx.char_name(c) {
                         *slot = unicode_from_adobe_name(name);
+                    } else if let Some(&u) = base.unicodes().and_then(|table| table.get(idx)) {
+                        // `MsSymbol` has no name table; the Unicode still
+                        // has to reach the Arial stand-in and the text dump.
+                        *slot = u;
                     }
                 }
             } else if find_charmap(ctx, CharmapId::MAC_ROMAN).is_some() {
@@ -75,6 +81,7 @@ pub(super) fn load_glyph_map(
                     }
                 }
             }
+            fill_adobe_names(ctx, base, unicodes, glyph_index);
             return;
         }
         // Nothing mapped: fall through with the table already zeroed. The next
@@ -122,15 +129,51 @@ pub(super) fn load_glyph_map(
                 *slot = char_index(ctx.glyphs, cm, u32::from(u));
             }
         }
+        fill_adobe_names(ctx, base, unicodes, glyph_index);
         if has_any_glyph(glyph_index) {
             return;
         }
     }
 
+    fill_adobe_names(ctx, base, unicodes, glyph_index);
+
     // Rung 5 — identity. Every code is its own glyph.
     for c in 0..256u16 {
         if let Some(slot) = glyph_index.get_mut(usize::from(c)) {
             *slot = c;
+        }
+    }
+}
+
+/// A TrueType `/BaseFont /Symbol` is encoded as `MsSymbol` (no names). The
+/// built-in face is a CFF that answers Adobe names. Codes the MS charmap
+/// missed still have those names.
+fn fill_adobe_names(
+    ctx: &LadderContext<'_>,
+    base: FontEncoding,
+    unicodes: &mut [u16; 256],
+    glyph_index: &mut [u16; 256],
+) {
+    if base != FontEncoding::MsSymbol {
+        return;
+    }
+    for c in 0..=255u8 {
+        let idx = usize::from(c);
+        let Some(name) = FontEncoding::AdobeSymbol.char_name(c) else {
+            continue;
+        };
+        if let Some(slot) = glyph_index.get_mut(idx)
+            && (*slot == 0 || *slot == WIDTH_UNSET)
+        {
+            let g = name_index(ctx.glyphs, name.as_bytes());
+            if g != 0 {
+                *slot = g;
+            }
+        }
+        if let Some(u) = unicodes.get_mut(idx)
+            && *u == 0
+        {
+            *u = unicode_from_adobe_name(name.as_bytes());
         }
     }
 }

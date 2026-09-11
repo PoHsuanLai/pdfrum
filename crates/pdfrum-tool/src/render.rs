@@ -161,6 +161,11 @@ pub struct SessionView<'a> {
     /// oracle's form-filler pass does and a golden comparison has to see the
     /// same pixels.
     pub popup: Option<pdfrum::PopupView>,
+    /// List-box scroll bars on this page, as `(raw /Annots index, view)`.
+    ///
+    /// The library reserves the 12-unit strip and publishes the numbers; the
+    /// bar itself is host chrome, the same bargain as [`Self::popup`].
+    pub scrollbars: Vec<(pdfrum::AnnotId, pdfrum::ScrollView)>,
 }
 
 /// One annotation's dictionary, by **raw** `/Annots` index.
@@ -363,6 +368,20 @@ pub fn rasterize<R: Resolve>(
             &limits,
             &mut build_diags,
         );
+    }
+    for (annot, view) in &session.scrollbars {
+        if let Some(widget) = widget_dict(page, annot.index as usize, r) {
+            crate::chrome::push_scrollbar(
+                &mut built,
+                view,
+                &widget,
+                catalog,
+                r,
+                ctx,
+                &limits,
+                &mut build_diags,
+            );
+        }
     }
     ctx.decode_target = previous;
     let page = built;

@@ -228,6 +228,7 @@ pub fn apply<R: Resolve>(
     // spent *after* the event's own routing so the field the event was about
     // has already committed.
     response.absorb(honour_focus_requests(session, ctx, cascade));
+    response.absorb(honour_border_style_writes(session, ctx, cascade));
     response
 }
 
@@ -253,6 +254,71 @@ fn honour_focus_requests<R: Resolve>(
     // followed, and the keyboard stays where the last honoured move left it.
     cascade.take_focus_request();
     response
+}
+
+/// Spends every `Field.borderStyle` a script left.
+///
+/// Stored on the session and regenerated through the ordinary appearance
+/// path, because writing `/BS` from inside the native setter would re-enter
+/// the routing the script is already inside.
+fn honour_border_style_writes<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+) -> Response {
+    let writes = cascade.drain_border_style_writes();
+    if writes.is_empty() {
+        return Response::ignored();
+    }
+    let mut response = Response::consumed();
+    for (index, style) in writes {
+        let Some(field) = ctx.field_of_index(index) else {
+            continue;
+        };
+        session.border_styles.insert(field, style);
+        for widget in ctx
+            .page
+            .widgets
+            .iter()
+            .filter(|widget| widget.field == field)
+        {
+            if let Some(update) = appearance_of(session, ctx, field, widget.id) {
+                response.push(update);
+            } else if let Some(generated) = generate_border_only(ctx, widget, style) {
+                response.push(AppearanceUpdate::new(
+                    widget.id,
+                    UpdateKind::Regenerated(Box::new(generated)),
+                ));
+            }
+        }
+    }
+    response
+}
+
+/// Chrome-only regeneration for a field nothing has touched yet: no live
+/// text, no caret, just the new border style over the file's own value.
+fn generate_border_only<R: Resolve>(
+    ctx: &Context<'_, R>,
+    widget: &WidgetInfo,
+    style: ap::BorderStyle,
+) -> Option<pdfrum_doc::GeneratedAp> {
+    with_font(ctx, widget, |font, substitute| {
+        ap::widget::generate_with_live_faces(
+            &widget.dict,
+            ctx.catalog,
+            font,
+            ctx.resolve,
+            ap::widget::LiveInput {
+                caret_and_selection: None,
+                live: None,
+                substitute,
+                appearance_state: None,
+                border_style: Some(style),
+                center_rows: false,
+            },
+        )
+    })
+    .flatten()
 }
 
 /// How many times one event may move the keyboard through `Field.setFocus`.
@@ -496,7 +562,12 @@ fn mouse_up<R: Resolve>(
     ) {
         // `SetFocusAnnot` first, `OnButtonUp` second
         // (`cffl_interactiveformfiller.cpp:213-250`) — so a document with
-        // both scripts alerts `focus` and then `up`.
+        // both scripts alerts `focus` and then `up`. A mouseup-first `.evt`
+        // (`bug_1447268`) never sent the down that `mouse_down` focuses on,
+        // so the release has to take the keyboard itself.
+        if let Some(widget) = ctx.widget(id) {
+            let _ = take_focus(session, ctx, cascade, FocusTarget::Widget(widget.field, id));
+        }
         fire_pointer(session, ctx, cascade, id, PointerTrigger::Focus, modifiers);
         fire_pointer(session, ctx, cascade, id, PointerTrigger::Up, modifiers);
     }
@@ -1819,6 +1890,101 @@ pub fn scroll_view<R: Resolve>(
     })
 }
 
+/// Every list box on this page that would show a scroll bar.
+///
+/// A host draws those bars as chrome — the library reserves the 12-unit
+/// strip in a live list's body and stops there. Combo-box dropdowns are
+/// a different window ([`popup_view`]) and are not listed here.
+///
+/// # Examples
+///
+/// A page of text fields has no list boxes, so the host has nothing to draw:
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let session = FormSession::new();
+/// assert!(route::scroll_views_on_page(&session, &ctx).is_empty());
+/// ```
+#[must_use]
+pub fn scroll_views_on_page<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+) -> Vec<(AnnotId, crate::popup::ScrollView)> {
+    ctx.page
+        .widgets
+        .iter()
+        .filter(|widget| widget.kind == Some(pdfrum_doc::form::FieldKind::List))
+        .filter_map(|widget| {
+            let view = list_scroll_view(session, ctx, widget)?;
+            view.is_scrollable().then_some((widget.id, view))
+        })
+        .collect()
+}
+
+/// [`scroll_view`] for a list box, falling back to the file when the
+/// session has never built interaction state for it.
+fn list_scroll_view<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+    widget: &WidgetInfo,
+) -> Option<crate::popup::ScrollView> {
+    match session.fields.get(&widget.field) {
+        Some(FieldState::Choice(choice)) => {
+            let visible = visible_rows(ctx, widget, choice);
+            Some(crate::popup::ScrollView {
+                top_visible: choice.top_visible,
+                visible_rows: visible,
+                total: choice.options.len(),
+            })
+        }
+        Some(_) => None,
+        None => {
+            let options = widget.options(ctx.resolve);
+            let choice = ChoiceState {
+                options,
+                top_visible: widget.top_index(ctx.resolve),
+                ..ChoiceState::default()
+            };
+            let visible = visible_rows(ctx, widget, &choice);
+            Some(crate::popup::ScrollView {
+                top_visible: choice.top_visible,
+                visible_rows: visible,
+                total: choice.options.len(),
+            })
+        }
+    }
+}
+
 /// The host reporting that the user picked a row of an open dropdown.
 ///
 /// A host that drew the list from [`popup_view`] tells the session what was
@@ -2536,6 +2702,7 @@ pub fn kill_focus<R: Resolve>(
     // `Field.setFocus` — which then puts the keyboard somewhere rather than
     // nowhere. Spent here for the same reason `apply` spends it.
     response.absorb(honour_focus_requests(session, ctx, cascade));
+    response.absorb(honour_border_style_writes(session, ctx, cascade));
     response
 }
 
@@ -3069,13 +3236,79 @@ fn appearance_of<R: Resolve>(
         .then(|| session.formatted.get(&field))
         .flatten()
         .map(String::as_str);
-    let generated = generate(ctx, widget, state, focused, display)?;
+    let generated = generate(
+        ctx,
+        widget,
+        state,
+        focused,
+        display,
+        session.border_styles.get(&field).copied(),
+    )?;
     let kind = if focused {
         UpdateKind::LiveEdit(Box::new(generated))
     } else {
         UpdateKind::Regenerated(Box::new(generated))
     };
     Some(AppearanceUpdate::new(id, kind))
+}
+
+/// Every widget on this page that has session state, as `FPDF_FFLDraw`
+/// would paint it: the live editor if focused, the committed appearance
+/// otherwise.
+///
+/// Event deltas alone miss an `/OpenAction` `setFocus` that never produced a
+/// later click (`bug_1445426`, `bug_1447268`).
+///
+/// # Examples
+///
+/// A session that has never seen an event has no interaction state, so there
+/// is nothing to overlay:
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let session = FormSession::new();
+/// assert!(route::appearances_on_page(&session, &ctx).is_empty());
+/// ```
+#[must_use]
+pub fn appearances_on_page<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+) -> Vec<AppearanceUpdate> {
+    ctx.page
+        .widgets
+        .iter()
+        .filter_map(|widget| appearance_of(session, ctx, widget.field, widget.id))
+        .collect()
 }
 
 /// Generates a widget's appearance stream for its current interaction state.
@@ -3091,6 +3324,7 @@ fn generate<R: Resolve>(
     state: &FieldState,
     focused: bool,
     display: Option<&str>,
+    border_style: Option<ap::BorderStyle>,
 ) -> Option<pdfrum_doc::GeneratedAp> {
     let selected = selected_rows(state);
     let live = live_state(state, &selected, display);
@@ -3125,6 +3359,8 @@ fn generate<R: Resolve>(
                 live: live.as_ref(),
                 substitute,
                 appearance_state: as_override.map(str::as_bytes),
+                border_style,
+                center_rows: false,
             },
         )
     })

@@ -135,6 +135,9 @@ pub struct PlacedGlyph {
     pub key: GlyphKey,
     /// Where the bitmap goes, when this run takes the bitmap path.
     pub bitmap: Option<BitmapPlacement>,
+    /// The outline came from the Arial `ShouldUseFont` stand-in, so the
+    /// bitmap path must rasterize that face rather than the run's font.
+    pub fallback: bool,
 }
 
 impl PlacedGlyph {
@@ -596,7 +599,8 @@ fn place_one_glyph(
     key: GlyphKey,
     font: &Font,
     item: &CharItem,
-    gid: pdfrum_font::Gid,
+    face_advance: i32,
+    fallback: bool,
     at: &Placement,
 ) -> PlacedGlyph {
     let japan1 = japan1_adjust(font, item, at.size);
@@ -618,7 +622,7 @@ fn place_one_glyph(
                       the f32 is this crate's own carrier"
         )]
         let declared = item.width as i32;
-        glyph_spacing_adjust(declared, font.glyph_advance(gid), at.size)
+        glyph_spacing_adjust(declared, face_advance, at.size)
     } else {
         GlyphAdjust::NONE
     };
@@ -635,6 +639,75 @@ fn place_one_glyph(
             * space.matrix,
         key,
         bitmap: None,
+        fallback,
+    }
+}
+
+/// Resolve one decoded character onto `out`: the host face, or the Arial
+/// stand-in when [`Font::should_use_own_glyph`] fails.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the two arms share the run's substitution pair and this item's \
+              dest_width; grouping them would invent a type with one call site"
+)]
+fn push_placed_glyph(
+    out: &mut Vec<PlacedGlyph>,
+    font: &Font,
+    cache: &mut GlyphCache,
+    item: &CharItem,
+    dest_width: i32,
+    subst_weight: i32,
+    subst_italic: i32,
+    at: &Placement,
+) {
+    if font.should_use_own_glyph(item.gid) {
+        if let Some(gid) = item.gid {
+            let key = GlyphKey {
+                font: font.id(),
+                gid,
+                dest_width,
+                weight: subst_weight,
+                italic_angle: subst_italic,
+                vertical: item.vertical_glyph,
+            };
+            if let Some(outline) = cache.shared(font, key) {
+                out.push(place_one_glyph(
+                    outline,
+                    key,
+                    font,
+                    item,
+                    font.glyph_advance(gid),
+                    false,
+                    at,
+                ));
+            }
+        }
+        return;
+    }
+    let Some(fb) = font.glyph_fallback() else {
+        return;
+    };
+    let Some(gid) = fb.gid(&item.unicode, item.code) else {
+        return;
+    };
+    let key = GlyphKey {
+        font: fb.id(),
+        gid,
+        dest_width,
+        weight: subst_weight,
+        italic_angle: subst_italic,
+        vertical: item.vertical_glyph,
+    };
+    if let Some(outline) = cache.shared_fallback(fb, at.vertical, key) {
+        out.push(place_one_glyph(
+            outline,
+            key,
+            font,
+            item,
+            fb.advance(gid),
+            true,
+            at,
+        ));
     }
 }
 
@@ -706,44 +779,35 @@ pub fn place_glyphs_into(
             } else {
                 0.0
             };
-            if let Some(gid) = item.gid {
-                let key = GlyphKey {
-                    font: font.id(),
-                    gid,
-                    dest_width: if widths_drive_the_design {
-                        #[expect(
-                            clippy::cast_possible_truncation,
-                            reason = "`GetCharWidth` is an int on the C++ side \
-                                      and a /Widths entry is a small number; \
-                                      the f32 is this crate's own carrier"
-                        )]
-                        {
-                            item.width as i32
-                        }
-                    } else {
-                        0
-                    },
-                    weight: subst_weight,
-                    italic_angle: subst_italic,
-                    vertical: item.vertical_glyph,
-                };
-                if let Some(outline) = cache.shared(font, key) {
-                    out.push(place_one_glyph(
-                        outline,
-                        key,
-                        font,
-                        &item,
-                        gid,
-                        &Placement {
-                            pen,
-                            size: *size,
-                            text_to_device,
-                            vertical,
-                            spacing,
-                        },
-                    ));
+            let dest_width = if widths_drive_the_design {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "`GetCharWidth` is an int on the C++ side \
+                              and a /Widths entry is a small number; \
+                              the f32 is this crate's own carrier"
+                )]
+                {
+                    item.width as i32
                 }
-            }
+            } else {
+                0
+            };
+            push_placed_glyph(
+                out,
+                font,
+                cache,
+                &item,
+                dest_width,
+                subst_weight,
+                subst_italic,
+                &Placement {
+                    pen,
+                    size: *size,
+                    text_to_device,
+                    vertical,
+                    spacing,
+                },
+            );
             if vertical {
                 pen.y += advance + word;
             } else {

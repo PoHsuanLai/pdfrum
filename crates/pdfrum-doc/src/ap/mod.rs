@@ -28,6 +28,7 @@
 //! missing `/AP`, a missing `/N`, or a scalar `/N` leaves the door open.
 
 mod border;
+pub use border::BorderStyle;
 mod da;
 pub(crate) mod emit;
 pub mod field_body;

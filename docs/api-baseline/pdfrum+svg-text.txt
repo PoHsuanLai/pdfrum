@@ -379,6 +379,7 @@ impl pdfrum::FormSession<'_>
 pub fn pdfrum::FormSession<'_>::owned(alloc::sync::Arc<pdfrum::Document>) -> pdfrum::OwnedFormSession
 pub fn pdfrum::FormSession<'_>::owned_with_config(alloc::sync::Arc<pdfrum::Document>, pdfrum_form::session::SessionConfig) -> pdfrum::OwnedFormSession
 impl<'a> pdfrum::FormSession<'a>
+pub fn pdfrum::FormSession<'a>::appearances_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::blur(&mut self) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::can_redo(&self) -> bool
@@ -404,6 +405,7 @@ pub fn pdfrum::FormSession<'a>::new(&'a pdfrum::Document) -> pdfrum::FormSession
 pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub fn pdfrum::FormSession<'a>::scrollbars_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<(pdfrum_form::session::AnnotId, pdfrum_form::popup::ScrollView)>
 pub fn pdfrum::FormSession<'a>::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::set_index_selected(&mut self, usize, bool) -> bool
 pub fn pdfrum::FormSession<'a>::set_viewed_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
@@ -473,6 +475,7 @@ pub fn pdfrum::OwnedFormSession::mouse_wheel(&mut self, impl core::convert::Into
 pub fn pdfrum::OwnedFormSession::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::OwnedFormSession::replace_selection(&mut self, &str) -> bool
 pub fn pdfrum::OwnedFormSession::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub fn pdfrum::OwnedFormSession::scrollbars_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<(pdfrum_form::session::AnnotId, pdfrum_form::popup::ScrollView)>
 pub fn pdfrum::OwnedFormSession::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::OwnedFormSession::set_index_selected(&mut self, usize, bool) -> bool
 pub fn pdfrum::OwnedFormSession::set_viewed_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)

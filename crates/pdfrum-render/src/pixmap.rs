@@ -400,10 +400,12 @@ impl Pixmap {
     /// C = Cn + (Cn - C0) * (a0 / agn - a0)
     /// ```
     ///
-    /// `C0`/`a0` are the backdrop's and `Cn`/`agn` the group's; at
-    /// `agn == a0` this returns a transparent pixel, the same image once
-    /// composited back. `backdrop` must match this pixmap's dimensions; a
-    /// mismatch is a no-op, as for [`Self::multiply_alpha_mask`].
+    /// `C0`/`a0` are the backdrop's and `Cn`/`agn` the group's. A pixel that
+    /// still equals the backdrop is empty. Over an **opaque** backdrop alpha
+    /// cannot rise, so a pixel the group *replaced* keeps the group's colour
+    /// — otherwise a later `ca < 1` multiply has nothing to fade. `backdrop`
+    /// must match this pixmap's dimensions; a mismatch is a no-op, as for
+    /// [`Self::multiply_alpha_mask`].
     ///
     /// ```
     /// use pdfrum_render::Pixmap;
@@ -433,9 +435,19 @@ impl Pixmap {
             .zip(backdrop.data.as_chunks::<4>().0)
         {
             let (agn, a0) = (chunk[3], base[3]);
-            // Nothing was added over this pixel: it is pure backdrop, and the
-            // group contributes nothing there.
+            // Over an opaque backdrop alpha cannot rise, so "agn <= a0" is
+            // true of every pixel — including ones the group replaced. Those
+            // keep the group's colour; only a pixel that still *is* the
+            // backdrop is empty. Without this, a form at `ca < 1` on a white
+            // page (example_062's templates) composites as nothing.
             if agn <= a0 {
+                if a0 == 255
+                    && (chunk.first() != base.first()
+                        || chunk.get(1) != base.get(1)
+                        || chunk.get(2) != base.get(2))
+                {
+                    continue;
+                }
                 for b in chunk.iter_mut() {
                     *b = 0;
                 }
@@ -444,11 +456,7 @@ impl Pixmap {
             // Un-premultiply, apply the formula, re-premultiply. The result's
             // alpha is the group's own contribution, `(agn - a0) / (1 - a0)`.
             let (fa0, fagn) = (f32::from(a0) / 255.0, f32::from(agn) / 255.0);
-            let out_alpha = if fa0 >= 1.0 {
-                0.0
-            } else {
-                ((fagn - fa0) / (1.0 - fa0)).clamp(0.0, 1.0)
-            };
+            let out_alpha = ((fagn - fa0) / (1.0 - fa0)).clamp(0.0, 1.0);
             for index in 0..3 {
                 let (Some(&cn), Some(&c0)) = (chunk.get(index), base.get(index)) else {
                     continue;
@@ -1201,17 +1209,14 @@ mod tests {
         // And it is not the backdrop: the removal changed the colour.
         assert_ne!(after, [45, 60, 75, 128]);
 
-        // 3. `[oracle-bug]` note, recorded rather than hidden: over a fully
-        //    **opaque** backdrop a non-isolated group's alpha cannot rise
-        //    above 255, so the alpha channel carries no record of what the
-        //    group painted and the removal yields a transparent pixel. That
-        //    is the correct composite — the page beneath is already those
-        //    pixels — but it means this formula recovers nothing extra there,
-        //    which is why the two rows it turns byte-exact are the evidence
-        //    that matters and not this unit test.
+        // 3. Over a fully opaque backdrop alpha cannot rise, so the group's
+        //    contribution is recovered by comparing colour: a pixel that still
+        //    equals the backdrop is empty, a pixel the group replaced keeps
+        //    the group's colour so a later `ca < 1` multiply has something
+        //    to fade.
         let mut group = Pixmap::filled(1, 1, peniko::Color::from_rgba8(200, 40, 10, 255));
         group.remove_backdrop(&backdrop);
-        assert_eq!(group.pixel(0, 0), Some([0, 0, 0, 0]));
+        assert_eq!(group.pixel(0, 0), Some([200, 40, 10, 255]));
     }
 
     /// A mismatched backdrop is a no-op, on the same
@@ -1245,6 +1250,17 @@ mod tests {
         let mut p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 255, 255, 255));
         p.multiply_alpha(0.5);
         assert_eq!(p.pixel(0, 0), Some([127, 127, 127, 127]));
+    }
+
+    #[test]
+    fn an_opaque_dest_times_a_mask_replaces_alpha_then_premultiplies() {
+        // An already-opaque pixel: RGB and A both scale by the mask.
+        let mut p = Pixmap::filled(1, 1, peniko::Color::from_rgba8(10, 20, 30, 255));
+        p.multiply_alpha_mask(&AlphaMask::filled(1, 1, 128));
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([mul255(10, 128), mul255(20, 128), mul255(30, 128), 128])
+        );
     }
 
     #[test]

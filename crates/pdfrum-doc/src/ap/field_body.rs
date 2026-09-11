@@ -353,6 +353,7 @@ pub(crate) fn generate<R: Resolve>(
     r: &R,
     caret_and_selection: Option<&Highlight>,
     live: Option<&LiveState<'_>>,
+    center_rows: bool,
 ) -> Option<Body> {
     let kind = Kind::of(dict, r)?;
     let form = catalog.dict(names::ACRO_FORM, r);
@@ -397,6 +398,7 @@ pub(crate) fn generate<R: Resolve>(
         substitute,
         caret_and_selection,
         live,
+        center_rows,
     };
     let mut out = Content::new();
     match kind {
@@ -661,6 +663,8 @@ struct BodyInput<'a> {
     caret_and_selection: Option<&'a Highlight>,
     /// What a focused field is showing instead of the stored value.
     live: Option<&'a LiveState<'a>>,
+    /// Vertically centre each list row (`SetAlignmentV(1)`).
+    center_rows: bool,
 }
 
 impl BodyInput<'_> {
@@ -979,11 +983,19 @@ fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
     for (index, option) in options.iter().enumerate().skip(top) {
         let layout = vt::layout(&option.label, &config, &font.metrics);
         let height = geom::height(layout.content_rect_pdf(plate));
+        // `CPWL_ListBox::DrawThisAppearance` offsets at the row midpoint
+        // with `SetAlignmentV(1)`. Stored list-box appearances stack from
+        // the top; a combo popup is a PWL list and centres.
+        let text_y = if input.center_rows {
+            y + shift_y - height / 2.0
+        } else {
+            y + shift_y
+        };
         let written = vt::edit_ap::generate(
             &layout,
             &config,
             &font.metrics,
-            (shift_x, y + shift_y),
+            (shift_x, text_y),
             vt::edit_ap::Grouping::Continuous,
             |code| face_for(font, input.substitute, &appearance.font_name, code),
         );
@@ -1319,6 +1331,7 @@ mod tests {
             &NoResolve,
             caret_and_selection,
             live,
+            false,
         )
         .map(|body| String::from_utf8_lossy(&body.stream).into_owned())
     }
@@ -1876,6 +1889,7 @@ mod tests {
             &NoResolve,
             None,
             None,
+            false,
         )
         .expect("a body");
         // Compared as **bytes**. A code-page byte is not valid UTF-8, so
@@ -1934,10 +1948,20 @@ mod tests {
             &NoResolve,
             None,
             None,
+            false,
         )
         .expect("a body");
-        let plain = super::generate(&widget, &catalog(), &font, None, &NoResolve, None, None)
-            .expect("a body");
+        let plain = super::generate(
+            &widget,
+            &catalog(),
+            &font,
+            None,
+            &NoResolve,
+            None,
+            None,
+            false,
+        )
+        .expect("a body");
         assert_eq!(
             offered.stream, plain.stream,
             "a substitute nothing reaches writes the same stream"

@@ -335,21 +335,13 @@ fn draw_tiling<B: RasterBackend>(
     // truncation in each blend biases the result upward by a count or two —
     // which is exactly the 127-vs-129/130 spread `bug_1288_2` showed.
     let mut screen = Screen::new(clip_w, clip_h);
-    let cell_bbox = pattern_to_device.transform_rect_bbox(pattern.bbox);
-    let [_, _, _, _, e, f] = pattern_to_device.as_coeffs();
-    let left_offset = cell_bbox.x0 - e;
-    let top_offset = cell_bbox.y0 - f;
+    let place = TilePlace::new(pattern, pattern_to_device, clip, cell_w, cell_h);
+    let Some(range) = place.range(range) else {
+        return;
+    };
     for row in range.min_row..=range.max_row {
         for col in range.min_col..=range.max_col {
-            let origin = pattern_to_device
-                * kurbo::Point::new(
-                    f64::from(col) * f64::from(pattern.x_step),
-                    f64::from(row) * f64::from(pattern.y_step),
-                );
-            let (Some(x), Some(y)) = (
-                checked_start(origin.x + left_offset, clip.left),
-                checked_start(origin.y + top_offset, clip.top),
-            ) else {
+            let Some((x, y)) = place.origin(col, row) else {
                 // A tile position that will not fit an `i32` aborts the whole
                 // pattern rather than skipping the tile.
                 return;
@@ -363,6 +355,152 @@ fn draw_tiling<B: RasterBackend>(
         ImageQuality::Nearest,
         1.0,
     );
+}
+
+/// Where each cached tile is blitted: integer grid when `bAligned`, else
+/// the float-step origin rounded into the clip.
+struct TilePlace {
+    aligned: bool,
+    orig_x: i32,
+    orig_y: i32,
+    cell_w: i32,
+    cell_h: i32,
+    clip: IntRect,
+    pattern_to_device: Affine,
+    x_step: f32,
+    y_step: f32,
+    left_offset: f64,
+    top_offset: f64,
+}
+
+impl TilePlace {
+    fn new(
+        pattern: &TilingPattern,
+        pattern_to_device: Affine,
+        clip: IntRect,
+        cell_w: i32,
+        cell_h: i32,
+    ) -> Self {
+        let cell_bbox = pattern_to_device.transform_rect_bbox(pattern.bbox);
+        let [_, _, _, _, e, f] = pattern_to_device.as_coeffs();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a pattern origin is a device pixel; round-to-nearest is the C++ `FXSYS_roundf`"
+        )]
+        let (orig_x, orig_y) = (e.round() as i32, f.round() as i32);
+        Self {
+            aligned: tiling_is_aligned(pattern, pattern_to_device),
+            orig_x,
+            orig_y,
+            cell_w,
+            cell_h,
+            clip,
+            pattern_to_device,
+            x_step: pattern.x_step,
+            y_step: pattern.y_step,
+            left_offset: cell_bbox.x0 - e,
+            top_offset: cell_bbox.y0 - f,
+        }
+    }
+
+    /// `bAligned` rewrites the index range onto the integer grid so a scaled
+    /// identity cell does not accumulate a float step (`2_uncolor_tiling`).
+    fn range(&self, fallback: pdfrum_page::TileRange) -> Option<pdfrum_page::TileRange> {
+        if self.aligned {
+            aligned_tile_range(
+                self.clip,
+                self.orig_x,
+                self.orig_y,
+                self.cell_w,
+                self.cell_h,
+            )
+        } else {
+            Some(fallback)
+        }
+    }
+
+    fn origin(&self, col: i32, row: i32) -> Option<(i32, i32)> {
+        if self.aligned {
+            let x = col
+                .checked_mul(self.cell_w)
+                .and_then(|off| self.orig_x.checked_add(off))
+                .and_then(|v| v.checked_sub(self.clip.left))?;
+            let y = row
+                .checked_mul(self.cell_h)
+                .and_then(|off| self.orig_y.checked_add(off))
+                .and_then(|v| v.checked_sub(self.clip.top))?;
+            Some((x, y))
+        } else {
+            let origin = self.pattern_to_device
+                * kurbo::Point::new(
+                    f64::from(col) * f64::from(self.x_step),
+                    f64::from(row) * f64::from(self.y_step),
+                );
+            let x = checked_start(origin.x + self.left_offset, self.clip.left)?;
+            let y = checked_start(origin.y + self.top_offset, self.clip.top)?;
+            Some((x, y))
+        }
+    }
+}
+
+/// Whether the cell is a unit step on an axis-aligned (or 90°-rotated)
+/// device grid, so tile origins can be integer multiples of the cell size
+/// (`cpdf_rendertiling.cpp`'s `bAligned`).
+///
+/// `/BBox` must be exactly `(0, 0, XStep, YStep)` and the pattern-to-device
+/// matrix must be a scale (`|b|*1000 < |a|` and `|c|*1000 < |d|`) or a
+/// 90° rotation (`|a|*1000 < |b|` and `|d|*1000 < |c|`): a shear or a bbox
+/// that does not fill the step still walks the float grid.
+fn tiling_is_aligned(pattern: &TilingPattern, pattern_to_device: Affine) -> bool {
+    // C++ compares the float bbox to the step with `==`.
+    #[expect(
+        clippy::float_cmp,
+        reason = "bAligned is an exact float identity, not a tolerance"
+    )]
+    let bbox_is_cell = pattern.bbox.x0 == 0.0
+        && pattern.bbox.y0 == 0.0
+        && pattern.bbox.x1 == f64::from(pattern.x_step)
+        && pattern.bbox.y1 == f64::from(pattern.y_step);
+    if !bbox_is_cell {
+        return false;
+    }
+    let [a, b, c, d, _, _] = pattern_to_device.as_coeffs();
+    // `CFX_Matrix::IsScaled`: `|b| * 1000 < |a| && |c| * 1000 < |d|`.
+    let scaled = b.abs() * 1000.0 < a.abs() && c.abs() * 1000.0 < d.abs();
+    // `CFX_Matrix::Is90Rotated`: `|a| * 1000 < |b| && |d| * 1000 < |c|`.
+    let rotated = a.abs() * 1000.0 < b.abs() && d.abs() * 1000.0 < c.abs();
+    scaled || rotated
+}
+
+/// The inclusive tile-index range `bAligned` walks, in device pixels.
+///
+/// C++ integer division is toward zero, then `min` decrements when the clip
+/// edge is strictly left/above the origin and `max` decrements when it is
+/// left/above *or equal*. An index that will not fit `i32` aborts the
+/// pattern, matching the unaligned overflow guard.
+fn aligned_tile_range(
+    clip: IntRect,
+    orig_x: i32,
+    orig_y: i32,
+    width: i32,
+    height: i32,
+) -> Option<pdfrum_page::TileRange> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let index = |edge: i32, orig: i32, step: i32, decrement: bool| -> Option<i32> {
+        let mut idx = (i64::from(edge) - i64::from(orig)) / i64::from(step);
+        if decrement {
+            idx -= 1;
+        }
+        i32::try_from(idx).ok()
+    };
+    Some(pdfrum_page::TileRange {
+        min_col: index(clip.left, orig_x, width, clip.left < orig_x)?,
+        max_col: index(clip.right, orig_x, width, clip.right <= orig_x)?,
+        min_row: index(clip.top, orig_y, height, clip.top < orig_y)?,
+        max_row: index(clip.bottom, orig_y, height, clip.bottom <= orig_y)?,
+    })
 }
 
 /// Whether the tiles are drawn one at a time rather than through a cached
@@ -813,6 +951,64 @@ mod tests {
         assert!(!tiles_one_at_a_time((399, 29), (400, 30)));
         // `bug_1693`'s cell, which cannot be allocated at all.
         assert!(tiles_one_at_a_time((102_400, 12_800), (200, 200)));
+    }
+
+    #[test]
+    fn an_identity_cell_filling_its_step_is_aligned() {
+        let pattern = TilingPattern {
+            colored: true,
+            x_step: 10.0,
+            y_step: 10.0,
+            bbox: Rect::new(0.0, 0.0, 10.0, 10.0),
+            matrix: Affine::IDENTITY,
+            resources: None,
+            content: pdfrum_object::ByteSpan::from(Vec::<u8>::new()),
+            objects: Vec::new(),
+        };
+        assert!(tiling_is_aligned(&pattern, Affine::IDENTITY));
+        // A shear is not `IsScaled` and not `Is90Rotated`.
+        assert!(!tiling_is_aligned(
+            &pattern,
+            Affine::new([1.0, 0.5, 0.0, 1.0, 0.0, 0.0])
+        ));
+        // A bbox that does not fill the step stays on the float grid.
+        let mut inset = pattern.clone();
+        inset.bbox = Rect::new(0.0, 0.0, 8.0, 10.0);
+        assert!(!tiling_is_aligned(&inset, Affine::IDENTITY));
+        // A 90° rotation (`a=d=0`, `b=-s`, `c=s`) is aligned.
+        assert!(tiling_is_aligned(
+            &pattern,
+            Affine::new([0.0, -1.0, 1.0, 0.0, 0.0, 0.0])
+        ));
+    }
+
+    #[test]
+    fn an_aligned_range_uses_toward_zero_then_decrements() {
+        // orig at (0, 0), 10×10 cells, clip [0, 0, 20, 20): tiles 0, 1, and
+        // the one that starts on the exclusive edge (C++ still includes it).
+        let clip = IntRect {
+            left: 0,
+            top: 0,
+            right: 20,
+            bottom: 20,
+        };
+        let range = aligned_tile_range(clip, 0, 0, 10, 10).expect("fits i32");
+        assert_eq!(range.min_col, 0);
+        assert_eq!(range.max_col, 2);
+        assert_eq!(range.min_row, 0);
+        assert_eq!(range.max_row, 2);
+        // Clip left of the origin: toward-zero of a negative, then decrement.
+        let clip = IntRect {
+            left: -1,
+            top: -1,
+            right: 10,
+            bottom: 10,
+        };
+        let range = aligned_tile_range(clip, 0, 0, 10, 10).expect("fits i32");
+        assert_eq!(range.min_col, -1);
+        assert_eq!(range.max_col, 1);
+        assert_eq!(range.min_row, -1);
+        assert_eq!(range.max_row, 1);
     }
 
     #[test]

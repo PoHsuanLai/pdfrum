@@ -296,6 +296,7 @@ mod tests {
     )]
 
     use super::{ImageCache, MAX_ENTRIES, RequestedSize};
+    use crate::color::Family;
     use crate::image::{ImageData, Pixels, Samples};
     use pdfrum_object::ObjRef;
     use std::sync::Arc;
@@ -308,6 +309,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: Family::Unknown,
         })
     }
 
@@ -448,6 +450,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: Family::Unknown,
         })
     }
 
@@ -545,6 +548,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: Family::Unknown,
         });
         let mut cache = ImageCache::default();
         let key = ObjRef::new(1, 0);

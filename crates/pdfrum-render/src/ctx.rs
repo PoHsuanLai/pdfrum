@@ -177,6 +177,12 @@ pub struct RenderCaches {
     /// own. Neither is a cache: the bytes depend on the glyph and the fill
     /// colour and are rewritten in full every time. Only the memory is reused.
     pub(crate) glyph_blit: GlyphBlitScratch,
+    /// Type 3 baseline snapping, keyed by the linear device matrix.
+    ///
+    /// Order-dependent by design, so it lives on the session rather than in
+    /// a process-wide cache: a shared one would make baselines depend on
+    /// what else had been drawn.
+    pub(crate) type3_blues: crate::type3::BlueCache,
 }
 
 /// The per-occurrence buffers a glyph blit fills.

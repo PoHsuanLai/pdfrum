@@ -315,6 +315,7 @@ pub pdfrum_form::route::Context::fonts: &'a pdfrum_doc::ap::FormFonts
 pub pdfrum_form::route::Context::page: &'a pdfrum_form::PageForm
 pub pdfrum_form::route::Context::permissions: pdfrum_form::Permissions
 pub pdfrum_form::route::Context::resolve: &'a R
+pub fn pdfrum_form::route::appearances_on_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> alloc::vec::Vec<pdfrum_form::AppearanceUpdate>
 pub fn pdfrum_form::route::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::Event) -> pdfrum_form::Response
 pub fn pdfrum_form::route::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::AnnotId, usize) -> pdfrum_form::Response
 pub fn pdfrum_form::route::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> pdfrum_form::Response
@@ -324,6 +325,7 @@ pub fn pdfrum_form::route::kill_focus<R: pdfrum_object::resolve::Resolve>(&mut p
 pub fn pdfrum_form::route::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_form::PopupView>
 pub fn pdfrum_form::route::replace_selection<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::FieldId, &str) -> bool
 pub fn pdfrum_form::route::scroll_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> core::option::Option<pdfrum_form::ScrollView>
+pub fn pdfrum_form::route::scroll_views_on_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> alloc::vec::Vec<(pdfrum_form::AnnotId, pdfrum_form::ScrollView)>
 pub enum pdfrum_form::Button
 pub pdfrum_form::Button::Left
 pub pdfrum_form::Button::Right
@@ -548,6 +550,7 @@ pub fn pdfrum_form::FocusRing::len(&self) -> usize
 pub fn pdfrum_form::FocusRing::next(&self, pdfrum_form::AnnotId) -> core::option::Option<pdfrum_form::AnnotId>
 pub fn pdfrum_form::FocusRing::prev(&self, pdfrum_form::AnnotId) -> core::option::Option<pdfrum_form::AnnotId>
 pub struct pdfrum_form::FormSession
+pub pdfrum_form::FormSession::border_styles: alloc::collections::btree::map::BTreeMap<pdfrum_form::FieldId, pdfrum_doc::ap::border::BorderStyle>
 pub pdfrum_form::FormSession::config: pdfrum_form::SessionConfig
 pub pdfrum_form::FormSession::dirty: alloc::collections::btree::set::BTreeSet<pdfrum_form::FieldId>
 pub pdfrum_form::FormSession::drag: core::option::Option<pdfrum_form::DragAnchor>
@@ -595,6 +598,7 @@ pub fn pdfrum_form::Modifiers::bitor(self, Self) -> Self
 pub struct pdfrum_form::NoScripts
 impl pdfrum_form::Cascade for pdfrum_form::NoScripts
 pub fn pdfrum_form::NoScripts::calculate(&mut self, &mut pdfrum_form::FieldWrites, &pdfrum_form::FieldRef)
+pub fn pdfrum_form::NoScripts::drain_border_style_writes(&mut self) -> alloc::vec::Vec<(u32, pdfrum_doc::ap::border::BorderStyle)>
 pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
@@ -750,6 +754,7 @@ pub fn pdfrum_form::WidgetInfo::top_index<R: pdfrum_object::resolve::Resolve>(&s
 pub fn pdfrum_form::WidgetInfo::value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub trait pdfrum_form::Cascade
 pub fn pdfrum_form::Cascade::calculate(&mut self, &mut pdfrum_form::FieldWrites, &pdfrum_form::FieldRef)
+pub fn pdfrum_form::Cascade::drain_border_style_writes(&mut self) -> alloc::vec::Vec<(u32, pdfrum_doc::ap::border::BorderStyle)>
 pub fn pdfrum_form::Cascade::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::Cascade::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::Cascade::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
@@ -758,6 +763,7 @@ pub fn pdfrum_form::Cascade::take_focus_request(&mut self) -> core::option::Opti
 pub fn pdfrum_form::Cascade::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 impl pdfrum_form::Cascade for pdfrum_form::NoScripts
 pub fn pdfrum_form::NoScripts::calculate(&mut self, &mut pdfrum_form::FieldWrites, &pdfrum_form::FieldRef)
+pub fn pdfrum_form::NoScripts::drain_border_style_writes(&mut self) -> alloc::vec::Vec<(u32, pdfrum_doc::ap::border::BorderStyle)>
 pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
@@ -772,6 +778,7 @@ impl pdfrum_form::edit::place::PlaceExt for pdfrum_doc::vt::hit::Place
 pub fn pdfrum_doc::vt::hit::Place::at_line_start(self) -> bool
 pub fn pdfrum_doc::vt::hit::Place::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
 pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::appearances_on_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> alloc::vec::Vec<pdfrum_form::AppearanceUpdate>
 pub fn pdfrum_form::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::Event) -> pdfrum_form::Response
 pub fn pdfrum_form::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::AnnotId, usize) -> pdfrum_form::Response
 pub fn pdfrum_form::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> pdfrum_form::Response
@@ -782,3 +789,4 @@ pub fn pdfrum_form::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form:
 pub fn pdfrum_form::read_page<R: pdfrum_object::resolve::Resolve>(impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> pdfrum_form::PageForm
 pub fn pdfrum_form::replace_selection<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::FieldId, &str) -> bool
 pub fn pdfrum_form::scroll_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> core::option::Option<pdfrum_form::ScrollView>
+pub fn pdfrum_form::scroll_views_on_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> alloc::vec::Vec<(pdfrum_form::AnnotId, pdfrum_form::ScrollView)>

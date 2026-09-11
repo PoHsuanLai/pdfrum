@@ -15,6 +15,8 @@
 // back; `dyn RenderDevice` survives only where a device is genuinely
 // swappable — the Coons scratch buffer.
 
+use std::sync::Arc;
+
 use kurbo::{Affine, Rect, Shape};
 use pdfrum_common::{Deadline, Diagnostics, Operation};
 use pdfrum_page::{Page, PageObject, Visibility};
@@ -25,7 +27,10 @@ use crate::ctx::{RenderCaches, RenderCtx};
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
-use crate::image::{effective_quality, overprint_blend, resample_quality, to_pixmap};
+use crate::image::{
+    apply_stretched_mask, color_as_fill_mask, effective_quality, overprint_blend, resample_quality,
+    resample_quality_at, takes_other_transform, to_pixmap,
+};
 use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
@@ -1207,15 +1212,23 @@ fn colors_inner(
             false,
         ),
     };
-    let stroke = resolve_argb(
-        &state.stroke,
-        state.general.stroke_alpha,
-        transfer.as_ref(),
-        ctx.initial_stroke,
-        &ctx.opts,
-        kind,
-        true,
-    );
+    // `Type3CharMissingStrokeColor`: an uncoloured (`d1`) procedure, or a
+    // coloured one that never set a stroke, takes the outer text fill for
+    // strokes too: `t3_fill_color_`, not the stroke the char proc left
+    // unset. Filling from the frame and stroking from `resolve_argb` is
+    // what left an uncoloured glyph's outlines black.
+    let stroke = match ctx.type3 {
+        Some(frame) if !frame.colored || state.stroke.to_rgb().is_none() => frame.fill,
+        _ => resolve_argb(
+            &state.stroke,
+            state.general.stroke_alpha,
+            transfer.as_ref(),
+            ctx.initial_stroke,
+            &ctx.opts,
+            kind,
+            true,
+        ),
+    };
     (fill, stroke)
 }
 
@@ -1752,7 +1765,12 @@ fn draw_glyph_bitmap(
     };
     // A weight of 1400 or more is past the render table, where the C++ returns
     // a negative level and `RenderGlyph` bails out with no bitmap at all.
-    let Some(synth) = font.render_synth(ft(a), ft(c)) else {
+    let Some(synth) = (if glyph.fallback {
+        font.glyph_fallback()
+            .and_then(|fb| fb.render_synth(ft(a), ft(c), font.is_vertical()))
+    } else {
+        font.render_synth(ft(a), ft(c))
+    }) else {
         return;
     };
 
@@ -1766,7 +1784,13 @@ fn draw_glyph_bitmap(
         // side's adjustments — so it takes only the shear-and-dilate-free
         // mapping into device space, and `synth` is applied to the hinted
         // outline alone.
-        match font.hinted_glyph_path(glyph.key.gid) {
+        let hinted = if glyph.fallback {
+            font.glyph_fallback()
+                .and_then(|fb| fb.hinted_path(glyph.key.gid))
+        } else {
+            font.hinted_glyph_path(glyph.key.gid)
+        };
+        match hinted {
             Some(hinted) => crate::glyph::render_lcd(&synth.apply(shape * hinted)),
             None => crate::glyph::render_lcd(&(shape * (*glyph.outline).clone())),
         }
@@ -1810,26 +1834,89 @@ fn draw_glyph_bitmap(
     );
 }
 
-/// Whether a glyph procedure is the sole-image case *and* taking it through
-/// the char-proc path would paint the wrong thing.
+/// An uncoloured Type 3 procedure whose one object is a stencil image.
 ///
-/// An uncoloured procedure whose one object is an image has that image lifted
-/// out and blitted as the glyph's 8bpp **mask**, in the text object's colour
-/// — a path this engine does not have.
-///
-/// The distinction that matters is what the image *is*. A stencil
-/// (`/ImageMask true`) already paints in the fill colour wherever its bits
-/// are set, which is what the mask blit does, so walking it as a char proc
-/// lands on the same pixels and it is *not* declined — and declining it would
-/// lose every bitmap-font glyph in the corpus, which is what these procedures
-/// overwhelmingly are. A colour image, by contrast, would paint its own
-/// samples where the oracle paints a mask, so that one is declined.
-///
-/// Exactly one object either way: a procedure that draws an image *and* a
-/// rule is a char proc like any other.
+/// `LoadBitmapFromSoleImageOfForm` lifts that image out and blits it as an
+/// 8bpp mask in the text colour, dropping any clip the procedure accumulated.
+/// Walking it as a char proc instead keeps the clip and places the image on
+/// the fractional CTM, which is `bug_1746` and `type3.pdf`.
 #[must_use]
-fn sole_color_image(objects: &[PageObject]) -> bool {
-    matches!(objects, [PageObject::Image(i)] if !i.object.is_mask)
+fn sole_stencil(objects: &[PageObject]) -> Option<&pdfrum_page::ImageObject> {
+    match objects {
+        [PageObject::Image(content)]
+            if content.object.is_mask || content.object.image.samples.is_stencil() =>
+        {
+            Some(&content.object)
+        }
+        _ => None,
+    }
+}
+
+/// An uncoloured procedure whose one object is a **colour** image.
+///
+/// `LoadBitmapFromSoleImageOfForm` realises that bitmap and `SetBitMask`
+/// tints it with the outer text fill, so luminance is coverage rather than
+/// a picture. The same snap, nearest-neighbour and dropped-clip as a
+/// stencil sole-image.
+#[must_use]
+fn sole_color_image(objects: &[PageObject]) -> Option<&pdfrum_page::ImageObject> {
+    match objects {
+        [PageObject::Image(content)]
+            if !content.object.is_mask && !content.object.image.samples.is_stencil() =>
+        {
+            Some(&content.object)
+        }
+        _ => None,
+    }
+}
+
+/// Draw a Type 3 sole-image the integer-stretch path could not handle.
+///
+/// A sheared image, a stencil with empty padding rows, and a colour image
+/// all miss that path. This is the same snapped, nearest-neighbour image
+/// draw as before: translation rounds to whole pixels, and a clip the
+/// procedure accumulated is dropped with the form.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the sole-image blit needs the same walk arguments as a char proc, \
+              plus the image, the snapped matrix and the outer fill"
+)]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..f are the affine matrix coefficients, named as in the PDF `cm` operands"
+)]
+fn render_type3_sole_stencil<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    image: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    char_to_device: Affine,
+    fill: Argb,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let [a, b, c, d, e, f] = char_to_device.as_coeffs();
+    let snapped = Affine::new([a, b, c, d, e.round(), f.round()]);
+    let inner = RenderCtx {
+        opts: crate::options::RenderOptions {
+            no_image_smooth: true,
+            force_halftone: true,
+            rect_aa: true,
+            ..ctx.opts.clone()
+        },
+        type3: Some(crate::ctx::Type3Frame {
+            fill,
+            colored: false,
+        }),
+        initial_fill: Some(fill),
+        initial_stroke: Some(fill),
+        ..ctx.deeper()
+    };
+    render_image::<B>(
+        &inner, device, backend, caches, image, state, snapped, device_box, diags,
+    );
 }
 
 /// Draw one type-3 text object, one glyph procedure at a time.
@@ -1901,6 +1988,9 @@ fn render_type3_text<B: RasterBackend>(
     let mut ancestry: Vec<pdfrum_font::FontId> = ctx.type3_fonts.to_vec();
     ancestry.push(font.id());
 
+    // Sole-image stencils collect into one blit so overlapping glyphs share
+    // a coverage plane. Anything else flushes first.
+    let mut pending: Vec<crate::type3::PlacedMask> = Vec::new();
     for placed in crate::text::place_type3_chars(object, state, to_device) {
         let Some(metrics) = object.type3_metrics.get(&placed.code) else {
             continue;
@@ -1908,44 +1998,144 @@ fn render_type3_text<B: RasterBackend>(
         if metrics.objects.is_empty() || !is_available_matrix(placed.matrix) {
             continue;
         }
-        // `LoadBitmapFromSoleImageOfForm`: an **uncoloured** procedure whose
-        // one object is an image is not walked as a char proc at all — the
-        // image becomes the glyph's *bitmap*, blitted as an 8bpp mask in the
-        // text colour by a separate path this engine does not have. Walking it
-        // here instead paints the image's own colours where the oracle paints
-        // a mask, so the char-proc path declines it.
-        if !metrics.colored && sole_color_image(&metrics.objects) {
-            continue;
-        }
-        let inner = RenderCtx {
-            opts: ctx.opts.for_type3_char_proc(),
-            type3: Some(crate::ctx::Type3Frame {
-                fill,
-                colored: metrics.colored,
-            }),
-            type3_fonts: &ancestry,
-            initial_fill: Some(fill),
-            initial_stroke: Some(fill),
-            ..ctx.deeper()
-        };
-        if fill.a == 255 {
-            render_object_list(
-                &inner,
+        draw_type3_glyph(
+            ctx,
+            device,
+            backend,
+            caches,
+            &mut pending,
+            metrics,
+            &placed,
+            state,
+            fill,
+            &ancestry,
+            device_box,
+            diags,
+        );
+    }
+    blit_type3_batch(device, &mut pending, fill);
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one glyph's dispatch needs the walk, the pending stencil batch, \
+              and the char-proc ancestry"
+)]
+fn draw_type3_glyph<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    pending: &mut Vec<crate::type3::PlacedMask>,
+    metrics: &pdfrum_page::Type3Metrics,
+    placed: &crate::text::PlacedType3Char,
+    state: &pdfrum_page::GraphicsState,
+    fill: Argb,
+    ancestry: &[pdfrum_font::FontId],
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    if !metrics.colored {
+        if let Some(image) = sole_stencil(&metrics.objects) {
+            if let Some(mask) = type3_stencil_glyph(
+                backend,
+                caches,
+                image,
+                placed.matrix,
+                ancestry.last().copied().unwrap_or(pdfrum_font::FontId(0)),
+            ) {
+                pending.push(mask);
+                return;
+            }
+            blit_type3_batch(device, pending, fill);
+            render_type3_sole_stencil(
+                ctx,
                 device,
                 backend,
                 caches,
-                &metrics.objects,
-                &Visibility::all_visible(), // the font's objects, not the page's
+                image,
+                state,
                 placed.matrix,
+                fill,
                 device_box,
                 diags,
             );
-            continue;
+            return;
         }
-        render_translucent_char_proc(
-            &inner, device, backend, caches, metrics, &placed, fill, device_box, diags,
-        );
+        if let Some(image) = sole_color_image(&metrics.objects) {
+            blit_type3_batch(device, pending, fill);
+            let tinted = pdfrum_page::ImageObject {
+                image: Arc::new(color_as_fill_mask(&image.image, fill)),
+                matrix: image.matrix,
+                is_mask: false,
+                oc: image.oc.clone(),
+                source: image.source,
+            };
+            render_type3_sole_stencil(
+                ctx,
+                device,
+                backend,
+                caches,
+                &tinted,
+                state,
+                placed.matrix,
+                fill,
+                device_box,
+                diags,
+            );
+            return;
+        }
     }
+    blit_type3_batch(device, pending, fill);
+    let inner = RenderCtx {
+        opts: ctx.opts.for_type3_char_proc(),
+        type3: Some(crate::ctx::Type3Frame {
+            fill,
+            colored: metrics.colored,
+        }),
+        type3_fonts: ancestry,
+        initial_fill: Some(fill),
+        initial_stroke: Some(fill),
+        ..ctx.deeper()
+    };
+    if fill.a == 255 {
+        render_object_list(
+            &inner,
+            device,
+            backend,
+            caches,
+            &metrics.objects,
+            &Visibility::all_visible(), // the font's objects, not the page's
+            placed.matrix,
+            device_box,
+            diags,
+        );
+        return;
+    }
+    render_translucent_char_proc(
+        &inner, device, backend, caches, metrics, placed, fill, device_box, diags,
+    );
+}
+
+fn type3_stencil_glyph<B: RasterBackend>(
+    backend: &B,
+    caches: &mut RenderCaches,
+    image: &pdfrum_page::ImageObject,
+    char_to_device: Affine,
+    font: pdfrum_font::FontId,
+) -> Option<crate::type3::PlacedMask> {
+    let blues = caches.type3_blues.for_font_matrix(font, char_to_device);
+    crate::type3::try_stretch(backend, image, char_to_device, blues)
+        .and_then(|glyph| glyph.place(char_to_device))
+}
+
+fn blit_type3_batch<D: crate::device::RenderDevice>(
+    device: &mut D,
+    pending: &mut Vec<crate::type3::PlacedMask>,
+    fill: Argb,
+) {
+    crate::type3::blit_batch(device, pending, fill);
+    pending.clear();
 }
 
 /// One type-3 glyph procedure drawn through its own buffer.
@@ -2044,19 +2234,21 @@ fn mask_quality(
     image: &pdfrum_page::ImageData,
     opts: &RenderOptions,
     extent: Rect,
+    matrix: Affine,
 ) -> ImageQuality {
     if !crate::image::image_value_fits(extent.width())
         || !crate::image::image_value_fits(extent.height())
     {
         return ImageQuality::Nearest;
     }
-    resample_quality(
+    resample_quality_at(
         image,
         opts,
         image.width,
         image.height,
         extent.width().round() as i64,
         extent.height().round() as i64,
+        matrix,
     )
 }
 
@@ -2152,7 +2344,7 @@ fn render_pattern_stencil<B: RasterBackend>(
         f64::from(object.image.width),
         f64::from(object.image.height),
     ));
-    let quality = mask_quality(&object.image, &ctx.opts, extent);
+    let quality = mask_quality(&object.image, &ctx.opts, extent, matrix);
     let (stencil, placement) =
         match crate::stretch::prescale(&stencil, placement, extent.width(), extent.height()) {
             Some((reduced, t)) => (reduced, t),
@@ -2168,7 +2360,7 @@ fn render_pattern_stencil<B: RasterBackend>(
     let mask = backend.finish(mask_target).alpha_mask();
     pixels.multiply_alpha_mask(&mask);
 
-    let blend = overprint_blend(None, &state.general);
+    let blend = overprint_blend(object.image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
         device.push_layer(blend, 1.0, None);
@@ -2184,12 +2376,6 @@ fn render_pattern_stencil<B: RasterBackend>(
     }
 }
 
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "`image_value_fits` has already rejected a non-finite extent and \
-              anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
-              values are well inside i64"
-)]
 #[expect(
     clippy::too_many_arguments,
     reason = "the pattern-stencil arm needs the backend, caches, device box \
@@ -2220,14 +2406,7 @@ fn render_image<B: RasterBackend>(
         );
         return;
     }
-    // `DrawMaskedImage`: a mask on a grid of its own is stretched to the
-    // device by itself rather than through the base's samples.
-    if object
-        .image
-        .mask
-        .as_ref()
-        .is_some_and(|m| !crate::image::is_coregistered(m, &object.image))
-    {
+    if uses_draw_masked_image(&object.image) {
         render_masked_image(ctx, device, backend, object, state, to_device, device_box);
         return;
     }
@@ -2249,6 +2428,46 @@ fn render_image<B: RasterBackend>(
     if image.width == 0 || image.height == 0 {
         return;
     }
+    if draw_sheared_image(
+        ctx,
+        device,
+        caches,
+        object,
+        state,
+        matrix,
+        device_box,
+        fill,
+        transfer.as_ref(),
+    ) {
+        return;
+    }
+    draw_snapped_image::<B>(ctx, device, caches, object, state, matrix);
+}
+
+/// Stretch an axis-aligned image onto its device rect, reduce it if the
+/// destination is smaller than the source, and blit.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`image_value_fits` has already rejected a non-finite extent and \
+              anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
+              values are well inside i64"
+)]
+fn draw_snapped_image<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+) {
+    let image = &object.image;
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let transfer = transfer.as_ref();
     // The image's unit square maps through the object matrix, so the device
     // transform folds in the sample grid's own size and the y flip PDF's
     // image space needs.
@@ -2272,13 +2491,14 @@ fn render_image<B: RasterBackend>(
     {
         return;
     }
-    let quality = resample_quality(
+    let quality = resample_quality_at(
         image,
         &ctx.opts,
         image.width,
         image.height,
         corners.width().round() as i64,
         corners.height().round() as i64,
+        matrix,
     );
     // A reduction is low-passed here rather than left to the backend's two-tap
     // kernel, which sees at most two of the many source pixels a shrunken
@@ -2304,26 +2524,20 @@ fn render_image<B: RasterBackend>(
     // unreduced pixmap alone would keep the box filter running per draw *and*
     // hold the larger of the two buffers.
     let pixels = crate::walkprofile::phase(crate::walkprofile::Phase::Image, || {
-        let key = crate::imagecache::PixmapRequest::for_image(
-            image,
-            fill,
-            transfer.as_ref(),
-            out_w,
-            out_h,
-        );
+        let key = crate::imagecache::PixmapRequest::for_image(image, fill, transfer, out_w, out_h);
         caches.images.get_or_render(object.source, key, || {
             if reduction.filters() {
                 // The conversion and the reduction are one pull pipeline,
                 // so neither the full-size RGBA pixmap nor the two
                 // full-height intermediates are ever built.
-                crate::stretch::convert_and_reduce(image, fill, transfer.as_ref(), out_w, out_h)
+                crate::stretch::convert_and_reduce(image, fill, transfer, out_w, out_h)
             } else {
-                to_pixmap(image, fill, transfer.as_ref())
+                to_pixmap(image, fill, transfer)
             }
         })
     });
     let pixels = &*pixels;
-    let blend = overprint_blend(None, &state.general);
+    let blend = overprint_blend(image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
         device.push_layer(blend, 1.0, None);
@@ -2368,6 +2582,158 @@ fn image_placement(
     }
 }
 
+/// Draw a sheared image by reverse-mapping dest pixels, then blit 1:1.
+///
+/// Returns `false` when the geometry is not drawable this way, so the caller
+/// can fall through to the quad rasterizer.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk threads context, device, caches, the image and the \
+              transfer the hypot pixmap is keyed on"
+)]
+fn draw_sheared_image<D: RenderDevice>(
+    ctx: &RenderCtx<'_>,
+    device: &mut D,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+    device_box: Rect,
+    fill: Argb,
+    transfer: Option<&TransferFunc>,
+) -> bool {
+    if !takes_other_transform(matrix) {
+        return false;
+    }
+    let image = &object.image;
+    let Some((hypot_w, hypot_h)) = crate::shear::hypot_size(matrix) else {
+        return false;
+    };
+    let pass1 = resample_quality(
+        image,
+        &ctx.opts,
+        image.width,
+        image.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let key = crate::imagecache::PixmapRequest::for_image(image, fill, transfer, hypot_w, hypot_h);
+    let src = caches
+        .images
+        .get_or_render(object.source, key, || to_pixmap(image, fill, transfer));
+    let clip = outer_rect(device_box);
+    let Some(mapped) = crate::shear::map_sheared(&src, matrix, clip, pass1) else {
+        return false;
+    };
+    let blend = overprint_blend(image.family, &state.general);
+    let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
+    if layered {
+        device.push_layer(blend, 1.0, None);
+    }
+    device.draw_image(
+        &mapped.pixels,
+        Affine::translate((f64::from(mapped.left), f64::from(mapped.top))),
+        ImageQuality::Nearest,
+        state.general.fill_alpha,
+    );
+    if layered {
+        device.pop();
+    }
+    true
+}
+
+/// Dest-space reverse-map of a base and its independent mask.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the mask plane is a separate resolution from the base"
+)]
+fn draw_sheared_masked<D: RenderDevice>(
+    ctx: &RenderCtx<'_>,
+    device: &mut D,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    matrix: Affine,
+    device_box: Rect,
+    mask_dict: &pdfrum_page::ImageData,
+    mask_plane: &[u8],
+) -> bool {
+    if !takes_other_transform(matrix) {
+        return false;
+    }
+    let image = &object.image;
+    let Some((hypot_w, hypot_h)) = crate::shear::hypot_size(matrix) else {
+        return false;
+    };
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let base = to_pixmap(image, fill, transfer.as_ref());
+    if base.width() == 0 || base.height() == 0 {
+        return false;
+    }
+    let pass1 = resample_quality(
+        image,
+        &ctx.opts,
+        image.width,
+        image.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let mask_q = resample_quality(
+        mask_dict,
+        &ctx.opts,
+        mask_dict.width,
+        mask_dict.height,
+        i64::from(hypot_w),
+        i64::from(hypot_h),
+    );
+    let clip = outer_rect(device_box);
+    let Some(mapped) = crate::shear::map_sheared(&base, matrix, clip, pass1) else {
+        return false;
+    };
+    let Some((mask, mx, my)) = crate::shear::map_sheared_coverage(
+        mask_plane,
+        mask_dict.width,
+        mask_dict.height,
+        matrix,
+        clip,
+        mask_q,
+    ) else {
+        return false;
+    };
+    if mx != mapped.left
+        || my != mapped.top
+        || mask.width() != mapped.pixels.width()
+        || mask.height() != mapped.pixels.height()
+    {
+        return false;
+    }
+    let mut pixels = mapped.pixels;
+    fold_mask_and_blit(
+        device,
+        image,
+        state,
+        &mut pixels,
+        &mask,
+        mapped.left,
+        mapped.top,
+    );
+    true
+}
+
+/// `/Matte`, or a mask on a grid of its own, is a separate dest-space mask
+/// multiply. A colour-key `/Mask` stays fused.
+fn uses_draw_masked_image(image: &pdfrum_page::ImageData) -> bool {
+    image.matte.is_some()
+        || image
+            .mask
+            .as_ref()
+            .is_some_and(|m| !crate::image::is_coregistered(m, image))
+}
+
 /// Paint an image whose mask has a resolution of its own.
 ///
 /// A mask is **never resolution-reduced**, so its
@@ -2400,6 +2766,18 @@ fn render_masked_image<B: RasterBackend>(
         return;
     };
     let matrix = to_device * object.matrix;
+    if draw_sheared_masked(
+        ctx,
+        device,
+        object,
+        state,
+        matrix,
+        device_box,
+        &mask_dict,
+        &mask_plane,
+    ) {
+        return;
+    }
     let bbox = matrix
         .transform_rect_bbox(unit_rect())
         .intersect(device_box);
@@ -2431,7 +2809,7 @@ fn render_masked_image<B: RasterBackend>(
         f64::from(image.width),
         f64::from(image.height),
     ));
-    let base_quality = mask_quality(image, &ctx.opts, base_extent);
+    let base_quality = mask_quality(image, &ctx.opts, base_extent, matrix);
     // The base and its mask are reduced independently, each toward its own
     // device footprint — which is the same footprint, reached from two
     // different resolutions. Neither ever passes through the other's grid.
@@ -2461,7 +2839,7 @@ fn render_masked_image<B: RasterBackend>(
         f64::from(mask_dict.width),
         f64::from(mask_dict.height),
     ));
-    let mask_q = mask_quality(&mask_dict, &ctx.opts, mask_extent);
+    let mask_q = mask_quality(&mask_dict, &ctx.opts, mask_extent, matrix);
     // The reduction runs on the coverage plane and the pixmap is built from
     // the *reduced* plane — the same bytes prescaling the expanded pixmap
     // produces, over a quarter of the memory and, once the reduction fires, a
@@ -2482,16 +2860,45 @@ fn render_masked_image<B: RasterBackend>(
         effective_quality(mask_q, mask_placement),
         1.0,
     );
-    pixels.multiply_alpha_mask(&backend.finish(mask_target).alpha_mask());
+    let mask = backend.finish(mask_target).alpha_mask();
+    fold_mask_and_blit(
+        device,
+        image,
+        state,
+        &mut pixels,
+        &mask,
+        rect.left,
+        rect.top,
+    );
+}
 
-    let blend = overprint_blend(None, &state.general);
+/// Fold coverage into the dest (matte then replace A, or multiply) and blit.
+fn fold_mask_and_blit<D: RenderDevice>(
+    device: &mut D,
+    image: &pdfrum_page::ImageData,
+    state: &pdfrum_page::GraphicsState,
+    pixels: &mut Pixmap,
+    mask: &crate::pixmap::AlphaMask,
+    left: i32,
+    top: i32,
+) {
+    if let Some(matte) = image.matte {
+        // Dest RGB is premultiplied; `/Matte` reads it as a straight sample.
+        // Recover the colour, un-premultiply against the stretched mask, then
+        // let the mask replace dest alpha — scaling dest A by the mask would
+        // count the base's coverage twice.
+        apply_stretched_mask(pixels, mask, Some(matte.to_bytes()));
+    } else {
+        pixels.multiply_alpha_mask(mask);
+    }
+    let blend = overprint_blend(image.family, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
         device.push_layer(blend, 1.0, None);
     }
     device.draw_image(
-        &pixels,
-        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        pixels,
+        Affine::translate((f64::from(left), f64::from(top))),
         ImageQuality::Nearest,
         state.general.fill_alpha,
     );

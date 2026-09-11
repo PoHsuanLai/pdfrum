@@ -259,6 +259,7 @@ impl ImageBuilder {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         };
         PageObject::Image(Box::new(Content::new(
             pdfrum_page::ImageObject {

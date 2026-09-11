@@ -59,6 +59,12 @@ pub(crate) struct HostState {
     /// The model's own `value` is updated in step, so a later script in the
     /// same run reads what an earlier one wrote.
     pub(crate) field_writes: Vec<(u32, String)>,
+    /// Fields a script wrote through `Field.borderStyle`, by `/Fields`
+    /// position.
+    ///
+    /// Spent after the script returns, the same way value writes are: the
+    /// native setter must not regenerate appearances from inside the engine.
+    pub(crate) border_style_writes: Vec<(u32, pdfrum_doc::ap::BorderStyle)>,
     /// Whether a script called `Doc.calculateNow()`.
     ///
     /// A **request**, not a call: running the sweep from inside a native
@@ -151,6 +157,7 @@ impl Default for HostState {
             globals: super::global::Bag::new(),
             icon_names: Vec::new(),
             field_writes: Vec::new(),
+            border_style_writes: Vec::new(),
             base_url: String::new(),
             app_calculate: true,
             app_runtime_highlight: false,
