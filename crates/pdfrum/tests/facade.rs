@@ -547,7 +547,7 @@ fn a_document_without_attachments_reports_none() {
 #[test]
 fn a_pages_annotations_are_read_with_their_geometry_and_flags() {
     let doc = Document::open(FORM).expect("open");
-    let annots = doc.page(0).expect("page").annotations();
+    let annots: Vec<_> = doc.page(0).expect("page").annotations().collect();
     assert_eq!(annots.len(), 1);
 
     let widget = &annots[0];
@@ -562,7 +562,7 @@ fn a_pages_annotations_are_read_with_their_geometry_and_flags() {
 #[test]
 fn a_page_without_annotations_reports_none() {
     let doc = Document::open(HELLO).expect("open");
-    assert!(doc.page(0).expect("page").annotations().is_empty());
+    assert_eq!(doc.page(0).expect("page").annotations().len(), 0);
     assert!(doc.page(0).expect("page").links().is_empty());
 }
 
@@ -575,7 +575,7 @@ fn a_form_enumerates_its_fields_with_their_kinds_and_names() {
     assert_eq!(form.field_count(), 1);
     assert!(!form.need_appearances());
 
-    let field = &form.fields()[0];
+    let field = form.fields().next().expect("the fixture has a field");
     assert_eq!(field.name(), "Text Box");
     assert_eq!(field.kind(), FieldKind::Text);
     assert_eq!(field.index(), 0);
@@ -686,7 +686,14 @@ fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
     let out = dir.join("filled.pdf");
 
     let doc = Document::open(FORM).expect("open");
-    assert!(!doc.page(0).expect("page").annotations()[0].has_appearance());
+    assert!(
+        !doc.page(0)
+            .expect("page")
+            .annotations()
+            .next()
+            .expect("the fixture has a widget")
+            .has_appearance()
+    );
 
     let mut form = doc.form().expect("form");
     form.set("Text Box", "drawn").expect("field exists");
@@ -738,7 +745,6 @@ fn set_checked_on_a_known_field_takes_effect_and_an_unknown_name_errors() {
     let mut form = doc.form().expect("form");
     let name = form
         .fields()
-        .into_iter()
         .find(|f| f.kind() == FieldKind::Check && !f.is_read_only())
         .expect("an ordinary checkbox")
         .name()

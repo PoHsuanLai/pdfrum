@@ -83,7 +83,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{name} must parse"));
             assert_eq!(face.units_per_em(), 1000, "{name}");
             assert_eq!(face.num_glyphs(), num_glyphs, "{name}");
-            assert_eq!(face.charmaps(), charmaps.to_vec(), "{name}");
+            assert_eq!(face.charmaps(), charmaps, "{name}");
             // Every fixture is a `glyf` font.
             assert!(face.is_truetype(), "{name}");
         }

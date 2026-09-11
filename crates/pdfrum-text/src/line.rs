@@ -24,6 +24,7 @@
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
 use crate::unicode::{mirror_char, normalize, normalize_space};
+use smallvec::SmallVec;
 
 /// The two staging buffers, kept one-to-one.
 #[derive(Debug, Clone, Default)]
@@ -256,7 +257,7 @@ fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
     let normalized = if is_rtl || (0xFB00..=0xFB06).contains(&unit) {
         normalize(unit)
     } else {
-        Vec::new()
+        SmallVec::new()
     };
 
     let mut modified = info;

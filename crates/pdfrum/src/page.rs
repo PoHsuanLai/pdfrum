@@ -383,23 +383,8 @@ impl<'a> Page<'a> {
     }
 
     /// The page's annotations, in `/Annots` order, with pop-ups excluded.
-    #[must_use]
-    pub fn annotations(&self) -> Vec<Annotation<'a>> {
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "the annotation list places synthesized pop-ups relative to the \
-                      page width, which upstream measures in f32; a page wider than \
-                      f32 can express is not one this changes the behaviour of"
-        )]
-        let width = self.crop_box.width() as f32;
-        pdfrum_doc::annot::AnnotList::load(&self.dict.dict, width, &self.doc.inner)
-            .annots
-            .into_iter()
-            .map(|inner| Annotation {
-                inner,
-                doc: self.doc,
-            })
-            .collect()
+    pub fn annotations(&self) -> impl ExactSizeIterator<Item = Annotation<'a>> + 'a {
+        annotations_of(self.doc, &self.dict.dict, self.crop_box.width())
     }
 
     /// The page's link annotations, with the destination or action each one
@@ -407,7 +392,6 @@ impl<'a> Page<'a> {
     #[must_use]
     pub fn links(&self) -> Vec<pdfrum_doc::Link> {
         pdfrum_doc::nav::page_links(&self.dict.dict, &self.doc.inner)
-            .into_iter()
             .flatten()
             .collect()
     }
@@ -948,6 +932,28 @@ pub enum LinkTarget {
     /// Anything else: a named action, a script, another file, or a
     /// destination that names no page of this document.
     Other,
+}
+
+/// The annotations of a page dictionary, in `/Annots` order, with pop-ups
+/// excluded. Shared by [`Page::annotations`] and
+/// [`crate::OwnedPage::annotations`] so the iterator can borrow the document
+/// directly rather than a temporary [`Page`].
+pub(crate) fn annotations_of<'a>(
+    doc: &'a Document,
+    dict: &pdfrum_object::Dict,
+    page_width: f64,
+) -> impl ExactSizeIterator<Item = Annotation<'a>> + 'a {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the annotation list places synthesized pop-ups relative to the \
+                  page width, which upstream measures in f32; a page wider than \
+                  f32 can express is not one this changes the behaviour of"
+    )]
+    let width = page_width as f32;
+    pdfrum_doc::annot::AnnotList::load(dict, width, &doc.inner)
+        .annots
+        .into_iter()
+        .map(move |inner| Annotation { inner, doc })
 }
 
 /// A link annotation with its target resolved, from [`Page::page_links`].

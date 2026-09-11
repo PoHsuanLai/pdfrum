@@ -81,7 +81,7 @@ pub pdfrum_font::GlyphSource::Type1(alloc::sync::Arc<pdfrum_type1::Type1Font>)
 impl pdfrum_font::GlyphSource
 pub fn pdfrum_font::GlyphSource::cap_height_unscaled(&self) -> core::option::Option<f32>
 pub fn pdfrum_font::GlyphSource::char_index(&self, pdfrum_font::Charmap, u32) -> u16
-pub fn pdfrum_font::GlyphSource::charmaps(&self) -> alloc::vec::Vec<pdfrum_font::CharmapId>
+pub fn pdfrum_font::GlyphSource::charmaps(&self) -> &[pdfrum_font::CharmapId]
 pub fn pdfrum_font::GlyphSource::default_advance(&self, pdfrum_font::Gid) -> i32
 pub fn pdfrum_font::GlyphSource::from_bytes(impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> core::option::Option<Self>
 pub fn pdfrum_font::GlyphSource::is_bold(&self) -> bool
@@ -145,7 +145,7 @@ pub struct pdfrum_font::Face
 impl pdfrum_font::Face
 pub fn pdfrum_font::Face::cap_height(&self) -> core::option::Option<f32>
 pub fn pdfrum_font::Face::char_index(&self, pdfrum_font::Charmap, u32) -> u16
-pub fn pdfrum_font::Face::charmaps(&self) -> alloc::vec::Vec<pdfrum_font::CharmapId>
+pub fn pdfrum_font::Face::charmaps(&self) -> &[pdfrum_font::CharmapId]
 pub fn pdfrum_font::Face::glyph_name(&self, pdfrum_font::Gid) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_font::Face::has_glyph_names(&self) -> bool
 pub fn pdfrum_font::Face::is_bold(&self) -> bool

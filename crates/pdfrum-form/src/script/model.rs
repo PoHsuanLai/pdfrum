@@ -100,19 +100,25 @@ impl DocumentModel {
     /// its `j`th entry, so a name that is a whole subtree answers every leaf
     /// under it rather than one — which is what makes
     /// `AFSimple_Calculate('SUM', ['Group'])` add a group's fields.
-    #[must_use]
-    pub fn fields_named(&self, name: &str) -> Vec<&FieldModel> {
-        match self.node_of(name) {
-            FieldNode::Missing => Vec::new(),
-            FieldNode::Root => self.fields.iter().collect(),
-            FieldNode::Named(prefix) => {
-                let under = format!("{prefix}.");
-                self.fields
-                    .iter()
-                    .filter(|f| f.name == prefix || f.name.starts_with(&under))
-                    .collect()
-            }
+    pub fn fields_named<'a>(&'a self, name: &str) -> impl Iterator<Item = &'a FieldModel> + 'a {
+        enum Filter {
+            None,
+            All,
+            Prefix { exact: String, under: String },
         }
+        let filter = match self.node_of(name) {
+            FieldNode::Missing => Filter::None,
+            FieldNode::Root => Filter::All,
+            FieldNode::Named(prefix) => Filter::Prefix {
+                under: format!("{prefix}."),
+                exact: prefix,
+            },
+        };
+        self.fields.iter().filter(move |f| match &filter {
+            Filter::None => false,
+            Filter::All => true,
+            Filter::Prefix { exact, under } => f.name == *exact || f.name.starts_with(under),
+        })
     }
 
     /// The position of the field `Doc.getField(name)` resolves to.

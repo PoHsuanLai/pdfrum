@@ -13,9 +13,7 @@ use crate::Document;
 ///
 /// ```
 /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
-/// let annots = doc.page(0)?.annotations();
-///
-/// let widget = &annots[0];
+/// let widget = doc.page(0)?.annotations().next().expect("the fixture has a widget");
 /// assert_eq!(widget.subtype(), pdfrum::Subtype::Widget);
 /// assert_eq!(widget.rect().width(), 100.0);
 /// assert!(!widget.is_hidden());

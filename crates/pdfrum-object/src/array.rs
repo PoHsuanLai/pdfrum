@@ -251,13 +251,6 @@ impl Array {
             f64::from(self.number_at_or_zero(5)),
         ])
     }
-
-    /// The numbers in the array, missing or non-numeric elements reading as
-    /// 0.0. Used wherever the specification says "an array of `n` numbers".
-    #[must_use]
-    pub fn to_numbers(&self) -> Vec<f32> {
-        (0..self.len()).map(|i| self.number_at_or_zero(i)).collect()
-    }
 }
 
 impl AsRef<[Object]> for Array {
@@ -437,7 +430,6 @@ mod tests {
             Object::Real(4.0),
         ]);
         assert_eq!(a.as_rect(), Rect::new(1.0, 0.0, 0.0, 4.0));
-        assert_eq!(a.to_numbers(), [1.0, 0.0, 0.0, 4.0]);
     }
 
     // From cpdf_object_unittest.cpp:210-236, restated over an array.

@@ -772,21 +772,19 @@ impl Document {
     /// section the open followed, which is one per incremental update. A
     /// file whose table had to be rebuilt has none, since no chain was
     /// followed.
-    #[must_use]
-    pub fn revisions(&self) -> Vec<Revision> {
+    pub fn revisions(&self) -> impl ExactSizeIterator<Item = Revision> + '_ {
         let bytes = self.inner.bytes();
         self.inner
             .xref()
             .sections()
             .iter()
             .enumerate()
-            .map(|(index, section)| Revision {
+            .map(move |(index, section)| Revision {
                 index,
                 xref_offset: section.offset,
                 is_stream: section.is_stream,
                 end: pdfrum_parser::revision_end(bytes, section.offset).unwrap_or(bytes.len()),
             })
-            .collect()
     }
 
     /// The file as it stood at revision `index` of [`Document::revisions`]:
@@ -794,8 +792,8 @@ impl Document {
     /// are appended after it, so this is the earlier document exactly.
     #[must_use]
     pub fn revision_bytes(&self, index: usize) -> Option<&[u8]> {
-        let revision = self.revisions().into_iter().nth(index)?;
-        self.inner.bytes().get(..revision.end)
+        let end = self.revisions().nth(index)?.end;
+        self.inner.bytes().get(..end)
     }
 
     /// The trailer's `/ID` pair (ISO 32000-1 §14.4): the first element names

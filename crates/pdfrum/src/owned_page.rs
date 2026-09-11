@@ -7,7 +7,7 @@ use pdfrum_common::PageIndex;
 
 use crate::{
     Annotation, Document, Page, PageImage, PageLink, Pixmap, RasterBackend, RenderOptions,
-    RenderSession, Result, Rotation, TextPage, Word,
+    RenderSession, Result, Rotation, TextPage, Word, page::annotations_of,
 };
 
 /// One page of a [`Document`], holding the document rather than borrowing
@@ -366,13 +366,11 @@ impl OwnedPage {
     ///
     /// let doc = Arc::new(Document::open("tests/fixtures/text_form.pdf")?);
     /// let page = doc.page_owned(0)?;
-    /// let annots = page.annotations();
-    /// assert!(annots.iter().any(|a| a.subtype() == Subtype::Widget));
+    /// assert!(page.annotations().any(|a| a.subtype() == Subtype::Widget));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    #[must_use]
-    pub fn annotations(&self) -> Vec<Annotation<'_>> {
-        self.page().annotations()
+    pub fn annotations(&self) -> impl ExactSizeIterator<Item = Annotation<'_>> + '_ {
+        annotations_of(&self.doc, &self.page.dict.dict, self.page.crop_box.width())
     }
 
     /// The page's link annotations with the destination or action each one

@@ -37,7 +37,6 @@ pub fn field_rows(doc: &Document) -> Vec<FieldRow> {
         return Vec::new();
     };
     form.fields()
-        .iter()
         .map(|f| {
             let kind = format!("{:?}", f.kind()).to_ascii_lowercase();
             let checkable = matches!(
@@ -197,7 +196,7 @@ fn apply_open_scripts(
     for (index, value) in writes {
         let Some(name) = form
             .fields()
-            .get(usize::try_from(index).unwrap_or(usize::MAX))
+            .nth(usize::try_from(index).unwrap_or(usize::MAX))
             .map(|f| f.name().to_owned())
         else {
             continue;
