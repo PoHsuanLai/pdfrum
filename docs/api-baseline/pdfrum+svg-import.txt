@@ -491,8 +491,9 @@ pub fn pdfrum::OwnedPage::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::OwnedPage::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::OwnedPage::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::OwnedPage::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
-pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render_with<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::OwnedPage::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::OwnedPage::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::OwnedPage::text(&self) -> pdfrum_text::TextPage
@@ -520,8 +521,9 @@ pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
 pub fn pdfrum::Page<'a>::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
 pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::PreparedPage<'a>
-pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render_with<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum_page::page::Rotation
 pub fn pdfrum::Page<'a>::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
@@ -542,8 +544,8 @@ pub pdfrum::PageLink::rect: kurbo::rect::Rect
 pub pdfrum::PageLink::target: pdfrum::LinkTarget
 pub struct pdfrum::PreparedPage<'a>
 impl pdfrum::PreparedPage<'_>
-pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, &B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub struct pdfrum::RawImage
 pub pdfrum::RawImage::data: alloc::vec::Vec<u8>
 pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding

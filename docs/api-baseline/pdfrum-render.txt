@@ -203,6 +203,14 @@ pub fn pdfrum_render::RasterBackend::new_target(&self, u32, u32, peniko::Color) 
 pub fn pdfrum_render::RasterBackend::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
 pub fn pdfrum_render::RasterBackend::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::RasterBackend::snapshot_rect(&self, &Self::Device, u32, u32, u32, u32) -> pdfrum_render::pixmap::Pixmap
+impl<T: pdfrum_render::RasterBackend + ?core::marker::Sized> pdfrum_render::RasterBackend for &T
+pub type &T::Device = <T as pdfrum_render::RasterBackend>::Device
+pub fn &T::composite_isolated_groups_as_layers(&self) -> bool
+pub fn &T::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn &T::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn &T::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn &T::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn &T::snapshot_rect(&self, &Self::Device, u32, u32, u32, u32) -> pdfrum_render::pixmap::Pixmap
 pub trait pdfrum_render::RenderDevice
 pub fn pdfrum_render::RenderDevice::draw_glyph_lcd(&mut self, &pdfrum_render::glyph::SubpixelBitmap, (f64, f64), peniko::Color)
 pub fn pdfrum_render::RenderDevice::draw_image(&mut self, &pdfrum_render::RasterImage, kurbo::affine::Affine, pdfrum_render::ImageQuality, f32)
