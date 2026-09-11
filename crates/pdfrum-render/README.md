@@ -14,7 +14,7 @@ use pdfrum_render::{RenderOptions, render_page};
 let pixmap = render_page(
     &Page::empty(),
     &RenderOptions::default(),
-    &TinySkiaBackend::new(),
+    &TinySkiaBackend,
     &mut Diagnostics::default(),
 )?;
 assert_eq!((pixmap.width(), pixmap.height()), (612, 792));

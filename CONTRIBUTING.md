@@ -125,18 +125,19 @@ Do not mix the two policies on a new type.
 
 ## Versions
 
-Internal workspace members depend on each other with a caret on `0.1.0`, so
-a patch of one crate is usable with siblings still at 0.1.0. Releases still
-bump the workspace together. `kurbo` and `peniko` are carets because their
-types are in public signatures; every other external crate is an exact pin.
-`Cargo.lock` is what reproduces our own builds. Keep `--locked` in CI.
+Internal workspace members depend on each other with a caret on the
+workspace version, so a patch of one crate is usable with siblings still
+on the previous patch. Releases still bump the workspace together.
+`kurbo` and `peniko` are carets because their types are in public
+signatures; every other external crate is an exact pin. `Cargo.lock` is
+what reproduces our own builds. Keep `--locked` in CI.
 
 ## Releases
 
 Workspace versions bump together. `scripts/prepare-release.nu` cuts
 `CHANGELOG.md` (`[Unreleased]` becomes `[x.y.z] - date`) and, if you pass a
 version, writes it into `Cargo.toml`. `just prepare-release` uses the version
-already in the manifest; `just prepare-release 0.1.1` bumps first.
+already in the manifest; `just prepare-release 0.2.0` bumps first.
 
 Commit that, open a PR, merge to `main`. Once CI is green,
 `.github/workflows/tag-release.yml` tags `v*` and the publish workflow

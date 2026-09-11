@@ -59,7 +59,7 @@ use crate::vt;
 ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///         Object::Array(Array::of([0, 0, 100, 50])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(
@@ -241,7 +241,7 @@ impl Focus {
 ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///         Object::Array(Array::of([0, 0, 100, 50])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(
@@ -428,11 +428,11 @@ impl AnnotOverlay {
     ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
     ///     (
     ///         Name::from("Rect"),
-    ///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+    ///         Object::Array(Array::of([0, 0, 100, 50])),
     ///     ),
     ///     (
     ///         Name::from("IC"),
-    ///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+    ///         Object::Array(Array::of([1, 0, 0])),
     ///     ),
     /// ]);
     /// let page = Dict::from_pairs([(
@@ -485,11 +485,11 @@ impl AnnotOverlay {
     ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
     ///     (
     ///         Name::from("Rect"),
-    ///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+    ///         Object::Array(Array::of([0, 0, 100, 50])),
     ///     ),
     ///     (
     ///         Name::from("IC"),
-    ///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+    ///         Object::Array(Array::of([1, 0, 0])),
     ///     ),
     /// ]);
     /// let page = Dict::from_pairs([(
@@ -1159,11 +1159,11 @@ impl FormFonts {
 ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///         Object::Array(Array::of([0, 0, 100, 50])),
 ///     ),
 ///     (
 ///         Name::from("IC"),
-///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///         Object::Array(Array::of([1, 0, 0])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(
@@ -1227,11 +1227,11 @@ pub fn generate_appearances<R: Resolve>(
 ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///         Object::Array(Array::of([0, 0, 100, 50])),
 ///     ),
 ///     (
 ///         Name::from("IC"),
-///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///         Object::Array(Array::of([1, 0, 0])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(
@@ -1488,11 +1488,11 @@ pub(crate) fn resources_dict(ext_gstate: Dict, font: Option<Dict>) -> Dict {
 ///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
 ///     (
 ///         Name::from("Rect"),
-///         Object::Array(Array::of([0, 0, 100, 50].map(Object::from))),
+///         Object::Array(Array::of([0, 0, 100, 50])),
 ///     ),
 ///     (
 ///         Name::from("IC"),
-///         Object::Array(Array::of([1, 0, 0].map(Object::from))),
+///         Object::Array(Array::of([1, 0, 0])),
 ///     ),
 /// ]);
 /// let page = Dict::from_pairs([(

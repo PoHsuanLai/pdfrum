@@ -69,7 +69,7 @@ fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
 /// use pdfrum_raster_tinyskia::TinySkiaBackend;
 /// use pdfrum_svg::SvgBackend;
 ///
-/// let tiny = TinySkiaBackend::new();
+/// let tiny = TinySkiaBackend;
 /// let backend = SvgBackend::new(&tiny);
 /// // ... render a page on `&backend` ...
 /// let (svg, report) = backend.into_svg();
@@ -89,7 +89,7 @@ impl<'a, B> SvgBackend<'a, B> {
     /// use pdfrum_raster_tinyskia::TinySkiaBackend;
     /// use pdfrum_svg::SvgBackend;
     ///
-    /// let tiny = TinySkiaBackend::new();
+    /// let tiny = TinySkiaBackend;
     /// let backend = SvgBackend::new(&tiny);
     /// let (svg, _) = backend.into_svg();
     /// assert_eq!(svg, "");
@@ -114,7 +114,7 @@ impl<'a, B> SvgBackend<'a, B> {
     /// use pdfrum_raster_tinyskia::TinySkiaBackend;
     /// use pdfrum_svg::SvgBackend;
     ///
-    /// let tiny = TinySkiaBackend::new();
+    /// let tiny = TinySkiaBackend;
     /// let (svg, report) = SvgBackend::new(&tiny).into_svg();
     /// assert!(svg.is_empty() && report.is_empty());
     /// ```
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn the_first_target_is_the_root_and_the_rest_are_offscreen() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let root = backend.new_target(8, 8, peniko::Color::WHITE);
         assert!(matches!(root.role, Role::Root));
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn a_root_fill_reaches_both_the_pixels_and_the_document() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         root.fill_path(
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn an_offscreen_fill_stays_out_of_the_document() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let root = backend.new_target(8, 8, peniko::Color::WHITE);
         let mut sub = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn an_offscreen_subtree_blitted_back_is_reported_as_a_composite() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         let mut sub = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn an_image_with_no_offscreen_behind_it_is_a_sampled_source() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         let img = Pixmap::filled(2, 2, peniko::Color::from_rgba8(1, 2, 3, 255));
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn a_backdrop_target_reports_a_non_isolated_group() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         let base = backend.snapshot(&root);
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn clips_and_layers_nest_and_close_on_the_root() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         root.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 8.0));
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn the_evidence_is_consumed_by_the_draw_it_explains() {
-        let tiny = TinySkiaBackend::new();
+        let tiny = TinySkiaBackend;
         let backend = SvgBackend::new(&tiny);
         let mut root = backend.new_target(8, 8, peniko::Color::WHITE);
         let sub = backend.new_target(2, 2, peniko::Color::TRANSPARENT);

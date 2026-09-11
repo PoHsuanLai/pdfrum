@@ -14,7 +14,7 @@ pdfrum is an independent project, not affiliated with Google's PDFium,
 which it uses as a read-only conformance oracle.
 
 ```toml
-pdfrum = "0.1"
+pdfrum = "0.2"
 ```
 
 ```rust
@@ -40,7 +40,7 @@ Open a file once. Ask it questions (Rendering is one of them).
   is useful
 - **Forms** — read values, fill them, run a live session
 - **Outline, links, annotations, tagged structure**
-- **Pixels** — name a rasterizer; defaults to [`vello_cpu`](https://crates.io/crates/vello_cpu)
+- **Pixels** — name a rasterizer (`page.render(VelloCpuBackend)`); [`vello_cpu`](https://crates.io/crates/vello_cpu) is the default feature, not a silent fallback
 - **A new file** — edit, stamp, merge, flatten, save full or incremental
 
 A file a browser would open, we open, and tell you where it's broken.
@@ -82,11 +82,10 @@ use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 
 let doc = Document::open("big.pdf")?;
 let pages: Vec<_> = doc.pages().collect();
-let backend = VelloCpuBackend::new();
 let pixmaps: Vec<_> = pages
     .par_iter()
     .map_init(RenderSession::new, |session, page| {
-        page.render_on(backend, &RenderOptions::default(), session)
+        page.render_on(VelloCpuBackend, &RenderOptions::default(), session)
     })
     .collect::<Result<_, _>>()?;
 # Ok::<(), pdfrum::Error>(())
@@ -138,7 +137,7 @@ are on by default.
 its backend.
 
 ```toml
-pdfrum = { version = "0.1", default-features = false, features = ["tiny-skia", "codecs-all"] }
+pdfrum = { version = "0.2", default-features = false, features = ["tiny-skia", "codecs-all"] }
 ```
 
 ## Alternatives
