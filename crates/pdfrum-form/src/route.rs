@@ -1895,6 +1895,47 @@ pub fn scroll_view<R: Resolve>(
 /// A host draws those bars as chrome — the library reserves the 12-unit
 /// strip in a live list's body and stops there. Combo-box dropdowns are
 /// a different window ([`popup_view`]) and are not listed here.
+///
+/// # Examples
+///
+/// A page of text fields has no list boxes, so the host has nothing to draw:
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let session = FormSession::new();
+/// assert!(route::scroll_views_on_page(&session, &ctx).is_empty());
+/// ```
+#[must_use]
 pub fn scroll_views_on_page<R: Resolve>(
     session: &FormSession,
     ctx: &Context<'_, R>,
@@ -3217,6 +3258,48 @@ fn appearance_of<R: Resolve>(
 ///
 /// Event deltas alone miss an `/OpenAction` `setFocus` that never produced a
 /// later click (`bug_1445426`, `bug_1447268`).
+///
+/// # Examples
+///
+/// A session that has never seen an event has no interaction state, so there
+/// is nothing to overlay:
+///
+/// ```
+/// # use pdfrum_doc::ap;
+/// # use pdfrum_form::route::{self, Context};
+/// # use pdfrum_form::{FormSession, Permissions};
+/// # use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+/// # fn dict<const N: usize>(pairs: [(&'static [u8], Object); N]) -> Dict {
+/// #     Dict::from_pairs(pairs.into_iter().map(|(k, v)| (Name::from(k), v)))
+/// # }
+/// # fn nm(b: &'static [u8]) -> Object { Object::Name(Name::from(b)) }
+/// # fn rect(l: f32, b: f32, r: f32, t: f32) -> Object {
+/// #     Object::Array([l, b, r, t].into_iter().map(Object::Real).collect())
+/// # }
+/// # let helv = dict([(b"Type", nm(b"Font")), (b"Subtype", nm(b"Type1")),
+/// #     (b"BaseFont", nm(b"Helvetica"))]);
+/// # let catalog = dict([(b"AcroForm", Object::Dict(dict([
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
+/// #     (b"DR", Object::Dict(dict([(b"Font",
+/// #         Object::Dict(dict([(b"Helv", Object::Dict(helv))])))]))),
+/// # ])))]);
+/// # let widget = dict([(b"Type", nm(b"Annot")), (b"Subtype", nm(b"Widget")),
+/// #     (b"FT", nm(b"Tx")), (b"T", Object::Str(PdfString::literal(b"Name"))),
+/// #     (b"V", Object::Str(PdfString::literal(b"old"))),
+/// #     (b"Rect", rect(20.0, 100.0, 180.0, 130.0)),
+/// #     (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g")))]);
+/// # let page_dict = dict([(b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
+/// #     (b"Annots", Object::Array([Object::Dict(widget)].into_iter().collect()))]);
+/// # let resolve = NoResolve;
+/// # let page = pdfrum_form::read_page(0, &page_dict, &catalog, &resolve);
+/// # let mut build = pdfrum_page::BuildContext::new();
+/// # let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+/// # let ctx = Context { page: &page, catalog: &catalog, resolve: &resolve,
+/// #     fonts: &fonts, permissions: Permissions::ALL };
+/// # let session = FormSession::new();
+/// assert!(route::appearances_on_page(&session, &ctx).is_empty());
+/// ```
+#[must_use]
 pub fn appearances_on_page<R: Resolve>(
     session: &FormSession,
     ctx: &Context<'_, R>,
