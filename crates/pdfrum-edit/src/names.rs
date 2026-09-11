@@ -74,16 +74,6 @@ pdfrum_object::names! {
     OPEN = "Open";
     /// Comment icon name (`/Comment`).
     COMMENT = "Comment";
-    /// Highlight subtype (`/Highlight`).
-    HIGHLIGHT = "Highlight";
-    /// Text (sticky note) subtype (`/Text`).
-    TEXT = "Text";
-    /// Square subtype (`/Square`).
-    SQUARE = "Square";
-    /// Underline subtype (`/Underline`).
-    UNDERLINE = "Underline";
-    /// Ink subtype (`/Ink`).
-    INK = "Ink";
-    /// Free-text subtype (`/FreeText`).
-    FREE_TEXT = "FreeText";
+    // Subtype spellings (/Highlight, /Text, …) come from
+    // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }

@@ -5,6 +5,7 @@
 
 use kurbo::{Point, Rect};
 use pdfrum_common::PageIndex;
+use pdfrum_doc::Subtype;
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, PdfString, Resolve, encode_text};
 use peniko::Color;
 
@@ -19,11 +20,20 @@ type Result<T> = core::result::Result<T, Error>;
 /// page is printed.
 const FLAG_PRINT: i64 = 4;
 
+/// Default `/DA` for [`AnnotSpec::FreeText`]: black Helvetica 12 pt.
+///
+/// Matches the string Rotero writes today.
+pub const DEFAULT_DA: &str = "0 0 0 rg /Helvetica 12 Tf";
+
 /// One quadrilateral for a text-markup annotation (`/QuadPoints`).
 ///
 /// Eight numbers are written in **top-left, top-right, bottom-left,
 /// bottom-right** order — the order Rotero writes and the order
 /// [`pdfrum_doc::annot`] reads as left/bottom = bl, right/top = tr.
+///
+/// The read path returns axis-aligned [`Rect`]s via
+/// [`pdfrum_doc::Annotation::quad_points`]; `Quad` is the write-side type for
+/// the same geometry. Convert with [`Quad::from_rect`] or [`From<Rect>`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Quad {
     /// Top-left corner in page space.
@@ -60,25 +70,43 @@ impl Quad {
     }
 }
 
+impl From<Rect> for Quad {
+    /// Delegates to [`Quad::from_rect`].
+    ///
+    /// ```
+    /// use pdfrum_edit::Quad;
+    /// use kurbo::Rect;
+    ///
+    /// let q: Quad = Rect::new(10.0, 20.0, 110.0, 40.0).into();
+    /// assert_eq!(q, Quad::from_rect(Rect::new(10.0, 20.0, 110.0, 40.0)));
+    /// ```
+    fn from(rect: Rect) -> Self {
+        Self::from_rect(rect)
+    }
+}
+
 /// What kind of annotation to create and attach to a page.
+///
+/// This is the **write** payload for [`add_annotation`]. The ISO subtype
+/// spelling itself is [`pdfrum_doc::Subtype`] (also re-exported from the
+/// facade): reading an annotation yields `Subtype`, while building one takes
+/// an `AnnotSpec` variant that carries the keys that subtype needs.
 ///
 /// Each variant carries the keys Rotero's `write_annotations` needs today.
 /// Appearance streams are not produced.
 ///
+/// Prefer the associated constructors (`highlight`, `text`, …) over spelling
+/// every field at the call site.
+///
 /// ```
-/// use pdfrum::{AnnotSpec, Color, Document, Quad, Rect, SaveOptions};
+/// use pdfrum::{AnnotSpec, Color, Document, Rect, SaveOptions};
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 /// let mut edit = doc.edit();
 /// let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
 /// edit.add_annotation(
 ///     0,
-///     AnnotSpec::Highlight {
-///         rect,
-///         color: Color::from_rgb8(255, 230, 0),
-///         quads: vec![Quad::from_rect(rect)],
-///         contents: Some("note".into()),
-///     },
+///     AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0)).with_contents("note"),
 /// )?;
 /// let mut bytes = Vec::new();
 /// edit.write_to(&mut bytes, &SaveOptions::default())?;
@@ -153,7 +181,8 @@ pub enum AnnotSpec {
     },
     /// A free-text annotation (`/Subtype /FreeText`).
     ///
-    /// `/Contents` and `/DA` are both required.
+    /// `/Contents` and `/DA` are both required. See [`DEFAULT_DA`] for a
+    /// common appearance string.
     FreeText {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -161,10 +190,158 @@ pub enum AnnotSpec {
         color: Color,
         /// The visible text (`/Contents`).
         contents: String,
-        /// Default appearance string (`/DA`), e.g.
-        /// `"0 0 0 rg /Helvetica 12 Tf"`.
+        /// Default appearance string (`/DA`), e.g. [`DEFAULT_DA`].
         da: String,
     },
+}
+
+impl AnnotSpec {
+    /// A highlight covering `rect` as a single quadrilateral, with no
+    /// contents.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::highlight(Rect::new(0.0, 0.0, 10.0, 2.0), Color::from_rgb8(255, 255, 0));
+    /// assert!(matches!(spec, AnnotSpec::Highlight { contents: None, .. }));
+    /// ```
+    #[must_use]
+    pub fn highlight(rect: Rect, color: Color) -> Self {
+        Self::Highlight {
+            rect,
+            color,
+            quads: vec![Quad::from(rect)],
+            contents: None,
+        }
+    }
+
+    /// An underline covering `rect` as a single quadrilateral, with no
+    /// contents.
+    #[must_use]
+    pub fn underline(rect: Rect, color: Color) -> Self {
+        Self::Underline {
+            rect,
+            color,
+            quads: vec![Quad::from(rect)],
+            contents: None,
+        }
+    }
+
+    /// A sticky-note text annotation with no contents.
+    #[must_use]
+    pub fn text(rect: Rect, color: Color) -> Self {
+        Self::Text {
+            rect,
+            color,
+            contents: None,
+        }
+    }
+
+    /// A square / area annotation with no contents.
+    #[must_use]
+    pub fn square(rect: Rect, color: Color) -> Self {
+        Self::Square {
+            rect,
+            color,
+            contents: None,
+        }
+    }
+
+    /// Freehand ink with the given strokes and no contents.
+    #[must_use]
+    pub fn ink(rect: Rect, color: Color, strokes: Vec<Vec<Point>>) -> Self {
+        Self::Ink {
+            rect,
+            color,
+            strokes,
+            contents: None,
+        }
+    }
+
+    /// A free-text annotation with required contents and `/DA`.
+    ///
+    /// Pass [`DEFAULT_DA`] when the caller has no custom appearance string.
+    #[must_use]
+    pub fn free_text(
+        rect: Rect,
+        color: Color,
+        contents: impl Into<String>,
+        da: impl Into<String>,
+    ) -> Self {
+        Self::FreeText {
+            rect,
+            color,
+            contents: contents.into(),
+            da: da.into(),
+        }
+    }
+
+    /// Sets `/Contents` on variants that take optional contents.
+    ///
+    /// [`AnnotSpec::FreeText`] already requires contents at construction; this
+    /// leaves it unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .with_contents("sticky");
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Text {
+    ///         contents: Some(ref c),
+    ///         ..
+    ///     } if c == "sticky"
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn with_contents(self, contents: impl Into<String>) -> Self {
+        let contents = Some(contents.into());
+        match self {
+            Self::Highlight {
+                rect, color, quads, ..
+            } => Self::Highlight {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Text { rect, color, .. } => Self::Text {
+                rect,
+                color,
+                contents,
+            },
+            Self::Square { rect, color, .. } => Self::Square {
+                rect,
+                color,
+                contents,
+            },
+            Self::Underline {
+                rect, color, quads, ..
+            } => Self::Underline {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Ink {
+                rect,
+                color,
+                strokes,
+                ..
+            } => Self::Ink {
+                rect,
+                color,
+                strokes,
+                contents,
+            },
+            other @ Self::FreeText { .. } => other,
+        }
+    }
 }
 
 /// Adds an annotation described by `spec` to `page`, returning the new
@@ -208,7 +385,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             if quads.is_empty() {
                 return Err(Error::EmptyQuadPoints);
             }
-            let mut dict = common(names::HIGHLIGHT, rect, color, page_ref);
+            let mut dict = common(Subtype::Highlight, rect, color, page_ref);
             dict.insert(
                 names::QUAD_POINTS.clone(),
                 Object::Array(quad_points(&quads)),
@@ -221,7 +398,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             contents,
         } => {
-            let mut dict = common(names::TEXT, rect, color, page_ref);
+            let mut dict = common(Subtype::Text, rect, color, page_ref);
             dict.insert(names::NAME.clone(), Object::Name(names::COMMENT.clone()));
             dict.insert(names::OPEN.clone(), Object::Bool(false));
             insert_contents(&mut dict, contents.as_deref());
@@ -232,7 +409,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             contents,
         } => {
-            let mut dict = common(names::SQUARE, rect, color, page_ref);
+            let mut dict = common(Subtype::Square, rect, color, page_ref);
             dict.insert(names::BS.clone(), Object::Dict(border_style(true)));
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
@@ -246,7 +423,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             if quads.is_empty() {
                 return Err(Error::EmptyQuadPoints);
             }
-            let mut dict = common(names::UNDERLINE, rect, color, page_ref);
+            let mut dict = common(Subtype::Underline, rect, color, page_ref);
             dict.insert(
                 names::QUAD_POINTS.clone(),
                 Object::Array(quad_points(&quads)),
@@ -260,7 +437,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             strokes,
             contents,
         } => {
-            let mut dict = common(names::INK, rect, color, page_ref);
+            let mut dict = common(Subtype::Ink, rect, color, page_ref);
             dict.insert(names::INK_LIST.clone(), Object::Array(ink_list(&strokes)));
             dict.insert(names::BS.clone(), Object::Dict(border_style(false)));
             insert_contents(&mut dict, contents.as_deref());
@@ -272,7 +449,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             contents,
             da,
         } => {
-            let mut dict = common(names::FREE_TEXT, rect, color, page_ref);
+            let mut dict = common(Subtype::FreeText, rect, color, page_ref);
             dict.insert(names::CONTENTS.clone(), Object::Str(pdf_string(&contents)));
             dict.insert(names::DA.clone(), Object::Str(pdf_string(&da)));
             Ok(dict)
@@ -281,10 +458,16 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
 }
 
 /// `/Type /Annot`, `/Subtype`, `/Rect`, `/C`, `/F` Print, and `/P`.
-fn common(subtype: &Name, rect: Rect, color: Color, page_ref: ObjRef) -> Dict {
+///
+/// Subtype spellings come from [`Subtype::as_bytes`] so they stay aligned with
+/// the ISO enum in `pdfrum-doc`.
+fn common(subtype: Subtype, rect: Rect, color: Color, page_ref: ObjRef) -> Dict {
     let mut dict = Dict::new();
     dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
-    dict.insert(names::SUBTYPE.clone(), Object::Name(subtype.clone()));
+    dict.insert(
+        names::SUBTYPE.clone(),
+        Object::Name(Name::from(subtype.as_bytes())),
+    );
     dict.insert(names::RECT.clone(), rect_object(rect));
     dict.insert(names::C.clone(), color_object(color));
     dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));

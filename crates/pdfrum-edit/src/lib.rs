@@ -34,7 +34,7 @@ mod svg_ingest;
 mod svg_text;
 mod write;
 
-pub use annot::{AnnotSpec, Quad, add_annotation};
+pub use annot::{AnnotSpec, DEFAULT_DA, Quad, add_annotation};
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,
