@@ -4,9 +4,9 @@
 //! from the annotation's own properties, matching what Rotero writes today.
 
 use kurbo::{Point, Rect};
-use peniko::Color;
 use pdfrum_common::PageIndex;
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, PdfString, Resolve, encode_text};
+use peniko::Color;
 
 use crate::doc::EditDoc;
 use crate::error::Error;
@@ -209,7 +209,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                 return Err(Error::EmptyQuadPoints);
             }
             let mut dict = common(names::HIGHLIGHT, rect, color, page_ref);
-            dict.insert(names::QUAD_POINTS.clone(), Object::Array(quad_points(&quads)));
+            dict.insert(
+                names::QUAD_POINTS.clone(),
+                Object::Array(quad_points(&quads)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -244,7 +247,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                 return Err(Error::EmptyQuadPoints);
             }
             let mut dict = common(names::UNDERLINE, rect, color, page_ref);
-            dict.insert(names::QUAD_POINTS.clone(), Object::Array(quad_points(&quads)));
+            dict.insert(
+                names::QUAD_POINTS.clone(),
+                Object::Array(quad_points(&quads)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
