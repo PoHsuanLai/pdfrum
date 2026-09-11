@@ -456,11 +456,11 @@ impl ContentsShape {
 
     /// The element references, in order.
     #[must_use]
-    pub fn elements(&self) -> Vec<ObjRef> {
+    pub fn elements(&self) -> &[ObjRef] {
         match self {
-            Self::Absent => Vec::new(),
-            Self::Single(reference) => vec![*reference],
-            Self::Array(elements) => elements.clone(),
+            Self::Absent => &[],
+            Self::Single(reference) => std::slice::from_ref(reference),
+            Self::Array(elements) => elements,
         }
     }
 }

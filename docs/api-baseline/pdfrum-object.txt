@@ -299,7 +299,6 @@ pub fn pdfrum_object::Array::remove(&mut self, usize) -> core::option::Option<pd
 pub fn pdfrum_object::Array::stream_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Stream>
 pub fn pdfrum_object::Array::string_at(&self, usize) -> core::option::Option<&pdfrum_object::PdfString>
 pub fn pdfrum_object::Array::text_at(&self, usize) -> core::option::Option<alloc::string::String>
-pub fn pdfrum_object::Array::to_numbers(&self) -> alloc::vec::Vec<f32>
 impl core::convert::AsRef<[pdfrum_object::Object]> for pdfrum_object::Array
 pub fn pdfrum_object::Array::as_ref(&self) -> &[pdfrum_object::Object]
 impl core::convert::From<alloc::vec::Vec<pdfrum_object::Object>> for pdfrum_object::Array

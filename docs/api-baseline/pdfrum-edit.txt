@@ -5,7 +5,7 @@ pub pdfrum_edit::ContentsShape::Absent
 pub pdfrum_edit::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
 pub pdfrum_edit::ContentsShape::Single(pdfrum_object::object::ObjRef)
 impl pdfrum_edit::ContentsShape
-pub fn pdfrum_edit::ContentsShape::elements(&self) -> alloc::vec::Vec<pdfrum_object::object::ObjRef>
+pub fn pdfrum_edit::ContentsShape::elements(&self) -> &[pdfrum_object::object::ObjRef]
 pub fn pdfrum_edit::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
 pub fn pdfrum_edit::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
 pub fn pdfrum_edit::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)

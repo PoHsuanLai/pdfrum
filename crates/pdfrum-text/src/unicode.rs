@@ -19,6 +19,8 @@
 // bounds check and `wch & 0xFFFF` mask do; the three ICU predicates cover
 // the whole code space, because the C++ hands ICU a 32-bit `wchar_t`.
 
+use smallvec::{SmallVec, smallvec};
+
 /// The committed blob. See `tables/PROVENANCE.md`.
 static BLOB: &[u8] = include_bytes!("../tables/unicode.bin");
 
@@ -296,17 +298,18 @@ pub const fn normalize_space(code: u32) -> u32 {
 /// `wch & 0xFFFF`-indexed in the C++, so a supplementary-plane code point
 /// reads a *BMP* entry — reproduced here, mask included.
 #[must_use]
-pub fn normalize(code: u32) -> Vec<u32> {
+pub fn normalize(code: u32) -> SmallVec<[u32; 4]> {
     let code = code & 0xFFFF;
     let found = normalization_table().get(code as usize);
     if found == 0 {
-        return vec![code];
+        return smallvec![code];
     }
     if found >= 0x8000 {
         let index = usize::from(found - 0x8000);
-        return match word_at(section(*b"NRM1"), index) {
-            Some(value) => vec![u32::from(value)],
-            None => vec![code],
+        return if let Some(value) = word_at(section(*b"NRM1"), index) {
+            smallvec![u32::from(value)]
+        } else {
+            smallvec![code]
         };
     }
     let index = usize::from(found & 0x0FFF);
@@ -315,25 +318,25 @@ pub fn normalize(code: u32) -> Vec<u32> {
         2 => section(*b"NRM2"),
         3 => section(*b"NRM3"),
         4 => section(*b"NRM4"),
-        _ => return vec![code],
+        _ => return smallvec![code],
     };
     // Tables 2 and 3 hold fixed-length runs; table 4 is length-prefixed.
     let (start, len) = if table == 4 {
         let Some(len) = word_at(payload, index) else {
-            return vec![code];
+            return smallvec![code];
         };
         (index + 1, usize::from(len))
     } else {
         (index, usize::from(table))
     };
-    let mut out = Vec::with_capacity(len);
+    let mut out = SmallVec::with_capacity(len);
     for offset in 0..len {
         match word_at(payload, start + offset) {
             Some(value) => out.push(u32::from(value)),
-            None => return vec![code],
+            None => return smallvec![code],
         }
     }
-    if out.is_empty() { vec![code] } else { out }
+    if out.is_empty() { smallvec![code] } else { out }
 }
 
 /// Whether a sorted, disjoint `(start, end)` range table contains a code
@@ -535,13 +538,13 @@ mod tests {
     #[test]
     fn normalization_covers_all_four_map_tables() {
         // Map1 (single replacement): NO-BREAK SPACE becomes a plain space.
-        assert_eq!(normalize(0x00A0), vec![0x0020]);
+        assert_eq!(normalize(0x00A0).as_slice(), &[0x0020]);
         // Map2 (two code points): the fi ligature.
-        assert_eq!(normalize(0xFB01), vec![0x0066, 0x0069]);
+        assert_eq!(normalize(0xFB01).as_slice(), &[0x0066, 0x0069]);
         // Three code points: the ffi ligature.
-        assert_eq!(normalize(0xFB03), vec![0x0066, 0x0066, 0x0069]);
+        assert_eq!(normalize(0xFB03).as_slice(), &[0x0066, 0x0066, 0x0069]);
         // Identity for anything unlisted.
-        assert_eq!(normalize(0x0041), vec![0x0041]);
+        assert_eq!(normalize(0x0041).as_slice(), &[0x0041]);
         // The mask means a supplementary code point reads its low half.
         assert_eq!(normalize(0x1_FB01), normalize(0xFB01));
     }
@@ -671,9 +674,12 @@ mod tests {
     #[test]
     fn the_normalization_table_decomposes_ligatures_and_passes_the_rest() {
         // LATIN SMALL LIGATURE FI decomposes.
-        assert_eq!(normalize(0xFB01), vec![u32::from(b'f'), u32::from(b'i')]);
+        assert_eq!(
+            normalize(0xFB01).as_slice(),
+            &[u32::from(b'f'), u32::from(b'i')]
+        );
         // An unlisted code point is itself.
-        assert_eq!(normalize(u32::from(b'a')), vec![u32::from(b'a')]);
+        assert_eq!(normalize(u32::from(b'a')).as_slice(), &[u32::from(b'a')]);
     }
 
     #[test]

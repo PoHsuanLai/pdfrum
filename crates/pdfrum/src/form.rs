@@ -32,7 +32,7 @@ pub struct UnknownField {
 /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
 /// let form = doc.form().expect("this fixture has a form");
 ///
-/// let field = &form.fields()[0];
+/// let field = form.fields().next().expect("the fixture has a field");
 /// assert_eq!(field.name(), "Text Box");
 /// assert_eq!(field.kind(), pdfrum::FieldKind::Text);
 /// assert_eq!(field.value(), "");
@@ -75,14 +75,12 @@ impl<'a> Form<'a> {
     /// child's fully-qualified name before the dot.
     ///
     /// Values read through these reflect any [`Form::set`] made so far.
-    #[must_use]
-    pub fn fields(&self) -> Vec<Field<'a>> {
+    pub fn fields(&self) -> impl ExactSizeIterator<Item = Field<'a>> + '_ {
         self.inner
             .fields
             .iter()
             .enumerate()
             .map(|(index, field)| self.view(index, field))
-            .collect()
     }
 
     /// How many fields the form has.

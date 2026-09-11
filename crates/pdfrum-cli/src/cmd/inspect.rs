@@ -295,7 +295,6 @@ pub struct RevisionRow {
 /// The incremental-update history, one row per saved revision.
 pub fn revision_rows(doc: &Document) -> Vec<RevisionRow> {
     doc.revisions()
-        .iter()
         .map(|r| RevisionRow {
             revision: r.index + 1,
             xref_offset: r.xref_offset,

@@ -319,7 +319,7 @@ pub fn pdfrum::Document::parser(&self) -> &pdfrum_parser::doc::Document
 pub fn pdfrum::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum::Document::render_session(&self) -> pdfrum::RenderSession
 pub fn pdfrum::Document::revision_bytes(&self, usize) -> core::option::Option<&[u8]>
-pub fn pdfrum::Document::revisions(&self) -> alloc::vec::Vec<pdfrum::Revision>
+pub fn pdfrum::Document::revisions(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = pdfrum::Revision> + '_
 pub fn pdfrum::Document::stream_data(&self, pdfrum_object::object::ObjRef) -> pdfrum::Result<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::to_pdfa(&self, impl core::convert::AsRef<std::path::Path>, pdfrum_doc::pdfa::report::Level, &pdfrum_doc::pdfa::policy::Policy) -> pdfrum::Result<pdfrum_doc::pdfa::policy::Conversion>
 pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
@@ -370,7 +370,7 @@ impl<'a> pdfrum::Form<'a>
 pub fn pdfrum::Form<'a>::edits(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&str, &str)>
 pub fn pdfrum::Form<'a>::field(&self, &str) -> core::option::Option<pdfrum::Field<'a>>
 pub fn pdfrum::Form<'a>::field_count(&self) -> usize
-pub fn pdfrum::Form<'a>::fields(&self) -> alloc::vec::Vec<pdfrum::Field<'a>>
+pub fn pdfrum::Form<'a>::fields(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = pdfrum::Field<'a>> + '_
 pub fn pdfrum::Form<'a>::need_appearances(&self) -> bool
 pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::string::String>) -> core::result::Result<(), pdfrum::UnknownField>
 pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool) -> core::result::Result<(), pdfrum::UnknownField>
@@ -482,7 +482,7 @@ pub fn pdfrum::OwnedFormSession::set_viewed_page(&mut self, impl core::convert::
 pub fn pdfrum::OwnedFormSession::viewed_page(&self) -> pdfrum_common::page_index::PageIndex
 pub struct pdfrum::OwnedPage
 impl pdfrum::OwnedPage
-pub fn pdfrum::OwnedPage::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'_>>
+pub fn pdfrum::OwnedPage::annotations(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = pdfrum::Annotation<'_>> + '_
 pub fn pdfrum::OwnedPage::art_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::OwnedPage::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::OwnedPage::crop_box(&self) -> kurbo::rect::Rect
@@ -510,7 +510,7 @@ pub fn pdfrum::Page<'_>::thumbnail(&self) -> core::option::Option<pdfrum_render:
 pub fn pdfrum::Page<'_>::thumbnail_data(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Page<'_>::thumbnail_raw(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 impl<'a> pdfrum::Page<'a>
-pub fn pdfrum::Page<'a>::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'a>>
+pub fn pdfrum::Page<'a>::annotations(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = pdfrum::Annotation<'a>> + 'a
 pub fn pdfrum::Page<'a>::art_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect

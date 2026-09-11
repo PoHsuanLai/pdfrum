@@ -112,7 +112,6 @@ impl Form {
         Ok(self
             .replayed()?
             .fields()
-            .iter()
             .map(|field| Field {
                 name: field.name().to_owned(),
                 value: field.value(),
