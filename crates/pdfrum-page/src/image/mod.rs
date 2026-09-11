@@ -51,7 +51,7 @@ pub(crate) use mask::{ColorKey, matte_color};
 pub use packed::{Depth, Packed, Unpacked};
 pub use rows::{Converted, Palette, Rgb8, Rgba8, Row, Rows, Source};
 
-use crate::color::{ColorSpace, Rgb};
+use crate::color::{ColorSpace, Family, Rgb};
 use crate::error::Error;
 use crate::function::FunctionCache;
 use crate::names;
@@ -236,6 +236,11 @@ pub struct ImageData {
     pub matte: Option<Rgb>,
     /// `/Interpolate`, a hint the renderer may honour.
     pub interpolate: bool,
+    /// The colour-space family the dictionary named, **before** samples are
+    /// converted to RGB. Overprint's Darken approximation keys on this —
+    /// `DeviceCMYK` / `Separation` / `DeviceN` — and is invisible once the
+    /// pixels are already sRGB.
+    pub family: Family,
 }
 
 impl ImageData {
@@ -326,48 +331,42 @@ pub fn decode_image<R: Resolve>(
             if image.space_override != SpaceOverride::Keep {
                 diags.record(Severity::Recovered, DiagKind::JpxColorSpaceOverride, None);
             }
-            let pixels = match (&space, image.components) {
+            let pixels = if let (Some(cs @ ColorSpace::Indexed(indexed)), 1) =
+                (&space, image.components)
+            {
                 // An `/Indexed` space keeps its indices and a resolved
                 // palette. The decoder was asked for raw indices rather than
                 // colours (`JpxAction::UseIndexed`), but it still hands them
                 // back as **eight-bit** samples, so a `/BitsPerComponent`
-                // below eight has to be shifted back down:
+                // below eight has to be shifted back down. Without it every
+                // sample overshoots the palette and clamps to its last
+                // entry; with the palette dropped altogether the indices
+                // themselves reach the page as grey.
                 //
-                // ```
-                // } else if (color_space_ && family == kIndexed && bpc_ < 8) {
-                //   int scale = 8 - bpc_;
-                //   for (auto& pixel : scanline) { pixel >>= scale; }
-                // }
-                // ```
-                //
-                // Without it every sample overshoots the palette and clamps
-                // to its last entry; with the palette dropped altogether the
-                // indices themselves reach the page as grey, which is what
-                // `jpxdecode_indexed.in` rendered before.
-                (Some(cs @ ColorSpace::Indexed(indexed)), 1) => {
-                    // The shift runs only for `bpc_ < 8`, so a declared depth
-                    // of eight or more leaves the samples alone. A *zero*
-                    // depth is the no-colour-space JPX path, where PDFium
-                    // would shift by eight and clear every index; we keep the
-                    // same answer without the overflowing shift.
-                    let indices: Box<[u8]> = if info.bpc >= 8 {
-                        image.data.iter().copied().collect()
-                    } else {
-                        let scale = 8u32.saturating_sub(info.bpc);
-                        image
-                            .data
-                            .iter()
-                            .map(|&v| u8::try_from(u32::from(v) >> scale).unwrap_or(0))
-                            .collect()
-                    };
-                    let palette = (0..=indexed.max_index)
-                        .map(|i| cs.to_rgb(&[f32::from(i)]))
-                        .collect();
-                    Pixels::Indexed { indices, palette }
-                }
-                (_, 1) => Pixels::Gray8(image.data.into()),
-                (_, 4) => Pixels::Cmyk8(image.data.into()),
-                _ => Pixels::Rgb8(image.data.into()),
+                // The shift runs only for `bpc_ < 8`, so a declared depth
+                // of eight or more leaves the samples alone. A *zero*
+                // depth is the no-colour-space JPX path; we keep the
+                // samples as eight-bit indices rather than overflowing a
+                // shift by eight.
+                let indices: Box<[u8]> = if info.bpc >= 8 {
+                    image.data.iter().copied().collect()
+                } else {
+                    let scale = 8u32.saturating_sub(info.bpc);
+                    image
+                        .data
+                        .iter()
+                        .map(|&v| u8::try_from(u32::from(v) >> scale).unwrap_or(0))
+                        .collect()
+                };
+                let palette = (0..=indexed.max_index)
+                    .map(|i| cs.to_rgb(&[f32::from(i)]))
+                    .collect();
+                Pixels::Indexed { indices, palette }
+            } else {
+                let n_pixels = usize::try_from(image.width)
+                    .unwrap_or(0)
+                    .saturating_mul(usize::try_from(image.height).unwrap_or(0));
+                pixels_from_codec_samples(space.as_ref(), image.components, image.data, n_pixels)?
             };
             (
                 image.width,
@@ -453,11 +452,11 @@ pub fn decode_image<R: Resolve>(
             }
             let mut data = image.data;
             apply_codec_decode(&mut data, space.as_ref(), image.components, &info);
-            let pixels = match image.components {
-                1 => Pixels::Gray8(data.into()),
-                4 => Pixels::Cmyk8(data.into()),
-                _ => Pixels::Rgb8(data.into()),
-            };
+            let n_pixels = usize::try_from(image.width)
+                .unwrap_or(0)
+                .saturating_mul(usize::try_from(image.height).unwrap_or(0));
+            let pixels =
+                pixels_from_codec_samples(space.as_ref(), image.components, data, n_pixels)?;
             (image.width, image.height, Samples::Whole(pixels), None)
         }
         // A one-bit fax image with a colour space of its own: the bits are the
@@ -504,11 +503,16 @@ pub fn decode_image<R: Resolve>(
         other => other,
     };
 
-    let matte = matte_color(
-        stream.dict.array(names::MATTE, r).as_ref(),
-        space.as_ref(),
-        usize::try_from(info.components).unwrap_or(0),
-    );
+    // `/Matte` lives on the **soft-mask** stream, not the base (`cpdf_dib.cpp`
+    // reads `mask->GetDict()->GetArrayFor("Matte")`). `bug_1395648` names
+    // `[0 0.2 1]` on a 50×50 `/SMask`; looking on the base always missed it.
+    let matte = stream.dict.stream(names::SMASK, r).and_then(|smask| {
+        matte_color(
+            smask.dict.array(names::MATTE, r).as_ref(),
+            space.as_ref(),
+            usize::try_from(info.components).unwrap_or(0),
+        )
+    });
 
     Ok(ImageData {
         width,
@@ -517,6 +521,7 @@ pub fn decode_image<R: Resolve>(
         mask,
         matte,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: space.as_ref().map_or(Family::Unknown, ColorSpace::family),
     })
 }
 
@@ -666,6 +671,7 @@ fn decode_stencil<R: Resolve>(
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: Family::Unknown,
     })
 }
 
@@ -795,6 +801,7 @@ fn stencil_from_jbig2<R: Resolve>(
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+        family: Family::Unknown,
     })
 }
 #[cfg(not(feature = "jbig2"))]
@@ -965,6 +972,30 @@ fn tint_per_pixel(
     Ok(Pixels::Rgb8(bgr.into()))
 }
 
+/// Wrap codec output as device pixels, or run the space when the samples
+/// are not already a device reading.
+///
+/// DCT and JPEG 2000 produce interleaved 8-bit samples and skip [`unpack`].
+/// Grey, RGB and CMYK can sit in the row pipeline as themselves; `Lab`, a
+/// non-sRGB `ICCBased`, and a tint family cannot — those bytes are the
+/// space's own components, and treating a Lab triple as RGB paints the
+/// wrong hue.
+fn pixels_from_codec_samples(
+    space: Option<&ColorSpace>,
+    components: u8,
+    data: Vec<u8>,
+    total_pixels: usize,
+) -> Result<Pixels, Error> {
+    if let Some(space) = space.filter(|s| s.needs_image_conversion()) {
+        return tint_per_pixel(space, &data, total_pixels);
+    }
+    Ok(match components {
+        1 => Pixels::Gray8(data.into()),
+        4 => Pixels::Cmyk8(data.into()),
+        _ => Pixels::Rgb8(data.into()),
+    })
+}
+
 /// Prepare raw or losslessly-filtered samples for the row pipeline.
 ///
 /// The two families that cannot be walked lazily resolve here and return
@@ -1020,31 +1051,18 @@ fn unpack(
         return Ok(Samples::Whole(Pixels::Indexed { indices, palette }));
     }
 
-    // A `Separation` or `DeviceN` sample is a **tint**, not a colour, so it
-    // has to be run through the tint transform before it means anything.
-    // Widening it to a byte and handing it to the device reading of the
-    // component count paints the tint itself — one colorant becomes a grey
-    // level, four become a CMYK tuple. See
-    // [`ColorSpace::needs_image_conversion`] for why these two families and
-    // no others.
+    // Samples that are not a device reading — a tint, a Lab triple, a
+    // non-sRGB ICC tuple — have to be run through the space before they
+    // mean a colour. Widening them to a byte and handing them to the device
+    // arm of the component count would paint the tint (or the Lab bytes)
+    // itself. See [`ColorSpace::needs_image_conversion`].
     //
-    // PDFium reaches the conversion from two directions and both end at
-    // `GetRGB`. When `bpc_ * components_ <= 8` — which covers every eight-bit
-    // single-component image — `CPDF_DIB::LoadPalette`
-    // (`cpdf_dib.cpp:894-979`) precomputes `GetRGB` over all `1 << bits`
-    // possible sample values and the image becomes a palette lookup.
-    // Anything wider takes `TranslateScanline24bpp` (`:1007-1054`), whose
-    // default-decode shortcut (`:1056-1075`) hands every non-RGB family to
-    // `TranslateImageLine`; the generic base (`cpdf_colorspace.cpp:636-660`)
-    // is `GetRGB` per pixel again.
-    //
-    // For a single component both collapse to the same thing here: resolve
-    // the colour once per distinct sample value into a palette, which is
-    // exact (there are at most 256 of them) and is the shape the renderer's
+    // For a single component the conversion is exact as a palette: there
+    // are at most 256 sample values, and that is the shape the renderer's
     // indexed fast path already consumes. `corpus/fx/other/1.pdf` is the
-    // fixture — a 1x1 `/Separation` image whose lone `0xC6` sample is a 0.776
-    // tint of PANTONE 327 CV, teal `(0, 182, 162)` through the tint transform
-    // and grey `(198, 198, 198)` without it.
+    // fixture — a 1x1 `/Separation` image whose lone `0xC6` sample is a
+    // 0.776 tint of PANTONE 327 CV, teal `(0, 182, 162)` through the tint
+    // transform and grey `(198, 198, 198)` without it.
     if components == 1 && space.needs_image_conversion() {
         return Ok(Samples::Whole(tint_palette(
             info, space, data, &decode, &layout, diags,
@@ -1052,10 +1070,24 @@ fn unpack(
     }
 
     // A multi-colorant `DeviceN` cannot be tabulated -- its sample tuple is
-    // too wide -- so it takes `TranslateScanline24bpp`'s own shape instead,
-    // which is per pixel and therefore eager.
+    // too wide -- so it converts per pixel instead.
     if space.needs_image_conversion() {
-        let out = widen_whole(info, data, &decode, &layout, diags)?;
+        // Default 8-bit samples are already the space's encoding — Lab's
+        // a* and b* live in 0..=255 with 128 as zero, and the bulk convert
+        // reads them that way. Mapping through 0..=1 would crush them.
+        let out = if decode.default && info.bpc == 8 {
+            let need = total_pixels
+                .checked_mul(components)
+                .ok_or(Error::ImageTooLarge)?;
+            let mut bytes = vec![0u8; need];
+            let n = data.len().min(need);
+            if let (Some(dst), Some(src)) = (bytes.get_mut(..n), data.get(..n)) {
+                dst.copy_from_slice(src);
+            }
+            bytes
+        } else {
+            widen_whole(info, data, &decode, &layout, diags)?
+        };
         return Ok(Samples::Whole(tint_per_pixel(space, &out, total_pixels)?));
     }
 
@@ -2524,5 +2556,55 @@ mod tests {
             full[0] > 200 && full[1] < 80 && full[2] < 80,
             "a full tint must reach the alternate space's red, got {full:?}"
         );
+    }
+
+    #[test]
+    fn a_lab_image_is_converted_not_copied_as_rgb() {
+        // L*=100, a*=0, b*=0 is white in Lab. Those same three bytes read as
+        // RGB are magenta, which is how a Lab JPEG used to paint.
+        let wp = Array::of([
+            Object::Real(0.9642),
+            Object::Real(1.0),
+            Object::Real(0.82491),
+        ]);
+        let lab = Array::of([
+            Object::Name(Name::from("Lab")),
+            Object::Dict(Dict::from_pairs(vec![(
+                Name::from("WhitePoint"),
+                Object::Array(wp),
+            )])),
+        ]);
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(1)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (Name::from("ColorSpace"), Object::Array(lab)),
+            ],
+            &[255, 128, 128],
+        );
+        let image = decode(&s).expect("should decode");
+        let rgb = sample_at(&image.samples, 0, 0, 1);
+        assert_ne!(
+            rgb,
+            [255, 128, 128],
+            "Lab bytes must not reach the page as RGB"
+        );
+        assert!(
+            rgb.iter().all(|&c| c > 200),
+            "L*=100 a*=0 b*=0 is white, got {rgb:?}"
+        );
+
+        let space = crate::color::ColorSpace::Lab(Box::new(crate::color::Lab {
+            white_point: [0.9642, 1.0, 0.82491],
+            black_point: [0.0; 3],
+            ranges: [-100.0, 100.0, -100.0, 100.0],
+        }));
+        let pixels =
+            super::pixels_from_codec_samples(Some(&space), 3, vec![255, 128, 128], 1).unwrap();
+        let Samples::Whole(Pixels::Rgb8(data)) = Samples::Whole(pixels) else {
+            panic!("codec Lab samples resolve to RGB");
+        };
+        assert_eq!(&*data, &rgb);
     }
 }

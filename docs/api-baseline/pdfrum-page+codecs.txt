@@ -481,6 +481,7 @@ pub fn pdfrum_page::ImageCache::is_empty(&self) -> bool
 pub fn pdfrum_page::ImageCache::len(&self) -> usize
 pub fn pdfrum_page::ImageCache::new() -> Self
 pub struct pdfrum_page::ImageData
+pub pdfrum_page::ImageData::family: pdfrum_page::Family
 pub pdfrum_page::ImageData::height: u32
 pub pdfrum_page::ImageData::interpolate: bool
 pub pdfrum_page::ImageData::mask: core::option::Option<pdfrum_page::ImageMask>

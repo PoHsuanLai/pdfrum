@@ -293,6 +293,10 @@ pub struct FieldModel {
     /// `/TP 7` and the golden reads `buttonPosition = 0` for it, so an
     /// out-of-range value becomes zero rather than being passed through.
     pub button_position: u32,
+    /// `Field.borderStyle` — one of `solid`, `dashed`, `beveled`, `inset`,
+    /// `underline`. Empty until a getter or setter first names it, which
+    /// the getter then answers as `solid`.
+    pub border_style: String,
 }
 
 /// What kind of field a script sees, in the oracle's own vocabulary.
@@ -764,7 +768,23 @@ fn read_field<R: pdfrum_object::Resolve>(
         checked,
         captions: caption_of(field, r),
         button_position: button_position_of(field, r),
+        border_style: border_style_of(field, r),
     }
+}
+
+/// `Field.borderStyle` as the first widget's `/BS /S` spells it.
+fn border_style_of<R: pdfrum_object::Resolve>(field: &pdfrum_doc::form::Field, r: &R) -> String {
+    let Some(widget) = field.widgets.first() else {
+        return "solid".to_string();
+    };
+    match pdfrum_doc::ap::widget::widget_border(&widget.dict, r).style {
+        pdfrum_doc::ap::BorderStyle::Solid => "solid",
+        pdfrum_doc::ap::BorderStyle::Dash => "dashed",
+        pdfrum_doc::ap::BorderStyle::Beveled => "beveled",
+        pdfrum_doc::ap::BorderStyle::Inset => "inset",
+        pdfrum_doc::ap::BorderStyle::Underline => "underline",
+    }
+    .to_string()
 }
 
 /// A toggle control's export value — the `/AP /N` key that is not `Off`,

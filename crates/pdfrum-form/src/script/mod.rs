@@ -661,6 +661,11 @@ impl ScriptCascade {
         std::mem::take(&mut self.host.borrow_mut().field_writes)
     }
 
+    /// What a script wrote through `Field.borderStyle`, drained.
+    pub fn drain_border_style_writes(&mut self) -> Vec<(u32, pdfrum_doc::ap::BorderStyle)> {
+        std::mem::take(&mut self.host.borrow_mut().border_style_writes)
+    }
+
     /// Whether a script called `Doc.calculateNow()`, drained.
     ///
     /// **Nothing reads this yet.** The sweep it asks for is
@@ -1009,6 +1014,10 @@ impl Cascade for ScriptCascade {
     /// the final one survives the script.
     fn take_focus_request(&mut self) -> Option<u32> {
         self.host.borrow_mut().focus_requested.take()
+    }
+
+    fn drain_border_style_writes(&mut self) -> Vec<(u32, pdfrum_doc::ap::BorderStyle)> {
+        std::mem::take(&mut self.host.borrow_mut().border_style_writes)
     }
 
     /// `/AA /F`.

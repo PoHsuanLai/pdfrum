@@ -1768,6 +1768,17 @@ fn bug_765384_set_focus_and_border_style_do_not_reenter() {
         "the last setFocus wins, and it comes back as a request"
     );
     assert!(cascade.transcript().is_empty(), "and nothing is alerted");
+    assert_eq!(
+        cascade.drain_border_style_writes(),
+        vec![(0, pdfrum_doc::ap::BorderStyle::Dash)],
+        "the borderStyle write is recorded for the host to spend"
+    );
+    assert!(
+        cascade.run("app.alert(this.getField(\"MyField\").borderStyle);", "test",),
+        "the getter reads what the setter stored: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(cascade.transcript_text(), "Alert: dashed\n");
 }
 
 /// `Bug1477093` — **`getField` on a name the form does not have.**

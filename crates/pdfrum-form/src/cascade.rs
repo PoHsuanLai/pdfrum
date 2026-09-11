@@ -218,6 +218,15 @@ pub trait Cascade {
     fn take_focus_request(&mut self) -> Option<u32> {
         None
     }
+
+    /// `Field.borderStyle` writes a script made, drained.
+    ///
+    /// Each entry is a `/Fields` position and the style the setter accepted.
+    /// Spent after the script returns so the appearance regenerates through
+    /// the ordinary path rather than from inside a native function.
+    fn drain_border_style_writes(&mut self) -> Vec<(u32, pdfrum_doc::ap::BorderStyle)> {
+        Vec::new()
+    }
 }
 
 /// Which of the six pointer and focus `/AA` entries a [`Cascade::pointer`]

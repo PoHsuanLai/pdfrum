@@ -10,6 +10,7 @@ mod type1;
 
 use crate::descriptor::{self, FontDescriptor};
 use crate::encoding::{FontEncoding, adobe_char_name, load_differences};
+use crate::fallback::GlyphFallback;
 use crate::glyphs::{Charmap, Face, GlyphSource};
 use crate::ids::GlyphName;
 use crate::subst::{
@@ -22,6 +23,7 @@ use pdfrum_common::kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Resolve};
 use smallvec::SmallVec;
+use std::sync::OnceLock;
 
 /// The character code an unmapped one borrows its metrics from in a
 /// substituted font (`LoadCharMetrics`'s `LoadCharMetrics(32)` fallback).
@@ -82,10 +84,17 @@ pub struct SimpleFont {
     /// parse counts as **not** embedded, which is what routes it to
     /// substitution.
     pub(crate) embedded: bool,
+    /// The PDF `/Subtype /TrueType`, not the face. `ShouldUseFont` branches
+    /// on the dictionary, so a substituted Type 1 named like a TrueType font
+    /// still keeps `.notdef`.
+    pub(crate) is_truetype: bool,
     /// The base font name, subset prefix stripped.
     pub(crate) base_font_name: Vec<u8>,
     /// Per-code bounding boxes, filled lazily by the metric derivation.
     char_bbox: [Rect; 256],
+    /// The Arial stand-in `GetCharPosList` builds on the first glyph the
+    /// ladder could not place. Empty until then.
+    pub(crate) fallback: OnceLock<Option<GlyphFallback>>,
 }
 
 impl SimpleFont {
@@ -154,7 +163,24 @@ impl SimpleFont {
             return SmallVec::new();
         };
         match self.unicodes.get(index) {
-            Some(&0) | None => SmallVec::new(),
+            Some(&0) | None => {
+                // The ladder left this code unmapped. A symbolic TrueType
+                // still has an encoding table (`MsSymbol` has no glyph
+                // names, so the name-driven fill never runs), and the Arial
+                // stand-in looks that Unicode up rather than treating the
+                // raw byte as WinAnsi — `bug_1442723`.
+                match self
+                    .encoding_kind
+                    .unicodes()
+                    .and_then(|table| table.get(index))
+                    .copied()
+                {
+                    Some(0) | None => SmallVec::new(),
+                    Some(u) => char::from_u32(u32::from(u))
+                        .map(|c| SmallVec::from_slice(&[c]))
+                        .unwrap_or_default(),
+                }
+            }
             Some(&u) => char::from_u32(u32::from(u))
                 .map(|c| SmallVec::from_slice(&[c]))
                 .unwrap_or_default(),
@@ -444,8 +470,10 @@ pub(crate) fn load(
             SimpleKind::Type1 { base14 }
         },
         embedded,
+        is_truetype,
         base_font_name,
         char_bbox,
+        fallback: OnceLock::new(),
     }
 }
 

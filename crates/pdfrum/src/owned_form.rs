@@ -481,6 +481,15 @@ impl OwnedFormSession {
         self.with(|session| session.scroll_view(annot))
     }
 
+    /// List-box scroll bars on `page` — as [`FormSession::scrollbars_for_page`].
+    #[must_use]
+    pub fn scrollbars_for_page(
+        &mut self,
+        page: impl Into<pdfrum_common::PageIndex>,
+    ) -> Vec<(pdfrum_form::AnnotId, pdfrum_form::ScrollView)> {
+        self.with(|session| session.scrollbars_for_page(page))
+    }
+
     /// Reports that the user picked row `index` of an open dropdown — as
     /// [`FormSession::choose`].
     ///

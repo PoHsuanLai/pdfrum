@@ -238,6 +238,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         }
     }
 
@@ -255,6 +256,7 @@ mod tests {
             mask: None,
             matte: None,
             interpolate: false,
+            family: pdfrum_page::Family::Unknown,
         }
     }
 

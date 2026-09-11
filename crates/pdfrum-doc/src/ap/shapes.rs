@@ -164,11 +164,12 @@ pub fn drop_button(bbox: Rect) -> String {
 
 /// One shape, wrapped in its own graphics state.
 ///
-/// The cross and the star stroke; everything else fills. A transparent colour
+/// The cross strokes; everything else fills — including the star, which
+/// `GetAppStream_Star` paints with `kFillOperator`. A transparent colour
 /// writes no colour operator, and the path is drawn regardless.
 fn shape(bbox: Rect, style: CheckStyle, color: Color) -> String {
     let (paint, operator) = match style {
-        CheckStyle::Cross | CheckStyle::Star => (PaintOp::Stroke, "S\n"),
+        CheckStyle::Cross => (PaintOp::Stroke, "S\n"),
         _ => (PaintOp::Fill, "f\n"),
     };
     let mut out = Content::new();
@@ -411,19 +412,18 @@ mod tests {
     }
 
     #[test]
-    fn the_cross_and_star_stroke_where_the_rest_fill() {
+    fn the_cross_strokes_where_the_rest_fill() {
         let box_ = geom::rect(0.0, 0.0, 12.0, 12.0);
-        for style in [CheckStyle::Cross, CheckStyle::Star] {
-            assert!(
-                check_box(box_, style, Color::Gray(0.0)).ends_with("S\nQ\n"),
-                "{style:?}"
-            );
-        }
+        assert!(
+            check_box(box_, CheckStyle::Cross, Color::Gray(0.0)).ends_with("S\nQ\n"),
+            "the cross strokes"
+        );
         for style in [
             CheckStyle::Check,
             CheckStyle::Circle,
             CheckStyle::Diamond,
             CheckStyle::Square,
+            CheckStyle::Star,
         ] {
             assert!(
                 check_box(box_, style, Color::Gray(0.0)).ends_with("f\nQ\n"),

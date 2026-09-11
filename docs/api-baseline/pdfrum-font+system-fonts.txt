@@ -55,6 +55,7 @@ pub fn pdfrum_font::Font::decode<'a>(&'a self, &'a [u8]) -> impl core::iter::tra
 pub fn pdfrum_font::Font::descent(&self) -> f32
 pub fn pdfrum_font::Font::font_bbox(&self) -> kurbo::rect::Rect
 pub fn pdfrum_font::Font::glyph_advance(&self, pdfrum_font::Gid) -> i32
+pub fn pdfrum_font::Font::glyph_fallback(&self) -> core::option::Option<&pdfrum_font::GlyphFallback>
 pub fn pdfrum_font::Font::glyph_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
 pub fn pdfrum_font::Font::hinted_glyph_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
 pub fn pdfrum_font::Font::id(&self) -> pdfrum_font::FontId
@@ -64,6 +65,7 @@ pub fn pdfrum_font::Font::is_vertical(&self) -> bool
 pub fn pdfrum_font::Font::japan1_transform(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::CidTransform>
 pub fn pdfrum_font::Font::load_standard(pdfrum_font::StandardFont, &pdfrum_font::FontCache) -> Self
 pub fn pdfrum_font::Font::render_synth(&self, i32, i32) -> core::option::Option<pdfrum_font::SynthGlyph>
+pub fn pdfrum_font::Font::should_use_own_glyph(&self, core::option::Option<pdfrum_font::Gid>) -> bool
 pub fn pdfrum_font::Font::string_width(&self, &[u8]) -> f32
 pub fn pdfrum_font::Font::subst(&self) -> core::option::Option<&pdfrum_font::SubstFont>
 pub fn pdfrum_font::Font::type3(&self) -> core::option::Option<&pdfrum_font::Type3Font>
@@ -202,6 +204,14 @@ pub struct pdfrum_font::GlyphCache
 impl pdfrum_font::GlyphCache
 pub fn pdfrum_font::GlyphCache::new() -> Self
 pub fn pdfrum_font::GlyphCache::shared(&mut self, &pdfrum_font::Font, pdfrum_font::GlyphKey) -> core::option::Option<alloc::sync::Arc<kurbo::bezpath::BezPath>>
+pub fn pdfrum_font::GlyphCache::shared_fallback(&mut self, &pdfrum_font::GlyphFallback, bool, pdfrum_font::GlyphKey) -> core::option::Option<alloc::sync::Arc<kurbo::bezpath::BezPath>>
+pub struct pdfrum_font::GlyphFallback
+impl pdfrum_font::GlyphFallback
+pub fn pdfrum_font::GlyphFallback::advance(&self, pdfrum_font::Gid) -> i32
+pub fn pdfrum_font::GlyphFallback::gid(&self, &[char], pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::Gid>
+pub fn pdfrum_font::GlyphFallback::hinted_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
+pub fn pdfrum_font::GlyphFallback::id(&self) -> pdfrum_font::FontId
+pub fn pdfrum_font::GlyphFallback::render_synth(&self, i32, i32, bool) -> core::option::Option<pdfrum_font::SynthGlyph>
 pub struct pdfrum_font::GlyphKey
 pub pdfrum_font::GlyphKey::dest_width: i32
 pub pdfrum_font::GlyphKey::font: pdfrum_font::FontId

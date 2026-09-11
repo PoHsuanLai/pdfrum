@@ -12,6 +12,7 @@ mod transform;
 pub use transform::{CidTransform, cid_transform_to_float, japan1_transform};
 
 use crate::descriptor::{self, FontDescriptor};
+use crate::fallback::GlyphFallback;
 use crate::glyphs::{Charmap, Face, GlyphSource};
 use crate::subst::{self, CodePage, FontRequest, SubstFont, SubstitutionOptions};
 use crate::tounicode::ToUnicode;
@@ -22,6 +23,7 @@ use pdfrum_common::kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Object, Resolve, Resolved};
 use smallvec::SmallVec;
+use std::sync::OnceLock;
 
 pub use crate::widths::VerticalMetrics;
 
@@ -83,6 +85,9 @@ pub struct Type0Font {
     pub(crate) ansi_widths_fixed: bool,
     /// Vertical substitution, parsed from `GSUB` on first use.
     gsub: gsub::VerticalSubst,
+    /// The Arial stand-in `GetCharPosList` builds on the first glyph the
+    /// ladder could not place. Empty until then.
+    pub(crate) fallback: OnceLock<Option<GlyphFallback>>,
 }
 
 impl Type0Font {
@@ -601,6 +606,7 @@ fn build(
         #[cfg(test)]
         ansi_widths_fixed: gb2312,
         gsub,
+        fallback: OnceLock::new(),
     }
 }
 

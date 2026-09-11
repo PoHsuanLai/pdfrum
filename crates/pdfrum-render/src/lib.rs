@@ -22,11 +22,13 @@ mod paint;
 mod path;
 mod pattern;
 mod shading;
+mod shear;
 mod softmask;
 mod stretch;
 mod stroke;
 mod text;
 mod transfer;
+mod type3;
 mod walk;
 mod zero_area;
 

@@ -377,6 +377,7 @@ pub fn pdfrum::FormSession<'_>::owned_with_config(alloc::sync::Arc<pdfrum::Docum
 pub fn pdfrum::FormSession<'_>::owned_with_scripts(alloc::sync::Arc<pdfrum::Document>, &pdfrum_form::script::ScriptConfig) -> core::result::Result<pdfrum::OwnedFormSession, pdfrum_form::script::BuildError>
 impl<'a> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::advance_time(&mut self, core::time::Duration) -> usize
+pub fn pdfrum::FormSession<'a>::appearances_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::blur(&mut self) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::can_redo(&self) -> bool
@@ -409,6 +410,7 @@ pub fn pdfrum::FormSession<'a>::script_failures(&mut self, &mut pdfrum_common::d
 pub fn pdfrum::FormSession<'a>::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scripts_mut(&mut self) -> core::option::Option<&mut pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub fn pdfrum::FormSession<'a>::scrollbars_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<(pdfrum_form::session::AnnotId, pdfrum_form::popup::ScrollView)>
 pub fn pdfrum::FormSession<'a>::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::set_index_selected(&mut self, usize, bool) -> bool
 pub fn pdfrum::FormSession<'a>::set_viewed_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
@@ -418,6 +420,7 @@ pub fn pdfrum::FormSession<'a>::with_config(&'a pdfrum::Document, pdfrum_form::s
 pub fn pdfrum::FormSession<'a>::with_config_in(&'a pdfrum::Document, pdfrum_form::session::SessionConfig, &mut pdfrum_page::build::BuildContext) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_context(&'a pdfrum::Document, &mut pdfrum_page::build::BuildContext) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_scripts(&'a pdfrum::Document, &pdfrum_form::script::ScriptConfig) -> core::result::Result<pdfrum::FormSession<'a>, pdfrum_form::script::BuildError>
+pub fn pdfrum::FormSession<'a>::with_scripts_in(&'a pdfrum::Document, &pdfrum_form::script::ScriptConfig, &mut pdfrum_page::build::BuildContext) -> core::result::Result<pdfrum::FormSession<'a>, pdfrum_form::script::BuildError>
 #[non_exhaustive] pub struct pdfrum::Metadata
 pub pdfrum::Metadata::author: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::creation_date: core::option::Option<alloc::string::String>
@@ -487,6 +490,7 @@ pub fn pdfrum::OwnedFormSession::script_failures(&mut self, &mut pdfrum_common::
 pub fn pdfrum::OwnedFormSession::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::OwnedFormSession::scripts_mut(&mut self) -> core::option::Option<&mut pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::OwnedFormSession::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub fn pdfrum::OwnedFormSession::scrollbars_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<(pdfrum_form::session::AnnotId, pdfrum_form::popup::ScrollView)>
 pub fn pdfrum::OwnedFormSession::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::OwnedFormSession::set_index_selected(&mut self, usize, bool) -> bool
 pub fn pdfrum::OwnedFormSession::set_viewed_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
