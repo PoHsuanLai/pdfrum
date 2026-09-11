@@ -10,6 +10,7 @@
 // across — `write` names `encrypt`, `content::marks` names `write::object` —
 // which is what the `pub(crate)` on a few *sub*modules is for; at this level
 // `mod` already means crate-visible.
+mod annot;
 mod attach;
 mod build_graph;
 mod builders;
@@ -33,6 +34,7 @@ mod svg_ingest;
 mod svg_text;
 mod write;
 
+pub use annot::{AnnotSpec, Quad, add_annotation};
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,

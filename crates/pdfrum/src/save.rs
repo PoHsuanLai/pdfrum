@@ -740,6 +740,49 @@ impl<'a> DocEdit<'a> {
         Ok(out?)
     }
 
+    /// Create an annotation on `page` and append it to the page's `/Annots`.
+    ///
+    /// Covers the six subtypes Rotero writes today — `Highlight`, `Text` (note),
+    /// `Square` (area), `Underline`, `Ink`, and `FreeText` — via [`AnnotSpec`].
+    /// Appearance streams are not generated.
+    ///
+    /// Returns the new annotation's object reference.
+    ///
+    /// ```
+    /// use pdfrum::{AnnotSpec, Color, Document, Quad, Rect, SaveOptions};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// let rect = Rect::new(50.0, 50.0, 150.0, 70.0);
+    /// edit.add_annotation(
+    ///     0,
+    ///     AnnotSpec::Text {
+    ///         rect,
+    ///         color: Color::from_rgb8(255, 200, 0),
+    ///         contents: Some("hello".into()),
+    ///     },
+    /// )?;
+    /// let mut bytes = Vec::new();
+    /// edit.write_to(&mut bytes, &SaveOptions::default())?;
+    /// let saved = Document::from_bytes(bytes)?;
+    /// let annot = saved.page(0)?.annotations().next().expect("one annot");
+    /// assert_eq!(annot.subtype(), pdfrum::Subtype::Text);
+    /// assert_eq!(annot.contents().as_deref(), Some("hello"));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// When `page` is out of range, the page is inline, or a highlight /
+    /// underline has no quadrilaterals.
+    pub fn add_annotation(
+        &mut self,
+        page: impl Into<PageIndex>,
+        spec: pdfrum_edit::AnnotSpec,
+    ) -> crate::Result<pdfrum_object::ObjRef> {
+        Ok(pdfrum_edit::add_annotation(&mut self.inner, page, spec)?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.
