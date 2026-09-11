@@ -220,6 +220,17 @@ usvg = { version = "=0.48.1", default-features = false }
 # newer than it. It appears in no library crate's normal dependency tree.
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
+# Tests are optimized: the corpus sweeps and the SVG round trip are tight
+# float loops, and `opt-level = 0` costs them ~22x. The whole run is 302s
+# unoptimized against 17s here.
+[profile.test]
+opt-level = 2
+
+# Dependencies too: `resvg`, `tiny-skia` and the image codecs do most of that
+# work and an edit here does not rebuild them.
+[profile.dev.package."*"]
+opt-level = 2
+
 # Line tables so `scripts/profile.nu` names functions. `debug = 1` is
 # line-tables-plus-frame-info, not full DWARF locals.
 [profile.release]

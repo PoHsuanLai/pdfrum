@@ -419,7 +419,20 @@ mod tests {
     /// cannot promise anything about.
     #[test]
     fn the_backends_are_send_and_sync() {
+        // Every assertion below is feature-gated, and `--no-default-features`
+        // enables none of them, leaving this uncalled.
+        #[cfg_attr(
+            not(any(
+                feature = "vello-cpu",
+                feature = "tiny-skia",
+                feature = "agg",
+                feature = "vello-gpu"
+            )),
+            expect(dead_code, reason = "no backend feature is enabled")
+        )]
         fn send_sync<T: Send + Sync>() {}
+        // Gated like its one call site below.
+        #[cfg(all(feature = "svg-export", feature = "vello-cpu"))]
         fn send<T: Send>() {}
         #[cfg(feature = "vello-cpu")]
         send_sync::<VelloCpuBackend>();
