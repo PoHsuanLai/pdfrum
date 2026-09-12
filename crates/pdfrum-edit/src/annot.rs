@@ -345,6 +345,121 @@ impl AnnotSpec {
             other @ Self::FreeText { .. } => other,
         }
     }
+
+    /// Attach author (`/T`), unique name (`/NM`), and/or modification date (`/M`).
+    #[must_use]
+    pub fn with_meta(self, meta: AnnotMeta) -> AnnotWrite {
+        AnnotWrite { spec: self, meta }
+    }
+
+    /// Sets the annotation author (`/T`).
+    #[must_use]
+    pub fn with_author(self, author: impl Into<String>) -> AnnotWrite {
+        self.with_meta(AnnotMeta::default().with_author(author))
+    }
+
+    /// Sets the annotation unique name (`/NM`), typically a stable id.
+    #[must_use]
+    pub fn with_name(self, name: impl Into<String>) -> AnnotWrite {
+        self.with_meta(AnnotMeta::default().with_name(name))
+    }
+
+    /// Sets `/M` from a PDF date string (e.g. from [`crate::pdf_date`]).
+    #[must_use]
+    pub fn with_modified(self, modified: impl Into<String>) -> AnnotWrite {
+        self.with_meta(AnnotMeta::default().with_modified(modified))
+    }
+}
+
+/// Optional dictionary fields common to every annotation subtype.
+///
+/// Applied when writing via [`add_annotation`] / [`AnnotWrite`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AnnotMeta {
+    /// Author / title string written as `/T`.
+    pub author: Option<String>,
+    /// Unique name written as `/NM` (often an application id).
+    pub name: Option<String>,
+    /// Modification date written as `/M` (PDF date string).
+    pub modified: Option<String>,
+}
+
+impl AnnotMeta {
+    /// Sets `/T`.
+    #[must_use]
+    pub fn with_author(mut self, author: impl Into<String>) -> Self {
+        self.author = Some(author.into());
+        self
+    }
+
+    /// Sets `/NM`.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets `/M` to a PDF date string.
+    #[must_use]
+    pub fn with_modified(mut self, modified: impl Into<String>) -> Self {
+        self.modified = Some(modified.into());
+        self
+    }
+}
+
+/// An [`AnnotSpec`] plus optional [`AnnotMeta`] for writing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnotWrite {
+    /// Subtype-specific fields.
+    pub spec: AnnotSpec,
+    /// Author / name / date.
+    pub meta: AnnotMeta,
+}
+
+impl From<AnnotSpec> for AnnotWrite {
+    fn from(spec: AnnotSpec) -> Self {
+        Self {
+            spec,
+            meta: AnnotMeta::default(),
+        }
+    }
+}
+
+impl AnnotWrite {
+    /// Sets `/Contents` on the inner spec (same rules as [`AnnotSpec::with_contents`]).
+    #[must_use]
+    pub fn with_contents(mut self, contents: impl Into<String>) -> Self {
+        self.spec = self.spec.with_contents(contents);
+        self
+    }
+
+    /// Sets `/T`.
+    #[must_use]
+    pub fn with_author(mut self, author: impl Into<String>) -> Self {
+        self.meta.author = Some(author.into());
+        self
+    }
+
+    /// Sets `/NM`.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.meta.name = Some(name.into());
+        self
+    }
+
+    /// Sets `/M`.
+    #[must_use]
+    pub fn with_modified(mut self, modified: impl Into<String>) -> Self {
+        self.meta.modified = Some(modified.into());
+        self
+    }
+
+    /// Replaces the full metadata block.
+    #[must_use]
+    pub fn with_meta(mut self, meta: AnnotMeta) -> Self {
+        self.meta = meta;
+        self
+    }
 }
 
 /// Adds an annotation described by `spec` to `page`, returning the new
@@ -364,17 +479,31 @@ impl AnnotSpec {
 pub fn add_annotation(
     edit: &mut EditDoc<'_>,
     page: impl Into<PageIndex>,
-    spec: AnnotSpec,
+    write: impl Into<AnnotWrite>,
 ) -> Result<ObjRef> {
+    let AnnotWrite { spec, meta } = write.into();
     let page = page.into();
     let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
         return Err(Error::InlinePage(page));
     };
     let mut dict = build_dict(spec, page_ref)?;
+    apply_meta(&mut dict, &meta);
     attach_appearance(edit, &mut dict);
     let annot_ref = edit.add(Object::Dict(dict));
     attach_to_page(edit, page_ref, &mut page_dict, annot_ref);
     Ok(annot_ref)
+}
+
+fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
+    if let Some(author) = meta.author.as_deref().filter(|s| !s.is_empty()) {
+        dict.insert(names::T.clone(), Object::Str(pdf_string(author)));
+    }
+    if let Some(name) = meta.name.as_deref().filter(|s| !s.is_empty()) {
+        dict.insert(names::NM.clone(), Object::Str(pdf_string(name)));
+    }
+    if let Some(modified) = meta.modified.as_deref().filter(|s| !s.is_empty()) {
+        dict.insert(names::M.clone(), Object::Str(pdf_string(modified)));
+    }
 }
 
 /// Generate `/AP /N` for `dict` when a subtype generator exists.
