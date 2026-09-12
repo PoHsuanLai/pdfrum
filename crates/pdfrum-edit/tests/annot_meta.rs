@@ -1,4 +1,9 @@
-//! AnnotSpec metadata (`/T`, `/NM`, `/M`) round-trip.
+//! `AnnotSpec` metadata (`/T`, `/NM`, `/M`) round-trip.
+
+#![expect(
+    clippy::expect_used,
+    reason = "helpers shared by the tests below; a panic here is a failure"
+)]
 
 use std::sync::Arc;
 
