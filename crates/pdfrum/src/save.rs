@@ -774,9 +774,9 @@ impl<'a> DocEdit<'a> {
     pub fn add_annotation(
         &mut self,
         page: impl Into<PageIndex>,
-        spec: pdfrum_edit::AnnotSpec,
+        write: impl Into<pdfrum_edit::AnnotWrite>,
     ) -> crate::Result<pdfrum_object::ObjRef> {
-        Ok(pdfrum_edit::add_annotation(&mut self.inner, page, spec)?)
+        Ok(pdfrum_edit::add_annotation(&mut self.inner, page, write)?)
     }
 
     /// The objects as the save writes them: the session's, with `/ModDate`
