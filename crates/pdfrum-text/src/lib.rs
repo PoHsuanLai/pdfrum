@@ -504,10 +504,10 @@ impl TextPage {
     /// Prefer this for text-markup annotation geometry (Highlight, Underline,
     /// `StrikeOut`, Squiggly): the loose box is font-uniform advance ×
     /// ascent/descent and always contains the tight glyph ink, so quads sit
-    /// on the line box the way Acrobat `/QuadPoints` do. Keep [`rects`] for
+    /// on the line box the way Acrobat `/QuadPoints` do. Keep [`Self::rects`] for
     /// ink-accurate hit-testing and select/copy.
     ///
-    /// The scan rules match [`rects`]: one box per run of consecutive
+    /// The scan rules match [`Self::rects`]: one box per run of consecutive
     /// characters sharing a text object; generated and sub-pixel boxes are
     /// skipped; an empty-after-skip run still yields one all-zero rectangle.
     #[must_use]
