@@ -1,7 +1,7 @@
 //! Creating page annotations and attaching them to a page's `/Annots`.
 //!
-//! When a generator exists for the subtype (Highlight, Underline, StrikeOut,
-//! Squiggly, Ink, FreeText, Text, Square, …), an `/AP /N` appearance stream is written so
+//! When a generator exists for the subtype (`Highlight`, `Underline`, `StrikeOut`,
+//! `Squiggly`, `Ink`, `FreeText`, `Text`, `Square`, …), an `/AP /N` appearance stream is written so
 //! [`crate::flatten`] and viewers that require appearances can draw them.
 
 use kurbo::{Point, Rect};
@@ -622,18 +622,53 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             quads,
             contents,
-        } => {
-            if quads.is_empty() {
-                return Err(Error::EmptyQuadPoints);
-            }
-            let mut dict = common(Subtype::Highlight, rect, color, page_ref);
-            dict.insert(
-                names::QUAD_POINTS.clone(),
-                Object::Array(quad_points(&quads)),
-            );
-            insert_contents(&mut dict, contents.as_deref());
-            Ok(dict)
-        }
+        } => markup_dict(
+            Subtype::Highlight,
+            rect,
+            color,
+            &quads,
+            contents.as_deref(),
+            page_ref,
+        ),
+        AnnotSpec::Underline {
+            rect,
+            color,
+            quads,
+            contents,
+        } => markup_dict(
+            Subtype::Underline,
+            rect,
+            color,
+            &quads,
+            contents.as_deref(),
+            page_ref,
+        ),
+        AnnotSpec::StrikeOut {
+            rect,
+            color,
+            quads,
+            contents,
+        } => markup_dict(
+            Subtype::StrikeOut,
+            rect,
+            color,
+            &quads,
+            contents.as_deref(),
+            page_ref,
+        ),
+        AnnotSpec::Squiggly {
+            rect,
+            color,
+            quads,
+            contents,
+        } => markup_dict(
+            Subtype::Squiggly,
+            rect,
+            color,
+            &quads,
+            contents.as_deref(),
+            page_ref,
+        ),
         AnnotSpec::Text {
             rect,
             color,
@@ -652,57 +687,6 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
         } => {
             let mut dict = common(Subtype::Square, rect, color, page_ref);
             dict.insert(names::BS.clone(), Object::Dict(border_style(true)));
-            insert_contents(&mut dict, contents.as_deref());
-            Ok(dict)
-        }
-        AnnotSpec::Underline {
-            rect,
-            color,
-            quads,
-            contents,
-        } => {
-            if quads.is_empty() {
-                return Err(Error::EmptyQuadPoints);
-            }
-            let mut dict = common(Subtype::Underline, rect, color, page_ref);
-            dict.insert(
-                names::QUAD_POINTS.clone(),
-                Object::Array(quad_points(&quads)),
-            );
-            insert_contents(&mut dict, contents.as_deref());
-            Ok(dict)
-        }
-        AnnotSpec::StrikeOut {
-            rect,
-            color,
-            quads,
-            contents,
-        } => {
-            if quads.is_empty() {
-                return Err(Error::EmptyQuadPoints);
-            }
-            let mut dict = common(Subtype::StrikeOut, rect, color, page_ref);
-            dict.insert(
-                names::QUAD_POINTS.clone(),
-                Object::Array(quad_points(&quads)),
-            );
-            insert_contents(&mut dict, contents.as_deref());
-            Ok(dict)
-        }
-        AnnotSpec::Squiggly {
-            rect,
-            color,
-            quads,
-            contents,
-        } => {
-            if quads.is_empty() {
-                return Err(Error::EmptyQuadPoints);
-            }
-            let mut dict = common(Subtype::Squiggly, rect, color, page_ref);
-            dict.insert(
-                names::QUAD_POINTS.clone(),
-                Object::Array(quad_points(&quads)),
-            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -730,6 +714,27 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             Ok(dict)
         }
     }
+}
+
+/// Shared `/QuadPoints` markup path for `Highlight` / `Underline` / `StrikeOut` / `Squiggly`.
+fn markup_dict(
+    subtype: Subtype,
+    rect: Rect,
+    color: Color,
+    quads: &[Quad],
+    contents: Option<&str>,
+    page_ref: ObjRef,
+) -> Result<Dict> {
+    if quads.is_empty() {
+        return Err(Error::EmptyQuadPoints);
+    }
+    let mut dict = common(subtype, rect, color, page_ref);
+    dict.insert(
+        names::QUAD_POINTS.clone(),
+        Object::Array(quad_points(quads)),
+    );
+    insert_contents(&mut dict, contents);
+    Ok(dict)
 }
 
 /// `/Type /Annot`, `/Subtype`, `/Rect`, `/C`, `/F` Print, and `/P`.

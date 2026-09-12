@@ -1,5 +1,10 @@
 //! Written annotations carry `/AP` and survive flatten.
 
+#![expect(
+    clippy::expect_used,
+    reason = "helpers shared by the tests below; a panic here is a failure"
+)]
+
 use pdfrum::{AnnotSpec, Color, Document, FlattenMode, Flattened, Name, Rect, SaveOptions};
 use std::sync::Arc;
 
