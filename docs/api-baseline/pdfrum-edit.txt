@@ -1,5 +1,60 @@
 pub mod pdfrum_edit
 pub use pdfrum_edit::StandardFont
+#[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
+pub pdfrum_edit::AnnotSpec::FreeText
+pub pdfrum_edit::AnnotSpec::FreeText::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::FreeText::contents: alloc::string::String
+pub pdfrum_edit::AnnotSpec::FreeText::da: alloc::string::String
+pub pdfrum_edit::AnnotSpec::FreeText::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Highlight
+pub pdfrum_edit::AnnotSpec::Highlight::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Highlight::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Highlight::quads: alloc::vec::Vec<pdfrum_edit::Quad>
+pub pdfrum_edit::AnnotSpec::Highlight::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Ink
+pub pdfrum_edit::AnnotSpec::Ink::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Ink::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Ink::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Ink::strokes: alloc::vec::Vec<alloc::vec::Vec<kurbo::point::Point>>
+pub pdfrum_edit::AnnotSpec::Square
+pub pdfrum_edit::AnnotSpec::Square::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Square::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Square::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Squiggly
+pub pdfrum_edit::AnnotSpec::Squiggly::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Squiggly::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Squiggly::quads: alloc::vec::Vec<pdfrum_edit::Quad>
+pub pdfrum_edit::AnnotSpec::Squiggly::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::StrikeOut
+pub pdfrum_edit::AnnotSpec::StrikeOut::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::StrikeOut::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::StrikeOut::quads: alloc::vec::Vec<pdfrum_edit::Quad>
+pub pdfrum_edit::AnnotSpec::StrikeOut::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Text
+pub pdfrum_edit::AnnotSpec::Text::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Text::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Text::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Underline
+pub pdfrum_edit::AnnotSpec::Underline::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Underline::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Underline::quads: alloc::vec::Vec<pdfrum_edit::Quad>
+pub pdfrum_edit::AnnotSpec::Underline::rect: kurbo::rect::Rect
+impl pdfrum_edit::AnnotSpec
+pub fn pdfrum_edit::AnnotSpec::free_text(kurbo::rect::Rect, peniko::Color, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotSpec::highlight(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::ink(kurbo::rect::Rect, peniko::Color, alloc::vec::Vec<alloc::vec::Vec<kurbo::point::Point>>) -> Self
+pub fn pdfrum_edit::AnnotSpec::square(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::strike_out(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::text(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::underline(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
+impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::AnnotSpec) -> Self
 pub enum pdfrum_edit::ContentsShape
 pub pdfrum_edit::ContentsShape::Absent
 pub pdfrum_edit::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
@@ -16,6 +71,7 @@ pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
 pub pdfrum_edit::Error::EmptyFontProgram
 pub pdfrum_edit::Error::EmptyImage
+pub pdfrum_edit::Error::EmptyQuadPoints
 pub pdfrum_edit::Error::EmptyToUnicodeCMap
 pub pdfrum_edit::Error::EncryptedSaveUnsupported
 pub pdfrum_edit::Error::ImageDataLength
@@ -97,6 +153,25 @@ pub fn pdfrum_edit::StampPosition::fmt(&self, &mut core::fmt::Formatter<'_>) -> 
 impl core::str::traits::FromStr for pdfrum_edit::StampPosition
 pub type pdfrum_edit::StampPosition::Err = pdfrum_edit::UnknownStampPosition
 pub fn pdfrum_edit::StampPosition::from_str(&str) -> core::result::Result<pdfrum_edit::StampPosition, pdfrum_edit::UnknownStampPosition>
+pub struct pdfrum_edit::AnnotMeta
+pub pdfrum_edit::AnnotMeta::author: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotMeta::modified: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotMeta::name: core::option::Option<alloc::string::String>
+impl pdfrum_edit::AnnotMeta
+pub fn pdfrum_edit::AnnotMeta::with_author(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotMeta::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotMeta::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub struct pdfrum_edit::AnnotWrite
+pub pdfrum_edit::AnnotWrite::meta: pdfrum_edit::AnnotMeta
+pub pdfrum_edit::AnnotWrite::spec: pdfrum_edit::AnnotSpec
+impl pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotWrite::with_author(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_meta(self, pdfrum_edit::AnnotMeta) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::AnnotSpec) -> Self
 #[non_exhaustive] pub struct pdfrum_edit::AttachmentOptions
 pub pdfrum_edit::AttachmentOptions::description: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AttachmentOptions::mime_type: core::option::Option<alloc::string::String>
@@ -247,6 +322,15 @@ pub fn pdfrum_edit::PathBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum_edit::PathBuilder::rect(kurbo::rect::Rect) -> Self
 impl core::default::Default for pdfrum_edit::PathBuilder
 pub fn pdfrum_edit::PathBuilder::default() -> Self
+pub struct pdfrum_edit::Quad
+pub pdfrum_edit::Quad::bottom_left: kurbo::point::Point
+pub pdfrum_edit::Quad::bottom_right: kurbo::point::Point
+pub pdfrum_edit::Quad::top_left: kurbo::point::Point
+pub pdfrum_edit::Quad::top_right: kurbo::point::Point
+impl pdfrum_edit::Quad
+pub fn pdfrum_edit::Quad::from_rect(kurbo::rect::Rect) -> Self
+impl core::convert::From<kurbo::rect::Rect> for pdfrum_edit::Quad
+pub fn pdfrum_edit::Quad::from(kurbo::rect::Rect) -> Self
 pub struct pdfrum_edit::Regenerated
 pub pdfrum_edit::Regenerated::bytes: alloc::string::String
 pub pdfrum_edit::Regenerated::stream: core::option::Option<usize>
@@ -319,6 +403,8 @@ pub fn pdfrum_edit::TextBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum_edit::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
 pub struct pdfrum_edit::UnknownFlattenMode(_)
 pub struct pdfrum_edit::UnknownStampPosition(_)
+pub const pdfrum_edit::DEFAULT_DA: &str
+pub fn pdfrum_edit::add_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::convert::Into<pdfrum_edit::AnnotWrite>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<usize, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
