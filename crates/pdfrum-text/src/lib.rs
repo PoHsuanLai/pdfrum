@@ -498,6 +498,23 @@ impl TextPage {
         select::rects(&self.chars, range)
     }
 
+    /// Like [`rects`](Self::rects), but unions each character's font em-box
+    /// ([`CharBox::loose_char_box`](crate::CharBox::loose_char_box)).
+    ///
+    /// Prefer this for text-markup annotation geometry (Highlight, Underline,
+    /// `StrikeOut`, Squiggly): the loose box is font-uniform advance ×
+    /// ascent/descent and always contains the tight glyph ink, so quads sit
+    /// on the line box the way Acrobat `/QuadPoints` do. Keep [`rects`] for
+    /// ink-accurate hit-testing and select/copy.
+    ///
+    /// The scan rules match [`rects`]: one box per run of consecutive
+    /// characters sharing a text object; generated and sub-pixel boxes are
+    /// skipped; an empty-after-skip run still yields one all-zero rectangle.
+    #[must_use]
+    pub fn rects_loose(&self, range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
+        select::rects_loose(&self.chars, range)
+    }
+
     /// The character under a point in page space, or the nearest within tolerance.
     /// A point inside a character's box wins outright and reports the
     /// **first** such character; failing that, and only when a tolerance is
