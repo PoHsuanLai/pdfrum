@@ -4,6 +4,9 @@ pub use pdfrum::ActionKind
 pub use pdfrum::Affine
 pub use pdfrum::AnnotFlags
 pub use pdfrum::AnnotId
+pub use pdfrum::AnnotMeta
+pub use pdfrum::AnnotSpec
+pub use pdfrum::AnnotWrite
 pub use pdfrum::AppearanceUpdate
 pub use pdfrum::Argb
 pub use pdfrum::Array
@@ -20,6 +23,7 @@ pub use pdfrum::CharIndex
 pub use pdfrum::Color
 pub use pdfrum::ColorMode
 pub use pdfrum::ColorScheme
+pub use pdfrum::DEFAULT_DA
 pub use pdfrum::Dash
 pub use pdfrum::Deadline
 pub use pdfrum::Dest
@@ -96,6 +100,7 @@ pub use pdfrum::Placement
 pub use pdfrum::Point
 pub use pdfrum::PopupGeometry
 pub use pdfrum::PopupView
+pub use pdfrum::Quad
 pub use pdfrum::RasterBackend
 pub use pdfrum::ReadError
 pub use pdfrum::Rect
@@ -141,6 +146,7 @@ pub use pdfrum::VelloCpuBackend
 pub use pdfrum::WebLink
 pub use pdfrum::Word
 pub use pdfrum::XrefEntry
+pub use pdfrum::add_annotation
 pub use pdfrum::add_attachment
 pub use pdfrum::delete_attachment
 pub use pdfrum::flatten
@@ -276,6 +282,7 @@ pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standar
 pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write::Write, &[pdfrum_page::page_edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl<'a> pdfrum::DocEdit<'a>
+pub fn pdfrum::DocEdit<'a>::add_annotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::convert::Into<pdfrum_edit::annot::AnnotWrite>) -> pdfrum::Result<pdfrum_object::object::ObjRef>
 pub fn pdfrum::DocEdit<'a>::add_attachment(&mut self, &str, &[u8], &pdfrum_edit::attach::AttachmentOptions) -> pdfrum::Result<usize>
 pub fn pdfrum::DocEdit<'a>::delete_attachment(&mut self, usize) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'a>::draw_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::ops::function::FnOnce(&mut pdfrum_edit::canvas::Canvas<'_, '_>)) -> pdfrum::Result<()>
