@@ -132,6 +132,50 @@ fn underline_round_trips_quads() {
 }
 
 #[test]
+fn strike_out_round_trips_quads() {
+    let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
+    let mut edit = doc.edit();
+    let rect = Rect::new(80.0, 580.0, 300.0, 592.0);
+    edit.add_annotation(
+        0,
+        AnnotSpec::strike_out(rect, Color::from_rgb8(200, 0, 0)).with_contents("so"),
+    )
+    .expect("write");
+    let saved = save_reopen(&edit);
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("one annot");
+    assert_eq!(annot.subtype(), Subtype::StrikeOut);
+    assert_eq!(annot.contents().as_deref(), Some("so"));
+    assert_eq!(annot.quad_points().len(), 1);
+}
+
+#[test]
+fn squiggly_round_trips_quads() {
+    let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
+    let mut edit = doc.edit();
+    let rect = Rect::new(80.0, 560.0, 300.0, 572.0);
+    edit.add_annotation(
+        0,
+        AnnotSpec::squiggly(rect, Color::from_rgb8(0, 160, 0)).with_contents("sq"),
+    )
+    .expect("write");
+    let saved = save_reopen(&edit);
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("one annot");
+    assert_eq!(annot.subtype(), Subtype::Squiggly);
+    assert_eq!(annot.contents().as_deref(), Some("sq"));
+    assert_eq!(annot.quad_points().len(), 1);
+}
+
+#[test]
 fn ink_writes_inklist_strokes() {
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
     let mut edit = doc.edit();

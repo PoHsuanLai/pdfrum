@@ -1,7 +1,7 @@
 //! Creating page annotations and attaching them to a page's `/Annots`.
 //!
-//! When a generator exists for the subtype (Highlight, Underline, Ink,
-//! FreeText, Text, Square, …), an `/AP /N` appearance stream is written so
+//! When a generator exists for the subtype (Highlight, Underline, StrikeOut,
+//! Squiggly, Ink, FreeText, Text, Square, …), an `/AP /N` appearance stream is written so
 //! [`crate::flatten`] and viewers that require appearances can draw them.
 
 use kurbo::{Point, Rect};
@@ -168,6 +168,34 @@ pub enum AnnotSpec {
         /// Optional `/Contents`.
         contents: Option<String>,
     },
+    /// A strike-out over one or more text runs (`/Subtype /StrikeOut`).
+    ///
+    /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    StrikeOut {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Text runs covered; each becomes eight numbers in tl, tr, bl, br
+        /// order.
+        quads: Vec<Quad>,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// A squiggly underline over one or more text runs (`/Subtype /Squiggly`).
+    ///
+    /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    Squiggly {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Text runs covered; each becomes eight numbers in tl, tr, bl, br
+        /// order.
+        quads: Vec<Quad>,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
     /// Freehand ink strokes (`/Subtype /Ink`).
     ///
     /// Writes `/InkList` as an array of strokes (each a flat array of x,y
@@ -225,6 +253,30 @@ impl AnnotSpec {
     #[must_use]
     pub fn underline(rect: Rect, color: Color) -> Self {
         Self::Underline {
+            rect,
+            color,
+            quads: vec![Quad::from(rect)],
+            contents: None,
+        }
+    }
+
+    /// A strike-out covering `rect` as a single quadrilateral, with no
+    /// contents.
+    #[must_use]
+    pub fn strike_out(rect: Rect, color: Color) -> Self {
+        Self::StrikeOut {
+            rect,
+            color,
+            quads: vec![Quad::from(rect)],
+            contents: None,
+        }
+    }
+
+    /// A squiggly underline covering `rect` as a single quadrilateral, with no
+    /// contents.
+    #[must_use]
+    pub fn squiggly(rect: Rect, color: Color) -> Self {
+        Self::Squiggly {
             rect,
             color,
             quads: vec![Quad::from(rect)],
@@ -326,6 +378,22 @@ impl AnnotSpec {
             Self::Underline {
                 rect, color, quads, ..
             } => Self::Underline {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::StrikeOut {
+                rect, color, quads, ..
+            } => Self::StrikeOut {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Squiggly {
+                rect, color, quads, ..
+            } => Self::Squiggly {
                 rect,
                 color,
                 quads,
@@ -475,7 +543,7 @@ impl AnnotWrite {
 ///
 /// - [`Error::PageIndexOutOfRange`] when `page` is outside the document.
 /// - [`Error::InlinePage`] when the page has no object of its own.
-/// - [`Error::EmptyQuadPoints`] when a highlight or underline has no quads.
+/// - [`Error::EmptyQuadPoints`] when a text-markup annot has no quads.
 pub fn add_annotation(
     edit: &mut EditDoc<'_>,
     page: impl Into<PageIndex>,
@@ -597,6 +665,40 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                 return Err(Error::EmptyQuadPoints);
             }
             let mut dict = common(Subtype::Underline, rect, color, page_ref);
+            dict.insert(
+                names::QUAD_POINTS.clone(),
+                Object::Array(quad_points(&quads)),
+            );
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::StrikeOut {
+            rect,
+            color,
+            quads,
+            contents,
+        } => {
+            if quads.is_empty() {
+                return Err(Error::EmptyQuadPoints);
+            }
+            let mut dict = common(Subtype::StrikeOut, rect, color, page_ref);
+            dict.insert(
+                names::QUAD_POINTS.clone(),
+                Object::Array(quad_points(&quads)),
+            );
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Squiggly {
+            rect,
+            color,
+            quads,
+            contents,
+        } => {
+            if quads.is_empty() {
+                return Err(Error::EmptyQuadPoints);
+            }
+            let mut dict = common(Subtype::Squiggly, rect, color, page_ref);
             dict.insert(
                 names::QUAD_POINTS.clone(),
                 Object::Array(quad_points(&quads)),
