@@ -1,12 +1,15 @@
 //! Creating page annotations and attaching them to a page's `/Annots`.
 //!
-//! Appearance streams (`/AP`) are not written: a reader that needs one draws
-//! from the annotation's own properties, matching what Rotero writes today.
+//! When a generator exists for the subtype (Highlight, Underline, Ink,
+//! FreeText, Text, Square, …), an `/AP /N` appearance stream is written so
+//! [`crate::flatten`] and viewers that require appearances can draw them.
 
 use kurbo::{Point, Rect};
-use pdfrum_common::PageIndex;
+use pdfrum_common::{Diagnostics, PageIndex};
 use pdfrum_doc::Subtype;
-use pdfrum_object::{Array, Dict, Name, ObjRef, Object, PdfString, Resolve, encode_text};
+use pdfrum_object::{
+    Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, encode_text,
+};
 use peniko::Color;
 
 use crate::doc::EditDoc;
@@ -93,7 +96,7 @@ impl From<Rect> for Quad {
 /// an `AnnotSpec` variant that carries the keys that subtype needs.
 ///
 /// Each variant carries the keys Rotero's `write_annotations` needs today.
-/// Appearance streams are not produced.
+/// Appearance streams are generated when the subtype has a generator.
 ///
 /// Prefer the associated constructors (`highlight`, `text`, …) over spelling
 /// every field at the call site.
@@ -367,10 +370,51 @@ pub fn add_annotation(
     let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
         return Err(Error::InlinePage(page));
     };
-    let dict = build_dict(spec, page_ref)?;
+    let mut dict = build_dict(spec, page_ref)?;
+    attach_appearance(edit, &mut dict);
     let annot_ref = edit.add(Object::Dict(dict));
     attach_to_page(edit, page_ref, &mut page_dict, annot_ref);
     Ok(annot_ref)
+}
+
+/// Generate `/AP /N` for `dict` when a subtype generator exists.
+///
+/// Uses the same appearance generators flatten consults, so a newly written
+/// annotation survives flatten and viewers that require appearance streams.
+fn attach_appearance(edit: &mut EditDoc<'_>, dict: &mut Dict) {
+    let catalog = edit.base().catalog().unwrap_or_default();
+    let mut build = pdfrum_page::BuildContext::new();
+    let fonts = pdfrum_doc::ap::FormFonts::load(&catalog, edit, &mut build);
+    let mut diags = Diagnostics::default();
+    // Synthetic one-annot page so we can reuse the page-walk generators.
+    let page = Dict::from_pairs([(
+        Name::from("Annots"),
+        Object::Array(Array::of([Object::Dict(dict.clone())])),
+    )]);
+    let overlay = pdfrum_doc::ap::generate_appearances_with_text(
+        &page,
+        &catalog,
+        Some(&fonts),
+        edit,
+        &mut diags,
+    );
+    let Some(generated) = overlay.get(0) else {
+        return;
+    };
+    if generated.stream.is_empty() {
+        return;
+    }
+    if let Some(rect) = generated.rect_override {
+        dict.insert(names::RECT.clone(), rect_object(rect));
+    }
+    let stream = Stream::new(
+        pdfrum_doc::ap::stream_dict(generated),
+        ByteSpan::from(generated.stream.clone()),
+    );
+    let ap_ref = edit.add(Object::Stream(Box::new(stream)));
+    let mut ap = Dict::new();
+    ap.insert(Name::from("N"), Object::Ref(ap_ref));
+    dict.insert(Name::from("AP"), Object::Dict(ap));
 }
 
 /// Builds the annotation dictionary for `spec`, with `/P` naming `page_ref`.
