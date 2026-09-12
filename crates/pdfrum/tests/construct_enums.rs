@@ -869,7 +869,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 19 + 2 + 5);
+    assert_eq!(construct_edit_variants(), 20 + 2 + 5);
 }
 
 #[test]
