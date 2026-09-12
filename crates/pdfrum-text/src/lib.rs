@@ -498,6 +498,59 @@ impl TextPage {
         select::rects(&self.chars, range)
     }
 
+    /// Like [`rects`](Self::rects), but unions each character's font em-box
+    /// ([`CharBox::loose_char_box`](crate::CharBox::loose_char_box)).
+    ///
+    /// Prefer this for text-markup annotation geometry (Highlight, Underline,
+    /// `StrikeOut`, Squiggly): the loose box is font-uniform advance ×
+    /// ascent/descent and always contains the tight glyph ink, so quads sit
+    /// on the line box the way Acrobat `/QuadPoints` do. Keep [`Self::rects`] for
+    /// ink-accurate hit-testing and select/copy.
+    ///
+    /// The scan rules match [`Self::rects`]: one box per run of consecutive
+    /// characters sharing a text object; generated and sub-pixel boxes are
+    /// skipped; an empty-after-skip run still yields one all-zero rectangle.
+    ///
+    /// # Examples
+    ///
+    /// Same shape as [`Self::rects`], and each loose box contains the tight ink:
+    ///
+    /// ```
+    /// # use pdfrum_common::{Diagnostics, Limits};
+    /// # use pdfrum_object::{Name, Object};
+    /// # use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+    /// # use std::sync::Arc;
+    /// # let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+    /// # let doc = pdfrum_parser::load(bytes, &pdfrum_parser::LoadOptions::default())?;
+    /// # let loaded = doc.page(0)?;
+    /// # let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    /// # let mut content = Vec::new();
+    /// # if let Some(contents) = loaded.dict.get(&Name::from("Contents"), &doc)
+    /// #     && let Some(Object::Stream(stream)) = contents.as_direct() {
+    /// #     content.extend_from_slice(
+    /// #         &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data);
+    /// # }
+    /// # let ops = parse_content(&content, &limits, &mut diags);
+    /// # let resources = Resources::for_page(
+    /// #     loaded.inherited(&Name::from("Resources"), &doc)
+    /// #         .and_then(|o| o.resolve(&doc).ok()?.as_dict().cloned()));
+    /// # let built = build_page_from_dict(&ops, &loaded.dict, |k| loaded.inherited(k, &doc),
+    /// #     &resources, &doc, &mut BuildContext::default(), &limits, &mut diags);
+    /// # let page = pdfrum_text::extract(&built, &doc, &pdfrum_text::ExtractOptions::default(),
+    /// #     &limits, &mut diags);
+    /// let tight = page.rects(..);
+    /// let loose = page.rects_loose(..);
+    /// assert_eq!(tight.len(), loose.len());
+    /// for (t, l) in tight.iter().zip(loose.iter()) {
+    ///     assert!(l.contains_rect(*t));
+    /// }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[must_use]
+    pub fn rects_loose(&self, range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
+        select::rects_loose(&self.chars, range)
+    }
+
     /// The character under a point in page space, or the nearest within tolerance.
     /// A point inside a character's box wins outright and reports the
     /// **first** such character; failing that, and only when a tolerance is
