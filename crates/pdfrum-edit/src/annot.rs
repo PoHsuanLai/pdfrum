@@ -1,7 +1,7 @@
 //! Creating page annotations and attaching them to a page's `/Annots`.
 //!
 //! When a generator exists for the subtype (`Highlight`, `Underline`, `StrikeOut`,
-//! `Squiggly`, `Ink`, `FreeText`, `Text`, `Square`, `Circle`, …), an `/AP /N` appearance stream is written so
+//! `Squiggly`, `Ink`, `FreeText`, `Text`, `Square`, `Circle`, `Line`, `Link`, `Caret`, …), an `/AP /N` appearance stream is written so
 //! [`crate::flatten`] and viewers that require appearances can draw them.
 
 use kurbo::{Point, Rect};
@@ -342,8 +342,7 @@ pub enum AnnotSpec {
     },
     /// A straight line (`/Subtype /Line`) with endpoints `/L`.
     ///
-    /// No appearance stream is generated today (the AP pipeline has no Line
-    /// generator); viewers draw from `/L` and `/BS`.
+    /// Appearance strokes between the endpoints using `/BS` width and `/C`.
     Line {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -360,7 +359,8 @@ pub enum AnnotSpec {
     },
     /// A URI link annotation (`/Subtype /Link`).
     ///
-    /// Writes `/A << /Type /Action /S /URI /URI (…) >>`. No appearance stream.
+    /// Writes `/A << /Type /Action /S /URI /URI (…) >>`. Appearance is a
+    /// stroked rectangle over `/Rect`.
     Link {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -371,7 +371,7 @@ pub enum AnnotSpec {
     },
     /// A caret / insertion-point annotation (`/Subtype /Caret`).
     ///
-    /// No appearance stream is generated today.
+    /// Appearance draws a simple caret mark inside `/Rect`.
     Caret {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
