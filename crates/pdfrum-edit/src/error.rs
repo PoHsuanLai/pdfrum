@@ -147,6 +147,13 @@ pub enum Error {
     #[error("page {0} has no object of its own to draw on")]
     InlinePage(PageIndex),
 
+    /// A highlight or underline was asked for with no `/QuadPoints`.
+    ///
+    /// ISO 32000-1 §12.5.6.10 requires the array; an empty one is not a
+    /// markup of anything.
+    #[error("a highlight or underline needs at least one quadrilateral")]
+    EmptyQuadPoints,
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),
