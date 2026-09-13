@@ -58,32 +58,32 @@ pub pdfrum_edit::AnnotRemoteDest::Page
 pub pdfrum_edit::AnnotRemoteDest::Page::page: i64
 pub pdfrum_edit::AnnotRemoteDest::Page::view: pdfrum_edit::AnnotGoToView
 #[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
-pub pdfrum_edit::AnnotSpec::Caret
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Caret
 pub pdfrum_edit::AnnotSpec::Caret::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Caret::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Caret::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Circle
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Circle
 pub pdfrum_edit::AnnotSpec::Circle::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Circle::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Circle::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Circle::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::FreeText
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::FreeText
 pub pdfrum_edit::AnnotSpec::FreeText::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::FreeText::contents: alloc::string::String
 pub pdfrum_edit::AnnotSpec::FreeText::da: alloc::string::String
 pub pdfrum_edit::AnnotSpec::FreeText::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Highlight
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Highlight
 pub pdfrum_edit::AnnotSpec::Highlight::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Highlight::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Highlight::quads: alloc::vec::Vec<pdfrum_edit::Quad>
 pub pdfrum_edit::AnnotSpec::Highlight::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Ink
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Ink
 pub pdfrum_edit::AnnotSpec::Ink::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Ink::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Ink::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Ink::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Ink::strokes: alloc::vec::Vec<alloc::vec::Vec<kurbo::point::Point>>
-pub pdfrum_edit::AnnotSpec::Line
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Line
 pub pdfrum_edit::AnnotSpec::Line::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Line::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Line::contents: core::option::Option<alloc::string::String>
@@ -92,35 +92,35 @@ pub pdfrum_edit::AnnotSpec::Line::interior: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Line::line_endings: core::option::Option<(pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle)>
 pub pdfrum_edit::AnnotSpec::Line::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Line::start: kurbo::point::Point
-pub pdfrum_edit::AnnotSpec::Link
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Link
 pub pdfrum_edit::AnnotSpec::Link::action: pdfrum_edit::AnnotLinkAction
 pub pdfrum_edit::AnnotSpec::Link::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Link::color: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Link::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Link::highlight: pdfrum_edit::AnnotLinkHighlight
 pub pdfrum_edit::AnnotSpec::Link::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Square
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Square
 pub pdfrum_edit::AnnotSpec::Square::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Square::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Square::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Square::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Squiggly
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Squiggly
 pub pdfrum_edit::AnnotSpec::Squiggly::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Squiggly::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Squiggly::quads: alloc::vec::Vec<pdfrum_edit::Quad>
 pub pdfrum_edit::AnnotSpec::Squiggly::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::StrikeOut
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::StrikeOut
 pub pdfrum_edit::AnnotSpec::StrikeOut::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::StrikeOut::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::StrikeOut::quads: alloc::vec::Vec<pdfrum_edit::Quad>
 pub pdfrum_edit::AnnotSpec::StrikeOut::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Text
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Text
 pub pdfrum_edit::AnnotSpec::Text::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Text::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Text::icon: pdfrum_object::name::Name
 pub pdfrum_edit::AnnotSpec::Text::open: bool
 pub pdfrum_edit::AnnotSpec::Text::rect: kurbo::rect::Rect
-pub pdfrum_edit::AnnotSpec::Underline
+#[non_exhaustive] pub pdfrum_edit::AnnotSpec::Underline
 pub pdfrum_edit::AnnotSpec::Underline::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Underline::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Underline::quads: alloc::vec::Vec<pdfrum_edit::Quad>
@@ -157,6 +157,7 @@ pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_open(self, bool) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_quads(self, impl core::iter::traits::collect::IntoIterator<Item = pdfrum_edit::Quad>) -> Self
 impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::AnnotSpec) -> Self
 pub enum pdfrum_edit::ContentsShape

@@ -245,12 +245,7 @@ fn empty_quads_are_refused() {
     let err = edit
         .add_annotation(
             0,
-            AnnotSpec::Highlight {
-                rect: Rect::new(0.0, 0.0, 1.0, 1.0),
-                color: yellow(),
-                quads: vec![],
-                contents: None,
-            },
+            AnnotSpec::highlight(Rect::new(0.0, 0.0, 1.0, 1.0), yellow()).with_quads([]),
         )
         .expect_err("empty quads");
     let msg = err.to_string();
