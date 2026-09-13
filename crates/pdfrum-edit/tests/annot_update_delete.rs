@@ -119,20 +119,29 @@ fn update_and_delete_by_annots_index() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::text(Rect::new(10.0, 10.0, 30.0, 30.0), Color::from_rgb8(255, 200, 0)),
+        AnnotSpec::text(
+            Rect::new(10.0, 10.0, 30.0, 30.0),
+            Color::from_rgb8(255, 200, 0),
+        ),
     )
     .expect("add a");
     edit.add_annotation(
         0,
-        AnnotSpec::square(Rect::new(40.0, 40.0, 80.0, 80.0), Color::from_rgb8(0, 0, 255)),
+        AnnotSpec::square(
+            Rect::new(40.0, 40.0, 80.0, 80.0),
+            Color::from_rgb8(0, 0, 255),
+        ),
     )
     .expect("add b");
 
     edit.update_annotation_at(
         0,
         0,
-        AnnotSpec::text(Rect::new(10.0, 10.0, 30.0, 30.0), Color::from_rgb8(255, 200, 0))
-            .with_contents("first"),
+        AnnotSpec::text(
+            Rect::new(10.0, 10.0, 30.0, 30.0),
+            Color::from_rgb8(255, 200, 0),
+        )
+        .with_contents("first"),
     )
     .expect("update at 0");
 
@@ -166,9 +175,7 @@ fn index_helpers_reject_out_of_range() {
         msg.contains("out of range") || msg.contains("AnnotIndexOutOfRange"),
         "unexpected: {msg}"
     );
-    let err = edit
-        .delete_annotation_at(0, 9)
-        .expect_err("oob delete");
+    let err = edit.delete_annotation_at(0, 9).expect_err("oob delete");
     let msg = err.to_string();
     assert!(
         msg.contains("out of range") || msg.contains("AnnotIndexOutOfRange"),
