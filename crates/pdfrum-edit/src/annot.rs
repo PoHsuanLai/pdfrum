@@ -259,6 +259,44 @@ pub enum AnnotGoToView {
     },
 }
 
+/// Link annotation highlight mode (`/H`, ISO 32000-1 table 173).
+///
+/// Written on [`AnnotSpec::Link`]; viewers use it for click feedback. The
+/// appearance stream still draws the border chrome independently.
+///
+/// ```
+/// use pdfrum_edit::AnnotLinkHighlight;
+///
+/// assert_eq!(AnnotLinkHighlight::Invert.as_bytes(), b"I");
+/// assert_eq!(AnnotLinkHighlight::Underline.as_bytes(), b"U");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[non_exhaustive]
+pub enum AnnotLinkHighlight {
+    /// No highlighting (`/N`).
+    None,
+    /// Invert content (`/I`). Acrobat default.
+    #[default]
+    Invert,
+    /// Invert the border (`/O`).
+    Outline,
+    /// Depress into the page (`/P`).
+    Push,
+}
+
+impl AnnotLinkHighlight {
+    /// The PDF name bytes for `/H`.
+    #[must_use]
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::None => b"N",
+            Self::Invert => b"I",
+            Self::Outline => b"O",
+            Self::Push => b"P",
+        }
+    }
+}
+
 /// Write-side link action, aligned with [`pdfrum_doc::ActionKind`] values we
 /// support on annotations.
 ///
@@ -482,8 +520,8 @@ pub enum AnnotSpec {
     },
     /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
-    /// Appearance is a stroked rectangle over `/Rect`. See [`AnnotLinkAction`]
-    /// for URI, `GoTo`, and named-destination forms.
+    /// Appearance honours `/BS` / `/C` (and `/H` is written for click feedback).
+    /// See [`AnnotLinkAction`] for URI, `GoTo`, and named-destination forms.
     Link {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -491,6 +529,12 @@ pub enum AnnotSpec {
         action: AnnotLinkAction,
         /// Optional `/Contents`.
         contents: Option<String>,
+        /// Optional annotation colour `/C`. `None` omits `/C` (AP uses muted blue).
+        color: Option<Color>,
+        /// Border style dictionary (`/BS`). Default width 1, solid.
+        border: AnnotBorder,
+        /// Highlight mode (`/H`). Default [`AnnotLinkHighlight::Invert`].
+        highlight: AnnotLinkHighlight,
     },
     /// A caret / insertion-point annotation (`/Subtype /Caret`).
     ///
@@ -738,6 +782,9 @@ impl AnnotSpec {
             rect,
             action: AnnotLinkAction::Uri(uri.into()),
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
@@ -764,6 +811,9 @@ impl AnnotSpec {
             rect,
             action: AnnotLinkAction::GoTo { page, view },
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
@@ -805,6 +855,9 @@ impl AnnotSpec {
                 view,
             },
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
@@ -952,10 +1005,20 @@ impl AnnotSpec {
                 border,
                 line_endings,
             },
-            Self::Link { rect, action, .. } => Self::Link {
+            Self::Link {
+                rect,
+                action,
+                color,
+                border,
+                highlight,
+                ..
+            } => Self::Link {
                 rect,
                 action,
                 contents,
+                color,
+                border,
+                highlight,
             },
             Self::Caret { rect, color, .. } => Self::Caret {
                 rect,
@@ -1043,6 +1106,21 @@ impl AnnotSpec {
                 border,
                 line_endings,
             },
+            Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                highlight,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                highlight,
+            },
             other => other,
         }
     }
@@ -1113,6 +1191,52 @@ impl AnnotSpec {
                 contents,
                 icon,
                 open,
+            },
+            other => other,
+        }
+    }
+
+    /// Sets `/C` on [`AnnotSpec::Link`]. Other variants are unchanged.
+    #[must_use]
+    pub fn with_color(self, color: Color) -> Self {
+        match self {
+            Self::Link {
+                rect,
+                action,
+                contents,
+                border,
+                highlight,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color: Some(color),
+                border,
+                highlight,
+            },
+            other => other,
+        }
+    }
+
+    /// Sets `/H` on [`AnnotSpec::Link`]. Other variants are unchanged.
+    #[must_use]
+    pub fn with_highlight(self, highlight: AnnotLinkHighlight) -> Self {
+        match self {
+            Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                highlight,
             },
             other => other,
         }
@@ -1777,6 +1901,9 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             rect,
             action,
             contents,
+            color,
+            border,
+            highlight,
         } => {
             let mut dict = Dict::new();
             dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
@@ -1788,6 +1915,17 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
             dict.insert(names::P.clone(), Object::Ref(page_ref));
             dict.insert(names::A.clone(), Object::Dict(link_action_dict(&action)));
+            if let Some(color) = color {
+                dict.insert(names::C.clone(), color_object(color));
+            }
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, false)),
+            );
+            dict.insert(
+                Name::from("H"),
+                Object::Name(Name::from(highlight.as_bytes())),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
