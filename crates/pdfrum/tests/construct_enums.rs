@@ -85,8 +85,23 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ),
     (
         "pdfrum-edit.txt",
+        "pdfrum_edit::AnnotLinkHighlight",
+        "AnnotLinkHighlight",
+    ),
+    (
+        "pdfrum-edit.txt",
         "pdfrum_edit::AnnotGoToView",
         "AnnotGoToView",
+    ),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::AnnotRemoteDest",
+        "AnnotRemoteDest",
+    ),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::LineEndingStyle",
+        "LineEndingStyle",
     ),
     ("pdfrum-form.txt", "pdfrum_form::Button", "Button"),
     ("pdfrum-form.txt", "pdfrum_form::Event", "Event"),
@@ -539,6 +554,10 @@ fn construct_doc_variants() -> usize {
     n
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one construction per edit-crate public enum variant"
+)]
 fn construct_edit_variants() -> usize {
     let mut n = 0;
 
@@ -560,6 +579,7 @@ fn construct_edit_variants() -> usize {
     let _ = SaveError::EmptyImage;
     let _ = SaveError::EmptyQuadPoints;
     let _ = SaveError::AnnotNotOnPage(ObjRef::new(1, 0), PageIndex::from(0u32));
+    let _ = SaveError::AnnotIndexOutOfRange(0, PageIndex::from(0u32));
     let _ = SaveError::ImageDataLength {
         expected: 0,
         found: 0,
@@ -569,7 +589,7 @@ fn construct_edit_variants() -> usize {
         offset: 0,
     });
     let _ = SaveError::InlinePage(PageIndex::from(0u32));
-    n += 21;
+    n += 22;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -594,8 +614,37 @@ fn construct_edit_variants() -> usize {
         page: ObjRef::new(1, 0),
         view: AnnotGoToView::Fit,
     };
-    let _ = AnnotLinkAction::Named(String::new());
-    n += 3;
+    let _ = AnnotLinkAction::Named {
+        name: String::new(),
+        page: ObjRef::new(1, 0),
+        view: AnnotGoToView::Fit,
+    };
+    let _ = AnnotLinkAction::NamedExisting {
+        name: String::new(),
+    };
+    let _ = AnnotLinkAction::GoToR {
+        file: String::new(),
+        dest: AnnotRemoteDest::Page {
+            page: 0,
+            view: AnnotGoToView::Fit,
+        },
+        new_window: None,
+    };
+    let _ = AnnotLinkAction::Launch {
+        file: String::new(),
+    };
+    let _ = AnnotRemoteDest::Page {
+        page: 0,
+        view: AnnotGoToView::Fit,
+    };
+    let _ = AnnotRemoteDest::Named(String::new());
+    n += 8;
+
+    let _ = AnnotLinkHighlight::None;
+    let _ = AnnotLinkHighlight::Invert;
+    let _ = AnnotLinkHighlight::Outline;
+    let _ = AnnotLinkHighlight::Push;
+    n += 4;
 
     let _ = AnnotGoToView::Fit;
     let _ = AnnotGoToView::Xyz {
@@ -603,7 +652,30 @@ fn construct_edit_variants() -> usize {
         top: None,
         zoom: None,
     };
-    n += 2;
+    let _ = AnnotGoToView::FitH { top: None };
+    let _ = AnnotGoToView::FitV { left: None };
+    let _ = AnnotGoToView::FitR {
+        left: 0.0,
+        bottom: 0.0,
+        right: 1.0,
+        top: 1.0,
+    };
+    let _ = AnnotGoToView::FitB;
+    let _ = AnnotGoToView::FitBH { top: None };
+    let _ = AnnotGoToView::FitBV { left: None };
+    n += 8;
+
+    let _ = LineEndingStyle::None;
+    let _ = LineEndingStyle::Square;
+    let _ = LineEndingStyle::Circle;
+    let _ = LineEndingStyle::Diamond;
+    let _ = LineEndingStyle::OpenArrow;
+    let _ = LineEndingStyle::ClosedArrow;
+    let _ = LineEndingStyle::Butt;
+    let _ = LineEndingStyle::ROpenArrow;
+    let _ = LineEndingStyle::RClosedArrow;
+    let _ = LineEndingStyle::Slash;
+    n += 10;
 
     n
 }
@@ -908,7 +980,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 21 + 2 + 5 + 5 + 3 + 2);
+    assert_eq!(construct_edit_variants(), 22 + 2 + 5 + 5 + 8 + 8 + 10 + 4);
 }
 
 #[test]
@@ -984,13 +1056,20 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 358 -> 363 (`AnnotBorderStyle` five variants).
     // 363 -> 364 (`SaveError::AnnotNotOnPage`).
     // 364 -> 369 (`AnnotLinkAction` 3 + `AnnotGoToView` 2).
+    // 369 -> 379 (`LineEndingStyle` ten variants).
+    // 379 -> 380 (`SaveError::AnnotIndexOutOfRange`).
+    // 380 -> 384 (`AnnotLinkHighlight` four variants).
+    // 384 -> 386 (`AnnotLinkAction::GoToR` + `Launch`).
+    // 386 -> 392 (`AnnotGoToView` FitH/FitV/FitR/FitB/FitBH/FitBV).
+    // 392 -> 393 (`AnnotLinkAction::NamedExisting`).
+    // 393 -> 395 (`AnnotRemoteDest` Page + Named).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 369, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 44, "default-feature enum count");
+    assert_eq!(constructed, 395, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 47, "default-feature enum count");
 }
 
 #[test]
