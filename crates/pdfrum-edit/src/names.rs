@@ -82,6 +82,12 @@ pdfrum_object::names! {
     L = "L";
     /// Line ending styles (`/LE`).
     LE = "LE";
+
+    /// Unicode file specification string (`/UF`).
+    UF = "UF";
+
+    /// File specification dictionary type (`/Filespec`).
+    FILESPEC = "Filespec";
     /// Destination on an action (`/D`).
     D = "D";
     /// GoTo action subtype (`/GoTo`).
