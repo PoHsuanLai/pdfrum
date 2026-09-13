@@ -779,6 +779,44 @@ impl<'a> DocEdit<'a> {
         Ok(pdfrum_edit::add_annotation(&mut self.inner, page, write)?)
     }
 
+    /// Replace an existing annotation in place, regenerating `/AP` when needed.
+    ///
+    /// `annot` must already appear in `page`'s `/Annots`. The object number is
+    /// preserved.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`pdfrum_edit::Error`] from the edit crate (bad page, annot
+    /// not on page, empty quads, …).
+    pub fn update_annotation(
+        &mut self,
+        page: impl Into<PageIndex>,
+        annot: pdfrum_object::ObjRef,
+        write: impl Into<pdfrum_edit::AnnotWrite>,
+    ) -> crate::Result<()> {
+        Ok(pdfrum_edit::update_annotation(
+            &mut self.inner,
+            page,
+            annot,
+            write,
+        )?)
+    }
+
+    /// Remove `annot` from `page`'s `/Annots` and drop the annotation object.
+    ///
+    /// Returns `Ok(true)` when it was present and removed.
+    ///
+    /// # Errors
+    ///
+    /// When `page` is out of range or inline.
+    pub fn delete_annotation(
+        &mut self,
+        page: impl Into<PageIndex>,
+        annot: pdfrum_object::ObjRef,
+    ) -> crate::Result<bool> {
+        Ok(pdfrum_edit::delete_annotation(&mut self.inner, page, annot)?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.
