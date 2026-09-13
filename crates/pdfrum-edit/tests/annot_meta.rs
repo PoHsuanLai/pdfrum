@@ -104,3 +104,40 @@ fn default_flags_remain_print_only() {
         .expect("annot");
     assert_eq!(annot.flags().bits(), AnnotFlags::PRINT.bits());
 }
+
+#[test]
+fn text_icon_and_open_round_trip() {
+    use pdfrum::Name;
+
+    let doc = hello();
+    let mut edit = doc.edit();
+    let rect = Rect::new(40.0, 40.0, 60.0, 60.0);
+    edit.add_annotation(
+        0,
+        AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0))
+            .with_contents("keyed")
+            .with_icon(Name::from("Key"))
+            .with_open(true),
+    )
+    .expect("add");
+
+    let mut out = Vec::new();
+    edit.write_to(&mut out, &SaveOptions::default())
+        .expect("write");
+    let reopened = Document::from_bytes(Arc::<[u8]>::from(out)).expect("reopen");
+    let annot = reopened
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("annot");
+    assert_eq!(
+        annot
+            .dict()
+            .name(&Name::from("Name"))
+            .map(Name::as_bytes),
+        Some(&b"Key"[..])
+    );
+    assert_eq!(annot.dict().bool(&Name::from("Open")), Some(true));
+    assert_eq!(annot.contents().as_deref(), Some("keyed"));
+}

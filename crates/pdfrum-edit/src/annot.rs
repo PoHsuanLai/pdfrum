@@ -134,7 +134,7 @@ pub enum AnnotSpec {
     },
     /// A sticky-note text annotation (`/Subtype /Text`).
     ///
-    /// Writes `/Name /Comment` and `/Open false`.
+    /// Defaults to `/Name /Comment` and `/Open false` (see [`AnnotSpec::text`]).
     Text {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -142,6 +142,10 @@ pub enum AnnotSpec {
         color: Color,
         /// Optional `/Contents`.
         contents: Option<String>,
+        /// Sticky-note icon name (`/Name`). Defaults to `/Comment`.
+        icon: Name,
+        /// Whether the pop-up starts open (`/Open`). Defaults to `false`.
+        open: bool,
     },
     /// A square / area annotation (`/Subtype /Square`).
     ///
@@ -285,12 +289,17 @@ impl AnnotSpec {
     }
 
     /// A sticky-note text annotation with no contents.
+    ///
+    /// Uses `/Name /Comment` and `/Open false`. Override with
+    /// [`AnnotSpec::with_icon`] / [`AnnotSpec::with_open`].
     #[must_use]
     pub fn text(rect: Rect, color: Color) -> Self {
         Self::Text {
             rect,
             color,
             contents: None,
+            icon: names::COMMENT.clone(),
+            open: false,
         }
     }
 
@@ -365,10 +374,18 @@ impl AnnotSpec {
                 quads,
                 contents,
             },
-            Self::Text { rect, color, .. } => Self::Text {
+            Self::Text {
+                rect,
+                color,
+                icon,
+                open,
+                ..
+            } => Self::Text {
                 rect,
                 color,
                 contents,
+                icon,
+                open,
             },
             Self::Square { rect, color, .. } => Self::Square {
                 rect,
@@ -411,6 +428,77 @@ impl AnnotSpec {
                 contents,
             },
             other @ Self::FreeText { .. } => other,
+        }
+    }
+
+    /// Sets the sticky-note icon (`/Name`) on [`AnnotSpec::Text`].
+    ///
+    /// Other variants are unchanged. Common values: `Comment`, `Key`, `Note`,
+    /// `Help`, `NewParagraph`, `Paragraph`, `Insert`.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_object::Name;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .with_icon(Name::from("Key"));
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Text { ref icon, .. } if icon.as_bytes() == b"Key"
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn with_icon(self, icon: impl Into<Name>) -> Self {
+        let icon = icon.into();
+        match self {
+            Self::Text {
+                rect,
+                color,
+                contents,
+                open,
+                ..
+            } => Self::Text {
+                rect,
+                color,
+                contents,
+                icon,
+                open,
+            },
+            other => other,
+        }
+    }
+
+    /// Sets whether a sticky-note pop-up starts open (`/Open`) on
+    /// [`AnnotSpec::Text`]. Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .with_open(true);
+    /// assert!(matches!(spec, AnnotSpec::Text { open: true, .. }));
+    /// ```
+    #[must_use]
+    pub fn with_open(self, open: bool) -> Self {
+        match self {
+            Self::Text {
+                rect,
+                color,
+                contents,
+                icon,
+                ..
+            } => Self::Text {
+                rect,
+                color,
+                contents,
+                icon,
+                open,
+            },
+            other => other,
         }
     }
 
@@ -718,10 +806,12 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             rect,
             color,
             contents,
+            icon,
+            open,
         } => {
             let mut dict = common(Subtype::Text, rect, color, page_ref);
-            dict.insert(names::NAME.clone(), Object::Name(names::COMMENT.clone()));
-            dict.insert(names::OPEN.clone(), Object::Bool(false));
+            dict.insert(names::NAME.clone(), Object::Name(icon));
+            dict.insert(names::OPEN.clone(), Object::Bool(open));
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
