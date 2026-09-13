@@ -13,7 +13,6 @@
 mod annot;
 mod attach;
 mod build_graph;
-mod builders;
 mod canvas;
 mod content;
 mod dests;
@@ -26,6 +25,7 @@ mod image;
 mod import;
 mod info;
 mod names;
+mod page_objects;
 mod pages;
 mod pdfa_convert;
 mod stamp;
@@ -46,7 +46,6 @@ pub use attach::{
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,
 };
 pub use build_graph::build_graph;
-pub use builders::{ImageBuilder, PathBuilder, TextBuilder};
 #[cfg(feature = "svg-import")]
 pub use canvas::SvgForm;
 pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
@@ -63,6 +62,7 @@ pub use font::{GidMap, Subsetted, subset};
 pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
 pub use info::{pdf_date, set_info_entry};
+pub use page_objects::{ImageBuilder, PathBuilder, TextBuilder};
 pub use pages::{PageBox, add_blank_page, delete_pages, set_page_box, set_page_rotation};
 pub use pdfa_convert::{convert as to_pdfa, pdf_date_to_iso8601};
 pub use pdfrum_font::StandardFont;
