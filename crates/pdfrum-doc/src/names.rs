@@ -134,6 +134,8 @@ pdfrum_object::names! {
 
     /// A border style dictionary (`/BS`).
     BS = "BS";
+    /// Line ending styles (`/LE`).
+    LE = "LE";
     /// The marker key PDFium writes on an annotation whose appearance it
     /// generated (`/PDFIUM_HasGeneratedAP`).
     HAS_GENERATED_AP = "PDFIUM_HasGeneratedAP";
