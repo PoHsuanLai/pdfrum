@@ -7,7 +7,9 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotSpec, Color, Document, LineEndingStyle, Name, Point, Rect, SaveOptions, Subtype};
+use pdfrum::{
+    AnnotSpec, Color, Document, LineEndingStyle, Name, Point, Rect, SaveOptions, Subtype,
+};
 
 fn hello() -> Document {
     Document::open(concat!(
