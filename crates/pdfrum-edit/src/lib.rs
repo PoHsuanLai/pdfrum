@@ -11,6 +11,7 @@
 // which is what the `pub(crate)` on a few *sub*modules is for; at this level
 // `mod` already means crate-visible.
 mod annot;
+mod annot_spec;
 mod attach;
 mod build_graph;
 mod canvas;
@@ -40,6 +41,10 @@ pub use annot::{
     AnnotRemoteDest, AnnotSpec, AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation,
     delete_annotation, delete_annotation_at, ensure_named_destination, set_named_destination,
     update_annotation, update_annotation_at,
+};
+pub use annot_spec::{
+    CaretSpec, CircleSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec, SquareSpec,
+    TextSpec,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
