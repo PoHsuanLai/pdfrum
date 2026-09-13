@@ -64,6 +64,7 @@ pub use pdfrum::Kid
 pub use pdfrum::LimitExceeded
 pub use pdfrum::Limits
 pub use pdfrum::LineCap
+pub use pdfrum::LineEndingStyle
 pub use pdfrum::LineJoin
 pub use pdfrum::Link
 pub use pdfrum::MissingGlyph
