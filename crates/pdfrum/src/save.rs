@@ -862,7 +862,7 @@ impl<'a> DocEdit<'a> {
 
     /// Upsert a named destination under `/Names /Dests`.
     ///
-    /// Used by [`AnnotLinkAction::Named`] links automatically; call this when
+    /// Used by [`crate::AnnotLinkAction::Named`] links automatically; call this when
     /// registering a name without writing a link.
     ///
     /// # Errors
