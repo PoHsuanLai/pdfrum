@@ -268,7 +268,7 @@ pub enum AnnotGoToView {
 /// use pdfrum_edit::AnnotLinkHighlight;
 ///
 /// assert_eq!(AnnotLinkHighlight::Invert.as_bytes(), b"I");
-/// assert_eq!(AnnotLinkHighlight::Underline.as_bytes(), b"U");
+/// assert_eq!(AnnotLinkHighlight::Outline.as_bytes(), b"O");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 #[non_exhaustive]
