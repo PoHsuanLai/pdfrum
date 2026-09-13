@@ -860,6 +860,28 @@ impl<'a> DocEdit<'a> {
         )?)
     }
 
+    /// Upsert a named destination under `/Names /Dests`.
+    ///
+    /// Used by [`AnnotLinkAction::Named`] links automatically; call this when
+    /// registering a name without writing a link.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn set_named_destination(
+        &mut self,
+        name: impl Into<String>,
+        page: pdfrum_object::ObjRef,
+        view: pdfrum_edit::AnnotGoToView,
+    ) -> crate::Result<()> {
+        Ok(pdfrum_edit::set_named_destination(
+            &mut self.inner,
+            name,
+            page,
+            view,
+        )?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.
