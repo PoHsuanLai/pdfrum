@@ -37,7 +37,7 @@ mod write;
 pub use annot::{
     AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotMeta, AnnotSpec,
     AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation, delete_annotation,
-    update_annotation,
+    delete_annotation_at, update_annotation, update_annotation_at,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,

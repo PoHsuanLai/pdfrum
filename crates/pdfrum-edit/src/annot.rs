@@ -1370,6 +1370,107 @@ pub fn delete_annotation(
     Ok(true)
 }
 
+/// Resolves `index` in `page`'s `/Annots` array (0-based) to an [`ObjRef`], then
+/// calls [`update_annotation`].
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation_at};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let rect = Rect::new(10.0, 10.0, 40.0, 40.0);
+/// add_annotation(&mut edit, 0, AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)))?;
+/// update_annotation_at(
+///     &mut edit,
+///     0,
+///     0,
+///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("by index"),
+/// )?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots`
+/// - Otherwise the same errors as [`update_annotation`]
+pub fn update_annotation_at(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    index: usize,
+    write: impl Into<AnnotWrite>,
+) -> Result<()> {
+    let page = page.into();
+    let annot = annotation_ref_at(edit, page, index)?;
+    update_annotation(edit, page, annot, write)
+}
+
+/// Resolves `index` in `page`'s `/Annots` array (0-based) to an [`ObjRef`], then
+/// calls [`delete_annotation`].
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation_at};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// add_annotation(
+///     &mut edit,
+///     0,
+///     AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
+/// )?;
+/// assert!(delete_annotation_at(&mut edit, 0, 0)?);
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots`
+/// - Otherwise the same errors as [`delete_annotation`]
+pub fn delete_annotation_at(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    index: usize,
+) -> Result<bool> {
+    let page = page.into();
+    let annot = annotation_ref_at(edit, page, index)?;
+    delete_annotation(edit, page, annot)
+}
+
+/// The indirect reference at `index` in the page's `/Annots`, or an out-of-range
+/// error. Inline dict entries are not addressable by these helpers.
+fn annotation_ref_at(edit: &EditDoc<'_>, page: PageIndex, index: usize) -> Result<ObjRef> {
+    let Some((_page_ref, page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    let array = match page_dict.raw(names::ANNOTS) {
+        Some(Object::Ref(array_ref)) => edit
+            .fetch(*array_ref)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_array)
+            .cloned(),
+        Some(Object::Array(array)) => Some(array.clone()),
+        _ => None,
+    };
+    let Some(array) = array else {
+        return Err(Error::AnnotIndexOutOfRange(index, page));
+    };
+    array
+        .reference_at(index)
+        .ok_or(Error::AnnotIndexOutOfRange(index, page))
+}
+
 fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
     if let Some(author) = meta.author.as_deref().filter(|s| !s.is_empty()) {
         dict.insert(names::T.clone(), Object::Str(pdf_string(author)));

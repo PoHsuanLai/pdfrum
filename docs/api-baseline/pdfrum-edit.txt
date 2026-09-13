@@ -122,6 +122,7 @@ pub fn pdfrum_edit::ContentsShape::to_object(&self, core::option::Option<pdfrum_
 pub fn pdfrum_edit::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
 pub fn pdfrum_edit::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<usize, usize>)
 #[non_exhaustive] pub enum pdfrum_edit::Error
+pub pdfrum_edit::Error::AnnotIndexOutOfRange(usize, pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::AnnotNotOnPage(pdfrum_object::object::ObjRef, pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
@@ -491,6 +492,7 @@ pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
 pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::delete_annotation_at(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
@@ -512,6 +514,7 @@ pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdf
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
 pub fn pdfrum_edit::to_pdfa(&pdfrum_parser::doc::Document, pdfrum_doc::pdfa::report::Level, pdfrum_doc::pdfa::policy::Policy, &pdfrum_doc::pdfa::xmp_write::InfoFields, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_doc::pdfa::policy::Conversion, core::option::Option<alloc::vec::Vec<u8>>), pdfrum_edit::Error>
 pub fn pdfrum_edit::update_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef, impl core::convert::Into<pdfrum_edit::AnnotWrite>) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::update_annotation_at(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize, impl core::convert::Into<pdfrum_edit::AnnotWrite>) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
 pub fn pdfrum_edit::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
 pub fn pdfrum_edit::write_point(&mut alloc::string::String, kurbo::point::Point)
