@@ -17,7 +17,7 @@
 //!
 //! # Which annotations get one
 //!
-//! Ten subtypes have a generator, and a widget annotation with no `/AP`
+//! Thirteen subtypes have a generator, and a widget annotation with no `/AP`
 //! dictionary gets its chrome from [`widget`] besides — plus, when the caller
 //! has fonts to set text with, the field body [`field_body`] lays out.
 //! Generation is refused
@@ -1381,9 +1381,12 @@ pub(crate) fn generate_one<R: Resolve>(
     }
     let subtype = Subtype::from_bytes(&dict.byte_string(obj_names::SUBTYPE, r).unwrap_or_default());
     let generated = match subtype {
+        Subtype::Caret => markup::caret(dict, r),
         Subtype::Circle => markup::circle(dict, r),
         Subtype::Highlight => markup::highlight(dict, r),
         Subtype::Ink => markup::ink(dict, r, diags)?,
+        Subtype::Line => markup::line(dict, r)?,
+        Subtype::Link => markup::link(dict, r),
         Subtype::Square => markup::square(dict, r),
         Subtype::Squiggly => markup::squiggly(dict, r),
         Subtype::StrikeOut => markup::strike_out(dict, r),

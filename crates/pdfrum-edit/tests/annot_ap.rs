@@ -131,3 +131,46 @@ fn strike_out_and_squiggly_get_appearances() {
         );
     }
 }
+
+#[test]
+fn line_link_caret_get_appearances() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::line(
+            Rect::new(10.0, 10.0, 100.0, 100.0),
+            Color::from_rgb8(0, 0, 0),
+            kurbo::Point::new(20.0, 20.0),
+            kurbo::Point::new(80.0, 80.0),
+        ),
+    )
+    .expect("line");
+    edit.add_annotation(
+        0,
+        AnnotSpec::link(Rect::new(72.0, 700.0, 200.0, 720.0), "https://example.test/"),
+    )
+    .expect("link");
+    edit.add_annotation(
+        0,
+        AnnotSpec::caret(Rect::new(30.0, 30.0, 40.0, 50.0), Color::from_rgb8(200, 0, 0)),
+    )
+    .expect("caret");
+
+    let mut out = Vec::new();
+    edit.write_to(&mut out, &SaveOptions::default())
+        .expect("write");
+    let reopened = Document::from_bytes(Arc::<[u8]>::from(out)).expect("reopen");
+    let page = reopened.page(0).expect("page");
+    let annots: Vec<_> = page.annotations().collect();
+    assert_eq!(annots.len(), 3);
+    for ann in &annots {
+        assert!(
+            ann.dict()
+                .dict(&Name::from("AP"), reopened.parser())
+                .is_some(),
+            "missing AP on {:?}",
+            ann.subtype()
+        );
+    }
+}
