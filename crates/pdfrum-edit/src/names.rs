@@ -8,13 +8,13 @@ pub(crate) use pdfrum_object::names::{
     ANNOTS, ART_BOX, ASCENT, AUTHOR, BASE_FONT, BBOX, BITS_PER_COMPONENT, BLEED_BOX, BM, BORDER, C,
     CA, CA_LOWER, CAP_HEIGHT, CID_SYSTEM_INFO, CID_TO_GID_MAP, COLOR_SPACE, COLUMNS, CONTENTS,
     COUNT, CREATOR, CROP_BOX, DA, DCT_DECODE, DECODE, DECODE_PARMS, DESCENDANT_FONTS, DESCENT,
-    ENCODING, ENCRYPT, EXT_G_STATE, F, FILTER, FIRST, FIRST_CHAR, FLAGS, FLATE_DECODE, FONT,
-    FONT_BBOX, FONT_DESCRIPTOR, FONT_FILE, FONT_FILE2, FONT_FILE3, FORM, FORM_TYPE, FT, HEIGHT, ID,
-    IMAGE, IMAGE_MASK, INDEX, INFO, INK_LIST, ITALIC_ANGLE, JPX_DECODE, KEYWORDS, KIDS, LAST_CHAR,
-    LENGTH, M, MATRIX, MEDIA_BOX, METADATA, N, NM, NORMAL, ORDERING, P, PAGE, PAGES, PARENT, PREV,
-    PROPERTIES, QUAD_POINTS, R, RECT, RESOURCES, ROOT, ROTATE, S, SIZE, SMASK, STANDARD, STEM_V,
-    SUBJECT, SUBTYPE, T, TITLE, TO_UNICODE, TRIM_BOX, TRUE_TYPE, TYPE, TYPE1, VIEWER_PREFERENCES,
-    W, WIDTH, WIDTHS, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
+    DESTS, ENCODING, ENCRYPT, EXT_G_STATE, F, FILTER, FIRST, FIRST_CHAR, FLAGS, FLATE_DECODE, FONT,
+    FONT_BBOX, FONT_DESCRIPTOR, FONT_FILE, FONT_FILE2, FONT_FILE3, FORM, FORM_TYPE, FT, HEIGHT, IC,
+    ID, IMAGE, IMAGE_MASK, INDEX, INFO, INK_LIST, ITALIC_ANGLE, JPX_DECODE, KEYWORDS, KIDS,
+    LAST_CHAR, LENGTH, M, MATRIX, MEDIA_BOX, METADATA, N, NAMES, NM, NORMAL, ORDERING, P, PAGE,
+    PAGES, PARENT, PREV, PROPERTIES, QUAD_POINTS, R, RECT, RESOURCES, ROOT, ROTATE, S, SIZE, SMASK,
+    STANDARD, STEM_V, SUBJECT, SUBTYPE, T, TITLE, TO_UNICODE, TRIM_BOX, TRUE_TYPE, TYPE, TYPE1,
+    VIEWER_PREFERENCES, W, WIDTH, WIDTHS, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -74,6 +74,46 @@ pdfrum_object::names! {
     OPEN = "Open";
     /// Comment icon name (`/Comment`).
     COMMENT = "Comment";
+    /// Action dictionary (`/A`), e.g. a URI action on a Link.
+    A = "A";
+    /// Uniform resource identifier (`/URI`).
+    URI = "URI";
+    /// Line endpoints (`/L`) for a Line annotation.
+    L = "L";
+    /// Line ending styles (`/LE`).
+    LE = "LE";
+
+    /// Unicode file specification string (`/UF`).
+    UF = "UF";
+
+    /// File specification dictionary type (`/Filespec`).
+    FILESPEC = "Filespec";
+    /// Destination on an action (`/D`).
+    D = "D";
+    /// GoTo action subtype (`/GoTo`).
+    GO_TO = "GoTo";
+    /// Remote go-to action subtype (`/GoToR`).
+    GO_TO_R = "GoToR";
+    /// Launch an application / document (`/Launch`).
+    LAUNCH = "Launch";
+    /// Open the destination in a new window (`/NewWindow`).
+    NEW_WINDOW = "NewWindow";
+    /// Fit the whole page in the window (`/Fit`).
+    FIT = "Fit";
+    /// Fit the page width (`/FitH`).
+    FIT_H = "FitH";
+    /// Fit the page height (`/FitV`).
+    FIT_V = "FitV";
+    /// Fit a rectangle (`/FitR`).
+    FIT_R = "FitR";
+    /// Fit the page bounding box (`/FitB`).
+    FIT_B = "FitB";
+    /// Fit the bounding-box width (`/FitBH`).
+    FIT_BH = "FitBH";
+    /// Fit the bounding-box height (`/FitBV`).
+    FIT_BV = "FitBV";
+    /// XYZ destination mode (`/XYZ`).
+    XYZ = "XYZ";
     // Subtype spellings (/Highlight, /Text, …) come from
     // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }
