@@ -74,6 +74,12 @@ pdfrum_object::names! {
     OPEN = "Open";
     /// Comment icon name (`/Comment`).
     COMMENT = "Comment";
+    /// Action dictionary (`/A`), e.g. a URI action on a Link.
+    A = "A";
+    /// Uniform resource identifier (`/URI`).
+    URI = "URI";
+    /// Line endpoints (`/L`) for a Line annotation.
+    L = "L";
     // Subtype spellings (/Highlight, /Text, …) come from
     // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }

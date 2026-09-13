@@ -1,7 +1,7 @@
 //! Creating page annotations and attaching them to a page's `/Annots`.
 //!
 //! When a generator exists for the subtype (`Highlight`, `Underline`, `StrikeOut`,
-//! `Squiggly`, `Ink`, `FreeText`, `Text`, `Square`, …), an `/AP /N` appearance stream is written so
+//! `Squiggly`, `Ink`, `FreeText`, `Text`, `Square`, `Circle`, …), an `/AP /N` appearance stream is written so
 //! [`crate::flatten`] and viewers that require appearances can draw them.
 
 use kurbo::{Point, Rect};
@@ -326,6 +326,60 @@ pub enum AnnotSpec {
         /// Default appearance string (`/DA`), e.g. [`DEFAULT_DA`].
         da: String,
     },
+    /// A circle / ellipse annotation (`/Subtype /Circle`).
+    ///
+    /// Writes `/BS` like [`AnnotSpec::Square`] (includes `/Type /Border`).
+    /// Appearance is generated when the circle AP pipeline is available.
+    Circle {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+        /// Border style dictionary (`/BS`).
+        border: AnnotBorder,
+    },
+    /// A straight line (`/Subtype /Line`) with endpoints `/L`.
+    ///
+    /// No appearance stream is generated today (the AP pipeline has no Line
+    /// generator); viewers draw from `/L` and `/BS`.
+    Line {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Line start in page space (`/L` x1,y1).
+        start: Point,
+        /// Line end in page space (`/L` x2,y2).
+        end: Point,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+        /// Border style dictionary (`/BS`).
+        border: AnnotBorder,
+    },
+    /// A URI link annotation (`/Subtype /Link`).
+    ///
+    /// Writes `/A << /Type /Action /S /URI /URI (…) >>`. No appearance stream.
+    Link {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Destination URI.
+        uri: String,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
+    /// A caret / insertion-point annotation (`/Subtype /Caret`).
+    ///
+    /// No appearance stream is generated today.
+    Caret {
+        /// The annotation's `/Rect` in page space.
+        rect: Rect,
+        /// Annotation colour `/C` as `DeviceRGB` in 0..1.
+        color: Color,
+        /// Optional `/Contents`.
+        contents: Option<String>,
+    },
 }
 
 impl AnnotSpec {
@@ -446,6 +500,90 @@ impl AnnotSpec {
         }
     }
 
+    /// A circle / ellipse with no contents and a solid width-2 border.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::circle(Rect::new(0.0, 0.0, 20.0, 20.0), Color::from_rgb8(0, 0, 255));
+    /// assert!(matches!(spec, AnnotSpec::Circle { contents: None, .. }));
+    /// ```
+    #[must_use]
+    pub fn circle(rect: Rect, color: Color) -> Self {
+        Self::Circle {
+            rect,
+            color,
+            contents: None,
+            border: AnnotBorder::default(),
+        }
+    }
+
+    /// A line from `start` to `end` with no contents and a solid width-2 border.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::{Point, Rect};
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::line(
+    ///     Rect::new(0.0, 0.0, 100.0, 100.0),
+    ///     Color::from_rgb8(0, 0, 0),
+    ///     Point::new(10.0, 10.0),
+    ///     Point::new(90.0, 90.0),
+    /// );
+    /// assert!(matches!(spec, AnnotSpec::Line { contents: None, .. }));
+    /// ```
+    #[must_use]
+    pub fn line(rect: Rect, color: Color, start: Point, end: Point) -> Self {
+        Self::Line {
+            rect,
+            color,
+            start,
+            end,
+            contents: None,
+            border: AnnotBorder::default(),
+        }
+    }
+
+    /// A URI link annotation.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    ///
+    /// let spec = AnnotSpec::link(Rect::new(0.0, 0.0, 50.0, 12.0), "https://example.test/");
+    /// assert!(matches!(spec, AnnotSpec::Link { .. }));
+    /// ```
+    #[must_use]
+    pub fn link(rect: Rect, uri: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            uri: uri.into(),
+            contents: None,
+        }
+    }
+
+    /// A caret annotation with no contents.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::caret(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 0));
+    /// assert!(matches!(spec, AnnotSpec::Caret { contents: None, .. }));
+    /// ```
+    #[must_use]
+    pub fn caret(rect: Rect, color: Color) -> Self {
+        Self::Caret {
+            rect,
+            color,
+            contents: None,
+        }
+    }
+
     /// Sets `/Contents` on variants that take optional contents.
     ///
     /// [`AnnotSpec::FreeText`] already requires contents at construction; this
@@ -467,6 +605,10 @@ impl AnnotSpec {
     /// ));
     /// ```
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one arm per AnnotSpec variant; stays exhaustive as subtypes grow"
+    )]
     pub fn with_contents(self, contents: impl Into<String>) -> Self {
         let contents = Some(contents.into());
         match self {
@@ -539,6 +681,42 @@ impl AnnotSpec {
                 contents,
                 border,
             },
+            Self::Circle {
+                rect,
+                color,
+                border,
+                ..
+            } => Self::Circle {
+                rect,
+                color,
+                contents,
+                border,
+            },
+            Self::Line {
+                rect,
+                color,
+                start,
+                end,
+                border,
+                ..
+            } => Self::Line {
+                rect,
+                color,
+                start,
+                end,
+                contents,
+                border,
+            },
+            Self::Link { rect, uri, .. } => Self::Link {
+                rect,
+                uri,
+                contents,
+            },
+            Self::Caret { rect, color, .. } => Self::Caret {
+                rect,
+                color,
+                contents,
+            },
             other @ Self::FreeText { .. } => other,
         }
     }
@@ -589,6 +767,32 @@ impl AnnotSpec {
                 rect,
                 color,
                 strokes,
+                contents,
+                border,
+            },
+            Self::Circle {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Circle {
+                rect,
+                color,
+                contents,
+                border,
+            },
+            Self::Line {
+                rect,
+                color,
+                start,
+                end,
+                contents,
+                ..
+            } => Self::Line {
+                rect,
+                color,
+                start,
+                end,
                 contents,
                 border,
             },
@@ -1023,6 +1227,76 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             let mut dict = common(Subtype::FreeText, rect, color, page_ref);
             dict.insert(names::CONTENTS.clone(), Object::Str(pdf_string(&contents)));
             dict.insert(names::DA.clone(), Object::Str(pdf_string(&da)));
+            Ok(dict)
+        }
+        AnnotSpec::Circle {
+            rect,
+            color,
+            contents,
+            border,
+        } => {
+            let mut dict = common(Subtype::Circle, rect, color, page_ref);
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, true)),
+            );
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Line {
+            rect,
+            color,
+            start,
+            end,
+            contents,
+            border,
+        } => {
+            let mut dict = common(Subtype::Line, rect, color, page_ref);
+            dict.insert(
+                names::L.clone(),
+                Object::Array(Array::of([
+                    Object::Real(as_f32(start.x)),
+                    Object::Real(as_f32(start.y)),
+                    Object::Real(as_f32(end.x)),
+                    Object::Real(as_f32(end.y)),
+                ])),
+            );
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, false)),
+            );
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Link {
+            rect,
+            uri,
+            contents,
+        } => {
+            let mut dict = Dict::new();
+            dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
+            dict.insert(
+                names::SUBTYPE.clone(),
+                Object::Name(Name::from(Subtype::Link.as_bytes())),
+            );
+            dict.insert(names::RECT.clone(), rect_object(rect));
+            dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
+            dict.insert(names::P.clone(), Object::Ref(page_ref));
+            let mut action = Dict::new();
+            action.insert(names::TYPE.clone(), Object::Name(Name::from("Action")));
+            action.insert(names::S.clone(), Object::Name(names::URI.clone()));
+            action.insert(names::URI.clone(), Object::Str(pdf_string(&uri)));
+            dict.insert(names::A.clone(), Object::Dict(action));
+            insert_contents(&mut dict, contents.as_deref());
+            Ok(dict)
+        }
+        AnnotSpec::Caret {
+            rect,
+            color,
+            contents,
+        } => {
+            let mut dict = common(Subtype::Caret, rect, color, page_ref);
+            insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
     }
