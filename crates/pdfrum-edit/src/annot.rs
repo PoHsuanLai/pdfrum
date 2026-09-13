@@ -987,7 +987,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             border,
         } => {
             let mut dict = common(Subtype::Square, rect, color, page_ref);
-            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, true)));
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, true)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -1000,7 +1003,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
         } => {
             let mut dict = common(Subtype::Ink, rect, color, page_ref);
             dict.insert(names::INK_LIST.clone(), Object::Array(ink_list(&strokes)));
-            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, false)));
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, false)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }

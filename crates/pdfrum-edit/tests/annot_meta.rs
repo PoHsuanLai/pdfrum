@@ -147,8 +147,11 @@ fn square_and_ink_custom_border_round_trip() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::square(Rect::new(100.0, 100.0, 200.0, 180.0), Color::from_rgb8(0, 128, 255))
-            .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dashed)),
+        AnnotSpec::square(
+            Rect::new(100.0, 100.0, 200.0, 180.0),
+            Color::from_rgb8(0, 128, 255),
+        )
+        .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dashed)),
     )
     .expect("square");
     edit.add_annotation(
@@ -185,15 +188,11 @@ fn square_and_ink_custom_border_round_trip() {
         Some(1.0)
     );
     assert_eq!(
-        square_bs
-            .name(&Name::from("S"))
-            .map(Name::as_bytes),
+        square_bs.name(&Name::from("S")).map(Name::as_bytes),
         Some(&b"D"[..])
     );
     assert_eq!(
-        square_bs
-            .name(&Name::from("Type"))
-            .map(Name::as_bytes),
+        square_bs.name(&Name::from("Type")).map(Name::as_bytes),
         Some(&b"Border"[..])
     );
 
@@ -201,7 +200,10 @@ fn square_and_ink_custom_border_round_trip() {
         .dict()
         .dict(&Name::from("BS"), reopened.parser())
         .expect("ink BS");
-    assert_eq!(ink_bs.number(&Name::from("W"), reopened.parser()), Some(3.0));
+    assert_eq!(
+        ink_bs.number(&Name::from("W"), reopened.parser()),
+        Some(3.0)
+    );
     assert_eq!(
         ink_bs.name(&Name::from("S")).map(Name::as_bytes),
         Some(&b"U"[..])
