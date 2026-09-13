@@ -1232,7 +1232,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             border,
         } => {
             let mut dict = common(Subtype::Circle, rect, color, page_ref);
-            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, true)));
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, true)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -1254,11 +1257,18 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                     Object::Real(as_f32(end.y)),
                 ])),
             );
-            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, false)));
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, false)),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
-        AnnotSpec::Link { rect, uri, contents } => {
+        AnnotSpec::Link {
+            rect,
+            uri,
+            contents,
+        } => {
             let mut dict = Dict::new();
             dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
             dict.insert(
