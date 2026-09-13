@@ -89,6 +89,7 @@ pub fn pdfrum_text::TextPage::find_with<'a>(&'a self, &str, pdfrum_text::FindOpt
 pub fn pdfrum_text::TextPage::font_name(&self, pdfrum_text::CharIndex) -> core::option::Option<&str>
 pub fn pdfrum_text::TextPage::index_at(&self, kurbo::point::Point, kurbo::size::Size) -> core::option::Option<pdfrum_text::CharIndex>
 pub fn pdfrum_text::TextPage::rects(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::vec::Vec<kurbo::rect::Rect>
+pub fn pdfrum_text::TextPage::rects_loose(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::vec::Vec<kurbo::rect::Rect>
 pub fn pdfrum_text::TextPage::slice(&self, impl core::ops::range::RangeBounds<pdfrum_text::CharIndex>) -> alloc::string::String
 pub fn pdfrum_text::TextPage::text_in_rect(&self, kurbo::rect::Rect) -> alloc::string::String
 pub fn pdfrum_text::TextPage::text_of_object(&self, pdfrum_text::ObjectIndex) -> alloc::string::String

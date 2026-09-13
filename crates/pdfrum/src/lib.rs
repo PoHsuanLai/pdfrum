@@ -123,6 +123,8 @@ pub use pdfrum_edit::SvgFonts;
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::pdf_date;
 #[cfg(feature = "edit")]
+pub use pdfrum_edit::{AnnotMeta, AnnotSpec, AnnotWrite, DEFAULT_DA, Quad, add_annotation};
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,

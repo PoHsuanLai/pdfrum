@@ -36,8 +36,32 @@ fn bounds(range: &impl RangeBounds<CharIndex>, total: usize) -> (usize, usize) {
 /// small to see are skipped. A box is pushed **unconditionally at the end**,
 /// so a run in which every character was skipped still yields one — an
 /// all-zero rectangle, which the upstream tests pin.
+///
+/// Unions each character's tight [`CharBox::char_box`] (glyph ink). Prefer
+/// [`rects_loose`] for text-markup annotation geometry.
 #[must_use]
 pub fn rects(chars: &[CharBox], range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
+    rects_with(chars, range, |info| info.char_box)
+}
+
+/// Like [`rects`], but unions each character's [`CharBox::loose_char_box`].
+///
+/// The loose box is font-uniform (advance × ascent/descent) and always
+/// contains the tight ink box, so markup quads sit on the em-box like
+/// Acrobat / PDF `/QuadPoints` for Highlight, Underline, `StrikeOut`, and
+/// Squiggly.
+#[must_use]
+pub fn rects_loose(chars: &[CharBox], range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
+    rects_with(chars, range, |info| info.loose_char_box)
+}
+
+/// Shared scan for [`rects`] / [`rects_loose`]: one box per run of consecutive
+/// characters sharing a text object, skipping generated and sub-pixel boxes.
+fn rects_with(
+    chars: &[CharBox],
+    range: impl RangeBounds<CharIndex>,
+    box_of: impl Fn(&CharBox) -> Rect,
+) -> Vec<Rect> {
     let mut out = Vec::new();
     let total = chars.len();
     let (start, end) = bounds(&range, total);
@@ -56,7 +80,8 @@ pub fn rects(chars: &[CharBox], range: impl RangeBounds<CharIndex>) -> Vec<Rect>
         if info.char_type == CharType::Generated {
             continue;
         }
-        if info.char_box.width() < 0.01 || info.char_box.height() < 0.01 {
+        let glyph = box_of(info);
+        if glyph.width() < 0.01 || glyph.height() < 0.01 {
             continue;
         }
         if !seen_any {
@@ -70,10 +95,10 @@ pub fn rects(chars: &[CharBox], range: impl RangeBounds<CharIndex>) -> Vec<Rect>
         }
         if new_rect {
             new_rect = false;
-            rect = normalize(info.char_box);
+            rect = normalize(glyph);
             continue;
         }
-        rect = union(rect, info.char_box);
+        rect = union(rect, glyph);
     }
     out.push(rect);
     out
@@ -354,5 +379,28 @@ mod tests {
             Rect::new(0.0, 0.0, 5.0, 5.0),
             Rect::new(4.0, 0.0, 10.0, 5.0)
         ));
+    }
+    #[test]
+    fn loose_rects_cover_at_least_the_tight_ink_including_descenders() {
+        // Descender ink sits above the em-box floor; loose uses the full font
+        // ascent/descent so the union is taller and may sit lower in y-up space.
+        let mut chars = run();
+        chars[0].char_box = Rect::new(0.0, 2.0, 5.0, 10.0);
+        chars[0].loose_char_box = Rect::new(0.0, 0.0, 5.0, 10.0);
+        chars[1].char_box = Rect::new(5.0, 2.0, 10.0, 10.0);
+        chars[1].loose_char_box = Rect::new(5.0, 0.0, 10.0, 10.0);
+        let tight = rects(&chars, CharIndex::new(0)..CharIndex::new(2));
+        let loose = rects_loose(&chars, CharIndex::new(0)..CharIndex::new(2));
+        assert_eq!(tight.len(), 1);
+        assert_eq!(loose.len(), 1);
+        assert!(
+            loose[0].height() >= tight[0].height(),
+            "loose height {} < tight {}",
+            loose[0].height(),
+            tight[0].height()
+        );
+        // Bottoms (min y in page space) may differ when descent extends below ink.
+        assert!(loose[0].y0 <= tight[0].y0);
+        assert_eq!(loose[0].y1, tight[0].y1);
     }
 }
