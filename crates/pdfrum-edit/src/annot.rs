@@ -242,7 +242,7 @@ impl AnnotBorder {
 /// use pdfrum_edit::AnnotGoToView;
 ///
 /// assert!(matches!(AnnotGoToView::Fit, AnnotGoToView::Fit));
-/// assert!(matches!(AnnotGoToView::FitH { .. }, AnnotGoToView::FitH { .. }));
+/// assert!(matches!(AnnotGoToView::FitH { top: None }, AnnotGoToView::FitH { top: None }));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
