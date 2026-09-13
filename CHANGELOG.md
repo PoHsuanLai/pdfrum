@@ -5,6 +5,15 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Added
+
+- `DocEdit::add_annotation` / `pdfrum_edit::add_annotation` with typed
+  `AnnotSpec` variants for Highlight, Text (note), Square (area),
+  Underline, Ink, and FreeText — enough for Rotero to drop lopdf when
+  writing annotations. `/QuadPoints` use tl/tr/bl/br order; appearance
+  streams are not generated.
+
+
 ## [0.2.0] - 2026-09-11
 
 ### Added
