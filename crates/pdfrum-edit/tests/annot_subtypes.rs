@@ -80,6 +80,13 @@ fn line_round_trips_endpoints() {
     assert_eq!(l.len(), 4);
     assert!((l.number_at(0).unwrap() - 20.0).abs() < 0.01);
     assert!((l.number_at(3).unwrap() - 180.0).abs() < 0.01);
+    assert!(
+        annot
+            .dict()
+            .dict(&Name::from("AP"), saved.parser())
+            .is_some(),
+        "Line should get /AP from the appearance pipeline"
+    );
 }
 
 #[test]
@@ -118,6 +125,13 @@ fn link_round_trips_uri_action() {
         decoded.contains("https://example.test/x"),
         "uri: {decoded:?}"
     );
+    assert!(
+        annot
+            .dict()
+            .dict(&Name::from("AP"), saved.parser())
+            .is_some(),
+        "Link should get /AP from the appearance pipeline"
+    );
 }
 
 #[test]
@@ -142,4 +156,11 @@ fn caret_round_trips() {
         .expect("annot");
     assert_eq!(annot.subtype(), Subtype::Caret);
     assert_eq!(annot.contents().as_deref(), Some("insert"));
+    assert!(
+        annot
+            .dict()
+            .dict(&Name::from("AP"), saved.parser())
+            .is_some(),
+        "Caret should get /AP from the appearance pipeline"
+    );
 }
