@@ -1457,7 +1457,9 @@ fn page_lists_annot(edit: &EditDoc<'_>, page_dict: &Dict, annot: ObjRef) -> bool
 }
 
 fn array_contains_ref(array: &Array, annot: ObjRef) -> bool {
-    array.iter().any(|obj| matches!(obj, Object::Ref(r) if *r == annot))
+    array
+        .iter()
+        .any(|obj| matches!(obj, Object::Ref(r) if *r == annot))
 }
 
 /// Removes `annot_ref` from `/Annots`. Returns whether it was present.
