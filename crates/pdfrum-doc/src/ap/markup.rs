@@ -1024,12 +1024,36 @@ mod tests {
     }
 
     #[test]
-    fn a_link_strokes_its_rectangle() {
+    fn a_link_draws_a_solid_border_donut() {
+        // Default solid border paints an even-odd fill donut (outer − inset)
+        // rather than a stroked rectangle, matching Square/Widget borders.
         let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
         let s = stream(&link(&annot, &NoResolve));
-        assert!(s.contains("re s\n"), "{s}");
+        assert!(s.contains("0 0 1 rg"), "{s}");
+        assert!(s.contains("re f*"), "{s}");
+        assert!(s.contains("0 0 50 12 re"), "{s}");
+        assert!(s.contains("1 1 48 10 re"), "{s}");
+    }
+
+    #[test]
+    fn a_link_with_underline_bs_strokes_the_bottom_edge() {
+        let annot = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 50.0, 12.0])),
+            (
+                "BS",
+                Object::Dict(Dict::from_pairs([
+                    (Name::from("W"), Object::from(1.0_f32)),
+                    (Name::from("S"), Object::Name(Name::from("U"))),
+                ])),
+            ),
+        ]);
+        let s = stream(&link(&annot, &NoResolve));
         assert!(
             s.contains("0 0 1 RG") || s.contains("0 0 1 RG\n") || s.contains("0 0 1 RG "),
+            "{s}"
+        );
+        assert!(
+            s.contains(" S\n") || s.ends_with("S\n") || s.contains("S\n"),
             "{s}"
         );
     }
