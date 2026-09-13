@@ -33,10 +33,9 @@ pub pdfrum_edit::AnnotLinkAction::GoTo
 pub pdfrum_edit::AnnotLinkAction::GoTo::page: pdfrum_object::object::ObjRef
 pub pdfrum_edit::AnnotLinkAction::GoTo::view: pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotLinkAction::GoToR
+pub pdfrum_edit::AnnotLinkAction::GoToR::dest: pdfrum_edit::AnnotRemoteDest
 pub pdfrum_edit::AnnotLinkAction::GoToR::file: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::GoToR::new_window: core::option::Option<bool>
-pub pdfrum_edit::AnnotLinkAction::GoToR::page: i64
-pub pdfrum_edit::AnnotLinkAction::GoToR::view: pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotLinkAction::Launch
 pub pdfrum_edit::AnnotLinkAction::Launch::file: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Named
@@ -53,6 +52,11 @@ pub pdfrum_edit::AnnotLinkHighlight::Outline
 pub pdfrum_edit::AnnotLinkHighlight::Push
 impl pdfrum_edit::AnnotLinkHighlight
 pub const fn pdfrum_edit::AnnotLinkHighlight::as_bytes(self) -> &'static [u8]
+#[non_exhaustive] pub enum pdfrum_edit::AnnotRemoteDest
+pub pdfrum_edit::AnnotRemoteDest::Named(alloc::string::String)
+pub pdfrum_edit::AnnotRemoteDest::Page
+pub pdfrum_edit::AnnotRemoteDest::Page::page: i64
+pub pdfrum_edit::AnnotRemoteDest::Page::view: pdfrum_edit::AnnotGoToView
 #[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
 pub pdfrum_edit::AnnotSpec::Caret
 pub pdfrum_edit::AnnotSpec::Caret::color: peniko::Color
@@ -131,6 +135,7 @@ pub fn pdfrum_edit::AnnotSpec::line(kurbo::rect::Rect, peniko::Color, kurbo::poi
 pub fn pdfrum_edit::AnnotSpec::link(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_goto(kurbo::rect::Rect, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_goto_r(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, i64, pdfrum_edit::AnnotGoToView) -> Self
+pub fn pdfrum_edit::AnnotSpec::link_goto_r_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_launch(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_named_existing(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
