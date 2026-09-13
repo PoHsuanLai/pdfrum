@@ -913,6 +913,10 @@ fn attach_appearance(edit: &mut EditDoc<'_>, dict: &mut Dict) {
 }
 
 /// Builds the annotation dictionary for `spec`, with `/P` naming `page_ref`.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one arm per AnnotSpec variant; stays exhaustive as subtypes grow"
+)]
 fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
     match spec {
         AnnotSpec::Highlight {
