@@ -527,7 +527,8 @@ fn corners(rect: Rect) -> (f32, f32, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        caret, circle, highlight, ink, line, link, square, squiggly, strike_out, text, text_symbol, underline,
+        caret, circle, highlight, ink, line, link, square, squiggly, strike_out, text, text_symbol,
+        underline,
     };
     use crate::geom;
     use pdfrum_common::{DiagKind, Diagnostics};
@@ -766,10 +767,10 @@ mod tests {
         let annot = dict(&[
             ("Rect", numbers(&[0.0, 0.0, 100.0, 100.0])),
             ("L", numbers(&[10.0, 10.0, 90.0, 90.0])),
-            ("BS", Object::Dict(Dict::from_pairs([(
-                Name::from("W"),
-                Object::from(2.0_f32),
-            )]))),
+            (
+                "BS",
+                Object::Dict(Dict::from_pairs([(Name::from("W"), Object::from(2.0_f32))])),
+            ),
         ]);
         let got = line(&annot, &NoResolve).expect("line");
         let s = stream(&got);
@@ -789,7 +790,10 @@ mod tests {
         let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
         let s = stream(&link(&annot, &NoResolve));
         assert!(s.contains("re s\n"), "{s}");
-        assert!(s.contains("0 0 1 RG") || s.contains("0 0 1 RG\n") || s.contains("0 0 1 RG "), "{s}");
+        assert!(
+            s.contains("0 0 1 RG") || s.contains("0 0 1 RG\n") || s.contains("0 0 1 RG "),
+            "{s}"
+        );
     }
 
     #[test]
