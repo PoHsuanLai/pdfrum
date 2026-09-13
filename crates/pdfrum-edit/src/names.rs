@@ -86,6 +86,12 @@ pdfrum_object::names! {
     D = "D";
     /// GoTo action subtype (`/GoTo`).
     GO_TO = "GoTo";
+    /// Remote go-to action subtype (`/GoToR`).
+    GO_TO_R = "GoToR";
+    /// Launch an application / document (`/Launch`).
+    LAUNCH = "Launch";
+    /// Open the destination in a new window (`/NewWindow`).
+    NEW_WINDOW = "NewWindow";
     /// Fit the whole page in the window (`/Fit`).
     FIT = "Fit";
     /// XYZ destination mode (`/XYZ`).
