@@ -71,7 +71,10 @@ fn write_respects_custom_flags() {
     let flags = annots[0].flags();
     assert!(flags.prints());
     assert!(!flags.zooms());
-    assert_eq!(flags.bits(), (AnnotFlags::PRINT | AnnotFlags::NO_ZOOM).bits());
+    assert_eq!(
+        flags.bits(),
+        (AnnotFlags::PRINT | AnnotFlags::NO_ZOOM).bits()
+    );
 }
 
 #[test]
@@ -82,7 +85,10 @@ fn default_flags_remain_print_only() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::text(Rect::new(10.0, 10.0, 30.0, 30.0), Color::from_rgb8(255, 200, 0)),
+        AnnotSpec::text(
+            Rect::new(10.0, 10.0, 30.0, 30.0),
+            Color::from_rgb8(255, 200, 0),
+        ),
     )
     .expect("add");
 
