@@ -16,6 +16,7 @@ mod build_graph;
 mod builders;
 mod canvas;
 mod content;
+mod dests;
 mod doc;
 mod encrypt;
 mod error;
@@ -35,8 +36,10 @@ mod svg_text;
 mod write;
 
 pub use annot::{
-    AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotMeta, AnnotSpec,
-    AnnotWrite, DEFAULT_DA, Quad, add_annotation, delete_annotation, update_annotation,
+    AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta,
+    AnnotRemoteDest, AnnotSpec, AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation,
+    delete_annotation, delete_annotation_at, ensure_named_destination, set_named_destination,
+    update_annotation, update_annotation_at,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
