@@ -62,13 +62,19 @@ fn add_delete_gone_on_reopen() {
     let a = edit
         .add_annotation(
             0,
-            AnnotSpec::text(Rect::new(10.0, 10.0, 30.0, 30.0), Color::from_rgb8(255, 200, 0)),
+            AnnotSpec::text(
+                Rect::new(10.0, 10.0, 30.0, 30.0),
+                Color::from_rgb8(255, 200, 0),
+            ),
         )
         .expect("add a");
     let b = edit
         .add_annotation(
             0,
-            AnnotSpec::square(Rect::new(40.0, 40.0, 80.0, 80.0), Color::from_rgb8(0, 0, 255)),
+            AnnotSpec::square(
+                Rect::new(40.0, 40.0, 80.0, 80.0),
+                Color::from_rgb8(0, 0, 255),
+            ),
         )
         .expect("add b");
 
