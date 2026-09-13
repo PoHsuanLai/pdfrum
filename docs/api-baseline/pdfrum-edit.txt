@@ -18,7 +18,10 @@ pub pdfrum_edit::AnnotGoToView::Xyz::zoom: core::option::Option<f32>
 pub pdfrum_edit::AnnotLinkAction::GoTo
 pub pdfrum_edit::AnnotLinkAction::GoTo::page: pdfrum_object::object::ObjRef
 pub pdfrum_edit::AnnotLinkAction::GoTo::view: pdfrum_edit::AnnotGoToView
-pub pdfrum_edit::AnnotLinkAction::Named(alloc::string::String)
+pub pdfrum_edit::AnnotLinkAction::Named
+pub pdfrum_edit::AnnotLinkAction::Named::name: alloc::string::String
+pub pdfrum_edit::AnnotLinkAction::Named::page: pdfrum_object::object::ObjRef
+pub pdfrum_edit::AnnotLinkAction::Named::view: pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotLinkAction::Uri(alloc::string::String)
 #[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
 pub pdfrum_edit::AnnotSpec::Caret
@@ -93,7 +96,7 @@ pub fn pdfrum_edit::AnnotSpec::ink(kurbo::rect::Rect, peniko::Color, alloc::vec:
 pub fn pdfrum_edit::AnnotSpec::line(kurbo::rect::Rect, peniko::Color, kurbo::point::Point, kurbo::point::Point) -> Self
 pub fn pdfrum_edit::AnnotSpec::link(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_goto(kurbo::rect::Rect, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
-pub fn pdfrum_edit::AnnotSpec::link_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotSpec::link_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
 pub fn pdfrum_edit::AnnotSpec::square(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::strike_out(kurbo::rect::Rect, peniko::Color) -> Self
@@ -507,6 +510,7 @@ pub fn pdfrum_edit::set_attachment_description(&mut pdfrum_edit::EditDoc<'_>, &p
 pub fn pdfrum_edit::set_attachment_file(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &[u8]) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_attachment_param(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
+pub fn pdfrum_edit::set_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts

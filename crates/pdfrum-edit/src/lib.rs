@@ -16,6 +16,7 @@ mod build_graph;
 mod builders;
 mod canvas;
 mod content;
+mod dests;
 mod doc;
 mod encrypt;
 mod error;
@@ -37,7 +38,7 @@ mod write;
 pub use annot::{
     AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotMeta, AnnotSpec,
     AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation, delete_annotation,
-    delete_annotation_at, update_annotation, update_annotation_at,
+    delete_annotation_at, set_named_destination, update_annotation, update_annotation_at,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,

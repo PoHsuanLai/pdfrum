@@ -157,6 +157,7 @@ pub use pdfrum::remove_attachment
 pub use pdfrum::set_attachment_description
 pub use pdfrum::set_attachment_file
 pub use pdfrum::set_attachment_param
+pub use pdfrum::set_named_destination
 pub use pdfrum::update_annotation
 pub use pdfrum::update_annotation_at
 #[non_exhaustive] pub enum pdfrum::Error
@@ -298,6 +299,7 @@ pub fn pdfrum::DocEdit<'a>::remove_attachment(&mut self, &str) -> pdfrum::Result
 pub fn pdfrum::DocEdit<'a>::set_attachment_description(&mut self, usize, &str) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'a>::set_attachment_file(&mut self, usize, &[u8]) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'a>::set_attachment_param(&mut self, usize, &str, &str) -> pdfrum::Result<bool>
+pub fn pdfrum::DocEdit<'a>::set_named_destination(&mut self, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::annot::AnnotGoToView) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::stamp_image(&mut self, &pdfrum_edit::image::EmbeddedImage, f64, &pdfrum_edit::stamp::StampOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::stamp_text(&mut self, &str, &pdfrum_edit::stamp::StampOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::update_annotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef, impl core::convert::Into<pdfrum_edit::annot::AnnotWrite>) -> pdfrum::Result<()>

@@ -140,7 +140,12 @@ fn goto_xyz_and_named_write_expected_keys() {
     .expect("xyz");
     edit.add_annotation(
         0,
-        AnnotSpec::link_named(Rect::new(10.0, 60.0, 80.0, 74.0), "Chapter1"),
+        AnnotSpec::link_named(
+            Rect::new(10.0, 60.0, 80.0, 74.0),
+            "Chapter1",
+            target,
+            AnnotGoToView::Fit,
+        ),
     )
     .expect("named");
 
@@ -183,4 +188,42 @@ fn goto_xyz_and_named_write_expected_keys() {
 
     // Typed construction stays available for callers matching on the write payload.
     let _ = AnnotLinkAction::Uri(String::from("x"));
+}
+
+#[test]
+fn named_dest_resolves_after_reopen() {
+    use pdfrum_common::{Diagnostics, Limits};
+    use pdfrum_doc::nav::lookup_named_dest;
+
+    let doc = hello_2();
+    let target = page_ref(&doc, 1);
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::link_named(
+            Rect::new(10.0, 60.0, 80.0, 74.0),
+            "Chapter1",
+            target,
+            AnnotGoToView::Fit,
+        ),
+    )
+    .expect("named");
+
+    let saved = save_reopen(&edit);
+    let catalog = saved.parser().catalog().expect("catalog");
+    let mut diags = Diagnostics::default();
+    let found = lookup_named_dest(
+        &catalog,
+        b"Chapter1",
+        saved.parser(),
+        &Limits::default(),
+        &mut diags,
+    );
+    let dest = found.expect("Names/Dests must resolve Chapter1");
+    assert_eq!(dest.reference_at(0), Some(target));
+    assert_eq!(
+        dest.get(1, saved.parser())
+            .and_then(|v| v.get().as_name().map(|n| n.as_bytes().to_vec())),
+        Some(b"Fit".to_vec())
+    );
 }
