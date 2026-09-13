@@ -180,6 +180,66 @@ impl AnnotBorder {
     }
 }
 
+/// Destination view for a [`AnnotLinkAction::GoTo`] action.
+///
+/// Mirrors the common modes [`pdfrum_doc::Dest`] reads (`Fit`, `XYZ`). Zoom /
+/// left / top of `None` write PDF `null` (leave unchanged).
+///
+/// ```
+/// use pdfrum_edit::AnnotGoToView;
+///
+/// assert!(matches!(AnnotGoToView::Fit, AnnotGoToView::Fit));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum AnnotGoToView {
+    /// Fit the whole page (`/Fit`).
+    Fit,
+    /// Position at `(left, top)` with optional zoom (`/XYZ`).
+    Xyz {
+        /// Left edge in page space, or unchanged when `None`.
+        left: Option<f32>,
+        /// Top edge in page space, or unchanged when `None`.
+        top: Option<f32>,
+        /// Zoom factor, or unchanged when `None` / `Some(0.0)`.
+        zoom: Option<f32>,
+    },
+}
+
+/// Write-side link action, aligned with [`pdfrum_doc::ActionKind`] values we
+/// support on annotations.
+///
+/// Reuses the document Action model conceptually (`URI`, `GoTo`); this enum is
+/// the typed payload [`AnnotSpec::Link`] writes into `/A`. Named destinations
+/// write a `GoTo` whose `/D` is a PDF string — the catalog name tree must already
+/// exist (this path does not create named-dest entries).
+///
+/// ```
+/// use pdfrum_edit::AnnotLinkAction;
+///
+/// let a = AnnotLinkAction::Uri("https://example.test/".into());
+/// assert!(matches!(a, AnnotLinkAction::Uri(_)));
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AnnotLinkAction {
+    /// Resolve a URI (`/S /URI`).
+    Uri(String),
+    /// Go to a page in this document (`/S /GoTo` with an explicit destination
+    /// array naming `page`).
+    GoTo {
+        /// Page object reference (the same refs [`crate::EditDoc::page_state`] returns).
+        page: pdfrum_object::ObjRef,
+        /// How to display that page.
+        view: AnnotGoToView,
+    },
+    /// `GoTo` whose `/D` is a named destination string.
+    ///
+    /// Relies on existing `/Names /Dests` (or legacy `/Dests`) plumbing in the
+    /// file; see [`pdfrum_doc::nav::lookup_named_dest`].
+    Named(String),
+}
+
 /// What kind of annotation to create and attach to a page.
 ///
 /// This is the **write** payload for [`add_annotation`]. The ISO subtype
@@ -357,15 +417,15 @@ pub enum AnnotSpec {
         /// Border style dictionary (`/BS`).
         border: AnnotBorder,
     },
-    /// A URI link annotation (`/Subtype /Link`).
+    /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
-    /// Writes `/A << /Type /Action /S /URI /URI (…) >>`. Appearance is a
-    /// stroked rectangle over `/Rect`.
+    /// Appearance is a stroked rectangle over `/Rect`. See [`AnnotLinkAction`]
+    /// for URI, `GoTo`, and named-destination forms.
     Link {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
-        /// Destination URI.
-        uri: String,
+        /// Action dictionary payload (`/A`).
+        action: AnnotLinkAction,
         /// Optional `/Contents`.
         contents: Option<String>,
     },
@@ -550,17 +610,59 @@ impl AnnotSpec {
     /// A URI link annotation.
     ///
     /// ```
-    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_edit::{AnnotLinkAction, AnnotSpec};
     /// use kurbo::Rect;
     ///
     /// let spec = AnnotSpec::link(Rect::new(0.0, 0.0, 50.0, 12.0), "https://example.test/");
-    /// assert!(matches!(spec, AnnotSpec::Link { .. }));
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Link {
+    ///         action: AnnotLinkAction::Uri(ref u),
+    ///         ..
+    ///     } if u == "https://example.test/"
+    /// ));
     /// ```
     #[must_use]
     pub fn link(rect: Rect, uri: impl Into<String>) -> Self {
         Self::Link {
             rect,
-            uri: uri.into(),
+            action: AnnotLinkAction::Uri(uri.into()),
+            contents: None,
+        }
+    }
+
+    /// A `GoTo` link to `page` with the given view.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotGoToView, AnnotLinkAction, AnnotSpec};
+    /// use kurbo::Rect;
+    /// use pdfrum_object::ObjRef;
+    ///
+    /// let page = ObjRef::new(3, 0);
+    /// let spec = AnnotSpec::link_goto(Rect::new(0.0, 0.0, 50.0, 12.0), page, AnnotGoToView::Fit);
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Link {
+    ///         action: AnnotLinkAction::GoTo { view: AnnotGoToView::Fit, .. },
+    ///         ..
+    ///     }
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn link_goto(rect: Rect, page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::GoTo { page, view },
+            contents: None,
+        }
+    }
+
+    /// A `GoTo` link naming a destination string already in the document.
+    #[must_use]
+    pub fn link_named(rect: Rect, name: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::Named(name.into()),
             contents: None,
         }
     }
@@ -707,9 +809,9 @@ impl AnnotSpec {
                 contents,
                 border,
             },
-            Self::Link { rect, uri, .. } => Self::Link {
+            Self::Link { rect, action, .. } => Self::Link {
                 rect,
-                uri,
+                action,
                 contents,
             },
             Self::Caret { rect, color, .. } => Self::Caret {
@@ -1369,7 +1471,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
         }
         AnnotSpec::Link {
             rect,
-            uri,
+            action,
             contents,
         } => {
             let mut dict = Dict::new();
@@ -1381,11 +1483,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             dict.insert(names::RECT.clone(), rect_object(rect));
             dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
             dict.insert(names::P.clone(), Object::Ref(page_ref));
-            let mut action = Dict::new();
-            action.insert(names::TYPE.clone(), Object::Name(Name::from("Action")));
-            action.insert(names::S.clone(), Object::Name(names::URI.clone()));
-            action.insert(names::URI.clone(), Object::Str(pdf_string(&uri)));
-            dict.insert(names::A.clone(), Object::Dict(action));
+            dict.insert(names::A.clone(), Object::Dict(link_action_dict(&action)));
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -1608,6 +1706,55 @@ fn ink_list(strokes: &[Vec<Point>]) -> Array {
         out.push(Object::Array(points));
     }
     out
+}
+
+/// `/A` dictionary for a link action.
+fn link_action_dict(action: &AnnotLinkAction) -> Dict {
+    let mut a = Dict::new();
+    a.insert(names::TYPE.clone(), Object::Name(Name::from("Action")));
+    match action {
+        AnnotLinkAction::Uri(uri) => {
+            a.insert(names::S.clone(), Object::Name(names::URI.clone()));
+            a.insert(names::URI.clone(), Object::Str(pdf_string(uri)));
+        }
+        AnnotLinkAction::GoTo { page, view } => {
+            a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
+            a.insert(names::D.clone(), Object::Array(goto_dest_array(*page, *view)));
+        }
+        AnnotLinkAction::Named(name) => {
+            a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
+            a.insert(names::D.clone(), Object::Str(pdf_string(name)));
+        }
+    }
+    a
+}
+
+/// Explicit destination array `[page /Fit]` or `[page /XYZ left top zoom]`.
+fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
+    match view {
+        AnnotGoToView::Fit => Array::of([
+            Object::Ref(page),
+            Object::Name(names::FIT.clone()),
+        ]),
+        AnnotGoToView::Xyz { left, top, zoom } => {
+            Array::of([
+                Object::Ref(page),
+                Object::Name(names::XYZ.clone()),
+                optional_dest_number(left, false),
+                optional_dest_number(top, false),
+                optional_dest_number(zoom, true),
+            ])
+        }
+    }
+}
+
+/// PDF destination number: `null` when absent (or zoom that means unchanged).
+fn optional_dest_number(value: Option<f32>, zero_means_null: bool) -> Object {
+    match value {
+        None => Object::Null,
+        Some(n) if zero_means_null && n == 0.0 => Object::Null,
+        Some(n) => Object::Real(n),
+    }
 }
 
 /// Border style dict from [`AnnotBorder`].
