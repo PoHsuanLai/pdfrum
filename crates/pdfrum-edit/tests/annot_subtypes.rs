@@ -88,8 +88,11 @@ fn link_round_trips_uri_action() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link(Rect::new(72.0, 700.0, 200.0, 720.0), "https://example.test/x")
-            .with_contents("go"),
+        AnnotSpec::link(
+            Rect::new(72.0, 700.0, 200.0, 720.0),
+            "https://example.test/x",
+        )
+        .with_contents("go"),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -123,8 +126,11 @@ fn caret_round_trips() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::caret(Rect::new(30.0, 30.0, 40.0, 50.0), Color::from_rgb8(200, 0, 0))
-            .with_contents("insert"),
+        AnnotSpec::caret(
+            Rect::new(30.0, 30.0, 40.0, 50.0),
+            Color::from_rgb8(200, 0, 0),
+        )
+        .with_contents("insert"),
     )
     .expect("add");
     let saved = save_reopen(&edit);
