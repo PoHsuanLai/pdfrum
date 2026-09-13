@@ -51,6 +51,7 @@ pub pdfrum_edit::AnnotSpec::Line::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Line::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Line::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Line::end: kurbo::point::Point
+pub pdfrum_edit::AnnotSpec::Line::line_endings: core::option::Option<(pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle)>
 pub pdfrum_edit::AnnotSpec::Line::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Line::start: kurbo::point::Point
 pub pdfrum_edit::AnnotSpec::Link
@@ -103,6 +104,7 @@ pub fn pdfrum_edit::AnnotSpec::with_border(self, pdfrum_edit::AnnotBorder) -> Se
 pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_icon(self, impl core::convert::Into<pdfrum_object::name::Name>) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_line_endings(self, pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
@@ -171,6 +173,19 @@ pub enum pdfrum_edit::LineCap
 pub pdfrum_edit::LineCap::Butt
 pub pdfrum_edit::LineCap::Round
 pub pdfrum_edit::LineCap::Square
+#[non_exhaustive] pub enum pdfrum_edit::LineEndingStyle
+pub pdfrum_edit::LineEndingStyle::Butt
+pub pdfrum_edit::LineEndingStyle::Circle
+pub pdfrum_edit::LineEndingStyle::ClosedArrow
+pub pdfrum_edit::LineEndingStyle::Diamond
+pub pdfrum_edit::LineEndingStyle::None
+pub pdfrum_edit::LineEndingStyle::OpenArrow
+pub pdfrum_edit::LineEndingStyle::RClosedArrow
+pub pdfrum_edit::LineEndingStyle::ROpenArrow
+pub pdfrum_edit::LineEndingStyle::Slash
+pub pdfrum_edit::LineEndingStyle::Square
+impl pdfrum_edit::LineEndingStyle
+pub const fn pdfrum_edit::LineEndingStyle::as_bytes(self) -> &'static [u8]
 pub enum pdfrum_edit::LineJoin
 pub pdfrum_edit::LineJoin::Bevel
 pub pdfrum_edit::LineJoin::Miter

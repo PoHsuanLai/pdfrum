@@ -80,6 +80,8 @@ pdfrum_object::names! {
     URI = "URI";
     /// Line endpoints (`/L`) for a Line annotation.
     L = "L";
+    /// Line ending styles (`/LE`).
+    LE = "LE";
     /// Destination on an action (`/D`).
     D = "D";
     /// GoTo action subtype (`/GoTo`).
