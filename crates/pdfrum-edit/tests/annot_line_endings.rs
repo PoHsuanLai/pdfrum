@@ -102,3 +102,39 @@ fn line_endings_round_trip() {
         "still has /AP"
     );
 }
+
+#[test]
+fn line_endings_still_generate_ap() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::line(
+            Rect::new(10.0, 10.0, 100.0, 100.0),
+            Color::BLACK,
+            Point::new(20.0, 20.0),
+            Point::new(80.0, 80.0),
+        )
+        .with_line_endings(LineEndingStyle::OpenArrow, LineEndingStyle::ClosedArrow),
+    )
+    .expect("add");
+    let saved = save_reopen(&edit);
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("annot");
+    assert!(
+        annot
+            .dict()
+            .dict(&Name::from("AP"), saved.parser())
+            .is_some(),
+        "/AP present with /LE"
+    );
+    let le = annot
+        .dict()
+        .array(&Name::from("LE"), saved.parser())
+        .expect("LE");
+    assert_eq!(le.len(), 2);
+}
