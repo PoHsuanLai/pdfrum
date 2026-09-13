@@ -56,8 +56,11 @@ fn gotor_and_launch_round_trip() {
         a0.name(&Name::from("S")).map(|n| n.as_bytes().to_vec()),
         Some(b"GoToR".to_vec())
     );
-    let f = a0.string(&Name::from("F")).expect("F");
+    let fdict = a0.dict(&Name::from("F"), saved.parser()).expect("F dict");
+    let f = fdict.string(&Name::from("F")).expect("F");
+    let uf = fdict.string(&Name::from("UF")).expect("UF");
     assert!(String::from_utf8_lossy(f.as_bytes()).contains("other.pdf"));
+    assert!(String::from_utf8_lossy(uf.as_bytes()).contains("other.pdf"));
     let d = a0.array(&Name::from("D"), saved.parser()).expect("D");
     assert_eq!(d.int_at(0), Some(2));
     assert_eq!(
@@ -74,6 +77,35 @@ fn gotor_and_launch_round_trip() {
         a1.name(&Name::from("S")).map(|n| n.as_bytes().to_vec()),
         Some(b"Launch".to_vec())
     );
-    let f = a1.string(&Name::from("F")).expect("F");
+    let fdict = a1.dict(&Name::from("F"), saved.parser()).expect("F dict");
+    let f = fdict.string(&Name::from("F")).expect("F");
     assert!(String::from_utf8_lossy(f.as_bytes()).contains("notes.txt"));
+    assert!(fdict.string(&Name::from("UF")).is_some());
+}
+
+#[test]
+fn gotor_named_dest_writes_string_d() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::link_goto_r_named(Rect::new(10.0, 10.0, 80.0, 24.0), "other.pdf", "Chapter1"),
+    )
+    .expect("gotor named");
+    let saved = save_reopen(&edit);
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("annot");
+    let a = annot
+        .dict()
+        .dict(&Name::from("A"), saved.parser())
+        .expect("A");
+    let d = a.string(&Name::from("D")).expect("D string");
+    assert!(
+        String::from_utf8_lossy(d.as_bytes()).contains("Chapter1"),
+        "named remote dest"
+    );
 }

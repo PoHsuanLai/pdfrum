@@ -295,8 +295,10 @@ pub enum AnnotGoToView {
 
 /// Link annotation highlight mode (`/H`, ISO 32000-1 table 173).
 ///
-/// Written on [`AnnotSpec::Link`]; viewers use it for click feedback. The
-/// appearance stream still draws the border chrome independently.
+/// Written on [`AnnotSpec::Link`] for **viewer click feedback**. The static
+/// `/AP` stream draws border chrome only — modes like [`Self::Invert`] and
+/// [`Self::Push`] cannot be simulated in a static appearance and are left to
+/// the viewer.
 ///
 /// ```
 /// use pdfrum_edit::AnnotLinkHighlight;
@@ -329,6 +331,34 @@ impl AnnotLinkHighlight {
             Self::Push => b"P",
         }
     }
+}
+
+/// Remote destination for [`AnnotLinkAction::GoToR`].
+///
+/// Remote `/D` values use a **page number** (not a page object ref) or a
+/// named-destination string in the remote file.
+///
+/// ```
+/// use pdfrum_edit::{AnnotGoToView, AnnotRemoteDest};
+///
+/// let _ = AnnotRemoteDest::Page {
+///     page: 0,
+///     view: AnnotGoToView::Fit,
+/// };
+/// let _ = AnnotRemoteDest::Named(String::from("Chapter1"));
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AnnotRemoteDest {
+    /// Explicit destination: page number + view.
+    Page {
+        /// Zero-based page number in the remote file.
+        page: i64,
+        /// How to display that page.
+        view: AnnotGoToView,
+    },
+    /// Named destination string in the remote file.
+    Named(String),
 }
 
 /// Write-side link action, aligned with [`pdfrum_doc::ActionKind`] values we
@@ -381,23 +411,22 @@ pub enum AnnotLinkAction {
         /// Destination name written as `/D`.
         name: String,
     },
-    /// Remote go-to (`/S /GoToR`): open `file` at a page number + view.
+    /// Remote go-to (`/S /GoToR`): open `file` at [`AnnotRemoteDest`].
     ///
-    /// The destination array uses a page **number** (not a page object ref),
-    /// matching how remote destinations are written.
+    /// `/F` is written as a filespec dictionary with `/F` and `/UF`.
     GoToR {
-        /// File specification path (`/F` as a simple string).
+        /// Remote file path (filespec `/F` + `/UF`).
         file: String,
-        /// Zero-based page number in the remote file.
-        page: i64,
-        /// How to display that page.
-        view: AnnotGoToView,
+        /// Page number + view, or a remote named destination.
+        dest: AnnotRemoteDest,
         /// Optional `/NewWindow`.
         new_window: Option<bool>,
     },
-    /// Launch a file / application (`/S /Launch` with `/F`).
+    /// Launch a file / application (`/S /Launch`).
+    ///
+    /// `/F` is written as a filespec dictionary with `/F` and `/UF`.
     Launch {
-        /// File specification path (`/F` as a simple string).
+        /// File / application path (filespec `/F` + `/UF`).
         file: String,
     },
 }
@@ -587,7 +616,8 @@ pub enum AnnotSpec {
     },
     /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
-    /// Appearance honours `/BS` / `/C` (and `/H` is written for click feedback).
+    /// Appearance honours `/BS` / `/C`. `/H` is written for viewer click
+    /// feedback only — see [`AnnotLinkHighlight`].
     /// See [`AnnotLinkAction`] for URI, `GoTo`, and named-destination forms.
     Link {
         /// The annotation's `/Rect` in page space.
@@ -983,8 +1013,24 @@ impl AnnotSpec {
             rect,
             action: AnnotLinkAction::GoToR {
                 file: file.into(),
-                page,
-                view,
+                dest: AnnotRemoteDest::Page { page, view },
+                new_window: None,
+            },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A remote `GoToR` link to a named destination in `file`.
+    #[must_use]
+    pub fn link_goto_r_named(rect: Rect, file: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::GoToR {
+                file: file.into(),
+                dest: AnnotRemoteDest::Named(name.into()),
                 new_window: None,
             },
             contents: None,
@@ -2391,6 +2437,16 @@ fn pdf_string(text: &str) -> PdfString {
     PdfString::literal(encode_text(text))
 }
 
+/// Simple filespec dictionary with `/Type /Filespec`, `/F`, and `/UF`.
+fn filespec_object(path: &str) -> Object {
+    let mut dict = Dict::new();
+    dict.insert(names::TYPE.clone(), Object::Name(names::FILESPEC.clone()));
+    let s = Object::Str(pdf_string(path));
+    dict.insert(names::F.clone(), s.clone());
+    dict.insert(names::UF.clone(), s);
+    Object::Dict(dict)
+}
+
 fn rect_object(rect: Rect) -> Object {
     let rect = rect.abs();
     Object::Array(Array::of([
@@ -2463,23 +2519,29 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
         }
         AnnotLinkAction::GoToR {
             file,
-            page,
-            view,
+            dest,
             new_window,
         } => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO_R.clone()));
-            a.insert(names::F.clone(), Object::Str(pdf_string(file)));
-            a.insert(
-                names::D.clone(),
-                Object::Array(remote_goto_dest_array(*page, *view)),
-            );
+            a.insert(names::F.clone(), filespec_object(file));
+            match dest {
+                AnnotRemoteDest::Page { page, view } => {
+                    a.insert(
+                        names::D.clone(),
+                        Object::Array(remote_goto_dest_array(*page, *view)),
+                    );
+                }
+                AnnotRemoteDest::Named(name) => {
+                    a.insert(names::D.clone(), Object::Str(pdf_string(name)));
+                }
+            }
             if let Some(new_window) = *new_window {
                 a.insert(names::NEW_WINDOW.clone(), Object::Bool(new_window));
             }
         }
         AnnotLinkAction::Launch { file } => {
             a.insert(names::S.clone(), Object::Name(names::LAUNCH.clone()));
-            a.insert(names::F.clone(), Object::Str(pdf_string(file)));
+            a.insert(names::F.clone(), filespec_object(file));
         }
     }
     a
