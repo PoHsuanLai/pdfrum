@@ -126,6 +126,59 @@ impl AnnotBorderStyle {
     }
 }
 
+/// Line ending style written in `/LE` (ISO 32000-1 table 166 / §12.5.6.7).
+///
+/// ```
+/// use pdfrum_edit::LineEndingStyle;
+///
+/// assert_eq!(LineEndingStyle::OpenArrow.as_bytes(), b"OpenArrow");
+/// assert_eq!(LineEndingStyle::None.as_bytes(), b"None");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[non_exhaustive]
+pub enum LineEndingStyle {
+    /// No special ending (`/None`).
+    #[default]
+    None,
+    /// Square.
+    Square,
+    /// Circle.
+    Circle,
+    /// Diamond.
+    Diamond,
+    /// Open arrow.
+    OpenArrow,
+    /// Closed arrow.
+    ClosedArrow,
+    /// Butt.
+    Butt,
+    /// Reversed open arrow.
+    ROpenArrow,
+    /// Reversed closed arrow.
+    RClosedArrow,
+    /// Slash.
+    Slash,
+}
+
+impl LineEndingStyle {
+    /// The PDF name bytes for one `/LE` entry.
+    #[must_use]
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::None => b"None",
+            Self::Square => b"Square",
+            Self::Circle => b"Circle",
+            Self::Diamond => b"Diamond",
+            Self::OpenArrow => b"OpenArrow",
+            Self::ClosedArrow => b"ClosedArrow",
+            Self::Butt => b"Butt",
+            Self::ROpenArrow => b"ROpenArrow",
+            Self::RClosedArrow => b"RClosedArrow",
+            Self::Slash => b"Slash",
+        }
+    }
+}
+
 /// Width and style for an annotation `/BS` dictionary.
 ///
 /// Defaults match what Square and Ink wrote previously: width `2`, solid.
@@ -182,13 +235,14 @@ impl AnnotBorder {
 
 /// Destination view for a [`AnnotLinkAction::GoTo`] action.
 ///
-/// Mirrors the common modes [`pdfrum_doc::Dest`] reads (`Fit`, `XYZ`). Zoom /
-/// left / top of `None` write PDF `null` (leave unchanged).
+/// Mirrors the modes [`pdfrum_doc::Dest`] / [`pdfrum_doc::ZoomMode`] reads.
+/// Optional coordinates of `None` write PDF `null` (leave unchanged).
 ///
 /// ```
 /// use pdfrum_edit::AnnotGoToView;
 ///
 /// assert!(matches!(AnnotGoToView::Fit, AnnotGoToView::Fit));
+/// assert!(matches!(AnnotGoToView::FitH { top: None }, AnnotGoToView::FitH { top: None }));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
@@ -204,15 +258,118 @@ pub enum AnnotGoToView {
         /// Zoom factor, or unchanged when `None` / `Some(0.0)`.
         zoom: Option<f32>,
     },
+    /// Fit the page width; `top` is the top edge (`/FitH`).
+    FitH {
+        /// Top edge in page space, or unchanged when `None`.
+        top: Option<f32>,
+    },
+    /// Fit the page height; `left` is the left edge (`/FitV`).
+    FitV {
+        /// Left edge in page space, or unchanged when `None`.
+        left: Option<f32>,
+    },
+    /// Fit the rectangle (`/FitR`).
+    FitR {
+        /// Left edge.
+        left: f32,
+        /// Bottom edge.
+        bottom: f32,
+        /// Right edge.
+        right: f32,
+        /// Top edge.
+        top: f32,
+    },
+    /// Fit the bounding box of the page's contents (`/FitB`).
+    FitB,
+    /// Fit the bounding box width; `top` is the top edge (`/FitBH`).
+    FitBH {
+        /// Top edge in page space, or unchanged when `None`.
+        top: Option<f32>,
+    },
+    /// Fit the bounding box height; `left` is the left edge (`/FitBV`).
+    FitBV {
+        /// Left edge in page space, or unchanged when `None`.
+        left: Option<f32>,
+    },
+}
+
+/// Link annotation highlight mode (`/H`, ISO 32000-1 table 173).
+///
+/// Written on [`AnnotSpec::Link`] for **viewer click feedback**. The static
+/// `/AP` stream draws border chrome only — modes like [`Self::Invert`] and
+/// [`Self::Push`] cannot be simulated in a static appearance and are left to
+/// the viewer.
+///
+/// ```
+/// use pdfrum_edit::AnnotLinkHighlight;
+///
+/// assert_eq!(AnnotLinkHighlight::Invert.as_bytes(), b"I");
+/// assert_eq!(AnnotLinkHighlight::Outline.as_bytes(), b"O");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[non_exhaustive]
+pub enum AnnotLinkHighlight {
+    /// No highlighting (`/N`).
+    None,
+    /// Invert content (`/I`). Acrobat default.
+    #[default]
+    Invert,
+    /// Invert the border (`/O`).
+    Outline,
+    /// Depress into the page (`/P`).
+    Push,
+}
+
+impl AnnotLinkHighlight {
+    /// The PDF name bytes for `/H`.
+    #[must_use]
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::None => b"N",
+            Self::Invert => b"I",
+            Self::Outline => b"O",
+            Self::Push => b"P",
+        }
+    }
+}
+
+/// Remote destination for [`AnnotLinkAction::GoToR`].
+///
+/// Remote `/D` values use a **page number** (not a page object ref) or a
+/// named-destination string in the remote file.
+///
+/// ```
+/// use pdfrum_edit::{AnnotGoToView, AnnotRemoteDest};
+///
+/// let _ = AnnotRemoteDest::Page {
+///     page: 0,
+///     view: AnnotGoToView::Fit,
+/// };
+/// let _ = AnnotRemoteDest::Named(String::from("Chapter1"));
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AnnotRemoteDest {
+    /// Explicit destination: page number + view.
+    Page {
+        /// Zero-based page number in the remote file.
+        page: i64,
+        /// How to display that page.
+        view: AnnotGoToView,
+    },
+    /// Named destination string in the remote file.
+    Named(String),
 }
 
 /// Write-side link action, aligned with [`pdfrum_doc::ActionKind`] values we
 /// support on annotations.
 ///
 /// Reuses the document Action model conceptually (`URI`, `GoTo`); this enum is
-/// the typed payload [`AnnotSpec::Link`] writes into `/A`. Named destinations
-/// write a `GoTo` whose `/D` is a PDF string — the catalog name tree must already
-/// exist (this path does not create named-dest entries).
+/// the typed payload [`AnnotSpec::Link`] writes into `/A`. A [`Self::Named`]
+/// action also upserts `/Names /Dests` so reopen/navigation can resolve the
+/// name (see [`set_named_destination`]). [`Self::NamedExisting`] writes the
+/// same `/D` string but does **not** touch the name tree — use it when the
+/// destination is already registered.
 ///
 /// ```
 /// use pdfrum_edit::AnnotLinkAction;
@@ -235,9 +392,43 @@ pub enum AnnotLinkAction {
     },
     /// `GoTo` whose `/D` is a named destination string.
     ///
-    /// Relies on existing `/Names /Dests` (or legacy `/Dests`) plumbing in the
-    /// file; see [`pdfrum_doc::nav::lookup_named_dest`].
-    Named(String),
+    /// Also registers (or updates) `name` under the catalog `/Names /Dests`
+    /// tree so [`pdfrum_doc::nav::lookup_named_dest`] can resolve it after save.
+    Named {
+        /// Destination name written as `/D` and as the name-tree key.
+        name: String,
+        /// Page the name resolves to.
+        page: pdfrum_object::ObjRef,
+        /// How to display that page.
+        view: AnnotGoToView,
+    },
+    /// `GoTo` whose `/D` is a named destination that must already exist.
+    ///
+    /// Unlike [`Self::Named`], this does not upsert `/Names /Dests` — the
+    /// name is assumed to resolve already (or will be registered separately
+    /// via [`set_named_destination`]).
+    NamedExisting {
+        /// Destination name written as `/D`.
+        name: String,
+    },
+    /// Remote go-to (`/S /GoToR`): open `file` at [`AnnotRemoteDest`].
+    ///
+    /// `/F` is written as a filespec dictionary with `/F` and `/UF`.
+    GoToR {
+        /// Remote file path (filespec `/F` + `/UF`).
+        file: String,
+        /// Page number + view, or a remote named destination.
+        dest: AnnotRemoteDest,
+        /// Optional `/NewWindow`.
+        new_window: Option<bool>,
+    },
+    /// Launch a file / application (`/S /Launch`).
+    ///
+    /// `/F` is written as a filespec dictionary with `/F` and `/UF`.
+    Launch {
+        /// File / application path (filespec `/F` + `/UF`).
+        file: String,
+    },
 }
 
 /// What kind of annotation to create and attach to a page.
@@ -273,6 +464,7 @@ pub enum AnnotSpec {
     /// A highlight over one or more text runs (`/Subtype /Highlight`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Highlight {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -287,6 +479,7 @@ pub enum AnnotSpec {
     /// A sticky-note text annotation (`/Subtype /Text`).
     ///
     /// Defaults to `/Name /Comment` and `/Open false` (see [`AnnotSpec::text`]).
+    #[non_exhaustive]
     Text {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -303,6 +496,7 @@ pub enum AnnotSpec {
     ///
     /// Writes `/BS` with [`AnnotBorder`] (default width 2, solid) and
     /// `/Type /Border`.
+    #[non_exhaustive]
     Square {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -316,6 +510,7 @@ pub enum AnnotSpec {
     /// An underline over one or more text runs (`/Subtype /Underline`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Underline {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -330,6 +525,7 @@ pub enum AnnotSpec {
     /// A strike-out over one or more text runs (`/Subtype /StrikeOut`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     StrikeOut {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -344,6 +540,7 @@ pub enum AnnotSpec {
     /// A squiggly underline over one or more text runs (`/Subtype /Squiggly`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Squiggly {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -360,6 +557,7 @@ pub enum AnnotSpec {
     /// Writes `/InkList` as an array of strokes (each a flat array of x,y
     /// pairs) and `/BS` from [`AnnotBorder`] (no `/Type /Border`, matching
     /// prior Ink writes).
+    #[non_exhaustive]
     Ink {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -376,6 +574,7 @@ pub enum AnnotSpec {
     ///
     /// `/Contents` and `/DA` are both required. See [`DEFAULT_DA`] for a
     /// common appearance string.
+    #[non_exhaustive]
     FreeText {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -390,6 +589,7 @@ pub enum AnnotSpec {
     ///
     /// Writes `/BS` like [`AnnotSpec::Square`] (includes `/Type /Border`).
     /// Appearance is generated when the circle AP pipeline is available.
+    #[non_exhaustive]
     Circle {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -402,7 +602,9 @@ pub enum AnnotSpec {
     },
     /// A straight line (`/Subtype /Line`) with endpoints `/L`.
     ///
-    /// Appearance strokes between the endpoints using `/BS` width and `/C`.
+    /// Appearance strokes between the endpoints using `/BS` width and `/C`,
+    /// with optional `/LE` endings and `/IC` interior fill for closed endings.
+    #[non_exhaustive]
     Line {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -416,11 +618,18 @@ pub enum AnnotSpec {
         contents: Option<String>,
         /// Border style dictionary (`/BS`).
         border: AnnotBorder,
+        /// Optional line endings (`/LE` start, end). `None` omits `/LE`
+        /// (prior behaviour).
+        line_endings: Option<(LineEndingStyle, LineEndingStyle)>,
+        /// Optional interior colour (`/IC`) for filled line endings.
+        interior: Option<Color>,
     },
     /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
-    /// Appearance is a stroked rectangle over `/Rect`. See [`AnnotLinkAction`]
-    /// for URI, `GoTo`, and named-destination forms.
+    /// Appearance honours `/BS` / `/C`. `/H` is written for viewer click
+    /// feedback only — see [`AnnotLinkHighlight`].
+    /// See [`AnnotLinkAction`] for URI, `GoTo`, and named-destination forms.
+    #[non_exhaustive]
     Link {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -428,10 +637,17 @@ pub enum AnnotSpec {
         action: AnnotLinkAction,
         /// Optional `/Contents`.
         contents: Option<String>,
+        /// Optional annotation colour `/C`. `None` omits `/C` (AP uses muted blue).
+        color: Option<Color>,
+        /// Border style dictionary (`/BS`). Default width 1, solid.
+        border: AnnotBorder,
+        /// Highlight mode (`/H`). Default [`AnnotLinkHighlight::Invert`].
+        highlight: AnnotLinkHighlight,
     },
     /// A caret / insertion-point annotation (`/Subtype /Caret`).
     ///
     /// Appearance draws a simple caret mark inside `/Rect`.
+    #[non_exhaustive]
     Caret {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -604,6 +820,95 @@ impl AnnotSpec {
             end,
             contents: None,
             border: AnnotBorder::default(),
+            line_endings: None,
+            interior: None,
+        }
+    }
+
+    /// Sets `/LE` on [`AnnotSpec::Line`]. Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotSpec, LineEndingStyle};
+    /// use kurbo::{Point, Rect};
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::line(
+    ///     Rect::new(0.0, 0.0, 10.0, 10.0),
+    ///     Color::BLACK,
+    ///     Point::new(0.0, 0.0),
+    ///     Point::new(10.0, 10.0),
+    /// )
+    /// .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow);
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Line {
+    ///         line_endings: Some((LineEndingStyle::None, LineEndingStyle::ClosedArrow)),
+    ///         ..
+    ///     }
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn with_line_endings(self, start: LineEndingStyle, end: LineEndingStyle) -> Self {
+        match self {
+            Self::Line {
+                rect,
+                color,
+                start: s,
+                end: e,
+                contents,
+                border,
+                interior,
+                ..
+            } => Self::Line {
+                rect,
+                color,
+                start: s,
+                end: e,
+                contents,
+                border,
+                line_endings: Some((start, end)),
+                interior,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_line_endings applies to Line, not {other:?}"
+                );
+                other
+            }
+        }
+    }
+
+    /// Sets `/IC` on [`AnnotSpec::Line`] for filled ending interiors.
+    #[must_use]
+    pub fn with_interior(self, color: Color) -> Self {
+        match self {
+            Self::Line {
+                rect,
+                color: c,
+                start,
+                end,
+                contents,
+                border,
+                line_endings,
+                ..
+            } => Self::Line {
+                rect,
+                color: c,
+                start,
+                end,
+                contents,
+                border,
+                line_endings,
+                interior: Some(color),
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_interior applies to Line, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -628,6 +933,9 @@ impl AnnotSpec {
             rect,
             action: AnnotLinkAction::Uri(uri.into()),
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
@@ -654,16 +962,118 @@ impl AnnotSpec {
             rect,
             action: AnnotLinkAction::GoTo { page, view },
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
-    /// A `GoTo` link naming a destination string already in the document.
+    /// A `GoTo` link whose `/D` is `name`, also registering that name under
+    /// `/Names /Dests` for `page` + `view`.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotGoToView, AnnotLinkAction, AnnotSpec};
+    /// use kurbo::Rect;
+    /// use pdfrum_object::ObjRef;
+    ///
+    /// let page = ObjRef::new(3, 0);
+    /// let spec = AnnotSpec::link_named(
+    ///     Rect::new(0.0, 0.0, 50.0, 12.0),
+    ///     "Chapter1",
+    ///     page,
+    ///     AnnotGoToView::Fit,
+    /// );
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Link {
+    ///         action: AnnotLinkAction::Named { .. },
+    ///         ..
+    ///     }
+    /// ));
+    /// ```
     #[must_use]
-    pub fn link_named(rect: Rect, name: impl Into<String>) -> Self {
+    pub fn link_named(
+        rect: Rect,
+        name: impl Into<String>,
+        page: pdfrum_object::ObjRef,
+        view: AnnotGoToView,
+    ) -> Self {
         Self::Link {
             rect,
-            action: AnnotLinkAction::Named(name.into()),
+            action: AnnotLinkAction::Named {
+                name: name.into(),
+                page,
+                view,
+            },
             contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A `GoTo` link to an existing named destination (no name-tree upsert).
+    #[must_use]
+    pub fn link_named_existing(rect: Rect, name: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::NamedExisting { name: name.into() },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A remote `GoToR` link to `file` at `page` with the given view.
+    #[must_use]
+    pub fn link_goto_r(
+        rect: Rect,
+        file: impl Into<String>,
+        page: i64,
+        view: AnnotGoToView,
+    ) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::GoToR {
+                file: file.into(),
+                dest: AnnotRemoteDest::Page { page, view },
+                new_window: None,
+            },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A remote `GoToR` link to a named destination in `file`.
+    #[must_use]
+    pub fn link_goto_r_named(rect: Rect, file: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::GoToR {
+                file: file.into(),
+                dest: AnnotRemoteDest::Named(name.into()),
+                new_window: None,
+            },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A `Launch` link naming `file`.
+    #[must_use]
+    pub fn link_launch(rect: Rect, file: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::Launch { file: file.into() },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
         }
     }
 
@@ -683,6 +1093,84 @@ impl AnnotSpec {
             rect,
             color,
             contents: None,
+        }
+    }
+
+    /// Replaces the `/QuadPoints` of a text-markup annotation
+    /// ([`AnnotSpec::Highlight`], [`AnnotSpec::Underline`],
+    /// [`AnnotSpec::StrikeOut`], [`AnnotSpec::Squiggly`]).
+    ///
+    /// Quads are written in tl/tr/bl/br order. Writing a spec whose quads are
+    /// empty fails with [`crate::Error::EmptyQuadPoints`]; pair this with
+    /// `pdfrum_text::rects_loose` to mark up a selection on the em-box.
+    ///
+    /// Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let rect = Rect::new(0.0, 0.0, 10.0, 4.0);
+    /// let spec = AnnotSpec::highlight(rect, Color::from_rgb8(255, 255, 0))
+    ///     .with_quads([Rect::new(0.0, 0.0, 5.0, 4.0).into()]);
+    /// assert!(matches!(spec, AnnotSpec::Highlight { ref quads, .. } if quads.len() == 1));
+    /// ```
+    #[must_use]
+    pub fn with_quads(self, quads: impl IntoIterator<Item = Quad>) -> Self {
+        let quads: Vec<Quad> = quads.into_iter().collect();
+        match self {
+            Self::Highlight {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Highlight {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Underline {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Underline {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::StrikeOut {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::StrikeOut {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Squiggly {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Squiggly {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_quads applies to Highlight, Underline, StrikeOut, or Squiggly, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -800,6 +1288,8 @@ impl AnnotSpec {
                 start,
                 end,
                 border,
+                line_endings,
+                interior,
                 ..
             } => Self::Line {
                 rect,
@@ -808,11 +1298,23 @@ impl AnnotSpec {
                 end,
                 contents,
                 border,
+                line_endings,
+                interior,
             },
-            Self::Link { rect, action, .. } => Self::Link {
+            Self::Link {
+                rect,
+                action,
+                color,
+                border,
+                highlight,
+                ..
+            } => Self::Link {
                 rect,
                 action,
                 contents,
+                color,
+                border,
+                highlight,
             },
             Self::Caret { rect, color, .. } => Self::Caret {
                 rect,
@@ -889,6 +1391,8 @@ impl AnnotSpec {
                 start,
                 end,
                 contents,
+                line_endings,
+                interior,
                 ..
             } => Self::Line {
                 rect,
@@ -897,8 +1401,31 @@ impl AnnotSpec {
                 end,
                 contents,
                 border,
+                line_endings,
+                interior,
             },
-            other => other,
+            Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                highlight,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                highlight,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_border applies to Square, Circle, Ink, or Link, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -937,7 +1464,10 @@ impl AnnotSpec {
                 icon,
                 open,
             },
-            other => other,
+            other => {
+                debug_assert!(false, "AnnotSpec::with_icon applies to Text, not {other:?}");
+                other
+            }
         }
     }
 
@@ -969,7 +1499,68 @@ impl AnnotSpec {
                 icon,
                 open,
             },
-            other => other,
+            other => {
+                debug_assert!(false, "AnnotSpec::with_open applies to Text, not {other:?}");
+                other
+            }
+        }
+    }
+
+    /// Sets `/C` on [`AnnotSpec::Link`]. Other variants are unchanged.
+    #[must_use]
+    pub fn with_color(self, color: Color) -> Self {
+        match self {
+            Self::Link {
+                rect,
+                action,
+                contents,
+                border,
+                highlight,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color: Some(color),
+                border,
+                highlight,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_color applies to Link, not {other:?}"
+                );
+                other
+            }
+        }
+    }
+
+    /// Sets `/H` on [`AnnotSpec::Link`]. Other variants are unchanged.
+    #[must_use]
+    pub fn with_highlight(self, highlight: AnnotLinkHighlight) -> Self {
+        match self {
+            Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                ..
+            } => Self::Link {
+                rect,
+                action,
+                contents,
+                color,
+                border,
+                highlight,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_highlight applies to Link, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -1156,6 +1747,7 @@ pub fn add_annotation(
     let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
         return Err(Error::InlinePage(page));
     };
+    register_named_dest_from_spec(edit, &spec)?;
     let mut dict = build_dict(spec, page_ref)?;
     apply_meta(&mut dict, &meta);
     attach_appearance(edit, &mut dict);
@@ -1211,6 +1803,7 @@ pub fn update_annotation(
     if !page_lists_annot(edit, &page_dict, annot) {
         return Err(Error::AnnotNotOnPage(annot, page));
     }
+    register_named_dest_from_spec(edit, &spec)?;
     let mut dict = build_dict(spec, page_ref)?;
     apply_meta(&mut dict, &meta);
     attach_appearance(edit, &mut dict);
@@ -1261,6 +1854,226 @@ pub fn delete_annotation(
     }
     edit.remove(annot);
     Ok(true)
+}
+
+/// Resolves `index` in `page`'s `/Annots` array (0-based) to an [`ObjRef`], then
+/// calls [`update_annotation`].
+///
+/// An **inline** dictionary at that index is promoted to a new indirect object
+/// (the array slot becomes a reference) before the update, so mixed
+/// indirect/inline `/Annots` arrays work.
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation_at};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let rect = Rect::new(10.0, 10.0, 40.0, 40.0);
+/// add_annotation(&mut edit, 0, AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)))?;
+/// update_annotation_at(
+///     &mut edit,
+///     0,
+///     0,
+///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("by index"),
+/// )?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots` or the
+///   entry is neither a reference nor a dictionary
+/// - Otherwise the same errors as [`update_annotation`]
+pub fn update_annotation_at(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    index: usize,
+    write: impl Into<AnnotWrite>,
+) -> Result<()> {
+    let page = page.into();
+    let annot = ensure_annot_ref_at(edit, page, index)?;
+    update_annotation(edit, page, annot, write)
+}
+
+/// Removes the annotation at `index` in `page`'s `/Annots` (0-based).
+///
+/// Indirect entries are detached and the object is dropped (same as
+/// [`delete_annotation`]). Inline dictionary entries are removed from the
+/// array only.
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation_at};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// add_annotation(
+///     &mut edit,
+///     0,
+///     AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
+/// )?;
+/// assert!(delete_annotation_at(&mut edit, 0, 0)?);
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots`
+/// - [`Error::PageIndexOutOfRange`] / [`Error::InlinePage`] for a bad page
+pub fn delete_annotation_at(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    index: usize,
+) -> Result<bool> {
+    let page = page.into();
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    match annots_entry_at(edit, &page_dict, page, index)? {
+        Object::Ref(annot) => delete_annotation(edit, page, annot),
+        Object::Dict(_) => Ok(remove_annots_index(edit, page_ref, &mut page_dict, index)),
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// Promotes an inline `/Annots` dict at `index` to an indirect object when
+/// needed, returning the reference callers can update.
+fn ensure_annot_ref_at(edit: &mut EditDoc<'_>, page: PageIndex, index: usize) -> Result<ObjRef> {
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    match annots_entry_at(edit, &page_dict, page, index)? {
+        Object::Ref(annot) => Ok(annot),
+        Object::Dict(dict) => {
+            let annot = edit.add(Object::Dict(dict));
+            replace_annots_index(
+                edit,
+                page_ref,
+                &mut page_dict,
+                page,
+                index,
+                Object::Ref(annot),
+            )?;
+            Ok(annot)
+        }
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// The raw `/Annots` element at `index`, without promoting.
+fn annots_entry_at(
+    edit: &EditDoc<'_>,
+    page_dict: &Dict,
+    page: PageIndex,
+    index: usize,
+) -> Result<Object> {
+    let array = annots_array(edit, page_dict).ok_or(Error::AnnotIndexOutOfRange(index, page))?;
+    array
+        .raw_at(index)
+        .cloned()
+        .ok_or(Error::AnnotIndexOutOfRange(index, page))
+}
+
+fn annots_array(edit: &EditDoc<'_>, page_dict: &Dict) -> Option<Array> {
+    match page_dict.raw(names::ANNOTS) {
+        Some(Object::Ref(array_ref)) => edit
+            .fetch(*array_ref)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_array)
+            .cloned(),
+        Some(Object::Array(array)) => Some(array.clone()),
+        _ => None,
+    }
+}
+
+/// Replaces the `/Annots` element at `index` with `value`.
+fn replace_annots_index(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    page: PageIndex,
+    index: usize,
+    value: Object,
+) -> Result<()> {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let mut array = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+                .ok_or(Error::AnnotIndexOutOfRange(index, page))?;
+            if index >= array.len() {
+                return Err(Error::AnnotIndexOutOfRange(index, page));
+            }
+            array.remove(index);
+            array.insert(index, value);
+            edit.replace(array_ref, Object::Array(array));
+            Ok(())
+        }
+        Some(Object::Array(mut array)) => {
+            if index >= array.len() {
+                return Err(Error::AnnotIndexOutOfRange(index, page));
+            }
+            array.remove(index);
+            array.insert(index, value);
+            page_dict.insert(annots_key, Object::Array(array));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+            Ok(())
+        }
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// Removes the `/Annots` element at `index`. Returns whether it was present.
+fn remove_annots_index(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    index: usize,
+) -> bool {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let Some(mut array) = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+            else {
+                return false;
+            };
+            if array.remove(index).is_none() {
+                return false;
+            }
+            edit.replace(array_ref, Object::Array(array));
+            true
+        }
+        Some(Object::Array(mut array)) => {
+            if array.remove(index).is_none() {
+                return false;
+            }
+            page_dict.insert(annots_key, Object::Array(array));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+            true
+        }
+        _ => false,
+    }
 }
 
 fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
@@ -1315,6 +2128,70 @@ fn attach_appearance(edit: &mut EditDoc<'_>, dict: &mut Dict) {
     let mut ap = Dict::new();
     ap.insert(Name::from("N"), Object::Ref(ap_ref));
     dict.insert(Name::from("AP"), Object::Dict(ap));
+}
+
+/// Upserts `name` into the catalog `/Names /Dests` name tree so named
+/// destinations (and [`AnnotLinkAction::Named`] links) resolve after save.
+///
+/// `dest` is the explicit destination array for `page` + `view` (same shape
+/// a `GoTo` `/D` array uses). An existing entry with the same name is replaced.
+///
+/// ```
+/// use pdfrum_edit::{AnnotGoToView, set_named_destination};
+/// use pdfrum_edit::EditDoc;
+/// use pdfrum_object::ObjRef;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// # let page = ObjRef::new(3, 0);
+/// set_named_destination(&mut edit, "Chapter1", page, AnnotGoToView::Fit)?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn set_named_destination(
+    edit: &mut EditDoc<'_>,
+    name: impl Into<String>,
+    page: ObjRef,
+    view: AnnotGoToView,
+) -> Result<()> {
+    let name = name.into();
+    let dest = Object::Array(goto_dest_array(page, view));
+    crate::dests::upsert_named_dest(edit, &name, dest)
+}
+
+/// Like [`set_named_destination`], but leaves an existing name untouched.
+///
+/// Returns `true` when a new entry was written.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn ensure_named_destination(
+    edit: &mut EditDoc<'_>,
+    name: impl Into<String>,
+    page: ObjRef,
+    view: AnnotGoToView,
+) -> Result<bool> {
+    let name = name.into();
+    let dest = Object::Array(goto_dest_array(page, view));
+    crate::dests::ensure_named_dest(edit, &name, dest)
+}
+
+fn register_named_dest_from_spec(edit: &mut EditDoc<'_>, spec: &AnnotSpec) -> Result<()> {
+    if let AnnotSpec::Link {
+        action: AnnotLinkAction::Named { name, page, view },
+        ..
+    } = spec
+    {
+        set_named_destination(edit, name.clone(), *page, *view)?;
+    }
+    Ok(())
 }
 
 /// Builds the annotation dictionary for `spec`, with `/P` naming `page_ref`.
@@ -1451,6 +2328,8 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             end,
             contents,
             border,
+            line_endings,
+            interior,
         } => {
             let mut dict = common(Subtype::Line, rect, color, page_ref);
             dict.insert(
@@ -1466,6 +2345,18 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                 names::BS.clone(),
                 Object::Dict(border_style_dict(border, false)),
             );
+            if let Some((start_style, end_style)) = line_endings {
+                dict.insert(
+                    names::LE.clone(),
+                    Object::Array(Array::of([
+                        Object::Name(Name::from(start_style.as_bytes())),
+                        Object::Name(Name::from(end_style.as_bytes())),
+                    ])),
+                );
+            }
+            if let Some(interior) = interior {
+                dict.insert(names::IC.clone(), color_object(interior));
+            }
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -1473,6 +2364,9 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             rect,
             action,
             contents,
+            color,
+            border,
+            highlight,
         } => {
             let mut dict = Dict::new();
             dict.insert(names::TYPE.clone(), Object::Name(names::ANNOT.clone()));
@@ -1484,6 +2378,17 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
             dict.insert(names::P.clone(), Object::Ref(page_ref));
             dict.insert(names::A.clone(), Object::Dict(link_action_dict(&action)));
+            if let Some(color) = color {
+                dict.insert(names::C.clone(), color_object(color));
+            }
+            dict.insert(
+                names::BS.clone(),
+                Object::Dict(border_style_dict(border, false)),
+            );
+            dict.insert(
+                Name::from("H"),
+                Object::Name(Name::from(highlight.as_bytes())),
+            );
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -1658,6 +2563,16 @@ fn pdf_string(text: &str) -> PdfString {
     PdfString::literal(encode_text(text))
 }
 
+/// Simple filespec dictionary with `/Type /Filespec`, `/F`, and `/UF`.
+fn filespec_object(path: &str) -> Object {
+    let mut dict = Dict::new();
+    dict.insert(names::TYPE.clone(), Object::Name(names::FILESPEC.clone()));
+    let s = Object::Str(pdf_string(path));
+    dict.insert(names::F.clone(), s.clone());
+    dict.insert(names::UF.clone(), s);
+    Object::Dict(dict)
+}
+
 fn rect_object(rect: Rect) -> Object {
     let rect = rect.abs();
     Object::Array(Array::of([
@@ -1724,24 +2639,93 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
                 Object::Array(goto_dest_array(*page, *view)),
             );
         }
-        AnnotLinkAction::Named(name) => {
+        AnnotLinkAction::Named { name, .. } | AnnotLinkAction::NamedExisting { name } => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
             a.insert(names::D.clone(), Object::Str(pdf_string(name)));
+        }
+        AnnotLinkAction::GoToR {
+            file,
+            dest,
+            new_window,
+        } => {
+            a.insert(names::S.clone(), Object::Name(names::GO_TO_R.clone()));
+            a.insert(names::F.clone(), filespec_object(file));
+            match dest {
+                AnnotRemoteDest::Page { page, view } => {
+                    a.insert(
+                        names::D.clone(),
+                        Object::Array(remote_goto_dest_array(*page, *view)),
+                    );
+                }
+                AnnotRemoteDest::Named(name) => {
+                    a.insert(names::D.clone(), Object::Str(pdf_string(name)));
+                }
+            }
+            if let Some(new_window) = *new_window {
+                a.insert(names::NEW_WINDOW.clone(), Object::Bool(new_window));
+            }
+        }
+        AnnotLinkAction::Launch { file } => {
+            a.insert(names::S.clone(), Object::Name(names::LAUNCH.clone()));
+            a.insert(names::F.clone(), filespec_object(file));
         }
     }
     a
 }
 
-/// Explicit destination array `[page /Fit]` or `[page /XYZ left top zoom]`.
+/// Explicit destination array `[page /Fit|…]`.
 fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
+    dest_array_with_page(Object::Ref(page), view)
+}
+
+/// Remote destination array: page **number** + view (for `/GoToR`).
+fn remote_goto_dest_array(page: i64, view: AnnotGoToView) -> Array {
+    dest_array_with_page(Object::Int(page), view)
+}
+
+fn dest_array_with_page(page: Object, view: AnnotGoToView) -> Array {
     match view {
-        AnnotGoToView::Fit => Array::of([Object::Ref(page), Object::Name(names::FIT.clone())]),
+        AnnotGoToView::Fit => Array::of([page, Object::Name(names::FIT.clone())]),
         AnnotGoToView::Xyz { left, top, zoom } => Array::of([
-            Object::Ref(page),
+            page,
             Object::Name(names::XYZ.clone()),
             optional_dest_number(left, false),
             optional_dest_number(top, false),
             optional_dest_number(zoom, true),
+        ]),
+        AnnotGoToView::FitH { top } => Array::of([
+            page,
+            Object::Name(names::FIT_H.clone()),
+            optional_dest_number(top, false),
+        ]),
+        AnnotGoToView::FitV { left } => Array::of([
+            page,
+            Object::Name(names::FIT_V.clone()),
+            optional_dest_number(left, false),
+        ]),
+        AnnotGoToView::FitR {
+            left,
+            bottom,
+            right,
+            top,
+        } => Array::of([
+            page,
+            Object::Name(names::FIT_R.clone()),
+            Object::Real(left),
+            Object::Real(bottom),
+            Object::Real(right),
+            Object::Real(top),
+        ]),
+        AnnotGoToView::FitB => Array::of([page, Object::Name(names::FIT_B.clone())]),
+        AnnotGoToView::FitBH { top } => Array::of([
+            page,
+            Object::Name(names::FIT_BH.clone()),
+            optional_dest_number(top, false),
+        ]),
+        AnnotGoToView::FitBV { left } => Array::of([
+            page,
+            Object::Name(names::FIT_BV.clone()),
+            optional_dest_number(left, false),
         ]),
     }
 }
