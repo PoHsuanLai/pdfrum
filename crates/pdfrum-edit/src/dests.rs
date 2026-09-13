@@ -170,8 +170,20 @@ fn try_upsert_into_kids(edit: &mut EditDoc<'_>, name: &str, dest: Object) -> Res
         }
     }
 
-    // Append into the last referenced leaf when possible; else add a new kid.
-    if let Some(Object::Ref(leaf_ref)) = kids.raw_at(kids.len().saturating_sub(1)).cloned()
+    // Insert into the leaf that owns `name`'s range, so sibling `/Limits`
+    // stay disjoint and ascending (ISO 32000-1 §7.9.6). Readers that binary
+    // search `/Kids` on `/Limits` depend on that; always appending to the
+    // last kid would widen its range backwards over its left siblings.
+    let target_slot = (0..kids.len())
+        .rfind(|&slot| {
+            kids.dict_at(slot, edit).is_some_and(|leaf| {
+                leaf_entries(&leaf, edit)
+                    .first()
+                    .is_some_and(|(low, _)| low.as_str() <= name)
+            })
+        })
+        .unwrap_or(0);
+    if let Some(Object::Ref(leaf_ref)) = kids.raw_at(target_slot).cloned()
         && let Some(mut leaf) = dict_at(edit, leaf_ref)
     {
         let mut entries = leaf_entries(&leaf, edit);

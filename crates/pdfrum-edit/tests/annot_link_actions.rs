@@ -377,3 +377,140 @@ fn named_dest_preserves_kids_tree() {
         );
     }
 }
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one explicit /Kids tree built inline"
+)]
+fn named_dest_inserts_into_correct_kid_leaf() {
+    use pdfrum::Resolve;
+    use pdfrum_object::{Array, Dict, Object, PdfString, encode_text};
+    use pdfrum_parser::{LoadOptions, load};
+
+    let doc = hello_2();
+    let target = page_ref(&doc, 1);
+    let mut edit = doc.edit();
+    // Seed a flat tree so we can lift its dest value out for reuse.
+    edit.set_named_destination("Alpha", target, AnnotGoToView::Fit)
+        .expect("alpha");
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &SaveOptions::default())
+        .expect("save");
+
+    let base = load(std::sync::Arc::<[u8]>::from(bytes), &LoadOptions::default()).expect("load");
+    let mut edit = pdfrum_edit::EditDoc::new(&base);
+    let root = edit
+        .base()
+        .trailer()
+        .reference(&Name::from("Root"))
+        .expect("Root");
+    let catalog = Resolve::fetch(&edit, root).expect("catalog");
+    let catalog = catalog.as_dict().expect("dict").clone();
+    let names_ref = catalog
+        .raw(&Name::from("Names"))
+        .and_then(pdfrum_object::Object::as_ref_id)
+        .expect("Names ref");
+    let names_dict = Resolve::fetch(&edit, names_ref)
+        .expect("names")
+        .as_dict()
+        .expect("d")
+        .clone();
+    let dests_ref = names_dict
+        .raw(&Name::from("Dests"))
+        .and_then(pdfrum_object::Object::as_ref_id)
+        .expect("Dests ref");
+    let dests = Resolve::fetch(&edit, dests_ref)
+        .expect("dests")
+        .as_dict()
+        .expect("d")
+        .clone();
+    let names_arr = dests.array(&Name::from("Names"), &edit).expect("Names");
+    // The seeded dest value for "Alpha" — reused as the payload for both kids.
+    let dest_value = names_arr.raw_at(1).cloned().expect("dest value");
+
+    let mk_leaf = |edit: &mut pdfrum_edit::EditDoc<'_>, key: &str| {
+        let mut leaf = Dict::new();
+        leaf.insert(
+            Name::from("Names"),
+            Object::Array(Array::of([
+                Object::Str(PdfString::literal(encode_text(key))),
+                dest_value.clone(),
+            ])),
+        );
+        leaf.insert(
+            Name::from("Limits"),
+            Object::Array(Array::of([
+                Object::Str(PdfString::literal(encode_text(key))),
+                Object::Str(PdfString::literal(encode_text(key))),
+            ])),
+        );
+        edit.add(Object::Dict(leaf))
+    };
+    // Two disjoint, ordered leaves: ["Alpha"] and ["Zeta"].
+    let first = mk_leaf(&mut edit, "Alpha");
+    let last = mk_leaf(&mut edit, "Zeta");
+
+    let mut tree = Dict::new();
+    tree.insert(
+        Name::from("Kids"),
+        Object::Array(Array::of([Object::Ref(first), Object::Ref(last)])),
+    );
+    tree.insert(
+        Name::from("Limits"),
+        Object::Array(Array::of([
+            Object::Str(PdfString::literal(encode_text("Alpha"))),
+            Object::Str(PdfString::literal(encode_text("Zeta"))),
+        ])),
+    );
+    edit.replace(dests_ref, Object::Dict(tree));
+
+    // "Beta" sorts into the FIRST leaf, not the last.
+    pdfrum_edit::set_named_destination(&mut edit, "Beta", target, AnnotGoToView::Fit)
+        .expect("beta");
+
+    // Sibling /Limits must stay disjoint and ascending (ISO 32000-1 §7.9.6):
+    // each leaf's high key must sort before the next leaf's low key.
+    let low_high = |r: ObjRef| -> (String, String) {
+        let leaf = Resolve::fetch(&edit, r)
+            .expect("leaf")
+            .as_dict()
+            .expect("d")
+            .clone();
+        let lim = leaf.array(&Name::from("Limits"), &edit).expect("Limits");
+        let get = |i: usize| {
+            pdfrum_object::decode_text(lim.string_at(i).expect("bound").as_bytes()).into_owned()
+        };
+        (get(0), get(1))
+    };
+    let (first_low, first_high) = low_high(first);
+    let (last_low, last_high) = low_high(last);
+    assert!(
+        first_low <= first_high && last_low <= last_high,
+        "each leaf's own /Limits must be ordered: [{first_low} {first_high}] [{last_low} {last_high}]"
+    );
+    assert!(
+        first_high < last_low,
+        "sibling /Limits must not overlap: [{first_low} {first_high}] then [{last_low} {last_high}]"
+    );
+
+    let mut out = Vec::new();
+    pdfrum_edit::save(&edit, &pdfrum_edit::SaveOptions::default(), &mut out).expect("save");
+    let saved = Document::from_bytes(std::sync::Arc::from(out)).expect("reopen");
+    let catalog = saved.parser().catalog().expect("catalog");
+    let mut diags = pdfrum_common::Diagnostics::default();
+    for name in [b"Alpha".as_slice(), b"Beta".as_slice(), b"Zeta".as_slice()] {
+        assert!(
+            pdfrum_doc::nav::lookup_named_dest(
+                &catalog,
+                name,
+                saved.parser(),
+                &pdfrum_common::Limits::default(),
+                &mut diags,
+            )
+            .is_some(),
+            "resolves {}",
+            String::from_utf8_lossy(name)
+        );
+    }
+}
