@@ -336,6 +336,25 @@ pub enum AnnotLinkAction {
         /// How to display that page.
         view: AnnotGoToView,
     },
+    /// Remote go-to (`/S /GoToR`): open `file` at a page number + view.
+    ///
+    /// The destination array uses a page **number** (not a page object ref),
+    /// matching how remote destinations are written.
+    GoToR {
+        /// File specification path (`/F` as a simple string).
+        file: String,
+        /// Zero-based page number in the remote file.
+        page: i64,
+        /// How to display that page.
+        view: AnnotGoToView,
+        /// Optional `/NewWindow`.
+        new_window: Option<bool>,
+    },
+    /// Launch a file / application (`/S /Launch` with `/F`).
+    Launch {
+        /// File specification path (`/F` as a simple string).
+        file: String,
+    },
 }
 
 /// What kind of annotation to create and attach to a page.
@@ -854,6 +873,42 @@ impl AnnotSpec {
                 page,
                 view,
             },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A remote `GoToR` link to `file` at `page` with the given view.
+    #[must_use]
+    pub fn link_goto_r(
+        rect: Rect,
+        file: impl Into<String>,
+        page: i64,
+        view: AnnotGoToView,
+    ) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::GoToR {
+                file: file.into(),
+                page,
+                view,
+                new_window: None,
+            },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A `Launch` link naming `file`.
+    #[must_use]
+    pub fn link_launch(rect: Rect, file: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::Launch { file: file.into() },
             contents: None,
             color: None,
             border: AnnotBorder::solid(1.0),
@@ -2289,6 +2344,26 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
             a.insert(names::D.clone(), Object::Str(pdf_string(name)));
         }
+        AnnotLinkAction::GoToR {
+            file,
+            page,
+            view,
+            new_window,
+        } => {
+            a.insert(names::S.clone(), Object::Name(names::GO_TO_R.clone()));
+            a.insert(names::F.clone(), Object::Str(pdf_string(file)));
+            a.insert(
+                names::D.clone(),
+                Object::Array(remote_goto_dest_array(*page, *view)),
+            );
+            if let Some(new_window) = *new_window {
+                a.insert(names::NEW_WINDOW.clone(), Object::Bool(new_window));
+            }
+        }
+        AnnotLinkAction::Launch { file } => {
+            a.insert(names::S.clone(), Object::Name(names::LAUNCH.clone()));
+            a.insert(names::F.clone(), Object::Str(pdf_string(file)));
+        }
     }
     a
 }
@@ -2299,6 +2374,20 @@ fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
         AnnotGoToView::Fit => Array::of([Object::Ref(page), Object::Name(names::FIT.clone())]),
         AnnotGoToView::Xyz { left, top, zoom } => Array::of([
             Object::Ref(page),
+            Object::Name(names::XYZ.clone()),
+            optional_dest_number(left, false),
+            optional_dest_number(top, false),
+            optional_dest_number(zoom, true),
+        ]),
+    }
+}
+
+/// Remote destination array: page **number** + view (for `/GoToR`).
+fn remote_goto_dest_array(page: i64, view: AnnotGoToView) -> Array {
+    match view {
+        AnnotGoToView::Fit => Array::of([Object::Int(page), Object::Name(names::FIT.clone())]),
+        AnnotGoToView::Xyz { left, top, zoom } => Array::of([
+            Object::Int(page),
             Object::Name(names::XYZ.clone()),
             optional_dest_number(left, false),
             optional_dest_number(top, false),

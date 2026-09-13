@@ -610,7 +610,16 @@ fn construct_edit_variants() -> usize {
         page: ObjRef::new(1, 0),
         view: AnnotGoToView::Fit,
     };
-    n += 3;
+    let _ = AnnotLinkAction::GoToR {
+        file: String::new(),
+        page: 0,
+        view: AnnotGoToView::Fit,
+        new_window: None,
+    };
+    let _ = AnnotLinkAction::Launch {
+        file: String::new(),
+    };
+    n += 5;
 
     let _ = AnnotLinkHighlight::None;
     let _ = AnnotLinkHighlight::Invert;
@@ -941,7 +950,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 22 + 2 + 5 + 5 + 3 + 2 + 10 + 4);
+    assert_eq!(construct_edit_variants(), 22 + 2 + 5 + 5 + 5 + 2 + 10 + 4);
 }
 
 #[test]
@@ -1020,12 +1029,13 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 369 -> 379 (`LineEndingStyle` ten variants).
     // 379 -> 380 (`SaveError::AnnotIndexOutOfRange`).
     // 380 -> 384 (`AnnotLinkHighlight` four variants).
+    // 384 -> 386 (`AnnotLinkAction::GoToR` + `Launch`).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 384, "default-feature variant count");
+    assert_eq!(constructed, 386, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 46, "default-feature enum count");
 }
 

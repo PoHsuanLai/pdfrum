@@ -18,6 +18,13 @@ pub pdfrum_edit::AnnotGoToView::Xyz::zoom: core::option::Option<f32>
 pub pdfrum_edit::AnnotLinkAction::GoTo
 pub pdfrum_edit::AnnotLinkAction::GoTo::page: pdfrum_object::object::ObjRef
 pub pdfrum_edit::AnnotLinkAction::GoTo::view: pdfrum_edit::AnnotGoToView
+pub pdfrum_edit::AnnotLinkAction::GoToR
+pub pdfrum_edit::AnnotLinkAction::GoToR::file: alloc::string::String
+pub pdfrum_edit::AnnotLinkAction::GoToR::new_window: core::option::Option<bool>
+pub pdfrum_edit::AnnotLinkAction::GoToR::page: i64
+pub pdfrum_edit::AnnotLinkAction::GoToR::view: pdfrum_edit::AnnotGoToView
+pub pdfrum_edit::AnnotLinkAction::Launch
+pub pdfrum_edit::AnnotLinkAction::Launch::file: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Named
 pub pdfrum_edit::AnnotLinkAction::Named::name: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Named::page: pdfrum_object::object::ObjRef
@@ -106,6 +113,8 @@ pub fn pdfrum_edit::AnnotSpec::ink(kurbo::rect::Rect, peniko::Color, alloc::vec:
 pub fn pdfrum_edit::AnnotSpec::line(kurbo::rect::Rect, peniko::Color, kurbo::point::Point, kurbo::point::Point) -> Self
 pub fn pdfrum_edit::AnnotSpec::link(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_goto(kurbo::rect::Rect, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
+pub fn pdfrum_edit::AnnotSpec::link_goto_r(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, i64, pdfrum_edit::AnnotGoToView) -> Self
+pub fn pdfrum_edit::AnnotSpec::link_launch(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
 pub fn pdfrum_edit::AnnotSpec::square(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Self
