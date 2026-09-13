@@ -154,6 +154,11 @@ pub enum Error {
     #[error("a highlight or underline needs at least one quadrilateral")]
     EmptyQuadPoints,
 
+    /// `update_annotation` / `delete_annotation` named an object that is not
+    /// listed in that page's `/Annots`.
+    #[error("annotation {}:{} is not on page {}", .0.num, .0.generation, .1)]
+    AnnotNotOnPage(pdfrum_object::ObjRef, PageIndex),
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),

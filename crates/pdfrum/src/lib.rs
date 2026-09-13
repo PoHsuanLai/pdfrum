@@ -125,7 +125,7 @@ pub use pdfrum_edit::pdf_date;
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
     AnnotBorder, AnnotBorderStyle, AnnotMeta, AnnotSpec, AnnotWrite, DEFAULT_DA, Quad,
-    add_annotation,
+    add_annotation, delete_annotation, update_annotation,
 };
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
