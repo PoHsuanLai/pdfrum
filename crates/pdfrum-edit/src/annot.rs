@@ -88,6 +88,98 @@ impl From<Rect> for Quad {
     }
 }
 
+/// Border style name written as `/BS /S` (ISO 32000-1 table 166).
+///
+/// ```
+/// use pdfrum_edit::AnnotBorderStyle;
+///
+/// assert_eq!(AnnotBorderStyle::Solid.as_bytes(), b"S");
+/// assert_eq!(AnnotBorderStyle::Dashed.as_bytes(), b"D");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[non_exhaustive]
+pub enum AnnotBorderStyle {
+    /// Solid (`/S`).
+    #[default]
+    Solid,
+    /// Dashed (`/D`).
+    Dashed,
+    /// Beveled (`/B`).
+    Beveled,
+    /// Inset (`/I`).
+    Inset,
+    /// Underline (`/U`).
+    Underline,
+}
+
+impl AnnotBorderStyle {
+    /// The PDF name bytes for `/BS /S`.
+    #[must_use]
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::Solid => b"S",
+            Self::Dashed => b"D",
+            Self::Beveled => b"B",
+            Self::Inset => b"I",
+            Self::Underline => b"U",
+        }
+    }
+}
+
+/// Width and style for an annotation `/BS` dictionary.
+///
+/// Defaults match what Square and Ink wrote previously: width `2`, solid.
+///
+/// ```
+/// use pdfrum_edit::{AnnotBorder, AnnotBorderStyle};
+///
+/// let border = AnnotBorder::default();
+/// assert_eq!(border.width, 2.0);
+/// assert_eq!(border.style, AnnotBorderStyle::Solid);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnnotBorder {
+    /// Border width (`/W`) in points.
+    pub width: f32,
+    /// Border style (`/S`).
+    pub style: AnnotBorderStyle,
+}
+
+impl Default for AnnotBorder {
+    fn default() -> Self {
+        Self {
+            width: 2.0,
+            style: AnnotBorderStyle::Solid,
+        }
+    }
+}
+
+impl AnnotBorder {
+    /// A solid border of the given width.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotBorder, AnnotBorderStyle};
+    ///
+    /// let border = AnnotBorder::solid(1.5);
+    /// assert_eq!(border.width, 1.5);
+    /// assert_eq!(border.style, AnnotBorderStyle::Solid);
+    /// ```
+    #[must_use]
+    pub fn solid(width: f32) -> Self {
+        Self {
+            width,
+            style: AnnotBorderStyle::Solid,
+        }
+    }
+
+    /// Sets the style, keeping the current width.
+    #[must_use]
+    pub fn with_style(mut self, style: AnnotBorderStyle) -> Self {
+        self.style = style;
+        self
+    }
+}
+
 /// What kind of annotation to create and attach to a page.
 ///
 /// This is the **write** payload for [`add_annotation`]. The ISO subtype
@@ -149,7 +241,8 @@ pub enum AnnotSpec {
     },
     /// A square / area annotation (`/Subtype /Square`).
     ///
-    /// Writes `/BS << /Type /Border /W 2 /S /S >>`.
+    /// Writes `/BS` with [`AnnotBorder`] (default width 2, solid) and
+    /// `/Type /Border`.
     Square {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -157,6 +250,8 @@ pub enum AnnotSpec {
         color: Color,
         /// Optional `/Contents`.
         contents: Option<String>,
+        /// Border style dictionary (`/BS`).
+        border: AnnotBorder,
     },
     /// An underline over one or more text runs (`/Subtype /Underline`).
     ///
@@ -203,7 +298,8 @@ pub enum AnnotSpec {
     /// Freehand ink strokes (`/Subtype /Ink`).
     ///
     /// Writes `/InkList` as an array of strokes (each a flat array of x,y
-    /// pairs) and `/BS << /W 2 /S /S >>`.
+    /// pairs) and `/BS` from [`AnnotBorder`] (no `/Type /Border`, matching
+    /// prior Ink writes).
     Ink {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -213,6 +309,8 @@ pub enum AnnotSpec {
         strokes: Vec<Vec<Point>>,
         /// Optional `/Contents`.
         contents: Option<String>,
+        /// Border style dictionary (`/BS`).
+        border: AnnotBorder,
     },
     /// A free-text annotation (`/Subtype /FreeText`).
     ///
@@ -304,16 +402,21 @@ impl AnnotSpec {
     }
 
     /// A square / area annotation with no contents.
+    ///
+    /// Uses a solid `/BS` of width 2. Override with [`AnnotSpec::with_border`].
     #[must_use]
     pub fn square(rect: Rect, color: Color) -> Self {
         Self::Square {
             rect,
             color,
             contents: None,
+            border: AnnotBorder::default(),
         }
     }
 
     /// Freehand ink with the given strokes and no contents.
+    ///
+    /// Uses a solid `/BS` of width 2. Override with [`AnnotSpec::with_border`].
     #[must_use]
     pub fn ink(rect: Rect, color: Color, strokes: Vec<Vec<Point>>) -> Self {
         Self::Ink {
@@ -321,6 +424,7 @@ impl AnnotSpec {
             color,
             strokes,
             contents: None,
+            border: AnnotBorder::default(),
         }
     }
 
@@ -387,10 +491,16 @@ impl AnnotSpec {
                 icon,
                 open,
             },
-            Self::Square { rect, color, .. } => Self::Square {
+            Self::Square {
+                rect,
+                color,
+                border,
+                ..
+            } => Self::Square {
                 rect,
                 color,
                 contents,
+                border,
             },
             Self::Underline {
                 rect, color, quads, ..
@@ -420,14 +530,69 @@ impl AnnotSpec {
                 rect,
                 color,
                 strokes,
+                border,
                 ..
             } => Self::Ink {
                 rect,
                 color,
                 strokes,
                 contents,
+                border,
             },
             other @ Self::FreeText { .. } => other,
+        }
+    }
+
+    /// Sets `/BS` on [`AnnotSpec::Square`] or [`AnnotSpec::Ink`].
+    ///
+    /// Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotBorder, AnnotBorderStyle, AnnotSpec};
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255))
+    ///     .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dashed));
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Square {
+    ///         border: AnnotBorder {
+    ///             width,
+    ///             style: AnnotBorderStyle::Dashed,
+    ///         },
+    ///         ..
+    ///     } if (width - 1.0).abs() < f32::EPSILON
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn with_border(self, border: AnnotBorder) -> Self {
+        match self {
+            Self::Square {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Square {
+                rect,
+                color,
+                contents,
+                border,
+            },
+            Self::Ink {
+                rect,
+                color,
+                strokes,
+                contents,
+                ..
+            } => Self::Ink {
+                rect,
+                color,
+                strokes,
+                contents,
+                border,
+            },
+            other => other,
         }
     }
 
@@ -819,9 +984,10 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             rect,
             color,
             contents,
+            border,
         } => {
             let mut dict = common(Subtype::Square, rect, color, page_ref);
-            dict.insert(names::BS.clone(), Object::Dict(border_style(true)));
+            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, true)));
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -830,10 +996,11 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             strokes,
             contents,
+            border,
         } => {
             let mut dict = common(Subtype::Ink, rect, color, page_ref);
             dict.insert(names::INK_LIST.clone(), Object::Array(ink_list(&strokes)));
-            dict.insert(names::BS.clone(), Object::Dict(border_style(false)));
+            dict.insert(names::BS.clone(), Object::Dict(border_style_dict(border, false)));
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -992,14 +1159,19 @@ fn ink_list(strokes: &[Vec<Point>]) -> Array {
     out
 }
 
-/// Border style: Square gets `/Type /Border`; Ink does not (matching Rotero).
-fn border_style(with_type: bool) -> Dict {
+/// Border style dict from [`AnnotBorder`].
+///
+/// Square gets `/Type /Border`; Ink does not (matching Rotero).
+fn border_style_dict(border: AnnotBorder, with_type: bool) -> Dict {
     let mut bs = Dict::new();
     if with_type {
         bs.insert(names::TYPE.clone(), Object::Name(names::BORDER.clone()));
     }
-    bs.insert(names::W.clone(), Object::Real(2.0));
-    bs.insert(names::S.clone(), Object::Name(names::S.clone()));
+    bs.insert(names::W.clone(), Object::Real(border.width));
+    bs.insert(
+        names::S.clone(),
+        Object::Name(Name::from(border.style.as_bytes())),
+    );
     bs
 }
 

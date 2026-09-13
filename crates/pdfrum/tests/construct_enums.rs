@@ -73,6 +73,11 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "FontEncoding",
     ),
     ("pdfrum-edit.txt", "pdfrum_edit::PixelFormat", "PixelFormat"),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::AnnotBorderStyle",
+        "AnnotBorderStyle",
+    ),
     ("pdfrum-form.txt", "pdfrum_form::Button", "Button"),
     ("pdfrum-form.txt", "pdfrum_form::Event", "Event"),
     ("pdfrum-form.txt", "pdfrum_form::Key", "Key"),
@@ -566,6 +571,13 @@ fn construct_edit_variants() -> usize {
     let _ = PixelFormat::Mask1;
     n += 5;
 
+    let _ = AnnotBorderStyle::Solid;
+    let _ = AnnotBorderStyle::Dashed;
+    let _ = AnnotBorderStyle::Beveled;
+    let _ = AnnotBorderStyle::Inset;
+    let _ = AnnotBorderStyle::Underline;
+    n += 5;
+
     n
 }
 
@@ -869,7 +881,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 20 + 2 + 5);
+    assert_eq!(construct_edit_variants(), 20 + 2 + 5 + 5);
 }
 
 #[test]
@@ -942,13 +954,14 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
     // 324 -> 357 -> 358 (`SaveError::EmptyQuadPoints` from AnnotSpec markup).
+    // 358 -> 363 (`AnnotBorderStyle` five variants).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 358, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 41, "default-feature enum count");
+    assert_eq!(constructed, 363, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 42, "default-feature enum count");
 }
 
 #[test]
