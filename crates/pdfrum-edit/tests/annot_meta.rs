@@ -132,10 +132,7 @@ fn text_icon_and_open_round_trip() {
         .next()
         .expect("annot");
     assert_eq!(
-        annot
-            .dict()
-            .name(&Name::from("Name"))
-            .map(Name::as_bytes),
+        annot.dict().name(&Name::from("Name")).map(Name::as_bytes),
         Some(&b"Key"[..])
     );
     assert_eq!(annot.dict().bool(&Name::from("Open")), Some(true));
