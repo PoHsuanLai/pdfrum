@@ -590,27 +590,47 @@ fn fill_default_black<R: Resolve>(dict: &Dict, r: &R) -> String {
     )
 }
 
-/// A `Link`: a stroked rectangle over `/Rect` (border / highlight chrome).
+/// A `Link`: border chrome over `/Rect`.
 ///
-/// Uses `/C` when present, otherwise a muted blue so the hit target is visible.
+/// Honours `/BS` (and `/Border`) via [`border::border_path`] — solid, dashed,
+/// underline, bevel, inset — with `/C` when present, otherwise a muted blue.
+/// A missing border still draws at least a 1 pt border so the hit target is
+/// visible.
 #[must_use]
 pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     let mut out = Content::new();
     out.raw(GS_SPACE);
-    let stroke = color_with_default(
-        dict.array(names::C, r).as_ref(),
-        Color::Rgb(0.0, 0.0, 1.0),
-        PaintOp::Stroke,
-    );
-    out.raw(&stroke);
-    let width = border::border_width(dict, r).max(1.0);
-    out.num(width, Float::G6);
-    out.raw("w ");
-    out.raw(&border::dash_pattern_string(dict, r));
-    let mut rect = geom::normalize(dict.rect(obj_names::RECT, r));
-    rect = geom::deflate(rect, width / 2.0, width / 2.0);
-    out.rect(rect, Float::G6);
-    out.raw("re s\n");
+    let rect = geom::normalize(dict.rect(obj_names::RECT, r));
+    let bs = dict.dict(names::BS, r);
+    let mut info = border::border_style_info(bs.as_ref(), r);
+    if bs.is_none() && dict.array(obj_names::BORDER, r).is_none() {
+        info.width = info.width.max(1.0);
+    }
+    // `/C` as RGB when present; else muted blue.
+    let color = match dict.array(names::C, r) {
+        Some(arr) if arr.len() >= 3 => Color::Rgb(
+            arr.number_at_or_zero(0),
+            arr.number_at_or_zero(1),
+            arr.number_at_or_zero(2),
+        ),
+        _ => Color::Rgb(0.0, 0.0, 1.0),
+    };
+    let path = border::border_path(rect, info, color);
+    if path.is_empty() {
+        let stroke = color_op(color, PaintOp::Stroke);
+        out.raw(&stroke);
+        let width = info.width.max(1.0);
+        out.num(width, Float::G6);
+        out.raw("w ");
+        let inset = geom::deflate(rect, width / 2.0, width / 2.0);
+        out.rect(inset, Float::G6);
+        out.raw(
+            "re s
+",
+        );
+    } else {
+        out.raw(&path);
+    }
     Generated::plain(out)
 }
 

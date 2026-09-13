@@ -8,6 +8,7 @@ pub use pdfrum::AnnotFlags
 pub use pdfrum::AnnotGoToView
 pub use pdfrum::AnnotId
 pub use pdfrum::AnnotLinkAction
+pub use pdfrum::AnnotLinkHighlight
 pub use pdfrum::AnnotMeta
 pub use pdfrum::AnnotSpec
 pub use pdfrum::AnnotWrite
