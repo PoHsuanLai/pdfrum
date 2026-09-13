@@ -227,3 +227,153 @@ fn named_dest_resolves_after_reopen() {
         Some(b"Fit".to_vec())
     );
 }
+
+#[test]
+fn named_existing_does_not_upsert_names_tree() {
+    use pdfrum_common::{Diagnostics, Limits};
+    use pdfrum_doc::nav::lookup_named_dest;
+
+    let doc = hello_2();
+    let target = page_ref(&doc, 1);
+    let mut edit = doc.edit();
+    edit.set_named_destination("OnlyOnce", target, AnnotGoToView::Fit)
+        .expect("register");
+    edit.add_annotation(
+        0,
+        AnnotSpec::link_named_existing(Rect::new(10.0, 80.0, 80.0, 94.0), "OnlyOnce"),
+    )
+    .expect("named existing");
+
+    let saved = save_reopen(&edit);
+    let catalog = saved.parser().catalog().expect("catalog");
+    let mut diags = Diagnostics::default();
+    let found = lookup_named_dest(
+        &catalog,
+        b"OnlyOnce",
+        saved.parser(),
+        &Limits::default(),
+        &mut diags,
+    );
+    assert!(found.is_some(), "existing name still resolves");
+
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("annot");
+    let action = annot
+        .dict()
+        .dict(&Name::from("A"), saved.parser())
+        .expect("A");
+    let name = action.string(&Name::from("D")).expect("D string");
+    assert!(
+        String::from_utf8_lossy(name.as_bytes()).contains("OnlyOnce"),
+        "D is the name"
+    );
+}
+
+#[test]
+fn named_dest_preserves_kids_tree() {
+    use pdfrum::Resolve;
+    use pdfrum_object::{Array, Dict, Object, PdfString, encode_text};
+    use pdfrum_parser::{LoadOptions, load};
+
+    let doc = hello_2();
+    let target = page_ref(&doc, 1);
+    let mut edit = doc.edit();
+    edit.set_named_destination("Alpha", target, AnnotGoToView::Fit)
+        .expect("alpha");
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &SaveOptions::default())
+        .expect("save");
+
+    let base = load(std::sync::Arc::<[u8]>::from(bytes), &LoadOptions::default()).expect("load");
+    let mut edit = pdfrum_edit::EditDoc::new(&base);
+    let root = edit
+        .base()
+        .trailer()
+        .reference(&Name::from("Root"))
+        .expect("Root");
+    let catalog = Resolve::fetch(&edit, root).expect("catalog");
+    let catalog = catalog.as_dict().expect("dict").clone();
+    let names_ref = catalog
+        .raw(&Name::from("Names"))
+        .and_then(|o| o.as_ref_id())
+        .expect("Names ref");
+    let names_dict = Resolve::fetch(&edit, names_ref)
+        .expect("names")
+        .as_dict()
+        .expect("d")
+        .clone();
+    let dests_ref = names_dict
+        .raw(&Name::from("Dests"))
+        .and_then(|o| o.as_ref_id())
+        .expect("Dests ref");
+    let dests = Resolve::fetch(&edit, dests_ref)
+        .expect("dests")
+        .as_dict()
+        .expect("d")
+        .clone();
+    let names_arr = dests.array(&Name::from("Names"), &edit).expect("Names");
+    let mut leaf = Dict::new();
+    leaf.insert(Name::from("Names"), Object::Array(names_arr));
+    leaf.insert(
+        Name::from("Limits"),
+        Object::Array(Array::of([
+            Object::Str(PdfString::literal(encode_text("Alpha"))),
+            Object::Str(PdfString::literal(encode_text("Alpha"))),
+        ])),
+    );
+    let leaf_ref = edit.add(Object::Dict(leaf));
+    let mut tree = Dict::new();
+    tree.insert(
+        Name::from("Kids"),
+        Object::Array(Array::of([Object::Ref(leaf_ref)])),
+    );
+    tree.insert(
+        Name::from("Limits"),
+        Object::Array(Array::of([
+            Object::Str(PdfString::literal(encode_text("Alpha"))),
+            Object::Str(PdfString::literal(encode_text("Alpha"))),
+        ])),
+    );
+    edit.replace(dests_ref, Object::Dict(tree));
+
+    pdfrum_edit::set_named_destination(&mut edit, "Beta", target, AnnotGoToView::Fit)
+        .expect("beta");
+
+    let tree = Resolve::fetch(&edit, dests_ref)
+        .expect("dests")
+        .as_dict()
+        .expect("d")
+        .clone();
+    assert!(
+        tree.array(&Name::from("Kids"), &edit).is_some(),
+        "Kids must be preserved"
+    );
+    assert!(
+        tree.array(&Name::from("Names"), &edit).is_none(),
+        "root must not be flattened to Names"
+    );
+
+    let mut out = Vec::new();
+    pdfrum_edit::save(&edit, &pdfrum_edit::SaveOptions::default(), &mut out).expect("save");
+    let saved = Document::from_bytes(std::sync::Arc::from(out)).expect("reopen");
+    let catalog = saved.parser().catalog().expect("catalog");
+    let mut diags = pdfrum_common::Diagnostics::default();
+    for name in [b"Alpha".as_slice(), b"Beta".as_slice()] {
+        assert!(
+            pdfrum_doc::nav::lookup_named_dest(
+                &catalog,
+                name,
+                saved.parser(),
+                &pdfrum_common::Limits::default(),
+                &mut diags,
+            )
+            .is_some(),
+            "resolves {}",
+            String::from_utf8_lossy(name)
+        );
+    }
+}
