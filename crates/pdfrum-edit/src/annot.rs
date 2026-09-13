@@ -464,6 +464,7 @@ pub enum AnnotSpec {
     /// A highlight over one or more text runs (`/Subtype /Highlight`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Highlight {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -478,6 +479,7 @@ pub enum AnnotSpec {
     /// A sticky-note text annotation (`/Subtype /Text`).
     ///
     /// Defaults to `/Name /Comment` and `/Open false` (see [`AnnotSpec::text`]).
+    #[non_exhaustive]
     Text {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -494,6 +496,7 @@ pub enum AnnotSpec {
     ///
     /// Writes `/BS` with [`AnnotBorder`] (default width 2, solid) and
     /// `/Type /Border`.
+    #[non_exhaustive]
     Square {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -507,6 +510,7 @@ pub enum AnnotSpec {
     /// An underline over one or more text runs (`/Subtype /Underline`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Underline {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -521,6 +525,7 @@ pub enum AnnotSpec {
     /// A strike-out over one or more text runs (`/Subtype /StrikeOut`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     StrikeOut {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -535,6 +540,7 @@ pub enum AnnotSpec {
     /// A squiggly underline over one or more text runs (`/Subtype /Squiggly`).
     ///
     /// `/QuadPoints` is required and must hold at least one quadrilateral.
+    #[non_exhaustive]
     Squiggly {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -551,6 +557,7 @@ pub enum AnnotSpec {
     /// Writes `/InkList` as an array of strokes (each a flat array of x,y
     /// pairs) and `/BS` from [`AnnotBorder`] (no `/Type /Border`, matching
     /// prior Ink writes).
+    #[non_exhaustive]
     Ink {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -567,6 +574,7 @@ pub enum AnnotSpec {
     ///
     /// `/Contents` and `/DA` are both required. See [`DEFAULT_DA`] for a
     /// common appearance string.
+    #[non_exhaustive]
     FreeText {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -581,6 +589,7 @@ pub enum AnnotSpec {
     ///
     /// Writes `/BS` like [`AnnotSpec::Square`] (includes `/Type /Border`).
     /// Appearance is generated when the circle AP pipeline is available.
+    #[non_exhaustive]
     Circle {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -595,6 +604,7 @@ pub enum AnnotSpec {
     ///
     /// Appearance strokes between the endpoints using `/BS` width and `/C`,
     /// with optional `/LE` endings and `/IC` interior fill for closed endings.
+    #[non_exhaustive]
     Line {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -619,6 +629,7 @@ pub enum AnnotSpec {
     /// Appearance honours `/BS` / `/C`. `/H` is written for viewer click
     /// feedback only — see [`AnnotLinkHighlight`].
     /// See [`AnnotLinkAction`] for URI, `GoTo`, and named-destination forms.
+    #[non_exhaustive]
     Link {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -636,6 +647,7 @@ pub enum AnnotSpec {
     /// A caret / insertion-point annotation (`/Subtype /Caret`).
     ///
     /// Appearance draws a simple caret mark inside `/Rect`.
+    #[non_exhaustive]
     Caret {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -857,7 +869,13 @@ impl AnnotSpec {
                 line_endings: Some((start, end)),
                 interior,
             },
-            other => other,
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_line_endings applies to Line, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -884,7 +902,13 @@ impl AnnotSpec {
                 line_endings,
                 interior: Some(color),
             },
-            other => other,
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_interior applies to Line, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -1069,6 +1093,84 @@ impl AnnotSpec {
             rect,
             color,
             contents: None,
+        }
+    }
+
+    /// Replaces the `/QuadPoints` of a text-markup annotation
+    /// ([`AnnotSpec::Highlight`], [`AnnotSpec::Underline`],
+    /// [`AnnotSpec::StrikeOut`], [`AnnotSpec::Squiggly`]).
+    ///
+    /// Quads are written in tl/tr/bl/br order. Writing a spec whose quads are
+    /// empty fails with [`crate::Error::EmptyQuadPoints`]; pair this with
+    /// [`pdfrum_text::rects_loose`] to mark up a selection on the em-box.
+    ///
+    /// Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let rect = Rect::new(0.0, 0.0, 10.0, 4.0);
+    /// let spec = AnnotSpec::highlight(rect, Color::from_rgb8(255, 255, 0))
+    ///     .with_quads([Rect::new(0.0, 0.0, 5.0, 4.0).into()]);
+    /// assert!(matches!(spec, AnnotSpec::Highlight { ref quads, .. } if quads.len() == 1));
+    /// ```
+    #[must_use]
+    pub fn with_quads(self, quads: impl IntoIterator<Item = Quad>) -> Self {
+        let quads: Vec<Quad> = quads.into_iter().collect();
+        match self {
+            Self::Highlight {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Highlight {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Underline {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Underline {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::StrikeOut {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::StrikeOut {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            Self::Squiggly {
+                rect,
+                color,
+                contents,
+                ..
+            } => Self::Squiggly {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_quads applies to Highlight, Underline, StrikeOut, or Squiggly, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -1317,7 +1419,13 @@ impl AnnotSpec {
                 border,
                 highlight,
             },
-            other => other,
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_border applies to Square, Circle, Ink, or Link, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -1356,7 +1464,10 @@ impl AnnotSpec {
                 icon,
                 open,
             },
-            other => other,
+            other => {
+                debug_assert!(false, "AnnotSpec::with_icon applies to Text, not {other:?}");
+                other
+            }
         }
     }
 
@@ -1388,7 +1499,10 @@ impl AnnotSpec {
                 icon,
                 open,
             },
-            other => other,
+            other => {
+                debug_assert!(false, "AnnotSpec::with_open applies to Text, not {other:?}");
+                other
+            }
         }
     }
 
@@ -1411,7 +1525,13 @@ impl AnnotSpec {
                 border,
                 highlight,
             },
-            other => other,
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_color applies to Link, not {other:?}"
+                );
+                other
+            }
         }
     }
 
@@ -1434,7 +1554,13 @@ impl AnnotSpec {
                 border,
                 highlight,
             },
-            other => other,
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_highlight applies to Link, not {other:?}"
+                );
+                other
+            }
         }
     }
 
