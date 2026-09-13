@@ -1062,6 +1062,105 @@ pub fn add_annotation(
     Ok(annot_ref)
 }
 
+/// Replaces an existing annotation object in place, regenerating `/AP` when
+/// the subtype has an appearance generator.
+///
+/// The object number is preserved. `annot` must already appear in `page`'s
+/// `/Annots`.
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let rect = Rect::new(10.0, 10.0, 40.0, 40.0);
+/// let r = add_annotation(&mut edit, 0, AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)))?;
+/// update_annotation(
+///     &mut edit,
+///     0,
+///     r,
+///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("updated"),
+/// )?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::PageIndexOutOfRange`] / [`Error::InlinePage`] for a bad page
+/// - [`Error::AnnotNotOnPage`] when `annot` is not listed on that page
+/// - [`Error::EmptyQuadPoints`] for empty markup quads
+pub fn update_annotation(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    annot: ObjRef,
+    write: impl Into<AnnotWrite>,
+) -> Result<()> {
+    let AnnotWrite { spec, meta } = write.into();
+    let page = page.into();
+    let Some((page_ref, page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    if !page_lists_annot(edit, &page_dict, annot) {
+        return Err(Error::AnnotNotOnPage(annot, page));
+    }
+    let mut dict = build_dict(spec, page_ref)?;
+    apply_meta(&mut dict, &meta);
+    attach_appearance(edit, &mut dict);
+    edit.replace(annot, Object::Dict(dict));
+    Ok(())
+}
+
+/// Removes `annot` from `page`'s `/Annots` and drops the annotation object.
+///
+/// Returns `Ok(true)` when it was listed and removed, `Ok(false)` when it was
+/// not on that page.
+///
+/// ```
+/// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation};
+/// use pdfrum_edit::EditDoc;
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let r = add_annotation(
+///     &mut edit,
+///     0,
+///     AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
+/// )?;
+/// assert!(delete_annotation(&mut edit, 0, r)?);
+/// assert!(!delete_annotation(&mut edit, 0, r)?);
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// [`Error::PageIndexOutOfRange`] or [`Error::InlinePage`] for a bad page.
+pub fn delete_annotation(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    annot: ObjRef,
+) -> Result<bool> {
+    let page = page.into();
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    if !detach_from_page(edit, page_ref, &mut page_dict, annot) {
+        return Ok(false);
+    }
+    edit.remove(annot);
+    Ok(true)
+}
+
 fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
     if let Some(author) = meta.author.as_deref().filter(|s| !s.is_empty()) {
         dict.insert(names::T.clone(), Object::Str(pdf_string(author)));
@@ -1341,6 +1440,74 @@ fn common(subtype: Subtype, rect: Rect, color: Color, page_ref: ObjRef) -> Dict 
     dict.insert(names::F.clone(), Object::Int(FLAG_PRINT));
     dict.insert(names::P.clone(), Object::Ref(page_ref));
     dict
+}
+
+/// Whether `annot` appears (as a direct or indirect ref) in the page's `/Annots`.
+fn page_lists_annot(edit: &EditDoc<'_>, page_dict: &Dict, annot: ObjRef) -> bool {
+    match page_dict.raw(names::ANNOTS) {
+        Some(Object::Ref(array_ref)) => edit
+            .fetch(*array_ref)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_array)
+            .is_some_and(|array| array_contains_ref(array, annot)),
+        Some(Object::Array(array)) => array_contains_ref(array, annot),
+        _ => false,
+    }
+}
+
+fn array_contains_ref(array: &Array, annot: ObjRef) -> bool {
+    array
+        .iter()
+        .any(|obj| matches!(obj, Object::Ref(r) if *r == annot))
+}
+
+/// Removes `annot_ref` from `/Annots`. Returns whether it was present.
+fn detach_from_page(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    annot_ref: ObjRef,
+) -> bool {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let Some(array) = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+            else {
+                return false;
+            };
+            let filtered = filter_annot_ref(&array, annot_ref);
+            if filtered.len() == array.len() {
+                return false;
+            }
+            edit.replace(array_ref, Object::Array(filtered));
+            true
+        }
+        Some(Object::Array(array)) => {
+            let filtered = filter_annot_ref(&array, annot_ref);
+            if filtered.len() == array.len() {
+                return false;
+            }
+            page_dict.insert(annots_key, Object::Array(filtered));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+            true
+        }
+        _ => false,
+    }
+}
+
+fn filter_annot_ref(array: &Array, annot_ref: ObjRef) -> Array {
+    Array::of(
+        array
+            .iter()
+            .filter(|obj| !matches!(obj, Object::Ref(r) if *r == annot_ref))
+            .cloned(),
+    )
 }
 
 /// Appends `annot_ref` to the page's `/Annots`, creating or extending as

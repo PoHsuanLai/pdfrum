@@ -549,6 +549,7 @@ fn construct_edit_variants() -> usize {
     let _ = SaveError::UnrecognisedImageData;
     let _ = SaveError::EmptyImage;
     let _ = SaveError::EmptyQuadPoints;
+    let _ = SaveError::AnnotNotOnPage(ObjRef::new(1, 0), PageIndex::from(0u32));
     let _ = SaveError::ImageDataLength {
         expected: 0,
         found: 0,
@@ -558,7 +559,7 @@ fn construct_edit_variants() -> usize {
         offset: 0,
     });
     let _ = SaveError::InlinePage(PageIndex::from(0u32));
-    n += 20;
+    n += 21;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -881,7 +882,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 20 + 2 + 5 + 5);
+    assert_eq!(construct_edit_variants(), 21 + 2 + 5 + 5);
 }
 
 #[test]
@@ -955,12 +956,13 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     );
     // 324 -> 357 -> 358 (`SaveError::EmptyQuadPoints` from AnnotSpec markup).
     // 358 -> 363 (`AnnotBorderStyle` five variants).
+    // 363 -> 364 (`SaveError::AnnotNotOnPage`).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 363, "default-feature variant count");
+    assert_eq!(constructed, 364, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 42, "default-feature enum count");
 }
 
