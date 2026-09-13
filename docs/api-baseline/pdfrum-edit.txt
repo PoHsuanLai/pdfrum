@@ -50,6 +50,7 @@ pub fn pdfrum_edit::AnnotSpec::text(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::underline(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
@@ -155,10 +156,12 @@ pub type pdfrum_edit::StampPosition::Err = pdfrum_edit::UnknownStampPosition
 pub fn pdfrum_edit::StampPosition::from_str(&str) -> core::result::Result<pdfrum_edit::StampPosition, pdfrum_edit::UnknownStampPosition>
 pub struct pdfrum_edit::AnnotMeta
 pub pdfrum_edit::AnnotMeta::author: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotMeta::flags: core::option::Option<pdfrum_doc::annot::AnnotFlags>
 pub pdfrum_edit::AnnotMeta::modified: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotMeta::name: core::option::Option<alloc::string::String>
 impl pdfrum_edit::AnnotMeta
 pub fn pdfrum_edit::AnnotMeta::with_author(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotMeta::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> Self
 pub fn pdfrum_edit::AnnotMeta::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotMeta::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub struct pdfrum_edit::AnnotWrite
@@ -167,6 +170,7 @@ pub pdfrum_edit::AnnotWrite::spec: pdfrum_edit::AnnotSpec
 impl pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotWrite::with_author(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_meta(self, pdfrum_edit::AnnotMeta) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
