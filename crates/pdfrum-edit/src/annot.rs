@@ -1102,7 +1102,7 @@ impl AnnotSpec {
     ///
     /// Quads are written in tl/tr/bl/br order. Writing a spec whose quads are
     /// empty fails with [`crate::Error::EmptyQuadPoints`]; pair this with
-    /// [`pdfrum_text::rects_loose`] to mark up a selection on the em-box.
+    /// `pdfrum_text::rects_loose` to mark up a selection on the em-box.
     ///
     /// Other variants are unchanged.
     ///
