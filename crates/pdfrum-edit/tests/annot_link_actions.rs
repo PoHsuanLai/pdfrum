@@ -299,7 +299,7 @@ fn named_dest_preserves_kids_tree() {
     let catalog = catalog.as_dict().expect("dict").clone();
     let names_ref = catalog
         .raw(&Name::from("Names"))
-        .and_then(|o| o.as_ref_id())
+        .and_then(pdfrum_object::Object::as_ref_id)
         .expect("Names ref");
     let names_dict = Resolve::fetch(&edit, names_ref)
         .expect("names")
@@ -308,7 +308,7 @@ fn named_dest_preserves_kids_tree() {
         .clone();
     let dests_ref = names_dict
         .raw(&Name::from("Dests"))
-        .and_then(|o| o.as_ref_id())
+        .and_then(pdfrum_object::Object::as_ref_id)
         .expect("Dests ref");
     let dests = Resolve::fetch(&edit, dests_ref)
         .expect("dests")

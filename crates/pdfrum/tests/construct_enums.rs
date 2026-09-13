@@ -549,6 +549,10 @@ fn construct_doc_variants() -> usize {
     n
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one construction per edit-crate public enum variant"
+)]
 fn construct_edit_variants() -> usize {
     let mut n = 0;
 
