@@ -1,4 +1,4 @@
-//! The nine per-subtype appearance generators that draw shapes rather than
+//! The per-subtype appearance generators that draw shapes rather than
 //! text.
 //!
 //! Every one of these writes its coordinates through the **six-significant-
@@ -334,6 +334,336 @@ pub fn text<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     }
 }
 
+/// A `Line`: stroke between `/L` endpoints with the annotation's border width
+/// and `/C` colour, plus `/LE` ending decorations when present.
+///
+/// Declines when `/L` is missing or shorter than four numbers.
+#[must_use]
+pub fn line<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
+    let endpoints = dict.array(names::L, r)?;
+    if endpoints.len() < 4 {
+        return None;
+    }
+    let x1 = endpoints.number_at(0)?;
+    let y1 = endpoints.number_at(1)?;
+    let x2 = endpoints.number_at(2)?;
+    let y2 = endpoints.number_at(3)?;
+
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    out.raw(&stroke_default_black(dict, r));
+    // `/IC` paints filled endings; absent/empty means stroke-only chrome.
+    let fill = line_ending_fill(dict, r);
+    let width = border::border_width(dict, r);
+    if width <= 0.0 {
+        return None;
+    }
+    out.num(width, Float::G6);
+    out.raw("w ");
+    out.raw(&border::dash_pattern_string(dict, r));
+    out.point(x1, y1, Float::G6);
+    out.raw("m\n");
+    out.point(x2, y2, Float::G6);
+    out.raw("l\n");
+    out.raw("S\n");
+
+    let (start_style, end_style) = line_ending_styles(dict, r);
+    // Ending length tracks stroke width (3×), with no separate absolute floor.
+    let size = width * 3.0;
+    draw_line_ending(&mut out, x1, y1, x2, y2, true, start_style, size, &fill);
+    draw_line_ending(&mut out, x1, y1, x2, y2, false, end_style, size, &fill);
+
+    let pad = (width / 2.0).max(size);
+    let rect = dict.rect(obj_names::RECT, r);
+    Some(Generated {
+        rect_override: Some(geom::inflate(rect, pad, pad)),
+        ..Generated::plain(out)
+    })
+}
+
+/// `/LE` start and end style spellings; missing or short `/LE` is `(None, None)`.
+fn line_ending_styles<R: Resolve>(dict: &Dict, r: &R) -> (LineEnd, LineEnd) {
+    let Some(le) = dict.array(names::LE, r) else {
+        return (LineEnd::None, LineEnd::None);
+    };
+    let start = le
+        .name_at(0)
+        .map_or(LineEnd::None, |n| LineEnd::from_bytes(n.as_bytes()));
+    let end = le
+        .name_at(1)
+        .map_or(LineEnd::None, |n| LineEnd::from_bytes(n.as_bytes()));
+    (start, end)
+}
+
+/// κ for cubic circle approximation.
+const CIRCLE_K: f32 = 0.552_284_8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineEnd {
+    None,
+    Square,
+    Circle,
+    Diamond,
+    OpenArrow,
+    ClosedArrow,
+    Butt,
+    ROpenArrow,
+    RClosedArrow,
+    Slash,
+}
+
+impl LineEnd {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        match bytes {
+            b"Square" => Self::Square,
+            b"Circle" => Self::Circle,
+            b"Diamond" => Self::Diamond,
+            b"OpenArrow" => Self::OpenArrow,
+            b"ClosedArrow" => Self::ClosedArrow,
+            b"Butt" => Self::Butt,
+            b"ROpenArrow" => Self::ROpenArrow,
+            b"RClosedArrow" => Self::RClosedArrow,
+            b"Slash" => Self::Slash,
+            _ => Self::None,
+        }
+    }
+}
+
+/// Draw one ending at the start (`at_start`) or end of the segment.
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "geometry + style + paint for one ending"
+)]
+fn draw_line_ending(
+    out: &mut Content,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    at_start: bool,
+    style: LineEnd,
+    size: f32,
+    fill: &str,
+) {
+    if matches!(style, LineEnd::None) {
+        return;
+    }
+    let (px, py) = if at_start { (x1, y1) } else { (x2, y2) };
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return;
+    }
+    // Outward unit along the line at this endpoint.
+    let (mut ux, mut uy) = (dx / len, dy / len);
+    if at_start {
+        ux = -ux;
+        uy = -uy;
+    }
+    // Reversed styles point inward.
+    if matches!(style, LineEnd::ROpenArrow | LineEnd::RClosedArrow) {
+        ux = -ux;
+        uy = -uy;
+    }
+    let (nx, ny) = (-uy, ux);
+    let half = size * 0.5;
+
+    match style {
+        LineEnd::None => {}
+        LineEnd::OpenArrow | LineEnd::ROpenArrow => {
+            let bx = px - size * ux;
+            let by = py - size * uy;
+            out.point(bx + half * nx, by + half * ny, Float::G6);
+            out.raw("m\n");
+            out.point(px, py, Float::G6);
+            out.raw("l\n");
+            out.point(bx - half * nx, by - half * ny, Float::G6);
+            out.raw("l\n");
+            out.raw("S\n");
+        }
+        LineEnd::ClosedArrow | LineEnd::RClosedArrow => {
+            let bx = px - size * ux;
+            let by = py - size * uy;
+            if !fill.is_empty() {
+                out.raw(fill);
+            }
+            out.point(px, py, Float::G6);
+            out.raw("m\n");
+            out.point(bx + half * nx, by + half * ny, Float::G6);
+            out.raw("l\n");
+            out.point(bx - half * nx, by - half * ny, Float::G6);
+            out.raw("l\n");
+            out.raw("b\n");
+        }
+        LineEnd::Square => {
+            let cx = px - half * ux;
+            let cy = py - half * uy;
+            if !fill.is_empty() {
+                out.raw(fill);
+            }
+            let corners = [
+                (cx + half * (-ux + nx), cy + half * (-uy + ny)),
+                (cx + half * (ux + nx), cy + half * (uy + ny)),
+                (cx + half * (ux - nx), cy + half * (uy - ny)),
+                (cx + half * (-ux - nx), cy + half * (-uy - ny)),
+            ];
+            out.point(corners[0].0, corners[0].1, Float::G6);
+            out.raw("m\n");
+            for &(x, y) in &corners[1..] {
+                out.point(x, y, Float::G6);
+                out.raw("l\n");
+            }
+            out.raw("b\n");
+        }
+        LineEnd::Diamond => {
+            if !fill.is_empty() {
+                out.raw(fill);
+            }
+            let tips = [
+                (px + half * ux, py + half * uy),
+                (px + half * nx, py + half * ny),
+                (px - half * ux, py - half * uy),
+                (px - half * nx, py - half * ny),
+            ];
+            out.point(tips[0].0, tips[0].1, Float::G6);
+            out.raw("m\n");
+            for &(x, y) in &tips[1..] {
+                out.point(x, y, Float::G6);
+                out.raw("l\n");
+            }
+            out.raw("b\n");
+        }
+        LineEnd::Circle => {
+            if !fill.is_empty() {
+                out.raw(fill);
+            }
+            // Four-curve unit circle approx scaled to `half`.
+            let (cx, cy, rad) = (px, py, half);
+            out.point(cx + rad, cy, Float::G6);
+            out.raw("m\n");
+            out.point(cx + rad, cy + CIRCLE_K * rad, Float::G6);
+            out.point(cx + CIRCLE_K * rad, cy + rad, Float::G6);
+            out.point(cx, cy + rad, Float::G6);
+            out.raw("c\n");
+            out.point(cx - CIRCLE_K * rad, cy + rad, Float::G6);
+            out.point(cx - rad, cy + CIRCLE_K * rad, Float::G6);
+            out.point(cx - rad, cy, Float::G6);
+            out.raw("c\n");
+            out.point(cx - rad, cy - CIRCLE_K * rad, Float::G6);
+            out.point(cx - CIRCLE_K * rad, cy - rad, Float::G6);
+            out.point(cx, cy - rad, Float::G6);
+            out.raw("c\n");
+            out.point(cx + CIRCLE_K * rad, cy - rad, Float::G6);
+            out.point(cx + rad, cy - CIRCLE_K * rad, Float::G6);
+            out.point(cx + rad, cy, Float::G6);
+            out.raw("c\n");
+            out.raw("b\n");
+        }
+        LineEnd::Butt => {
+            out.point(px + half * nx, py + half * ny, Float::G6);
+            out.raw("m\n");
+            out.point(px - half * nx, py - half * ny, Float::G6);
+            out.raw("l\n");
+            out.raw("S\n");
+        }
+        LineEnd::Slash => {
+            // ~60° slash through the endpoint.
+            let angle = core::f32::consts::FRAC_PI_3;
+            let (sx, sy) = (angle.cos(), angle.sin());
+            let rx = sx * ux - sy * uy;
+            let ry = sy * ux + sx * uy;
+            out.point(px + half * rx, py + half * ry, Float::G6);
+            out.raw("m\n");
+            out.point(px - half * rx, py - half * ry, Float::G6);
+            out.raw("l\n");
+            out.raw("S\n");
+        }
+    }
+}
+
+/// Interior colour for filled line endings (`/IC`).
+///
+/// A present non-empty array fills; missing or empty `/IC` yields no fill so
+/// closed endings stroke only (ISO 32000-1 §12.5.6.7).
+fn line_ending_fill<R: Resolve>(dict: &Dict, r: &R) -> String {
+    match dict.array(names::IC, r) {
+        Some(arr) if !arr.is_empty() => {
+            color_with_default(Some(&arr), Color::Transparent, PaintOp::Fill)
+        }
+        _ => String::new(),
+    }
+}
+
+/// A `Link`: border chrome over `/Rect`.
+///
+/// Honours `/BS` (and `/Border`) via [`border::border_path`] — solid, dashed,
+/// underline, bevel, inset — with `/C` when present, otherwise a muted blue.
+/// A missing border still draws at least a 1 pt border so the hit target is
+/// visible.
+#[must_use]
+pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    let rect = geom::normalize(dict.rect(obj_names::RECT, r));
+    let bs = dict.dict(names::BS, r);
+    let mut info = border::border_style_info(bs.as_ref(), r);
+    if bs.is_none() && dict.array(obj_names::BORDER, r).is_none() {
+        info.width = info.width.max(1.0);
+    }
+    // `/C` as RGB when present; else muted blue.
+    let color = match dict.array(names::C, r) {
+        Some(arr) if arr.len() >= 3 => Color::Rgb(
+            arr.number_at_or_zero(0),
+            arr.number_at_or_zero(1),
+            arr.number_at_or_zero(2),
+        ),
+        _ => Color::Rgb(0.0, 0.0, 1.0),
+    };
+    let path = border::border_path(rect, info, color);
+    if path.is_empty() {
+        let stroke = color_op(color, PaintOp::Stroke);
+        out.raw(&stroke);
+        let width = info.width.max(1.0);
+        out.num(width, Float::G6);
+        out.raw("w ");
+        let inset = geom::deflate(rect, width / 2.0, width / 2.0);
+        out.rect(inset, Float::G6);
+        out.raw(
+            "re s
+",
+        );
+    } else {
+        out.raw(&path);
+    }
+    Generated::plain(out)
+}
+
+/// A `Caret`: a simple inverted-V glyph centered in `/Rect`.
+#[must_use]
+pub fn caret<R: Resolve>(dict: &Dict, r: &R) -> Generated {
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    out.raw(&stroke_default_black(dict, r));
+    let width = border::border_width(dict, r).max(1.0);
+    out.num(width, Float::G6);
+    out.raw("w\n");
+
+    let rect = geom::normalize(dict.rect(obj_names::RECT, r));
+    let (left, bottom, right, top) = corners(rect);
+    let mid_x = (left + right) / 2.0;
+    // Tip near the top, legs toward the bottom corners — a caret mark.
+    out.point(left, bottom, Float::G6);
+    out.raw("m\n");
+    out.point(mid_x, top, Float::G6);
+    out.raw("l\n");
+    out.point(right, bottom, Float::G6);
+    out.raw("l\n");
+    out.raw("S\n");
+    Generated::plain(out)
+}
+
 /// The sticky-note icon: a page outline with a folded corner and three
 /// ruled lines.
 #[must_use]
@@ -441,7 +771,8 @@ fn corners(rect: Rect) -> (f32, f32, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        circle, highlight, ink, square, squiggly, strike_out, text, text_symbol, underline,
+        caret, circle, highlight, ink, line, link, square, squiggly, strike_out, text, text_symbol,
+        underline,
     };
     use crate::geom;
     use pdfrum_common::{DiagKind, Diagnostics};
@@ -673,5 +1004,183 @@ mod tests {
         assert_eq!(got.matches(" m\n").count(), 4);
         assert_eq!(got.matches(" l\n").count(), 10);
         assert!(got.ends_with("B*\n"), "{got}");
+    }
+
+    #[test]
+    fn a_line_strokes_between_its_endpoints() {
+        let annot = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 100.0, 100.0])),
+            ("L", numbers(&[10.0, 10.0, 90.0, 90.0])),
+            (
+                "BS",
+                Object::Dict(Dict::from_pairs([(Name::from("W"), Object::from(2.0_f32))])),
+            ),
+        ]);
+        let got = line(&annot, &NoResolve).expect("line");
+        let s = stream(&got);
+        assert!(s.contains("10 10 m\n"), "{s}");
+        assert!(s.contains("90 90 l\n"), "{s}");
+        assert!(s.ends_with("S\n"), "{s}");
+    }
+
+    #[test]
+    fn a_line_declines_without_endpoints() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 10.0, 10.0]))]);
+        assert!(line(&annot, &NoResolve).is_none());
+    }
+
+    #[test]
+    fn a_link_draws_a_solid_border_donut() {
+        // Default solid border paints an even-odd fill donut (outer − inset)
+        // rather than a stroked rectangle, matching Square/Widget borders.
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
+        let s = stream(&link(&annot, &NoResolve));
+        assert!(s.contains("0 0 1 rg"), "{s}");
+        assert!(s.contains("re f*"), "{s}");
+        assert!(s.contains("0 0 50 12 re"), "{s}");
+        assert!(s.contains("1 1 48 10 re"), "{s}");
+    }
+
+    #[test]
+    fn a_link_with_underline_bs_strokes_the_bottom_edge() {
+        let annot = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 50.0, 12.0])),
+            (
+                "BS",
+                Object::Dict(Dict::from_pairs([
+                    (Name::from("W"), Object::from(1.0_f32)),
+                    (Name::from("S"), Object::Name(Name::from("U"))),
+                ])),
+            ),
+        ]);
+        let s = stream(&link(&annot, &NoResolve));
+        assert!(
+            s.contains("0 0 1 RG") || s.contains("0 0 1 RG\n") || s.contains("0 0 1 RG "),
+            "{s}"
+        );
+        assert!(
+            s.contains(" S\n") || s.ends_with("S\n") || s.contains("S\n"),
+            "{s}"
+        );
+    }
+
+    #[test]
+    fn a_caret_draws_an_inverted_vee() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 10.0, 20.0]))]);
+        let s = stream(&caret(&annot, &NoResolve));
+        assert_eq!(s.matches(" m\n").count(), 1);
+        assert_eq!(s.matches(" l\n").count(), 2);
+        assert!(s.ends_with("S\n"), "{s}");
+    }
+}
+
+#[cfg(test)]
+mod line_ending_tests {
+    use super::line;
+    use crate::names as doc_names;
+    use pdfrum_object::{Array, Dict, Name, NoResolve, Object, names};
+
+    fn line_dict(le: Option<[&str; 2]>) -> Dict {
+        let mut dict = Dict::from_pairs([
+            (
+                names::L.clone(),
+                Object::Array(Array::of([
+                    Object::Real(0.0),
+                    Object::Real(0.0),
+                    Object::Real(100.0),
+                    Object::Real(0.0),
+                ])),
+            ),
+            (
+                names::RECT.clone(),
+                Object::Array(Array::of([
+                    Object::Real(0.0),
+                    Object::Real(-10.0),
+                    Object::Real(100.0),
+                    Object::Real(10.0),
+                ])),
+            ),
+            (
+                names::C.clone(),
+                Object::Array(Array::of([
+                    Object::Real(0.0),
+                    Object::Real(0.0),
+                    Object::Real(0.0),
+                ])),
+            ),
+            (
+                doc_names::BS.clone(),
+                Object::Dict(Dict::from_pairs([(names::W.clone(), Object::Real(2.0))])),
+            ),
+        ]);
+        if let Some([a, b]) = le {
+            dict.insert(
+                doc_names::LE.clone(),
+                Object::Array(Array::of([
+                    Object::Name(Name::from(a)),
+                    Object::Name(Name::from(b)),
+                ])),
+            );
+        }
+        dict
+    }
+
+    #[test]
+    fn line_without_le_is_stroke_only() {
+        let generated = line(&line_dict(None), &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        assert!(s.contains("S\n"), "{s}");
+        assert!(
+            !s.contains("\nb\n") && !s.contains(" b\n"),
+            "no fill close without LE: {s}"
+        );
+    }
+
+    #[test]
+    fn line_draws_closed_arrow_ops() {
+        let generated = line(&line_dict(Some(["None", "ClosedArrow"])), &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        assert!(
+            s.contains('b') || s.contains("b\n"),
+            "closed arrow close: {s}"
+        );
+        assert!(s.matches("m\n").count() >= 2 || s.contains("m\n"), "{s}");
+        // No `/IC` → no fill colour operator before the ending.
+        assert!(!s.contains(" rg") && !s.contains("rg\n"), "no IC fill: {s}");
+    }
+
+    #[test]
+    fn line_closed_arrow_uses_ic_fill() {
+        let mut d = line_dict(Some(["None", "ClosedArrow"]));
+        d.insert(
+            names::IC.clone(),
+            Object::Array(Array::of([
+                Object::Real(1.0),
+                Object::Real(0.0),
+                Object::Real(0.0),
+            ])),
+        );
+        let generated = line(&d, &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        assert!(s.contains("1 0 0 rg") || s.contains("1 0 0 rg\n"), "{s}");
+        assert!(s.contains('b') || s.contains("b\n"), "{s}");
+    }
+
+    #[test]
+    fn line_ending_size_tracks_stroke_width() {
+        // line_dict uses `/BS /W 2` → ending size 6 (3× width), no absolute floor.
+        let generated = line(&line_dict(Some(["OpenArrow", "None"])), &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        // Start tip (0,0); open-arrow wings at x=6.
+        assert!(s.contains("6 -3 m\n") || s.contains("6 -3 m"), "{s}");
+        assert!(s.contains("6 3 l\n") || s.contains("6 3 l"), "{s}");
+    }
+
+    #[test]
+    fn line_draws_open_arrow_stroke() {
+        let generated = line(&line_dict(Some(["OpenArrow", "None"])), &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        // Open arrow adds two extra stroke segments after the main line.
+        assert!(s.matches("S\n").count() >= 2, "open arrow strokes: {s}");
     }
 }
