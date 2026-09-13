@@ -23,6 +23,13 @@ pub pdfrum_edit::AnnotLinkAction::Named::name: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Named::page: pdfrum_object::object::ObjRef
 pub pdfrum_edit::AnnotLinkAction::Named::view: pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotLinkAction::Uri(alloc::string::String)
+#[non_exhaustive] pub enum pdfrum_edit::AnnotLinkHighlight
+pub pdfrum_edit::AnnotLinkHighlight::Invert
+pub pdfrum_edit::AnnotLinkHighlight::None
+pub pdfrum_edit::AnnotLinkHighlight::Outline
+pub pdfrum_edit::AnnotLinkHighlight::Push
+impl pdfrum_edit::AnnotLinkHighlight
+pub const fn pdfrum_edit::AnnotLinkHighlight::as_bytes(self) -> &'static [u8]
 #[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
 pub pdfrum_edit::AnnotSpec::Caret
 pub pdfrum_edit::AnnotSpec::Caret::color: peniko::Color
@@ -59,7 +66,10 @@ pub pdfrum_edit::AnnotSpec::Line::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Line::start: kurbo::point::Point
 pub pdfrum_edit::AnnotSpec::Link
 pub pdfrum_edit::AnnotSpec::Link::action: pdfrum_edit::AnnotLinkAction
+pub pdfrum_edit::AnnotSpec::Link::border: pdfrum_edit::AnnotBorder
+pub pdfrum_edit::AnnotSpec::Link::color: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Link::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Link::highlight: pdfrum_edit::AnnotLinkHighlight
 pub pdfrum_edit::AnnotSpec::Link::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Square
 pub pdfrum_edit::AnnotSpec::Square::border: pdfrum_edit::AnnotBorder
@@ -104,8 +114,10 @@ pub fn pdfrum_edit::AnnotSpec::text(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::underline(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_border(self, pdfrum_edit::AnnotBorder) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_color(self, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_highlight(self, pdfrum_edit::AnnotLinkHighlight) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_icon(self, impl core::convert::Into<pdfrum_object::name::Name>) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_line_endings(self, pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite

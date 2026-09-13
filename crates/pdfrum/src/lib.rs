@@ -124,8 +124,8 @@ pub use pdfrum_edit::SvgFonts;
 pub use pdfrum_edit::pdf_date;
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
-    AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotMeta, AnnotSpec,
-    AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation, delete_annotation,
+    AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta,
+    AnnotSpec, AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation, delete_annotation,
     delete_annotation_at, set_named_destination, update_annotation, update_annotation_at,
 };
 #[cfg(feature = "edit")]
