@@ -1,4 +1,4 @@
-//! The nine per-subtype appearance generators that draw shapes rather than
+//! The per-subtype appearance generators that draw shapes rather than
 //! text.
 //!
 //! Every one of these writes its coordinates through the **six-significant-
@@ -334,6 +334,92 @@ pub fn text<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     }
 }
 
+/// A `Line`: stroke between `/L` endpoints with the annotation's border width
+/// and `/C` colour.
+///
+/// Declines when `/L` is missing or shorter than four numbers.
+#[must_use]
+pub fn line<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
+    let endpoints = dict.array(names::L, r)?;
+    if endpoints.len() < 4 {
+        return None;
+    }
+    let x1 = endpoints.number_at(0)?;
+    let y1 = endpoints.number_at(1)?;
+    let x2 = endpoints.number_at(2)?;
+    let y2 = endpoints.number_at(3)?;
+
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    out.raw(&stroke_default_black(dict, r));
+    let width = border::border_width(dict, r);
+    if width <= 0.0 {
+        return None;
+    }
+    out.num(width, Float::G6);
+    out.raw("w ");
+    out.raw(&border::dash_pattern_string(dict, r));
+    out.point(x1, y1, Float::G6);
+    out.raw("m\n");
+    out.point(x2, y2, Float::G6);
+    out.raw("l\n");
+    out.raw("S\n");
+
+    let rect = dict.rect(obj_names::RECT, r);
+    Some(Generated {
+        rect_override: Some(geom::inflate(rect, width / 2.0, width / 2.0)),
+        ..Generated::plain(out)
+    })
+}
+
+/// A `Link`: a stroked rectangle over `/Rect` (border / highlight chrome).
+///
+/// Uses `/C` when present, otherwise a muted blue so the hit target is visible.
+#[must_use]
+pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    let stroke = color_with_default(
+        dict.array(names::C, r).as_ref(),
+        Color::Rgb(0.0, 0.0, 1.0),
+        PaintOp::Stroke,
+    );
+    out.raw(&stroke);
+    let width = border::border_width(dict, r).max(1.0);
+    out.num(width, Float::G6);
+    out.raw("w ");
+    out.raw(&border::dash_pattern_string(dict, r));
+    let mut rect = geom::normalize(dict.rect(obj_names::RECT, r));
+    rect = geom::deflate(rect, width / 2.0, width / 2.0);
+    out.rect(rect, Float::G6);
+    out.raw("re s\n");
+    Generated::plain(out)
+}
+
+/// A `Caret`: a simple inverted-V glyph centered in `/Rect`.
+#[must_use]
+pub fn caret<R: Resolve>(dict: &Dict, r: &R) -> Generated {
+    let mut out = Content::new();
+    out.raw(GS_SPACE);
+    out.raw(&stroke_default_black(dict, r));
+    let width = border::border_width(dict, r).max(1.0);
+    out.num(width, Float::G6);
+    out.raw("w\n");
+
+    let rect = geom::normalize(dict.rect(obj_names::RECT, r));
+    let (left, bottom, right, top) = corners(rect);
+    let mid_x = (left + right) / 2.0;
+    // Tip near the top, legs toward the bottom corners — a caret mark.
+    out.point(left, bottom, Float::G6);
+    out.raw("m\n");
+    out.point(mid_x, top, Float::G6);
+    out.raw("l\n");
+    out.point(right, bottom, Float::G6);
+    out.raw("l\n");
+    out.raw("S\n");
+    Generated::plain(out)
+}
+
 /// The sticky-note icon: a page outline with a folded corner and three
 /// ruled lines.
 #[must_use]
@@ -441,7 +527,8 @@ fn corners(rect: Rect) -> (f32, f32, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        circle, highlight, ink, square, squiggly, strike_out, text, text_symbol, underline,
+        caret, circle, highlight, ink, line, link, square, squiggly, strike_out, text, text_symbol,
+        underline,
     };
     use crate::geom;
     use pdfrum_common::{DiagKind, Diagnostics};
@@ -673,5 +760,48 @@ mod tests {
         assert_eq!(got.matches(" m\n").count(), 4);
         assert_eq!(got.matches(" l\n").count(), 10);
         assert!(got.ends_with("B*\n"), "{got}");
+    }
+
+    #[test]
+    fn a_line_strokes_between_its_endpoints() {
+        let annot = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 100.0, 100.0])),
+            ("L", numbers(&[10.0, 10.0, 90.0, 90.0])),
+            (
+                "BS",
+                Object::Dict(Dict::from_pairs([(Name::from("W"), Object::from(2.0_f32))])),
+            ),
+        ]);
+        let got = line(&annot, &NoResolve).expect("line");
+        let s = stream(&got);
+        assert!(s.contains("10 10 m\n"), "{s}");
+        assert!(s.contains("90 90 l\n"), "{s}");
+        assert!(s.ends_with("S\n"), "{s}");
+    }
+
+    #[test]
+    fn a_line_declines_without_endpoints() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 10.0, 10.0]))]);
+        assert!(line(&annot, &NoResolve).is_none());
+    }
+
+    #[test]
+    fn a_link_strokes_its_rectangle() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
+        let s = stream(&link(&annot, &NoResolve));
+        assert!(s.contains("re s\n"), "{s}");
+        assert!(
+            s.contains("0 0 1 RG") || s.contains("0 0 1 RG\n") || s.contains("0 0 1 RG "),
+            "{s}"
+        );
+    }
+
+    #[test]
+    fn a_caret_draws_an_inverted_vee() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 10.0, 20.0]))]);
+        let s = stream(&caret(&annot, &NoResolve));
+        assert_eq!(s.matches(" m\n").count(), 1);
+        assert_eq!(s.matches(" l\n").count(), 2);
+        assert!(s.ends_with("S\n"), "{s}");
     }
 }
