@@ -9,6 +9,15 @@ pub pdfrum_edit::AnnotBorderStyle::Underline
 impl pdfrum_edit::AnnotBorderStyle
 pub const fn pdfrum_edit::AnnotBorderStyle::as_bytes(self) -> &'static [u8]
 #[non_exhaustive] pub enum pdfrum_edit::AnnotSpec
+pub pdfrum_edit::AnnotSpec::Caret
+pub pdfrum_edit::AnnotSpec::Caret::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Caret::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Caret::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Circle
+pub pdfrum_edit::AnnotSpec::Circle::border: pdfrum_edit::AnnotBorder
+pub pdfrum_edit::AnnotSpec::Circle::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Circle::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Circle::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::FreeText
 pub pdfrum_edit::AnnotSpec::FreeText::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::FreeText::contents: alloc::string::String
@@ -25,6 +34,17 @@ pub pdfrum_edit::AnnotSpec::Ink::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Ink::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Ink::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Ink::strokes: alloc::vec::Vec<alloc::vec::Vec<kurbo::point::Point>>
+pub pdfrum_edit::AnnotSpec::Line
+pub pdfrum_edit::AnnotSpec::Line::border: pdfrum_edit::AnnotBorder
+pub pdfrum_edit::AnnotSpec::Line::color: peniko::Color
+pub pdfrum_edit::AnnotSpec::Line::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Line::end: kurbo::point::Point
+pub pdfrum_edit::AnnotSpec::Line::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Line::start: kurbo::point::Point
+pub pdfrum_edit::AnnotSpec::Link
+pub pdfrum_edit::AnnotSpec::Link::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Link::rect: kurbo::rect::Rect
+pub pdfrum_edit::AnnotSpec::Link::uri: alloc::string::String
 pub pdfrum_edit::AnnotSpec::Square
 pub pdfrum_edit::AnnotSpec::Square::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Square::color: peniko::Color
@@ -52,9 +72,13 @@ pub pdfrum_edit::AnnotSpec::Underline::contents: core::option::Option<alloc::str
 pub pdfrum_edit::AnnotSpec::Underline::quads: alloc::vec::Vec<pdfrum_edit::Quad>
 pub pdfrum_edit::AnnotSpec::Underline::rect: kurbo::rect::Rect
 impl pdfrum_edit::AnnotSpec
+pub fn pdfrum_edit::AnnotSpec::caret(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::circle(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::free_text(kurbo::rect::Rect, peniko::Color, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::highlight(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::ink(kurbo::rect::Rect, peniko::Color, alloc::vec::Vec<alloc::vec::Vec<kurbo::point::Point>>) -> Self
+pub fn pdfrum_edit::AnnotSpec::line(kurbo::rect::Rect, peniko::Color, kurbo::point::Point, kurbo::point::Point) -> Self
+pub fn pdfrum_edit::AnnotSpec::link(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::square(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::strike_out(kurbo::rect::Rect, peniko::Color) -> Self
