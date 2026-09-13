@@ -80,6 +80,14 @@ pdfrum_object::names! {
     URI = "URI";
     /// Line endpoints (`/L`) for a Line annotation.
     L = "L";
+    /// Destination on an action (`/D`).
+    D = "D";
+    /// GoTo action subtype (`/GoTo`).
+    GO_TO = "GoTo";
+    /// Fit the whole page in the window (`/Fit`).
+    FIT = "Fit";
+    /// XYZ destination mode (`/XYZ`).
+    XYZ = "XYZ";
     // Subtype spellings (/Highlight, /Text, …) come from
     // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }
