@@ -821,6 +821,45 @@ impl<'a> DocEdit<'a> {
         )?)
     }
 
+    /// Update the annotation at `index` in `page`'s `/Annots` (0-based).
+    ///
+    /// Resolves the index to an object reference, then calls
+    /// [`Self::update_annotation`].
+    ///
+    /// # Errors
+    ///
+    /// When the index is out of range, or when update itself fails.
+    pub fn update_annotation_at(
+        &mut self,
+        page: impl Into<PageIndex>,
+        index: usize,
+        write: impl Into<pdfrum_edit::AnnotWrite>,
+    ) -> crate::Result<()> {
+        Ok(pdfrum_edit::update_annotation_at(
+            &mut self.inner,
+            page,
+            index,
+            write,
+        )?)
+    }
+
+    /// Delete the annotation at `index` in `page`'s `/Annots` (0-based).
+    ///
+    /// # Errors
+    ///
+    /// When the index is out of range, or when delete itself fails.
+    pub fn delete_annotation_at(
+        &mut self,
+        page: impl Into<PageIndex>,
+        index: usize,
+    ) -> crate::Result<bool> {
+        Ok(pdfrum_edit::delete_annotation_at(
+            &mut self.inner,
+            page,
+            index,
+        )?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.

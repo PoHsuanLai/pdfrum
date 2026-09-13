@@ -159,6 +159,11 @@ pub enum Error {
     #[error("annotation {}:{} is not on page {}", .0.num, .0.generation, .1)]
     AnnotNotOnPage(pdfrum_object::ObjRef, PageIndex),
 
+    /// `update_annotation_at` / `delete_annotation_at` named an index outside
+    /// the page's `/Annots` array (or the page has no `/Annots`).
+    #[error("annotation index {0} is out of range on page {1}")]
+    AnnotIndexOutOfRange(usize, PageIndex),
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),

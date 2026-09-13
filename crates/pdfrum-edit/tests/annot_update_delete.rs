@@ -112,3 +112,73 @@ fn update_rejects_annot_not_on_page() {
         "unexpected: {msg}"
     );
 }
+
+#[test]
+fn update_and_delete_by_annots_index() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::text(
+            Rect::new(10.0, 10.0, 30.0, 30.0),
+            Color::from_rgb8(255, 200, 0),
+        ),
+    )
+    .expect("add a");
+    edit.add_annotation(
+        0,
+        AnnotSpec::square(
+            Rect::new(40.0, 40.0, 80.0, 80.0),
+            Color::from_rgb8(0, 0, 255),
+        ),
+    )
+    .expect("add b");
+
+    edit.update_annotation_at(
+        0,
+        0,
+        AnnotSpec::text(
+            Rect::new(10.0, 10.0, 30.0, 30.0),
+            Color::from_rgb8(255, 200, 0),
+        )
+        .with_contents("first"),
+    )
+    .expect("update at 0");
+
+    assert!(edit.delete_annotation_at(0, 1).expect("delete at 1"));
+
+    let saved = save_reopen(&edit);
+    let annots: Vec<_> = saved.page(0).expect("page").annotations().collect();
+    assert_eq!(annots.len(), 1);
+    assert_eq!(annots[0].subtype(), Subtype::Text);
+    assert_eq!(annots[0].contents().as_deref(), Some("first"));
+}
+
+#[test]
+fn index_helpers_reject_out_of_range() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
+    )
+    .expect("add");
+    let err = edit
+        .update_annotation_at(
+            0,
+            3,
+            AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
+        )
+        .expect_err("oob");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("out of range") || msg.contains("AnnotIndexOutOfRange"),
+        "unexpected: {msg}"
+    );
+    let err = edit.delete_annotation_at(0, 9).expect_err("oob delete");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("out of range") || msg.contains("AnnotIndexOutOfRange"),
+        "unexpected: {msg}"
+    );
+}
