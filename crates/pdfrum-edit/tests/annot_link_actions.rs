@@ -49,7 +49,10 @@ fn uri_link_still_round_trips() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link(Rect::new(72.0, 700.0, 200.0, 720.0), "https://example.test/uri"),
+        AnnotSpec::link(
+            Rect::new(72.0, 700.0, 200.0, 720.0),
+            "https://example.test/uri",
+        ),
     )
     .expect("add");
     let saved = save_reopen(&edit);
