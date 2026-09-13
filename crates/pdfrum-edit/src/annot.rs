@@ -1537,6 +1537,10 @@ pub fn delete_annotation(
 /// Resolves `index` in `page`'s `/Annots` array (0-based) to an [`ObjRef`], then
 /// calls [`update_annotation`].
 ///
+/// An **inline** dictionary at that index is promoted to a new indirect object
+/// (the array slot becomes a reference) before the update, so mixed
+/// indirect/inline `/Annots` arrays work.
+///
 /// ```
 /// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation_at};
 /// use pdfrum_edit::EditDoc;
@@ -1561,7 +1565,8 @@ pub fn delete_annotation(
 ///
 /// # Errors
 ///
-/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots`
+/// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots` or the
+///   entry is neither a reference nor a dictionary
 /// - Otherwise the same errors as [`update_annotation`]
 pub fn update_annotation_at(
     edit: &mut EditDoc<'_>,
@@ -1570,12 +1575,15 @@ pub fn update_annotation_at(
     write: impl Into<AnnotWrite>,
 ) -> Result<()> {
     let page = page.into();
-    let annot = annotation_ref_at(edit, page, index)?;
+    let annot = ensure_annot_ref_at(edit, page, index)?;
     update_annotation(edit, page, annot, write)
 }
 
-/// Resolves `index` in `page`'s `/Annots` array (0-based) to an [`ObjRef`], then
-/// calls [`delete_annotation`].
+/// Removes the annotation at `index` in `page`'s `/Annots` (0-based).
+///
+/// Indirect entries are detached and the object is dropped (same as
+/// [`delete_annotation`]). Inline dictionary entries are removed from the
+/// array only.
 ///
 /// ```
 /// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation_at};
@@ -1600,24 +1608,63 @@ pub fn update_annotation_at(
 /// # Errors
 ///
 /// - [`Error::AnnotIndexOutOfRange`] when `index` is outside `/Annots`
-/// - Otherwise the same errors as [`delete_annotation`]
+/// - [`Error::PageIndexOutOfRange`] / [`Error::InlinePage`] for a bad page
 pub fn delete_annotation_at(
     edit: &mut EditDoc<'_>,
     page: impl Into<PageIndex>,
     index: usize,
 ) -> Result<bool> {
     let page = page.into();
-    let annot = annotation_ref_at(edit, page, index)?;
-    delete_annotation(edit, page, annot)
-}
-
-/// The indirect reference at `index` in the page's `/Annots`, or an out-of-range
-/// error. Inline dict entries are not addressable by these helpers.
-fn annotation_ref_at(edit: &EditDoc<'_>, page: PageIndex, index: usize) -> Result<ObjRef> {
-    let Some((_page_ref, page_dict, _)) = edit.page_state(page)? else {
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
         return Err(Error::InlinePage(page));
     };
-    let array = match page_dict.raw(names::ANNOTS) {
+    match annots_entry_at(edit, &page_dict, page, index)? {
+        Object::Ref(annot) => delete_annotation(edit, page, annot),
+        Object::Dict(_) => Ok(remove_annots_index(edit, page_ref, &mut page_dict, index)),
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// Promotes an inline `/Annots` dict at `index` to an indirect object when
+/// needed, returning the reference callers can update.
+fn ensure_annot_ref_at(edit: &mut EditDoc<'_>, page: PageIndex, index: usize) -> Result<ObjRef> {
+    let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    match annots_entry_at(edit, &page_dict, page, index)? {
+        Object::Ref(annot) => Ok(annot),
+        Object::Dict(dict) => {
+            let annot = edit.add(Object::Dict(dict));
+            replace_annots_index(
+                edit,
+                page_ref,
+                &mut page_dict,
+                page,
+                index,
+                Object::Ref(annot),
+            )?;
+            Ok(annot)
+        }
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// The raw `/Annots` element at `index`, without promoting.
+fn annots_entry_at(
+    edit: &EditDoc<'_>,
+    page_dict: &Dict,
+    page: PageIndex,
+    index: usize,
+) -> Result<Object> {
+    let array = annots_array(edit, page_dict).ok_or(Error::AnnotIndexOutOfRange(index, page))?;
+    array
+        .raw_at(index)
+        .cloned()
+        .ok_or(Error::AnnotIndexOutOfRange(index, page))
+}
+
+fn annots_array(edit: &EditDoc<'_>, page_dict: &Dict) -> Option<Array> {
+    match page_dict.raw(names::ANNOTS) {
         Some(Object::Ref(array_ref)) => edit
             .fetch(*array_ref)
             .ok()
@@ -1626,13 +1673,85 @@ fn annotation_ref_at(edit: &EditDoc<'_>, page: PageIndex, index: usize) -> Resul
             .cloned(),
         Some(Object::Array(array)) => Some(array.clone()),
         _ => None,
-    };
-    let Some(array) = array else {
-        return Err(Error::AnnotIndexOutOfRange(index, page));
-    };
-    array
-        .reference_at(index)
-        .ok_or(Error::AnnotIndexOutOfRange(index, page))
+    }
+}
+
+/// Replaces the `/Annots` element at `index` with `value`.
+fn replace_annots_index(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    page: PageIndex,
+    index: usize,
+    value: Object,
+) -> Result<()> {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let mut array = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+                .ok_or(Error::AnnotIndexOutOfRange(index, page))?;
+            if index >= array.len() {
+                return Err(Error::AnnotIndexOutOfRange(index, page));
+            }
+            array.remove(index);
+            array.insert(index, value);
+            edit.replace(array_ref, Object::Array(array));
+            Ok(())
+        }
+        Some(Object::Array(mut array)) => {
+            if index >= array.len() {
+                return Err(Error::AnnotIndexOutOfRange(index, page));
+            }
+            array.remove(index);
+            array.insert(index, value);
+            page_dict.insert(annots_key, Object::Array(array));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+            Ok(())
+        }
+        _ => Err(Error::AnnotIndexOutOfRange(index, page)),
+    }
+}
+
+/// Removes the `/Annots` element at `index`. Returns whether it was present.
+fn remove_annots_index(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    index: usize,
+) -> bool {
+    let annots_key = names::ANNOTS.clone();
+    match page_dict.raw(&annots_key).cloned() {
+        Some(Object::Ref(array_ref)) => {
+            let Some(mut array) = edit
+                .fetch(array_ref)
+                .ok()
+                .as_deref()
+                .and_then(Object::as_array)
+                .cloned()
+            else {
+                return false;
+            };
+            if array.remove(index).is_none() {
+                return false;
+            }
+            edit.replace(array_ref, Object::Array(array));
+            true
+        }
+        Some(Object::Array(mut array)) => {
+            if array.remove(index).is_none() {
+                return false;
+            }
+            page_dict.insert(annots_key, Object::Array(array));
+            edit.replace(page_ref, Object::Dict(page_dict.clone()));
+            true
+        }
+        _ => false,
+    }
 }
 
 fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
