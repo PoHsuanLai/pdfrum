@@ -235,13 +235,14 @@ impl AnnotBorder {
 
 /// Destination view for a [`AnnotLinkAction::GoTo`] action.
 ///
-/// Mirrors the common modes [`pdfrum_doc::Dest`] reads (`Fit`, `XYZ`). Zoom /
-/// left / top of `None` write PDF `null` (leave unchanged).
+/// Mirrors the modes [`pdfrum_doc::Dest`] / [`pdfrum_doc::ZoomMode`] reads.
+/// Optional coordinates of `None` write PDF `null` (leave unchanged).
 ///
 /// ```
 /// use pdfrum_edit::AnnotGoToView;
 ///
 /// assert!(matches!(AnnotGoToView::Fit, AnnotGoToView::Fit));
+/// assert!(matches!(AnnotGoToView::FitH { .. }, AnnotGoToView::FitH { .. }));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
@@ -257,6 +258,39 @@ pub enum AnnotGoToView {
         /// Zoom factor, or unchanged when `None` / `Some(0.0)`.
         zoom: Option<f32>,
     },
+    /// Fit the page width; `top` is the top edge (`/FitH`).
+    FitH {
+        /// Top edge in page space, or unchanged when `None`.
+        top: Option<f32>,
+    },
+    /// Fit the page height; `left` is the left edge (`/FitV`).
+    FitV {
+        /// Left edge in page space, or unchanged when `None`.
+        left: Option<f32>,
+    },
+    /// Fit the rectangle (`/FitR`).
+    FitR {
+        /// Left edge.
+        left: f32,
+        /// Bottom edge.
+        bottom: f32,
+        /// Right edge.
+        right: f32,
+        /// Top edge.
+        top: f32,
+    },
+    /// Fit the bounding box of the page's contents (`/FitB`).
+    FitB,
+    /// Fit the bounding box width; `top` is the top edge (`/FitBH`).
+    FitBH {
+        /// Top edge in page space, or unchanged when `None`.
+        top: Option<f32>,
+    },
+    /// Fit the bounding box height; `left` is the left edge (`/FitBV`).
+    FitBV {
+        /// Left edge in page space, or unchanged when `None`.
+        left: Option<f32>,
+    },
 }
 
 /// Link annotation highlight mode (`/H`, ISO 32000-1 table 173).
@@ -268,7 +302,7 @@ pub enum AnnotGoToView {
 /// use pdfrum_edit::AnnotLinkHighlight;
 ///
 /// assert_eq!(AnnotLinkHighlight::Invert.as_bytes(), b"I");
-/// assert_eq!(AnnotLinkHighlight::Underline.as_bytes(), b"U");
+/// assert_eq!(AnnotLinkHighlight::Outline.as_bytes(), b"O");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 #[non_exhaustive]
@@ -2368,30 +2402,59 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
     a
 }
 
-/// Explicit destination array `[page /Fit]` or `[page /XYZ left top zoom]`.
+/// Explicit destination array `[page /Fit|…]`.
 fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
+    dest_array_with_page(Object::Ref(page), view)
+}
+
+/// Remote destination array: page **number** + view (for `/GoToR`).
+fn remote_goto_dest_array(page: i64, view: AnnotGoToView) -> Array {
+    dest_array_with_page(Object::Int(page), view)
+}
+
+fn dest_array_with_page(page: Object, view: AnnotGoToView) -> Array {
     match view {
-        AnnotGoToView::Fit => Array::of([Object::Ref(page), Object::Name(names::FIT.clone())]),
+        AnnotGoToView::Fit => Array::of([page, Object::Name(names::FIT.clone())]),
         AnnotGoToView::Xyz { left, top, zoom } => Array::of([
-            Object::Ref(page),
+            page,
             Object::Name(names::XYZ.clone()),
             optional_dest_number(left, false),
             optional_dest_number(top, false),
             optional_dest_number(zoom, true),
         ]),
-    }
-}
-
-/// Remote destination array: page **number** + view (for `/GoToR`).
-fn remote_goto_dest_array(page: i64, view: AnnotGoToView) -> Array {
-    match view {
-        AnnotGoToView::Fit => Array::of([Object::Int(page), Object::Name(names::FIT.clone())]),
-        AnnotGoToView::Xyz { left, top, zoom } => Array::of([
-            Object::Int(page),
-            Object::Name(names::XYZ.clone()),
-            optional_dest_number(left, false),
+        AnnotGoToView::FitH { top } => Array::of([
+            page,
+            Object::Name(names::FIT_H.clone()),
             optional_dest_number(top, false),
-            optional_dest_number(zoom, true),
+        ]),
+        AnnotGoToView::FitV { left } => Array::of([
+            page,
+            Object::Name(names::FIT_V.clone()),
+            optional_dest_number(left, false),
+        ]),
+        AnnotGoToView::FitR {
+            left,
+            bottom,
+            right,
+            top,
+        } => Array::of([
+            page,
+            Object::Name(names::FIT_R.clone()),
+            Object::Real(left),
+            Object::Real(bottom),
+            Object::Real(right),
+            Object::Real(top),
+        ]),
+        AnnotGoToView::FitB => Array::of([page, Object::Name(names::FIT_B.clone())]),
+        AnnotGoToView::FitBH { top } => Array::of([
+            page,
+            Object::Name(names::FIT_BH.clone()),
+            optional_dest_number(top, false),
+        ]),
+        AnnotGoToView::FitBV { left } => Array::of([
+            page,
+            Object::Name(names::FIT_BV.clone()),
+            optional_dest_number(left, false),
         ]),
     }
 }

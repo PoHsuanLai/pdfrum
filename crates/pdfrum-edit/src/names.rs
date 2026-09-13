@@ -94,6 +94,18 @@ pdfrum_object::names! {
     NEW_WINDOW = "NewWindow";
     /// Fit the whole page in the window (`/Fit`).
     FIT = "Fit";
+    /// Fit the page width (`/FitH`).
+    FIT_H = "FitH";
+    /// Fit the page height (`/FitV`).
+    FIT_V = "FitV";
+    /// Fit a rectangle (`/FitR`).
+    FIT_R = "FitR";
+    /// Fit the page bounding box (`/FitB`).
+    FIT_B = "FitB";
+    /// Fit the bounding-box width (`/FitBH`).
+    FIT_BH = "FitBH";
+    /// Fit the bounding-box height (`/FitBV`).
+    FIT_BV = "FitBV";
     /// XYZ destination mode (`/XYZ`).
     XYZ = "XYZ";
     // Subtype spellings (/Highlight, /Text, …) come from
