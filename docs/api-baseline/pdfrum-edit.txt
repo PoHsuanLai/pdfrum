@@ -10,6 +10,20 @@ impl pdfrum_edit::AnnotBorderStyle
 pub const fn pdfrum_edit::AnnotBorderStyle::as_bytes(self) -> &'static [u8]
 #[non_exhaustive] pub enum pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotGoToView::Fit
+pub pdfrum_edit::AnnotGoToView::FitB
+pub pdfrum_edit::AnnotGoToView::FitBH
+pub pdfrum_edit::AnnotGoToView::FitBH::top: core::option::Option<f32>
+pub pdfrum_edit::AnnotGoToView::FitBV
+pub pdfrum_edit::AnnotGoToView::FitBV::left: core::option::Option<f32>
+pub pdfrum_edit::AnnotGoToView::FitH
+pub pdfrum_edit::AnnotGoToView::FitH::top: core::option::Option<f32>
+pub pdfrum_edit::AnnotGoToView::FitR
+pub pdfrum_edit::AnnotGoToView::FitR::bottom: f32
+pub pdfrum_edit::AnnotGoToView::FitR::left: f32
+pub pdfrum_edit::AnnotGoToView::FitR::right: f32
+pub pdfrum_edit::AnnotGoToView::FitR::top: f32
+pub pdfrum_edit::AnnotGoToView::FitV
+pub pdfrum_edit::AnnotGoToView::FitV::left: core::option::Option<f32>
 pub pdfrum_edit::AnnotGoToView::Xyz
 pub pdfrum_edit::AnnotGoToView::Xyz::left: core::option::Option<f32>
 pub pdfrum_edit::AnnotGoToView::Xyz::top: core::option::Option<f32>
