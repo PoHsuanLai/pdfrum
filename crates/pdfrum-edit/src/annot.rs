@@ -605,6 +605,10 @@ impl AnnotSpec {
     /// ));
     /// ```
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one arm per AnnotSpec variant; stays exhaustive as subtypes grow"
+    )]
     pub fn with_contents(self, contents: impl Into<String>) -> Self {
         let contents = Some(contents.into());
         match self {
