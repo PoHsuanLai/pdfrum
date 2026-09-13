@@ -1,4 +1,4 @@
-//! Link /A URI and GoTo round-trips.
+//! Link /A URI and `GoTo` round-trips.
 
 #![expect(
     clippy::expect_used,
