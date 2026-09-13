@@ -33,6 +33,8 @@ pub pdfrum_edit::AnnotSpec::StrikeOut::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Text
 pub pdfrum_edit::AnnotSpec::Text::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Text::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Text::icon: pdfrum_object::name::Name
+pub pdfrum_edit::AnnotSpec::Text::open: bool
 pub pdfrum_edit::AnnotSpec::Text::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Underline
 pub pdfrum_edit::AnnotSpec::Underline::color: peniko::Color
@@ -51,9 +53,11 @@ pub fn pdfrum_edit::AnnotSpec::underline(kurbo::rect::Rect, peniko::Color) -> Se
 pub fn pdfrum_edit::AnnotSpec::with_author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_icon(self, impl core::convert::Into<pdfrum_object::name::Name>) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_open(self, bool) -> Self
 impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::AnnotSpec) -> Self
 pub enum pdfrum_edit::ContentsShape
