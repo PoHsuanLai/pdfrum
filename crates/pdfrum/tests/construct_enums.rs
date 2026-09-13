@@ -600,7 +600,11 @@ fn construct_edit_variants() -> usize {
         page: ObjRef::new(1, 0),
         view: AnnotGoToView::Fit,
     };
-    let _ = AnnotLinkAction::Named(String::new());
+    let _ = AnnotLinkAction::Named {
+        name: String::new(),
+        page: ObjRef::new(1, 0),
+        view: AnnotGoToView::Fit,
+    };
     n += 3;
 
     let _ = AnnotGoToView::Fit;

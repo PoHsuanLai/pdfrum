@@ -263,9 +263,9 @@ pub enum AnnotGoToView {
 /// support on annotations.
 ///
 /// Reuses the document Action model conceptually (`URI`, `GoTo`); this enum is
-/// the typed payload [`AnnotSpec::Link`] writes into `/A`. Named destinations
-/// write a `GoTo` whose `/D` is a PDF string — the catalog name tree must already
-/// exist (this path does not create named-dest entries).
+/// the typed payload [`AnnotSpec::Link`] writes into `/A`. A [`Self::Named`]
+/// action also upserts `/Names /Dests` so reopen/navigation can resolve the
+/// name (see [`set_named_destination`]).
 ///
 /// ```
 /// use pdfrum_edit::AnnotLinkAction;
@@ -288,9 +288,16 @@ pub enum AnnotLinkAction {
     },
     /// `GoTo` whose `/D` is a named destination string.
     ///
-    /// Relies on existing `/Names /Dests` (or legacy `/Dests`) plumbing in the
-    /// file; see [`pdfrum_doc::nav::lookup_named_dest`].
-    Named(String),
+    /// Also registers (or updates) `name` under the catalog `/Names /Dests`
+    /// tree so [`pdfrum_doc::nav::lookup_named_dest`] can resolve it after save.
+    Named {
+        /// Destination name written as `/D` and as the name-tree key.
+        name: String,
+        /// Page the name resolves to.
+        page: pdfrum_object::ObjRef,
+        /// How to display that page.
+        view: AnnotGoToView,
+    },
 }
 
 /// What kind of annotation to create and attach to a page.
@@ -760,12 +767,43 @@ impl AnnotSpec {
         }
     }
 
-    /// A `GoTo` link naming a destination string already in the document.
+    /// A `GoTo` link whose `/D` is `name`, also registering that name under
+    /// `/Names /Dests` for `page` + `view`.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotGoToView, AnnotLinkAction, AnnotSpec};
+    /// use kurbo::Rect;
+    /// use pdfrum_object::ObjRef;
+    ///
+    /// let page = ObjRef::new(3, 0);
+    /// let spec = AnnotSpec::link_named(
+    ///     Rect::new(0.0, 0.0, 50.0, 12.0),
+    ///     "Chapter1",
+    ///     page,
+    ///     AnnotGoToView::Fit,
+    /// );
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Link {
+    ///         action: AnnotLinkAction::Named { .. },
+    ///         ..
+    ///     }
+    /// ));
+    /// ```
     #[must_use]
-    pub fn link_named(rect: Rect, name: impl Into<String>) -> Self {
+    pub fn link_named(
+        rect: Rect,
+        name: impl Into<String>,
+        page: pdfrum_object::ObjRef,
+        view: AnnotGoToView,
+    ) -> Self {
         Self::Link {
             rect,
-            action: AnnotLinkAction::Named(name.into()),
+            action: AnnotLinkAction::Named {
+                name: name.into(),
+                page,
+                view,
+            },
             contents: None,
         }
     }
@@ -1263,6 +1301,7 @@ pub fn add_annotation(
     let Some((page_ref, mut page_dict, _)) = edit.page_state(page)? else {
         return Err(Error::InlinePage(page));
     };
+    register_named_dest_from_spec(edit, &spec)?;
     let mut dict = build_dict(spec, page_ref)?;
     apply_meta(&mut dict, &meta);
     attach_appearance(edit, &mut dict);
@@ -1318,6 +1357,7 @@ pub fn update_annotation(
     if !page_lists_annot(edit, &page_dict, annot) {
         return Err(Error::AnnotNotOnPage(annot, page));
     }
+    register_named_dest_from_spec(edit, &spec)?;
     let mut dict = build_dict(spec, page_ref)?;
     apply_meta(&mut dict, &meta);
     attach_appearance(edit, &mut dict);
@@ -1523,6 +1563,52 @@ fn attach_appearance(edit: &mut EditDoc<'_>, dict: &mut Dict) {
     let mut ap = Dict::new();
     ap.insert(Name::from("N"), Object::Ref(ap_ref));
     dict.insert(Name::from("AP"), Object::Dict(ap));
+}
+
+/// Upserts `name` into the catalog `/Names /Dests` name tree so named
+/// destinations (and [`AnnotLinkAction::Named`] links) resolve after save.
+///
+/// `dest` is the explicit destination array for `page` + `view` (same shape
+/// a `GoTo` `/D` array uses). An existing entry with the same name is replaced.
+///
+/// ```
+/// use pdfrum_edit::{AnnotGoToView, set_named_destination};
+/// use pdfrum_edit::EditDoc;
+/// use pdfrum_object::ObjRef;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// # let page = ObjRef::new(3, 0);
+/// set_named_destination(&mut edit, "Chapter1", page, AnnotGoToView::Fit)?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn set_named_destination(
+    edit: &mut EditDoc<'_>,
+    name: impl Into<String>,
+    page: ObjRef,
+    view: AnnotGoToView,
+) -> Result<()> {
+    let name = name.into();
+    let dest = Object::Array(goto_dest_array(page, view));
+    crate::dests::upsert_named_dest(edit, &name, dest)
+}
+
+fn register_named_dest_from_spec(edit: &mut EditDoc<'_>, spec: &AnnotSpec) -> Result<()> {
+    if let AnnotSpec::Link {
+        action: AnnotLinkAction::Named { name, page, view },
+        ..
+    } = spec
+    {
+        set_named_destination(edit, name.clone(), *page, *view)?;
+    }
+    Ok(())
 }
 
 /// Builds the annotation dictionary for `spec`, with `/P` naming `page_ref`.
@@ -1942,7 +2028,7 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
                 Object::Array(goto_dest_array(*page, *view)),
             );
         }
-        AnnotLinkAction::Named(name) => {
+        AnnotLinkAction::Named { name, .. } => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
             a.insert(names::D.clone(), Object::Str(pdf_string(name)));
         }
