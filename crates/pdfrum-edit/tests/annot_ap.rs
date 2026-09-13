@@ -148,12 +148,18 @@ fn line_link_caret_get_appearances() {
     .expect("line");
     edit.add_annotation(
         0,
-        AnnotSpec::link(Rect::new(72.0, 700.0, 200.0, 720.0), "https://example.test/"),
+        AnnotSpec::link(
+            Rect::new(72.0, 700.0, 200.0, 720.0),
+            "https://example.test/",
+        ),
     )
     .expect("link");
     edit.add_annotation(
         0,
-        AnnotSpec::caret(Rect::new(30.0, 30.0, 40.0, 50.0), Color::from_rgb8(200, 0, 0)),
+        AnnotSpec::caret(
+            Rect::new(30.0, 30.0, 40.0, 50.0),
+            Color::from_rgb8(200, 0, 0),
+        ),
     )
     .expect("caret");
 
