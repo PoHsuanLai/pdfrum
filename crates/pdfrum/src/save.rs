@@ -814,7 +814,11 @@ impl<'a> DocEdit<'a> {
         page: impl Into<PageIndex>,
         annot: pdfrum_object::ObjRef,
     ) -> crate::Result<bool> {
-        Ok(pdfrum_edit::delete_annotation(&mut self.inner, page, annot)?)
+        Ok(pdfrum_edit::delete_annotation(
+            &mut self.inner,
+            page,
+            annot,
+        )?)
     }
 
     /// The objects as the save writes them: the session's, with `/ModDate`
