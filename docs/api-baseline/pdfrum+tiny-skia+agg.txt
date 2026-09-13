@@ -3,6 +3,8 @@ pub use pdfrum::Action
 pub use pdfrum::ActionKind
 pub use pdfrum::Affine
 pub use pdfrum::AggBackend
+pub use pdfrum::AnnotBorder
+pub use pdfrum::AnnotBorderStyle
 pub use pdfrum::AnnotFlags
 pub use pdfrum::AnnotId
 pub use pdfrum::AnnotMeta
