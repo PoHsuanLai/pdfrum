@@ -337,7 +337,9 @@ impl AnnotLinkHighlight {
 /// Reuses the document Action model conceptually (`URI`, `GoTo`); this enum is
 /// the typed payload [`AnnotSpec::Link`] writes into `/A`. A [`Self::Named`]
 /// action also upserts `/Names /Dests` so reopen/navigation can resolve the
-/// name (see [`set_named_destination`]).
+/// name (see [`set_named_destination`]). [`Self::NamedExisting`] writes the
+/// same `/D` string but does **not** touch the name tree — use it when the
+/// destination is already registered.
 ///
 /// ```
 /// use pdfrum_edit::AnnotLinkAction;
@@ -369,6 +371,15 @@ pub enum AnnotLinkAction {
         page: pdfrum_object::ObjRef,
         /// How to display that page.
         view: AnnotGoToView,
+    },
+    /// `GoTo` whose `/D` is a named destination that must already exist.
+    ///
+    /// Unlike [`Self::Named`], this does not upsert `/Names /Dests` — the
+    /// name is assumed to resolve already (or will be registered separately
+    /// via [`set_named_destination`]).
+    NamedExisting {
+        /// Destination name written as `/D`.
+        name: String,
     },
     /// Remote go-to (`/S /GoToR`): open `file` at a page number + view.
     ///
@@ -907,6 +918,19 @@ impl AnnotSpec {
                 page,
                 view,
             },
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
+    /// A `GoTo` link to an existing named destination (no name-tree upsert).
+    #[must_use]
+    pub fn link_named_existing(rect: Rect, name: impl Into<String>) -> Self {
+        Self::Link {
+            rect,
+            action: AnnotLinkAction::NamedExisting { name: name.into() },
             contents: None,
             color: None,
             border: AnnotBorder::solid(1.0),
@@ -1932,6 +1956,24 @@ pub fn set_named_destination(
     crate::dests::upsert_named_dest(edit, &name, dest)
 }
 
+/// Like [`set_named_destination`], but leaves an existing name untouched.
+///
+/// Returns `true` when a new entry was written.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn ensure_named_destination(
+    edit: &mut EditDoc<'_>,
+    name: impl Into<String>,
+    page: ObjRef,
+    view: AnnotGoToView,
+) -> Result<bool> {
+    let name = name.into();
+    let dest = Object::Array(goto_dest_array(page, view));
+    crate::dests::ensure_named_dest(edit, &name, dest)
+}
+
 fn register_named_dest_from_spec(edit: &mut EditDoc<'_>, spec: &AnnotSpec) -> Result<()> {
     if let AnnotSpec::Link {
         action: AnnotLinkAction::Named { name, page, view },
@@ -2374,7 +2416,7 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
                 Object::Array(goto_dest_array(*page, *view)),
             );
         }
-        AnnotLinkAction::Named { name, .. } => {
+        AnnotLinkAction::Named { name, .. } | AnnotLinkAction::NamedExisting { name } => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
             a.insert(names::D.clone(), Object::Str(pdf_string(name)));
         }

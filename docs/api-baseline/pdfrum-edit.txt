@@ -43,6 +43,8 @@ pub pdfrum_edit::AnnotLinkAction::Named
 pub pdfrum_edit::AnnotLinkAction::Named::name: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Named::page: pdfrum_object::object::ObjRef
 pub pdfrum_edit::AnnotLinkAction::Named::view: pdfrum_edit::AnnotGoToView
+pub pdfrum_edit::AnnotLinkAction::NamedExisting
+pub pdfrum_edit::AnnotLinkAction::NamedExisting::name: alloc::string::String
 pub pdfrum_edit::AnnotLinkAction::Uri(alloc::string::String)
 #[non_exhaustive] pub enum pdfrum_edit::AnnotLinkHighlight
 pub pdfrum_edit::AnnotLinkHighlight::Invert
@@ -130,6 +132,7 @@ pub fn pdfrum_edit::AnnotSpec::link_goto(kurbo::rect::Rect, pdfrum_object::objec
 pub fn pdfrum_edit::AnnotSpec::link_goto_r(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, i64, pdfrum_edit::AnnotGoToView) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_launch(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::link_named(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
+pub fn pdfrum_edit::AnnotSpec::link_named_existing(kurbo::rect::Rect, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotSpec::square(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::strike_out(kurbo::rect::Rect, peniko::Color) -> Self
@@ -533,6 +536,7 @@ pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::
 pub fn pdfrum_edit::delete_annotation_at(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::ensure_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>

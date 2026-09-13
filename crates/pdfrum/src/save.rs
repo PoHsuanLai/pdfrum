@@ -882,6 +882,29 @@ impl<'a> DocEdit<'a> {
         )?)
     }
 
+    /// Insert a named destination only when the name is not already present.
+    ///
+    /// Returns `true` when a new entry was written. Prefer
+    /// [`AnnotLinkAction::NamedExisting`](crate::AnnotLinkAction::NamedExisting)
+    /// when linking to a name that must not be rewritten.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn ensure_named_destination(
+        &mut self,
+        name: impl Into<String>,
+        page: pdfrum_object::ObjRef,
+        view: pdfrum_edit::AnnotGoToView,
+    ) -> crate::Result<bool> {
+        Ok(pdfrum_edit::ensure_named_destination(
+            &mut self.inner,
+            name,
+            page,
+            view,
+        )?)
+    }
+
     /// The objects as the save writes them: the session's, with `/ModDate`
     /// stamped when a metadata edit asked for the save's own time and
     /// `options` do not ask for a reproducible file.
