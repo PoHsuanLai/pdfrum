@@ -6,7 +6,7 @@
 
 use kurbo::{Point, Rect};
 use pdfrum_common::{Diagnostics, PageIndex};
-use pdfrum_doc::Subtype;
+use pdfrum_doc::{AnnotFlags, Subtype};
 use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, encode_text,
 };
@@ -437,11 +437,30 @@ impl AnnotSpec {
     pub fn with_modified(self, modified: impl Into<String>) -> AnnotWrite {
         self.with_meta(AnnotMeta::default().with_modified(modified))
     }
+
+    /// Sets `/F` annotation flags (default when omitted is Print).
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let write = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .with_flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM);
+    /// assert_eq!(write.meta.flags, Some(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM));
+    /// ```
+    #[must_use]
+    pub fn with_flags(self, flags: AnnotFlags) -> AnnotWrite {
+        self.with_meta(AnnotMeta::default().with_flags(flags))
+    }
 }
 
 /// Optional dictionary fields common to every annotation subtype.
 ///
 /// Applied when writing via [`add_annotation`] / [`AnnotWrite`].
+///
+/// `/F` defaults to [`AnnotFlags::PRINT`] when [`Self::flags`] is `None`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AnnotMeta {
     /// Author / title string written as `/T`.
@@ -450,6 +469,8 @@ pub struct AnnotMeta {
     pub name: Option<String>,
     /// Modification date written as `/M` (PDF date string).
     pub modified: Option<String>,
+    /// Annotation flags written as `/F`. `None` means [`AnnotFlags::PRINT`].
+    pub flags: Option<AnnotFlags>,
 }
 
 impl AnnotMeta {
@@ -471,6 +492,21 @@ impl AnnotMeta {
     #[must_use]
     pub fn with_modified(mut self, modified: impl Into<String>) -> Self {
         self.modified = Some(modified.into());
+        self
+    }
+
+    /// Sets `/F` annotation flags.
+    ///
+    /// ```
+    /// use pdfrum_doc::AnnotFlags;
+    /// use pdfrum_edit::AnnotMeta;
+    ///
+    /// let meta = AnnotMeta::default().with_flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM);
+    /// assert_eq!(meta.flags, Some(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM));
+    /// ```
+    #[must_use]
+    pub fn with_flags(mut self, flags: AnnotFlags) -> Self {
+        self.flags = Some(flags);
         self
     }
 }
@@ -528,13 +564,20 @@ impl AnnotWrite {
         self.meta = meta;
         self
     }
+
+    /// Sets `/F` annotation flags.
+    #[must_use]
+    pub fn with_flags(mut self, flags: AnnotFlags) -> Self {
+        self.meta.flags = Some(flags);
+        self
+    }
 }
 
 /// Adds an annotation described by `spec` to `page`, returning the new
 /// annotation's object reference.
 ///
 /// The annotation is written as a new indirect object (`/Type /Annot`,
-/// `/Subtype`, `/Rect`, `/C`, `/F` with the Print bit) and appended to the
+/// `/Subtype`, `/Rect`, `/C`, `/F` — Print by default, or [`AnnotMeta::flags`]) and appended to the
 /// page's `/Annots`: a missing array is created; an indirect array is
 /// extended in place; an inline array is rewritten on the page. `/P` is set
 /// to the page object.
@@ -572,6 +615,8 @@ fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
     if let Some(modified) = meta.modified.as_deref().filter(|s| !s.is_empty()) {
         dict.insert(names::M.clone(), Object::Str(pdf_string(modified)));
     }
+    let flags = meta.flags.unwrap_or(AnnotFlags::PRINT);
+    dict.insert(names::F.clone(), Object::Int(flags.bits()));
 }
 
 /// Generate `/AP /N` for `dict` when a subtype generator exists.
@@ -737,7 +782,9 @@ fn markup_dict(
     Ok(dict)
 }
 
-/// `/Type /Annot`, `/Subtype`, `/Rect`, `/C`, `/F` Print, and `/P`.
+/// `/Type /Annot`, `/Subtype`, `/Rect`, `/C`, provisional `/F` Print, and `/P`.
+///
+/// [`apply_meta`] overwrites `/F` from [`AnnotMeta::flags`] (Print when `None`).
 ///
 /// Subtype spellings come from [`Subtype::as_bytes`] so they stay aligned with
 /// the ISO enum in `pdfrum-doc`.
