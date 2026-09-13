@@ -564,7 +564,8 @@ pub enum AnnotSpec {
     },
     /// A straight line (`/Subtype /Line`) with endpoints `/L`.
     ///
-    /// Appearance strokes between the endpoints using `/BS` width and `/C`.
+    /// Appearance strokes between the endpoints using `/BS` width and `/C`,
+    /// with optional `/LE` endings and `/IC` interior fill for closed endings.
     Line {
         /// The annotation's `/Rect` in page space.
         rect: Rect,
@@ -581,6 +582,8 @@ pub enum AnnotSpec {
         /// Optional line endings (`/LE` start, end). `None` omits `/LE`
         /// (prior behaviour).
         line_endings: Option<(LineEndingStyle, LineEndingStyle)>,
+        /// Optional interior colour (`/IC`) for filled line endings.
+        interior: Option<Color>,
     },
     /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
@@ -776,6 +779,7 @@ impl AnnotSpec {
             contents: None,
             border: AnnotBorder::default(),
             line_endings: None,
+            interior: None,
         }
     }
 
@@ -811,6 +815,7 @@ impl AnnotSpec {
                 end: e,
                 contents,
                 border,
+                interior,
                 ..
             } => Self::Line {
                 rect,
@@ -820,6 +825,34 @@ impl AnnotSpec {
                 contents,
                 border,
                 line_endings: Some((start, end)),
+                interior,
+            },
+            other => other,
+        }
+    }
+
+    /// Sets `/IC` on [`AnnotSpec::Line`] for filled ending interiors.
+    #[must_use]
+    pub fn with_interior(self, color: Color) -> Self {
+        match self {
+            Self::Line {
+                rect,
+                color: c,
+                start,
+                end,
+                contents,
+                border,
+                line_endings,
+                ..
+            } => Self::Line {
+                rect,
+                color: c,
+                start,
+                end,
+                contents,
+                border,
+                line_endings,
+                interior: Some(color),
             },
             other => other,
         }
@@ -1108,6 +1141,7 @@ impl AnnotSpec {
                 end,
                 border,
                 line_endings,
+                interior,
                 ..
             } => Self::Line {
                 rect,
@@ -1117,6 +1151,7 @@ impl AnnotSpec {
                 contents,
                 border,
                 line_endings,
+                interior,
             },
             Self::Link {
                 rect,
@@ -1209,6 +1244,7 @@ impl AnnotSpec {
                 end,
                 contents,
                 line_endings,
+                interior,
                 ..
             } => Self::Line {
                 rect,
@@ -1218,6 +1254,7 @@ impl AnnotSpec {
                 contents,
                 border,
                 line_endings,
+                interior,
             },
             Self::Link {
                 rect,
@@ -2120,6 +2157,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             contents,
             border,
             line_endings,
+            interior,
         } => {
             let mut dict = common(Subtype::Line, rect, color, page_ref);
             dict.insert(
@@ -2143,6 +2181,9 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                         Object::Name(Name::from(end_style.as_bytes())),
                     ])),
                 );
+            }
+            if let Some(interior) = interior {
+                dict.insert(names::IC.clone(), color_object(interior));
             }
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
