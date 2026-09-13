@@ -126,6 +126,59 @@ impl AnnotBorderStyle {
     }
 }
 
+/// Line ending style written in `/LE` (ISO 32000-1 table 166 / §12.5.6.7).
+///
+/// ```
+/// use pdfrum_edit::LineEndingStyle;
+///
+/// assert_eq!(LineEndingStyle::OpenArrow.as_bytes(), b"OpenArrow");
+/// assert_eq!(LineEndingStyle::None.as_bytes(), b"None");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[non_exhaustive]
+pub enum LineEndingStyle {
+    /// No special ending (`/None`).
+    #[default]
+    None,
+    /// Square.
+    Square,
+    /// Circle.
+    Circle,
+    /// Diamond.
+    Diamond,
+    /// Open arrow.
+    OpenArrow,
+    /// Closed arrow.
+    ClosedArrow,
+    /// Butt.
+    Butt,
+    /// Reversed open arrow.
+    ROpenArrow,
+    /// Reversed closed arrow.
+    RClosedArrow,
+    /// Slash.
+    Slash,
+}
+
+impl LineEndingStyle {
+    /// The PDF name bytes for one `/LE` entry.
+    #[must_use]
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::None => b"None",
+            Self::Square => b"Square",
+            Self::Circle => b"Circle",
+            Self::Diamond => b"Diamond",
+            Self::OpenArrow => b"OpenArrow",
+            Self::ClosedArrow => b"ClosedArrow",
+            Self::Butt => b"Butt",
+            Self::ROpenArrow => b"ROpenArrow",
+            Self::RClosedArrow => b"RClosedArrow",
+            Self::Slash => b"Slash",
+        }
+    }
+}
+
 /// Width and style for an annotation `/BS` dictionary.
 ///
 /// Defaults match what Square and Ink wrote previously: width `2`, solid.
@@ -416,6 +469,9 @@ pub enum AnnotSpec {
         contents: Option<String>,
         /// Border style dictionary (`/BS`).
         border: AnnotBorder,
+        /// Optional line endings (`/LE` start, end). `None` omits `/LE`
+        /// (prior behaviour).
+        line_endings: Option<(LineEndingStyle, LineEndingStyle)>,
     },
     /// A link annotation (`/Subtype /Link`) with a typed `/A` action.
     ///
@@ -604,6 +660,53 @@ impl AnnotSpec {
             end,
             contents: None,
             border: AnnotBorder::default(),
+            line_endings: None,
+        }
+    }
+
+    /// Sets `/LE` on [`AnnotSpec::Line`]. Other variants are unchanged.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotSpec, LineEndingStyle};
+    /// use kurbo::{Point, Rect};
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::line(
+    ///     Rect::new(0.0, 0.0, 10.0, 10.0),
+    ///     Color::BLACK,
+    ///     Point::new(0.0, 0.0),
+    ///     Point::new(10.0, 10.0),
+    /// )
+    /// .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow);
+    /// assert!(matches!(
+    ///     spec,
+    ///     AnnotSpec::Line {
+    ///         line_endings: Some((LineEndingStyle::None, LineEndingStyle::ClosedArrow)),
+    ///         ..
+    ///     }
+    /// ));
+    /// ```
+    #[must_use]
+    pub fn with_line_endings(self, start: LineEndingStyle, end: LineEndingStyle) -> Self {
+        match self {
+            Self::Line {
+                rect,
+                color,
+                start: s,
+                end: e,
+                contents,
+                border,
+                ..
+            } => Self::Line {
+                rect,
+                color,
+                start: s,
+                end: e,
+                contents,
+                border,
+                line_endings: Some((start, end)),
+            },
+            other => other,
         }
     }
 
@@ -800,6 +903,7 @@ impl AnnotSpec {
                 start,
                 end,
                 border,
+                line_endings,
                 ..
             } => Self::Line {
                 rect,
@@ -808,6 +912,7 @@ impl AnnotSpec {
                 end,
                 contents,
                 border,
+                line_endings,
             },
             Self::Link { rect, action, .. } => Self::Link {
                 rect,
@@ -889,6 +994,7 @@ impl AnnotSpec {
                 start,
                 end,
                 contents,
+                line_endings,
                 ..
             } => Self::Line {
                 rect,
@@ -897,6 +1003,7 @@ impl AnnotSpec {
                 end,
                 contents,
                 border,
+                line_endings,
             },
             other => other,
         }
@@ -1451,6 +1558,7 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             end,
             contents,
             border,
+            line_endings,
         } => {
             let mut dict = common(Subtype::Line, rect, color, page_ref);
             dict.insert(
@@ -1466,6 +1574,15 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
                 names::BS.clone(),
                 Object::Dict(border_style_dict(border, false)),
             );
+            if let Some((start_style, end_style)) = line_endings {
+                dict.insert(
+                    names::LE.clone(),
+                    Object::Array(Array::of([
+                        Object::Name(Name::from(start_style.as_bytes())),
+                        Object::Name(Name::from(end_style.as_bytes())),
+                    ])),
+                );
+            }
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
