@@ -1444,7 +1444,7 @@ fn common(subtype: Subtype, rect: Rect, color: Color, page_ref: ObjRef) -> Dict 
 
 /// Whether `annot` appears (as a direct or indirect ref) in the page's `/Annots`.
 fn page_lists_annot(edit: &EditDoc<'_>, page_dict: &Dict, annot: ObjRef) -> bool {
-    match page_dict.raw(&names::ANNOTS) {
+    match page_dict.raw(names::ANNOTS) {
         Some(Object::Ref(array_ref)) => edit
             .fetch(*array_ref)
             .ok()
