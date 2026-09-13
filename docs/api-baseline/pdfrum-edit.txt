@@ -84,6 +84,7 @@ pub pdfrum_edit::AnnotSpec::Line::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Line::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Line::contents: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotSpec::Line::end: kurbo::point::Point
+pub pdfrum_edit::AnnotSpec::Line::interior: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Line::line_endings: core::option::Option<(pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle)>
 pub pdfrum_edit::AnnotSpec::Line::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Line::start: kurbo::point::Point
@@ -145,6 +146,7 @@ pub fn pdfrum_edit::AnnotSpec::with_contents(self, impl core::convert::Into<allo
 pub fn pdfrum_edit::AnnotSpec::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_highlight(self, pdfrum_edit::AnnotLinkHighlight) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_icon(self, impl core::convert::Into<pdfrum_object::name::Name>) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_interior(self, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_line_endings(self, pdfrum_edit::LineEndingStyle, pdfrum_edit::LineEndingStyle) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite

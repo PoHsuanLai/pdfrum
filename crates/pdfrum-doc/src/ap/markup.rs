@@ -352,7 +352,8 @@ pub fn line<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
     let mut out = Content::new();
     out.raw(GS_SPACE);
     out.raw(&stroke_default_black(dict, r));
-    let fill = fill_default_black(dict, r);
+    // `/IC` paints filled endings; absent/empty means stroke-only chrome.
+    let fill = line_ending_fill(dict, r);
     let width = border::border_width(dict, r);
     if width <= 0.0 {
         return None;
@@ -367,7 +368,8 @@ pub fn line<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
     out.raw("S\n");
 
     let (start_style, end_style) = line_ending_styles(dict, r);
-    let size = (width * 3.0).max(6.0);
+    // Ending length tracks stroke width (3×), with no separate absolute floor.
+    let size = width * 3.0;
     draw_line_ending(&mut out, x1, y1, x2, y2, true, start_style, size, &fill);
     draw_line_ending(&mut out, x1, y1, x2, y2, false, end_style, size, &fill);
 
@@ -581,13 +583,17 @@ fn draw_line_ending(
     }
 }
 
-/// Fill colour from `/C`, defaulting to black (matching stroke default).
-fn fill_default_black<R: Resolve>(dict: &Dict, r: &R) -> String {
-    color_with_default(
-        dict.array(names::C, r).as_ref(),
-        Color::Rgb(0.0, 0.0, 0.0),
-        PaintOp::Fill,
-    )
+/// Interior colour for filled line endings (`/IC`).
+///
+/// A present non-empty array fills; missing or empty `/IC` yields no fill so
+/// closed endings stroke only (ISO 32000-1 §12.5.6.7).
+fn line_ending_fill<R: Resolve>(dict: &Dict, r: &R) -> String {
+    match dict.array(names::IC, r) {
+        Some(arr) if !arr.is_empty() => {
+            color_with_default(Some(&arr), Color::Transparent, PaintOp::Fill)
+        }
+        _ => String::new(),
+    }
 }
 
 /// A `Link`: border chrome over `/Rect`.
@@ -1136,9 +1142,38 @@ mod line_ending_tests {
         let s = String::from_utf8(generated.stream).expect("utf8");
         assert!(
             s.contains('b') || s.contains("b\n"),
-            "closed arrow fills: {s}"
+            "closed arrow close: {s}"
         );
         assert!(s.matches("m\n").count() >= 2 || s.contains("m\n"), "{s}");
+        // No `/IC` → no fill colour operator before the ending.
+        assert!(!s.contains(" rg") && !s.contains("rg\n"), "no IC fill: {s}");
+    }
+
+    #[test]
+    fn line_closed_arrow_uses_ic_fill() {
+        let mut d = line_dict(Some(["None", "ClosedArrow"]));
+        d.insert(
+            names::IC.clone(),
+            Object::Array(Array::of([
+                Object::Real(1.0),
+                Object::Real(0.0),
+                Object::Real(0.0),
+            ])),
+        );
+        let generated = line(&d, &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        assert!(s.contains("1 0 0 rg") || s.contains("1 0 0 rg\n"), "{s}");
+        assert!(s.contains('b') || s.contains("b\n"), "{s}");
+    }
+
+    #[test]
+    fn line_ending_size_tracks_stroke_width() {
+        // line_dict uses `/BS /W 2` → ending size 6 (3× width), no absolute floor.
+        let generated = line(&line_dict(Some(["OpenArrow", "None"])), &NoResolve).expect("line");
+        let s = String::from_utf8(generated.stream).expect("utf8");
+        // Start tip (0,0); open-arrow wings at x=6.
+        assert!(s.contains("6 -3 m\n") || s.contains("6 -3 m"), "{s}");
+        assert!(s.contains("6 3 l\n") || s.contains("6 3 l"), "{s}");
     }
 
     #[test]

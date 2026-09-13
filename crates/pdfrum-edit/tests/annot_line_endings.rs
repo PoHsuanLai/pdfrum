@@ -138,3 +138,32 @@ fn line_endings_still_generate_ap() {
         .expect("LE");
     assert_eq!(le.len(), 2);
 }
+
+#[test]
+fn line_interior_ic_round_trips() {
+    let doc = hello();
+    let mut edit = doc.edit();
+    edit.add_annotation(
+        0,
+        AnnotSpec::line(
+            Rect::new(10.0, 10.0, 110.0, 30.0),
+            Color::from_rgb8(0, 0, 0),
+            Point::new(10.0, 20.0),
+            Point::new(110.0, 20.0),
+        )
+        .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow)
+        .with_interior(Color::from_rgb8(255, 0, 0)),
+    )
+    .expect("add");
+    let saved = save_reopen(&edit);
+    let annot = saved
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("annot");
+    let dict = annot.dict();
+    let ic = dict.array(&Name::from("IC"), saved.parser()).expect("IC");
+    assert!((ic.number_at(0).unwrap() - 1.0).abs() < 0.01);
+    assert!(dict.dict(&Name::from("AP"), saved.parser()).is_some());
+}
