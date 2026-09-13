@@ -8,10 +8,45 @@ first crates.io release.
 ### Added
 
 - `DocEdit::add_annotation` / `pdfrum_edit::add_annotation` with typed
-  `AnnotSpec` variants for Highlight, Text (note), Square (area),
-  Underline, Ink, and FreeText — enough for Rotero to drop lopdf when
-  writing annotations. `/QuadPoints` use tl/tr/bl/br order; appearance
-  streams are not generated.
+  `AnnotSpec` variants — enough for Rotero to drop lopdf when writing
+  annotations. Text markup (Highlight, Underline, `StrikeOut`, Squiggly)
+  takes `/QuadPoints` in tl/tr/bl/br order; Text (note), Square, Circle,
+  Line, Ink, `FreeText`, Link, and Caret cover the rest.
+- Appearance streams are generated for the shapes that have a geometry to
+  draw (Square, Circle, Ink, Line, Link, Caret) through the same
+  `pdfrum_doc::ap` pipeline the reader already uses, so a written
+  annotation renders without a viewer regenerating `/AP`.
+- `AnnotMeta` carries `/T` author, `/NM` name, `/M` date, and `/F` flags;
+  flags default to Print.
+- Per-subtype appearance controls: `AnnotBorder` / `AnnotBorderStyle`
+  (`/BS` width and style) on Square, Circle, Ink, and Link;
+  `LineEndingStyle` (`/LE`) plus `/IC` interior fill on Line, with the
+  ending sized from the stroke width; `/Name` icon and `/Open` on Text;
+  `/C` and `AnnotLinkHighlight` (`/H`) on Link.
+- Link actions via `AnnotLinkAction`: `Uri`, `GoTo` (local, with
+  `AnnotGoToView` covering Fit, `XYZ`, `FitH`, `FitV`, `FitR`, `FitB`,
+  `FitBH`, and `FitBV`), `GoToR` (remote, page or named destination,
+  `/F` written as a `/Type /Filespec` with `/F` and `/UF`), `Launch`,
+  and `Named` / `NamedExisting`.
+- Named destinations: `set_named_destination` and
+  `ensure_named_destination` upsert into the catalog's `/Names /Dests`,
+  merging into an existing `/Kids` hierarchy in place rather than
+  flattening it, so a named `GoTo` resolves after reopen.
+- `update_annotation` / `delete_annotation` by `ObjRef`, and
+  `update_annotation_at` / `delete_annotation_at` by page and 0-based
+  `/Annots` index. Update preserves the object number and regenerates
+  `/AP`; an inline `/Annots` dictionary is promoted to an indirect object
+  before update and removed from the array on delete.
+- `TextPage::rects_loose` unions each character's em-box (advance ×
+  ascent/descent) instead of its ink box, so markup `/QuadPoints` sit
+  where Acrobat puts them.
+
+### Changed
+
+- Every `AnnotSpec` variant is `#[non_exhaustive]`, so a later subtype
+  option is an additive change rather than a breaking one. Build specs
+  through the constructors (`AnnotSpec::line`, …) and the `with_*`
+  builders rather than a struct literal.
 
 
 ## [0.2.0] - 2026-09-11
