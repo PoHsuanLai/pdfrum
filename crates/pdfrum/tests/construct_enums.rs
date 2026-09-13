@@ -78,6 +78,16 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "pdfrum_edit::AnnotBorderStyle",
         "AnnotBorderStyle",
     ),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::AnnotLinkAction",
+        "AnnotLinkAction",
+    ),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::AnnotGoToView",
+        "AnnotGoToView",
+    ),
     ("pdfrum-form.txt", "pdfrum_form::Button", "Button"),
     ("pdfrum-form.txt", "pdfrum_form::Event", "Event"),
     ("pdfrum-form.txt", "pdfrum_form::Key", "Key"),
@@ -579,6 +589,22 @@ fn construct_edit_variants() -> usize {
     let _ = AnnotBorderStyle::Underline;
     n += 5;
 
+    let _ = AnnotLinkAction::Uri(String::new());
+    let _ = AnnotLinkAction::GoTo {
+        page: ObjRef::new(1, 0),
+        view: AnnotGoToView::Fit,
+    };
+    let _ = AnnotLinkAction::Named(String::new());
+    n += 3;
+
+    let _ = AnnotGoToView::Fit;
+    let _ = AnnotGoToView::Xyz {
+        left: None,
+        top: None,
+        zoom: None,
+    };
+    n += 2;
+
     n
 }
 
@@ -882,7 +908,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 21 + 2 + 5 + 5);
+    assert_eq!(construct_edit_variants(), 21 + 2 + 5 + 5 + 3 + 2);
 }
 
 #[test]
@@ -957,13 +983,14 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 324 -> 357 -> 358 (`SaveError::EmptyQuadPoints` from AnnotSpec markup).
     // 358 -> 363 (`AnnotBorderStyle` five variants).
     // 363 -> 364 (`SaveError::AnnotNotOnPage`).
+    // 364 -> 369 (`AnnotLinkAction` 3 + `AnnotGoToView` 2).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 364, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 42, "default-feature enum count");
+    assert_eq!(constructed, 369, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 44, "default-feature enum count");
 }
 
 #[test]
