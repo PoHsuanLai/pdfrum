@@ -1719,7 +1719,10 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
         }
         AnnotLinkAction::GoTo { page, view } => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
-            a.insert(names::D.clone(), Object::Array(goto_dest_array(*page, *view)));
+            a.insert(
+                names::D.clone(),
+                Object::Array(goto_dest_array(*page, *view)),
+            );
         }
         AnnotLinkAction::Named(name) => {
             a.insert(names::S.clone(), Object::Name(names::GO_TO.clone()));
@@ -1732,19 +1735,14 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
 /// Explicit destination array `[page /Fit]` or `[page /XYZ left top zoom]`.
 fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
     match view {
-        AnnotGoToView::Fit => Array::of([
+        AnnotGoToView::Fit => Array::of([Object::Ref(page), Object::Name(names::FIT.clone())]),
+        AnnotGoToView::Xyz { left, top, zoom } => Array::of([
             Object::Ref(page),
-            Object::Name(names::FIT.clone()),
+            Object::Name(names::XYZ.clone()),
+            optional_dest_number(left, false),
+            optional_dest_number(top, false),
+            optional_dest_number(zoom, true),
         ]),
-        AnnotGoToView::Xyz { left, top, zoom } => {
-            Array::of([
-                Object::Ref(page),
-                Object::Name(names::XYZ.clone()),
-                optional_dest_number(left, false),
-                optional_dest_number(top, false),
-                optional_dest_number(zoom, true),
-            ])
-        }
     }
 }
 
