@@ -153,6 +153,7 @@ pub use pdfrum::XrefEntry
 pub use pdfrum::add_annotation
 pub use pdfrum::add_attachment
 pub use pdfrum::delete_annotation
+pub use pdfrum::delete_annotation_at
 pub use pdfrum::delete_attachment
 pub use pdfrum::flatten
 pub use pdfrum::pdf_date
@@ -161,6 +162,7 @@ pub use pdfrum::set_attachment_description
 pub use pdfrum::set_attachment_file
 pub use pdfrum::set_attachment_param
 pub use pdfrum::update_annotation
+pub use pdfrum::update_annotation_at
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
@@ -294,6 +296,7 @@ pub fn pdfrum::DocEdit<'a>::add_attachment(&mut self, &str, &[u8], &pdfrum_edit:
 pub fn pdfrum::DocEdit<'a>::compile_svg(&mut self, &str) -> pdfrum::Result<(pdfrum_edit::canvas::SvgForm, pdfrum_edit::svg_ingest::SvgIngestReport)>
 pub fn pdfrum::DocEdit<'a>::compile_svg_from(&mut self, &str, core::option::Option<&std::path::Path>) -> pdfrum::Result<(pdfrum_edit::canvas::SvgForm, pdfrum_edit::svg_ingest::SvgIngestReport)>
 pub fn pdfrum::DocEdit<'a>::delete_annotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> pdfrum::Result<bool>
+pub fn pdfrum::DocEdit<'a>::delete_annotation_at(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'a>::delete_attachment(&mut self, usize) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'a>::draw_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::ops::function::FnOnce(&mut pdfrum_edit::canvas::Canvas<'_, '_>)) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::draw_pages(&mut self, impl core::ops::function::FnMut(&mut pdfrum_edit::canvas::Canvas<'_, '_>)) -> pdfrum::Result<()>
@@ -305,6 +308,7 @@ pub fn pdfrum::DocEdit<'a>::set_attachment_param(&mut self, usize, &str, &str) -
 pub fn pdfrum::DocEdit<'a>::stamp_image(&mut self, &pdfrum_edit::image::EmbeddedImage, f64, &pdfrum_edit::stamp::StampOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::stamp_text(&mut self, &str, &pdfrum_edit::stamp::StampOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'a>::update_annotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef, impl core::convert::Into<pdfrum_edit::annot::AnnotWrite>) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'a>::update_annotation_at(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize, impl core::convert::Into<pdfrum_edit::annot::AnnotWrite>) -> pdfrum::Result<()>
 pub struct pdfrum::Document
 impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
