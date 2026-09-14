@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotGoToView, AnnotSpec, Document, Name, Rect, SaveOptions};
+use pdfrum::{AnnotGoToView, Document, LinkSpec, Name, Rect, SaveOptions};
 use pdfrum_object::ObjRef;
 
 fn hello_2() -> Document {
@@ -67,7 +67,7 @@ fn fit_family_views_round_trip() {
     for (view, y) in views.into_iter().zip(ys) {
         edit.add_annotation(
             0,
-            AnnotSpec::link_goto(Rect::new(10.0, y, 80.0, y + 14.0), target, view),
+            LinkSpec::goto(Rect::new(10.0, y, 80.0, y + 14.0), target, view),
         )
         .expect("add");
     }

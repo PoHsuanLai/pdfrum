@@ -7,7 +7,10 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotSpec, Color, Document, Name, Point, Rect, SaveOptions, Subtype};
+use pdfrum::{
+    CaretSpec, CircleSpec, Color, Document, LineSpec, LinkSpec, Name, Point, Rect, SaveOptions,
+    Subtype,
+};
 
 fn hello() -> Document {
     Document::open(concat!(
@@ -29,7 +32,7 @@ fn circle_round_trips_with_appearance() {
     let doc = hello();
     let mut edit = doc.edit();
     let rect = Rect::new(80.0, 80.0, 160.0, 160.0);
-    edit.add_annotation(0, AnnotSpec::circle(rect, Color::from_rgb8(0, 128, 255)))
+    edit.add_annotation(0, CircleSpec::new(rect, Color::from_rgb8(0, 128, 255)))
         .expect("add");
     let saved = save_reopen(&edit);
     let annot = saved
@@ -55,13 +58,13 @@ fn line_round_trips_endpoints() {
     let rect = Rect::new(10.0, 10.0, 200.0, 200.0);
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             rect,
             Color::from_rgb8(0, 0, 0),
             Point::new(20.0, 20.0),
             Point::new(180.0, 180.0),
         )
-        .with_contents("diagonal"),
+        .contents("diagonal"),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -95,11 +98,11 @@ fn link_round_trips_uri_action() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link(
+        LinkSpec::uri(
             Rect::new(72.0, 700.0, 200.0, 720.0),
             "https://example.test/x",
         )
-        .with_contents("go"),
+        .contents("go"),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -140,11 +143,11 @@ fn caret_round_trips() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::caret(
+        CaretSpec::new(
             Rect::new(30.0, 30.0, 40.0, 50.0),
             Color::from_rgb8(200, 0, 0),
         )
-        .with_contents("insert"),
+        .contents("insert"),
     )
     .expect("add");
     let saved = save_reopen(&edit);

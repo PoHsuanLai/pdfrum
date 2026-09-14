@@ -55,6 +55,7 @@ pub use pdfrum::Flattened
 pub use pdfrum::Focus
 pub use pdfrum::FocusBox
 pub use pdfrum::FontEncoding
+pub use pdfrum::FreeTextSpec
 pub use pdfrum::GeneratedAp
 pub use pdfrum::IdSource
 pub use pdfrum::ImageBuilder
