@@ -24,6 +24,11 @@ compile untouched.
   box in any reader that does not rebuild appearances itself — which is most of
   them, absent `/NeedAppearances`. Both now lay the value out through the same
   `pdfrum_doc::vt` engine the page renderer and `flatten` already used.
+- A choice field's `/I` is rewritten to agree with the `/V` a fill writes.
+  `/I` indexes `/Opt`, and a reader that finds the two disagreeing discards
+  `/I` wholesale and matches the text instead — so a fill that rewrote `/V`
+  alone left behind exactly the stale pair the reader defends against. A value
+  naming no option writes an empty array rather than guessing an index.
 - A field body reads its value from the dictionary it was handed when that
   dictionary carries `/V`, rather than resolving the name through
   `/AcroForm /Fields`. Two `/Fields` entries sharing a `/T` are still one
@@ -33,6 +38,18 @@ compile untouched.
 
 ### Added
 
+- `WidgetAppearance` and `set_widget_appearance` write a widget's `/MK`
+  appearance characteristics — `/BG` background, `/BC` border colour, `/R`
+  rotation, and `/CA` caption. The generator reads `/MK` on every
+  regeneration, so a written one changes how the field is drawn with no
+  companion redraw; a characteristic the builder leaves unset keeps whatever
+  the widget already had, so one key can be edited without flattening the
+  rest.
+- `flatten_document` flattens every page, which is what a caller who wants no
+  annotations left usually means. The per-page `flatten` made that a loop
+  that also re-pruned `/AcroForm` once per page. Answers `Done` when any page
+  had something to draw.
+- `FieldKind::is_choice`, the `/Opt`-backed kinds — the two that carry `/I`.
 - `set_need_appearances` sets or clears `/AcroForm /NeedAppearances`, asking a
   reader to build every field's appearance from its value and `/DA`. Clearing
   removes the key rather than writing `false`, which is the same thing to a
