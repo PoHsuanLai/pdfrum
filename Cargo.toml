@@ -120,8 +120,8 @@ tiny-skia = "=0.12.0"
 vello = "=0.10.0"
 
 # fonts
-skrifa = "=0.46.2"
-read-fonts = "=0.43.3"
+skrifa = "=0.47.0"
+read-fonts = "=0.44.0"
 fontdb = { version = "=0.24.0", default-features = false }
 # `variable-fonts` (on by default) pulls a second skrifa/write-fonts/kurbo and
 # buys only CFF2 + variation instancing. Off keeps the tree to one skrifa.
@@ -134,7 +134,7 @@ miniz_oxide = "=0.9.1"
 # 0.1, not 0.2: gif 0.14 (resvg's `raster-images`) requires weezl 0.1.
 # The TIFF/MSB `Configuration` API LZW uses is in both; staying on 0.1
 # keeps one copy in the lockfile.
-weezl = "=0.1.12"
+weezl = "=0.2.1"
 zune-jpeg = "=0.5.15"
 # `image` (on by default) is the `image` crate integration plus a second
 # moxcms 0.8. We decode with `Image::new` and convert colour ourselves.
@@ -171,7 +171,7 @@ rayon = "=1.12.0"
 # Wipes file keys on drop. Exact pin like the rest of the closed set; the
 # crate is Apache-2.0/MIT and has no C. Used by `pdfrum-crypt` and
 # `pdfrum-edit` only.
-zeroize = { version = "=1.8.2", default-features = false, features = ["alloc"] }
+zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
 
 # JavaScript engine. Reachable only through `pdfrum-form`'s default-off
 # `javascript` feature.
