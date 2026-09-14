@@ -359,11 +359,7 @@ impl Face {
         }
         // In a CID-keyed font the charset's string identifiers *are* CIDs.
         cff.charset()
-            .and_then(|charset| {
-                charset
-                    .glyph_id(read_fonts::ps::string::Sid::new(gid.0))
-                    .ok()
-            })
+            .and_then(|charset| charset.glyph_id(read_fonts::ps::string::Sid::new(gid.0)))
             .unwrap_or(raw)
     }
 
@@ -449,7 +445,7 @@ impl Face {
             let mut map = HashMap::new();
             for gid in 0..self.num_glyphs {
                 let Ok(g) = u16::try_from(gid) else { break };
-                let Ok(sid) = charset.string_id(read_fonts::types::GlyphId::new(gid)) else {
+                let Some(sid) = charset.string_id(read_fonts::types::GlyphId::new(gid)) else {
                     continue;
                 };
                 if let Some(bytes) = cff.string(sid) {
@@ -528,7 +524,7 @@ impl Face {
             for gid in 0..self.num_glyphs {
                 let Ok(g) = u16::try_from(gid) else { break };
                 let id = read_fonts::types::GlyphId::new(gid);
-                let Ok(sid) = charset.string_id(id) else {
+                let Some(sid) = charset.string_id(id) else {
                     continue;
                 };
                 if cff.string(sid) == Some(name.as_bytes()) {
@@ -556,8 +552,7 @@ impl Face {
         if let Some(cff) = self.cff() {
             let sid = cff
                 .charset()?
-                .string_id(read_fonts::types::GlyphId::new(u32::from(gid.0)))
-                .ok()?;
+                .string_id(read_fonts::types::GlyphId::new(u32::from(gid.0)))?;
             return cff
                 .string(sid)
                 .and_then(|b| std::str::from_utf8(b).ok())
