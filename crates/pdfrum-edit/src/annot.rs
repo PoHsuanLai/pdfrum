@@ -88,37 +88,40 @@ impl From<Rect> for Quad {
     }
 }
 
-/// Border style name written as `/BS /S` (ISO 32000-1 table 166).
+/// Border style written as `/BS /S` (ISO 32000-1 table 166).
+///
+/// This is [`pdfrum_doc::ap::BorderStyle`], the same type the read side and
+/// the form layer already use: one set of five values, named once. Reading a
+/// `/BS` yields it, and writing one takes it.
+///
+/// The two sides differ in how they *arrive* at a value, not in the value.
+/// Reading is deliberately lenient — the style comes from the first byte of
+/// `/S` alone, so `/Dotted` reads as `Dash` — while writing goes through
+/// [`BorderStyleName::as_bytes`], which emits exactly the five legal names.
 ///
 /// ```
-/// use pdfrum_edit::AnnotBorderStyle;
+/// use pdfrum_edit::{AnnotBorderStyle, BorderStyleName};
 ///
 /// assert_eq!(AnnotBorderStyle::Solid.as_bytes(), b"S");
-/// assert_eq!(AnnotBorderStyle::Dashed.as_bytes(), b"D");
+/// assert_eq!(AnnotBorderStyle::Dash.as_bytes(), b"D");
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-#[non_exhaustive]
-pub enum AnnotBorderStyle {
-    /// Solid (`/S`).
-    #[default]
-    Solid,
-    /// Dashed (`/D`).
-    Dashed,
-    /// Beveled (`/B`).
-    Beveled,
-    /// Inset (`/I`).
-    Inset,
-    /// Underline (`/U`).
-    Underline,
+pub type AnnotBorderStyle = pdfrum_doc::ap::BorderStyle;
+
+/// The `/BS /S` name a [`AnnotBorderStyle`] is written as.
+///
+/// An extension trait rather than an inherent `impl`, because the type it
+/// extends belongs to `pdfrum_doc`. Only the write side needs the spelling;
+/// the read side only ever matches on the value.
+pub trait BorderStyleName {
+    /// The PDF name bytes for `/BS /S`.
+    fn as_bytes(&self) -> &'static [u8];
 }
 
-impl AnnotBorderStyle {
-    /// The PDF name bytes for `/BS /S`.
-    #[must_use]
-    pub const fn as_bytes(self) -> &'static [u8] {
+impl BorderStyleName for AnnotBorderStyle {
+    fn as_bytes(&self) -> &'static [u8] {
         match self {
             Self::Solid => b"S",
-            Self::Dashed => b"D",
+            Self::Dash => b"D",
             Self::Beveled => b"B",
             Self::Inset => b"I",
             Self::Underline => b"U",
@@ -1335,13 +1338,13 @@ impl AnnotSpec {
     /// use peniko::Color;
     ///
     /// let spec = AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255))
-    ///     .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dashed));
+    ///     .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dash));
     /// assert!(matches!(
     ///     spec,
     ///     AnnotSpec::Square {
     ///         border: AnnotBorder {
     ///             width,
-    ///             style: AnnotBorderStyle::Dashed,
+    ///             style: AnnotBorderStyle::Dash,
     ///         },
     ///         ..
     ///     } if (width - 1.0).abs() < f32::EPSILON
