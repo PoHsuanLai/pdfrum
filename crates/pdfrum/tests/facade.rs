@@ -653,18 +653,15 @@ trailer<</Root 1 0 R/Size 5>>\n";
 }
 
 #[test]
-fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
-    // The documented boundary: appearance
-    // generation builds a widget's *chrome* — background, border, and the
-    // check and radio glyphs — and deliberately does not lay out a text
-    // field's body, which upstream does in a second layout engine this
-    // project does not port.
+fn a_filled_widget_gets_an_appearance_with_its_value_laid_out() {
+    // A fill writes what a reader will show. `/V` alone is not enough: a
+    // viewer that does not regenerate appearances draws the widget's `/AP /N`
+    // and nothing else, so a fill that stopped at the chrome stored the value
+    // and rendered an empty box.
     //
-    // This fixture's widget has no `/MK` and no border, so its chrome is
-    // empty and the save writes no appearance stream for it. The value is
-    // still stored, which is what a form fill is for: a reader that lays out
-    // its own field text shows it, and one that does not shows the field
-    // empty. The test pins that split rather than wishing it away.
+    // The layout is `pdfrum_doc::vt`, the same engine the page-wide generator
+    // and `flatten` reach through `generate_with_text` — this path used to be
+    // the one that did not call it.
     let dir = temp_dir("form-appearance");
     let out = dir.join("filled.pdf");
 
@@ -694,7 +691,21 @@ fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
             .stored_value(),
         "drawn"
     );
-    // And the page still renders, with or without an appearance to draw.
+    // And the widget now carries an appearance, where before the fill left
+    // the fixture's `/AP`-less widget exactly as it found it.
+    let annot = reopened
+        .page(0)
+        .expect("page")
+        .annotations()
+        .next()
+        .expect("the fixture has a widget");
+    assert!(
+        annot.has_appearance(),
+        "a filled widget must carry an /AP /N for a reader that does not \
+         regenerate appearances"
+    );
+
+    // The page still renders.
     assert!(
         reopened
             .page(0)

@@ -5,8 +5,39 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Breaking
+
+This release breaks source compatibility. The crate is young enough that the
+churn is worth more than the pin, but a `cargo update` from 0.2 will not
+compile untouched.
+
+- `pdfrum_doc::form::apply` takes a `&Dict` catalog and an
+  `Option<&ap::FormFonts>` before its resolver. Callers that have neither can
+  pass `&Dict::new()` and `None` to keep the old chrome-only behaviour; a
+  caller that wants filled fields to be *visible* should pass the real catalog
+  and `FormFonts::load`'s answer, which is what `Document::save_form` now does.
+
+### Fixed
+
+- A filled form renders its values. `save_form` and `write_form_to` laid out a
+  widget's chrome and stopped, so a text field stored `/V` and drew an empty
+  box in any reader that does not rebuild appearances itself — which is most of
+  them, absent `/NeedAppearances`. Both now lay the value out through the same
+  `pdfrum_doc::vt` engine the page renderer and `flatten` already used.
+- A field body reads its value from the dictionary it was handed when that
+  dictionary carries `/V`, rather than resolving the name through
+  `/AcroForm /Fields`. Two `/Fields` entries sharing a `/T` are still one
+  field with two controls — that lookup is unchanged for the widgets it was
+  written for — but an *edited* dictionary that is not yet in the file now
+  wins over the stale one the file still points at.
+
 ### Added
 
+- `set_need_appearances` sets or clears `/AcroForm /NeedAppearances`, asking a
+  reader to build every field's appearance from its value and `/DA`. Clearing
+  removes the key rather than writing `false`, which is the same thing to a
+  reader. A document with no `/AcroForm` gains one, since a flag with no form
+  to hang on would be dropped by the next reader that rewrites the catalog.
 - Per-subtype annotation builders — `MarkupSpec` (with `MarkupKind`),
   `TextSpec`, `SquareSpec`, `CircleSpec`, `InkSpec`, `LineSpec`,
   `LinkSpec`, and `CaretSpec` — each carrying only the options its
