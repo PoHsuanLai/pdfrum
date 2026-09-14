@@ -277,7 +277,7 @@ pub fn pdfrum_doc::form::Form::field(&self, &str) -> core::option::Option<&pdfru
 pub fn pdfrum_doc::form::Form::is_empty(&self) -> bool
 pub fn pdfrum_doc::form::Form::len(&self) -> usize
 pub fn pdfrum_doc::form::Form::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::form::Form>
-pub fn pdfrum_doc::form::apply<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::form::Form, &pdfrum_doc::form::FieldValues, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::form::field::FieldEdit>
+pub fn pdfrum_doc::form::apply<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::form::Form, &pdfrum_doc::form::FieldValues, &pdfrum_object::dict::Dict, core::option::Option<&pdfrum_doc::ap::FormFonts>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::form::field::FieldEdit>
 pub fn pdfrum_doc::form::field_attr<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
 pub fn pdfrum_doc::form::full_name<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
 pub fn pdfrum_doc::form::selected_indices_for_interaction<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[alloc::string::String], &R) -> alloc::vec::Vec<usize>
