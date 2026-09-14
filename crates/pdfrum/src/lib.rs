@@ -50,7 +50,7 @@ pub use pdfrum_edit::SvgForm;
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
 #[cfg(feature = "edit")]
-pub use pdfrum_edit::{FlattenMode, Flattened, UnknownFlattenMode, flatten};
+pub use pdfrum_edit::{FlattenMode, Flattened, UnknownFlattenMode, flatten, flatten_document};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{ImageBuilder, PathBuilder, TextBuilder};
 pub use pdfrum_page::PageEdit;

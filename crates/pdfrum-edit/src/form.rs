@@ -1,16 +1,177 @@
-//! The interactive form dictionary (ISO 32000-1 §12.7.2) on the write side.
+//! The interactive form dictionary (ISO 32000-1 §12.7.2) on the write side,
+//! and the appearance characteristics (§12.5.6.19) a widget is drawn from.
 //!
 //! The catalog's `/AcroForm` is where a document says how its fields should be
-//! presented, as opposed to what any one of them holds. Only the flag that
-//! decides *who draws the field* lives here so far: the values themselves go
-//! through `Document::save_form`, which lays each one out as it writes.
+//! presented, as opposed to what any one of them holds; `/MK` is where one
+//! widget says how it should look. Values themselves go through
+//! `Document::save_form`, which lays each one out as it writes.
 
-use pdfrum_object::{Dict, Name, Object, Resolve, names};
+use pdfrum_object::{Array, Dict, Name, ObjRef, Object, Resolve, names};
+use peniko::Color;
 
 use crate::{doc::EditDoc, error::Error};
 
 /// A form write either applies or names why it could not.
 type Result<T> = core::result::Result<T, Error>;
+
+/// A widget's appearance characteristics — its `/MK` dictionary.
+///
+/// The generator reads `/MK` on **every** regeneration, so writing one is
+/// enough to change how a field is drawn: there is no separate appearance to
+/// keep in step. An unset field leaves that key alone rather than writing a
+/// default, which is what lets this edit one characteristic of a widget
+/// without flattening the rest.
+///
+/// ```
+/// use pdfrum_edit::WidgetAppearance;
+/// use peniko::Color;
+///
+/// let mk = WidgetAppearance::new()
+///     .background(Color::from_rgb8(240, 240, 240))
+///     .border(Color::from_rgb8(0, 0, 0));
+/// // Characteristics left unset keep whatever the widget already had.
+/// assert_eq!(mk, mk.clone());
+/// ```
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WidgetAppearance {
+    background: Option<Color>,
+    border: Option<Color>,
+    rotation: Option<i64>,
+    caption: Option<String>,
+}
+
+impl WidgetAppearance {
+    /// Characteristics that change nothing.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// `/BG`: the colour behind the field.
+    #[must_use]
+    pub fn background(mut self, color: Color) -> Self {
+        self.background = Some(color);
+        self
+    }
+
+    /// `/BC`: the border colour.
+    ///
+    /// A widget's border is drawn only when this names one — the `/BS` width
+    /// alone does not produce a visible edge.
+    #[must_use]
+    pub fn border(mut self, color: Color) -> Self {
+        self.border = Some(color);
+        self
+    }
+
+    /// `/R`: the widget's rotation within its rectangle, in degrees.
+    ///
+    /// Read as a quarter turn; anything else rounds down to one.
+    #[must_use]
+    pub fn rotation(mut self, degrees: i64) -> Self {
+        self.rotation = Some(degrees);
+        self
+    }
+
+    /// `/CA`: the caption a push button shows.
+    #[must_use]
+    pub fn caption(mut self, text: impl Into<String>) -> Self {
+        self.caption = Some(text.into());
+        self
+    }
+
+    /// Merges these characteristics into an existing `/MK`, keeping keys the
+    /// builder says nothing about.
+    fn merge_into(&self, mut mk: Dict) -> Dict {
+        if let Some(color) = self.background {
+            mk.insert(names::BG.clone(), color_object(color));
+        }
+        if let Some(color) = self.border {
+            mk.insert(names::BC.clone(), color_object(color));
+        }
+        if let Some(degrees) = self.rotation {
+            mk.insert(Name::from("R"), Object::Int(degrees));
+        }
+        if let Some(caption) = &self.caption {
+            mk.insert(
+                names::CA.clone(),
+                Object::Str(pdfrum_object::PdfString::literal(caption.as_bytes())),
+            );
+        }
+        mk
+    }
+}
+
+/// The `/MK` key. `pdfrum-doc` owns the constant; this crate spells it here
+/// rather than depending on that module's name table for one entry.
+fn mk_key() -> Name {
+    Name::from("MK")
+}
+
+/// An `/MK` colour: three clamped components, as the reader's `from_array`
+/// expects.
+fn color_object(color: Color) -> Object {
+    let [r, g, b, _] = color.components;
+    Object::Array(Array::of([
+        Object::Real(r.clamp(0.0, 1.0)),
+        Object::Real(g.clamp(0.0, 1.0)),
+        Object::Real(b.clamp(0.0, 1.0)),
+    ]))
+}
+
+/// Sets a widget annotation's `/MK` appearance characteristics.
+///
+/// `annot` is the widget's own object — the reference an
+/// [`add_annotation`](crate::add_annotation) returned, or one found by walking
+/// a page's `/Annots`. Characteristics the builder leaves unset keep whatever
+/// the widget already had.
+///
+/// The generated appearance follows automatically: `/BG` and `/BC` are read
+/// every time a widget's appearance is rebuilt, so this needs no companion
+/// call to redraw. A widget whose `/AP` is stale and which the document does
+/// not mark with [`set_need_appearances`] may still show its old face in a
+/// reader that trusts the stream, which is the ordinary appearance-staleness
+/// question rather than anything specific to `/MK`.
+///
+/// # Errors
+///
+/// [`Error::UnresolvedRef`](crate::Error) when `annot` names no dictionary.
+pub fn set_widget_appearance(
+    dest: &mut EditDoc<'_>,
+    annot: ObjRef,
+    appearance: &WidgetAppearance,
+) -> Result<()> {
+    let Some(dict) = dest
+        .fetch(annot)
+        .ok()
+        .and_then(|object| object.as_dict().cloned())
+    else {
+        return Err(Error::Object(pdfrum_object::Error::UnresolvedRef(annot)));
+    };
+
+    // `/MK` is usually direct, but an indirect one is edited in place so any
+    // other widget sharing it keeps the same characteristics.
+    match dict.raw(&mk_key()).cloned() {
+        Some(Object::Ref(mk_ref)) => {
+            let mk = dest
+                .fetch(mk_ref)
+                .ok()
+                .and_then(|object| object.as_dict().cloned())
+                .unwrap_or_default();
+            dest.replace(mk_ref, Object::Dict(appearance.merge_into(mk)));
+        }
+        existing => {
+            let mk = match existing {
+                Some(Object::Dict(mk)) => mk,
+                _ => Dict::new(),
+            };
+            let mut dict = dict;
+            dict.insert(mk_key(), Object::Dict(appearance.merge_into(mk)));
+            dest.replace(annot, Object::Dict(dict));
+        }
+    }
+    Ok(())
+}
 
 /// Sets or clears `/AcroForm /NeedAppearances`.
 ///

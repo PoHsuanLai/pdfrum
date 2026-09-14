@@ -118,6 +118,22 @@ impl FieldKind {
     pub fn is_toggle(self) -> bool {
         matches!(self, FieldKind::Check | FieldKind::Radio)
     }
+
+    /// Whether the kind picks from `/Opt` — a drop-down or a list box.
+    ///
+    /// These are the two that carry `/I` alongside `/V`, which is why a write
+    /// has to keep the pair agreeing.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldKind;
+    /// assert!(FieldKind::Combo.is_choice());
+    /// assert!(FieldKind::List.is_choice());
+    /// assert!(!FieldKind::Text.is_choice());
+    /// ```
+    #[must_use]
+    pub fn is_choice(self) -> bool {
+        matches!(self, FieldKind::Combo | FieldKind::List)
+    }
 }
 
 /// A field's `/Ff` flag word (ISO 32000-1 tables 227–230).
@@ -1179,6 +1195,16 @@ pub fn apply<R: Resolve>(
         }
 
         let dict = rewrite(&field.dict, names::V, value_object(field.kind, value));
+        // A choice field's `/I` indexes `/Opt`, and a `/V` rewritten without
+        // it leaves exactly the stale pair `selected_indices_for_interaction`
+        // has to defend against: it discards `/I` wholesale the moment the two
+        // disagree. Rewriting it here keeps them agreeing, so the selection
+        // survives as an index rather than being re-derived from the text.
+        let dict = if field.kind.is_choice() {
+            rewrite(&dict, names::I, selected_indices_for(&dict, value, r))
+        } else {
+            dict
+        };
         let mut widgets = Vec::new();
         for widget in &field.widgets {
             let Some(widget_ref) = widget.reference else {
@@ -1251,6 +1277,28 @@ pub fn apply<R: Resolve>(
 
 /// The object a value is stored as: a name for a toggle's state, a string for
 /// everything else.
+/// The `/I` array that agrees with a choice field's newly written `/V`.
+///
+/// `/I` holds the **indices into `/Opt`** of what is selected, ascending, and
+/// a reader that finds it disagreeing with `/V` throws it away and matches the
+/// text instead. A value that names no option therefore writes an empty array
+/// rather than guessing: an absent selection and a text-only one are the two
+/// honest answers, and the empty array says the first without contradicting
+/// the second.
+///
+/// A `FieldValues` entry is one string, so at most one index is written even
+/// though the array shape allows several.
+fn selected_indices_for<R: Resolve>(dict: &Dict, value: &str, r: &R) -> Object {
+    let selected = crate::ap::field_body::options(dict, r)
+        .into_iter()
+        .position(|option| option.value == value);
+    Object::Array(pdfrum_object::Array::of(
+        selected
+            .and_then(|index| i64::try_from(index).ok())
+            .map(Object::Int),
+    ))
+}
+
 fn value_object(kind: FieldKind, value: &str) -> Object {
     if kind.is_toggle() {
         Object::Name(Name::from(value.as_bytes()))

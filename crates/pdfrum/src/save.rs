@@ -752,6 +752,27 @@ impl<'a> DocEdit<'a> {
         Ok(out?)
     }
 
+    /// Bakes every page's annotation appearances into its content stream.
+    ///
+    /// [`DocEdit::flatten`] takes one page; this walks the document, which is
+    /// what a caller who wants no annotations left usually means.
+    /// [`Flattened::Done`](pdfrum_edit::Flattened::Done) when any page had
+    /// something to draw.
+    ///
+    /// # Errors
+    ///
+    /// As [`DocEdit::flatten`], for the first page that raises one.
+    pub fn flatten_document(
+        &mut self,
+        mode: pdfrum_edit::FlattenMode,
+    ) -> crate::Result<pdfrum_edit::Flattened> {
+        let mut diags = Diagnostics::default();
+        let out =
+            pdfrum_edit::flatten_document(&mut self.inner, &self.doc.limits, mode, &mut diags);
+        self.doc.note(&diags);
+        Ok(out?)
+    }
+
     /// Create an annotation on `page` and append it to the page's `/Annots`.
     ///
     /// Covers the six subtypes Rotero writes today — `Highlight`, `Text` (note),

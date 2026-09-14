@@ -227,6 +227,7 @@ pub pdfrum_doc::form::FieldKind::Signature
 pub pdfrum_doc::form::FieldKind::Text
 impl pdfrum_doc::form::FieldKind
 pub fn pdfrum_doc::form::FieldKind::classify(&[u8], pdfrum_doc::form::FieldFlags) -> core::option::Option<pdfrum_doc::form::FieldKind>
+pub fn pdfrum_doc::form::FieldKind::is_choice(self) -> bool
 pub fn pdfrum_doc::form::FieldKind::is_toggle(self) -> bool
 pub fn pdfrum_doc::form::FieldKind::is_writable(self) -> bool
 pub struct pdfrum_doc::form::Field
