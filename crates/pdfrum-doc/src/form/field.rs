@@ -1152,13 +1152,17 @@ pub struct FieldEdit {
 /// values.set("name", "Grace");
 ///
 /// // The field is written inline in `/Fields`, so it has no reference to
-/// // replace and no edit is produced.
-/// assert!(apply(&form, &values, &NoResolve, &mut diags).is_empty());
+/// // replace and no edit is produced. `None` for the fonts draws a widget's
+/// // chrome without laying its value out; pass `FormFonts::load`'s answer to
+/// // get the body too.
+/// assert!(apply(&form, &values, &catalog, None, &NoResolve, &mut diags).is_empty());
 /// ```
 #[must_use]
 pub fn apply<R: Resolve>(
     form: &Form,
     values: &FieldValues,
+    catalog: &Dict,
+    fonts: Option<&ap::FormFonts>,
     r: &R,
     diags: &mut Diagnostics,
 ) -> Vec<FieldEdit> {
@@ -1200,7 +1204,24 @@ pub fn apply<R: Resolve>(
             } else {
                 source.clone()
             };
-            if let Some(generated) = ap::widget::generate(&widget_dict, r) {
+            // A text or choice field's widget needs its *value* laid out, not
+            // just its chrome: the page-wide generator reaches the body through
+            // `generate_with_text`, and a fill that stopped at the chrome would
+            // store the value and render an empty box.
+            let generated =
+                ap::with_text_font(&widget_dict, catalog, fonts, r, |text_font, substitute| {
+                    match text_font {
+                        Some(font) => ap::widget::generate_with_text(
+                            &widget_dict,
+                            catalog,
+                            font,
+                            substitute,
+                            r,
+                        ),
+                        None => ap::widget::generate(&widget_dict, r),
+                    }
+                });
+            if let Some(generated) = generated {
                 widgets.push((widget_ref, widget_dict, generated));
             } else if widget_ref != reference && field.kind.is_toggle() {
                 // No appearance needed to be drawn, but `/AS` still changed.
@@ -1832,7 +1853,7 @@ mod tests {
         values.set("inline", "x");
         let mut diags = Diagnostics::default();
         assert!(
-            apply(&form, &values, &NoResolve, &mut diags).is_empty(),
+            apply(&form, &values, &catalog, None, &NoResolve, &mut diags).is_empty(),
             "an unnamed field produces no replacement"
         );
     }

@@ -346,7 +346,19 @@ impl Document {
     ) -> Result<()> {
         let mut edit = EditDoc::new(&self.inner);
         let mut diags = Diagnostics::default();
-        let edits = pdfrum_doc::form::apply(form.inner(), form.values(), &self.inner, &mut diags);
+        // The fill lays each field's value out, which needs the `/DR` faces the
+        // form's `/DA` names — the same ones the page-wide generator loads.
+        let catalog = self.inner.catalog().unwrap_or_default();
+        let mut build = pdfrum_page::BuildContext::new();
+        let fonts = pdfrum_doc::ap::FormFonts::load(&catalog, &self.inner, &mut build);
+        let edits = pdfrum_doc::form::apply(
+            form.inner(),
+            form.values(),
+            &catalog,
+            Some(&fonts),
+            &self.inner,
+            &mut diags,
+        );
         self.note(&diags);
         for field in edits {
             edit.replace(field.reference, Object::Dict(field.dict));
