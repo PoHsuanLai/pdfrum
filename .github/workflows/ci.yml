@@ -70,7 +70,7 @@ jobs:
       # Actions are pinned by commit SHA, not tag: a tag is mutable and these
       # run with a token that can read the repository.
       - name: Install the prebuilt tools
-        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        uses: taiki-e/install-action@9534c84618278caac52cb373bb164ed464dbd8af # v2
         with:
           # `wasm-bindgen` must match the `wasm-bindgen` crate version in
           # `crates/pdfrum-wasm/Cargo.toml`; a mismatch is a runtime error.
@@ -120,7 +120,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Install the prebuilt tools
-        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        uses: taiki-e/install-action@9534c84618278caac52cb373bb164ed464dbd8af # v2
         with:
           tool: cargo-nextest
 
@@ -187,7 +187,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Install the prebuilt tools
-        uses: taiki-e/install-action@84f5ac3124727fb3d284d4d22ee9ab3654fd09a6 # v2
+        uses: taiki-e/install-action@9534c84618278caac52cb373bb164ed464dbd8af # v2
         with:
           tool: cargo-nextest
 
