@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    AnnotGoToView, AnnotLinkAction, AnnotSpec, Document, Name, Rect, SaveOptions, Subtype,
+    AnnotGoToView, AnnotLinkAction, Document, LinkSpec, Name, Rect, SaveOptions, Subtype,
 };
 use pdfrum_object::ObjRef;
 
@@ -49,7 +49,7 @@ fn uri_link_still_round_trips() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link(
+        LinkSpec::uri(
             Rect::new(72.0, 700.0, 200.0, 720.0),
             "https://example.test/uri",
         ),
@@ -85,12 +85,12 @@ fn goto_fit_round_trips_via_dict() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link_goto(
+        LinkSpec::goto(
             Rect::new(10.0, 10.0, 80.0, 24.0),
             target,
             AnnotGoToView::Fit,
         )
-        .with_contents("to page 2"),
+        .contents("to page 2"),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -127,7 +127,7 @@ fn goto_xyz_and_named_write_expected_keys() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link_goto(
+        LinkSpec::goto(
             Rect::new(10.0, 40.0, 80.0, 54.0),
             target,
             AnnotGoToView::Xyz {
@@ -140,7 +140,7 @@ fn goto_xyz_and_named_write_expected_keys() {
     .expect("xyz");
     edit.add_annotation(
         0,
-        AnnotSpec::link_named(
+        LinkSpec::named(
             Rect::new(10.0, 60.0, 80.0, 74.0),
             "Chapter1",
             target,
@@ -200,7 +200,7 @@ fn named_dest_resolves_after_reopen() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link_named(
+        LinkSpec::named(
             Rect::new(10.0, 60.0, 80.0, 74.0),
             "Chapter1",
             target,
@@ -240,7 +240,7 @@ fn named_existing_does_not_upsert_names_tree() {
         .expect("register");
     edit.add_annotation(
         0,
-        AnnotSpec::link_named_existing(Rect::new(10.0, 80.0, 80.0, 94.0), "OnlyOnce"),
+        LinkSpec::named_existing(Rect::new(10.0, 80.0, 80.0, 94.0), "OnlyOnce"),
     )
     .expect("named existing");
 

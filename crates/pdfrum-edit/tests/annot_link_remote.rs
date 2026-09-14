@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotGoToView, AnnotSpec, Document, Name, Rect, SaveOptions, Subtype};
+use pdfrum::{AnnotGoToView, Document, LinkSpec, Name, Rect, SaveOptions, Subtype};
 
 fn hello() -> Document {
     Document::open(concat!(
@@ -30,7 +30,7 @@ fn gotor_and_launch_round_trip() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link_goto_r(
+        LinkSpec::goto_r(
             Rect::new(10.0, 10.0, 80.0, 24.0),
             "other.pdf",
             2,
@@ -40,7 +40,7 @@ fn gotor_and_launch_round_trip() {
     .expect("gotor");
     edit.add_annotation(
         0,
-        AnnotSpec::link_launch(Rect::new(10.0, 40.0, 80.0, 54.0), "notes.txt"),
+        LinkSpec::launch(Rect::new(10.0, 40.0, 80.0, 54.0), "notes.txt"),
     )
     .expect("launch");
 
@@ -89,7 +89,7 @@ fn gotor_named_dest_writes_string_d() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link_goto_r_named(Rect::new(10.0, 10.0, 80.0, 24.0), "other.pdf", "Chapter1"),
+        LinkSpec::goto_r_named(Rect::new(10.0, 10.0, 80.0, 24.0), "other.pdf", "Chapter1"),
     )
     .expect("gotor named");
     let saved = save_reopen(&edit);
