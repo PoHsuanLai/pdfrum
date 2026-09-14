@@ -23,7 +23,7 @@ fn blue() -> Color {
 #[test]
 fn line_builder_matches_the_enum_setters() {
     let (a, b) = (Point::new(0.0, 0.0), Point::new(100.0, 20.0));
-    let border = AnnotBorder::solid(3.0).with_style(AnnotBorderStyle::Dashed);
+    let border = AnnotBorder::solid(3.0).with_style(AnnotBorderStyle::Dash);
 
     let built: AnnotSpec = LineSpec::new(rect(), red(), a, b)
         .border(border)
