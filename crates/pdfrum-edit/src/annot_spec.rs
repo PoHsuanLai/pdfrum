@@ -248,6 +248,7 @@ pub struct SquareSpec {
     color: Color,
     contents: Option<String>,
     border: Option<AnnotBorder>,
+    interior: Option<Color>,
 }
 
 impl SquareSpec {
@@ -259,6 +260,7 @@ impl SquareSpec {
             color,
             contents: None,
             border: None,
+            interior: None,
         }
     }
 
@@ -266,6 +268,16 @@ impl SquareSpec {
     #[must_use]
     pub fn border(mut self, border: AnnotBorder) -> Self {
         self.border = Some(border);
+        self
+    }
+
+    /// Sets `/IC`, the colour filling the shape.
+    ///
+    /// Left unset the shape is an outline, which is what an absent `/IC`
+    /// means to a reader.
+    #[must_use]
+    pub fn interior(mut self, color: Color) -> Self {
+        self.interior = Some(color);
         self
     }
 }
@@ -279,10 +291,14 @@ impl From<SquareSpec> for AnnotSpec {
             color,
             contents,
             border,
+            interior,
         } = b;
         let mut spec = Self::square(rect, color);
         if let Some(border) = border {
             spec = spec.with_border(border);
+        }
+        if let Some(interior) = interior {
+            spec = spec.with_interior(interior);
         }
         match contents {
             Some(c) => spec.with_contents(c),
@@ -298,6 +314,7 @@ pub struct CircleSpec {
     color: Color,
     contents: Option<String>,
     border: Option<AnnotBorder>,
+    interior: Option<Color>,
 }
 
 impl CircleSpec {
@@ -309,6 +326,7 @@ impl CircleSpec {
             color,
             contents: None,
             border: None,
+            interior: None,
         }
     }
 
@@ -316,6 +334,16 @@ impl CircleSpec {
     #[must_use]
     pub fn border(mut self, border: AnnotBorder) -> Self {
         self.border = Some(border);
+        self
+    }
+
+    /// Sets `/IC`, the colour filling the shape.
+    ///
+    /// Left unset the shape is an outline, which is what an absent `/IC`
+    /// means to a reader.
+    #[must_use]
+    pub fn interior(mut self, color: Color) -> Self {
+        self.interior = Some(color);
         self
     }
 }
@@ -329,10 +357,14 @@ impl From<CircleSpec> for AnnotSpec {
             color,
             contents,
             border,
+            interior,
         } = b;
         let mut spec = Self::circle(rect, color);
         if let Some(border) = border {
             spec = spec.with_border(border);
+        }
+        if let Some(interior) = interior {
+            spec = spec.with_interior(interior);
         }
         match contents {
             Some(c) => spec.with_contents(c),

@@ -58,8 +58,10 @@ pub pdfrum_edit::AnnotSpec::Caret::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Circle::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Circle::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Circle::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Circle::interior: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Circle::rect: kurbo::rect::Rect
 #[non_exhaustive] pub pdfrum_edit::AnnotSpec::FreeText
+pub pdfrum_edit::AnnotSpec::FreeText::align: core::option::Option<pdfrum_doc::vt::Alignment>
 pub pdfrum_edit::AnnotSpec::FreeText::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::FreeText::contents: alloc::string::String
 pub pdfrum_edit::AnnotSpec::FreeText::da: alloc::string::String
@@ -95,6 +97,7 @@ pub pdfrum_edit::AnnotSpec::Link::rect: kurbo::rect::Rect
 pub pdfrum_edit::AnnotSpec::Square::border: pdfrum_edit::AnnotBorder
 pub pdfrum_edit::AnnotSpec::Square::color: peniko::Color
 pub pdfrum_edit::AnnotSpec::Square::contents: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotSpec::Square::interior: core::option::Option<peniko::Color>
 pub pdfrum_edit::AnnotSpec::Square::rect: kurbo::rect::Rect
 #[non_exhaustive] pub pdfrum_edit::AnnotSpec::Squiggly
 pub pdfrum_edit::AnnotSpec::Squiggly::color: peniko::Color
@@ -137,6 +140,7 @@ pub fn pdfrum_edit::AnnotSpec::squiggly(kurbo::rect::Rect, peniko::Color) -> Sel
 pub fn pdfrum_edit::AnnotSpec::strike_out(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::text(kurbo::rect::Rect, peniko::Color) -> Self
 pub fn pdfrum_edit::AnnotSpec::underline(kurbo::rect::Rect, peniko::Color) -> Self
+pub fn pdfrum_edit::AnnotSpec::with_align(self, pdfrum_doc::vt::Alignment) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_border(self, pdfrum_edit::AnnotBorder) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_color(self, peniko::Color) -> Self
@@ -149,6 +153,7 @@ pub fn pdfrum_edit::AnnotSpec::with_line_endings(self, pdfrum_edit::LineEndingSt
 pub fn pdfrum_edit::AnnotSpec::with_meta(self, pdfrum_edit::AnnotMeta) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_modified(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_name(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
+pub fn pdfrum_edit::AnnotSpec::with_opacity(self, f32) -> pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotSpec::with_open(self, bool) -> Self
 pub fn pdfrum_edit::AnnotSpec::with_quads(self, impl core::iter::traits::collect::IntoIterator<Item = pdfrum_edit::Quad>) -> Self
 impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
@@ -287,11 +292,13 @@ pub fn pdfrum_edit::StampPosition::fmt(&self, &mut core::fmt::Formatter<'_>) -> 
 impl core::str::traits::FromStr for pdfrum_edit::StampPosition
 pub type pdfrum_edit::StampPosition::Err = pdfrum_edit::UnknownStampPosition
 pub fn pdfrum_edit::StampPosition::from_str(&str) -> core::result::Result<pdfrum_edit::StampPosition, pdfrum_edit::UnknownStampPosition>
-pub struct pdfrum_edit::AnnotBorder
+#[non_exhaustive] pub struct pdfrum_edit::AnnotBorder
+pub pdfrum_edit::AnnotBorder::dash: core::option::Option<[i64; 3]>
 pub pdfrum_edit::AnnotBorder::style: pdfrum_edit::AnnotBorderStyle
 pub pdfrum_edit::AnnotBorder::width: f32
 impl pdfrum_edit::AnnotBorder
 pub fn pdfrum_edit::AnnotBorder::solid(f32) -> Self
+pub fn pdfrum_edit::AnnotBorder::with_dash(self, [i64; 3]) -> Self
 pub fn pdfrum_edit::AnnotBorder::with_style(self, pdfrum_edit::AnnotBorderStyle) -> Self
 impl core::default::Default for pdfrum_edit::AnnotBorder
 pub fn pdfrum_edit::AnnotBorder::default() -> Self
@@ -300,11 +307,13 @@ pub pdfrum_edit::AnnotMeta::author: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotMeta::flags: core::option::Option<pdfrum_doc::annot::AnnotFlags>
 pub pdfrum_edit::AnnotMeta::modified: core::option::Option<alloc::string::String>
 pub pdfrum_edit::AnnotMeta::name: core::option::Option<alloc::string::String>
+pub pdfrum_edit::AnnotMeta::opacity: core::option::Option<f32>
 impl pdfrum_edit::AnnotMeta
 pub fn pdfrum_edit::AnnotMeta::with_author(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotMeta::with_flags(self, pdfrum_doc::annot::AnnotFlags) -> Self
 pub fn pdfrum_edit::AnnotMeta::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotMeta::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotMeta::with_opacity(self, f32) -> Self
 pub struct pdfrum_edit::AnnotWrite
 pub pdfrum_edit::AnnotWrite::meta: pdfrum_edit::AnnotMeta
 pub pdfrum_edit::AnnotWrite::spec: pdfrum_edit::AnnotSpec
@@ -315,6 +324,7 @@ pub fn pdfrum_edit::AnnotWrite::with_flags(self, pdfrum_doc::annot::AnnotFlags) 
 pub fn pdfrum_edit::AnnotWrite::with_meta(self, pdfrum_edit::AnnotMeta) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_modified(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AnnotWrite::with_name(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::AnnotWrite::with_opacity(self, f32) -> Self
 impl core::convert::From<pdfrum_edit::AnnotSpec> for pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::AnnotSpec) -> Self
 #[non_exhaustive] pub struct pdfrum_edit::AttachmentOptions
@@ -359,6 +369,7 @@ pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::CaretSpec) -> Self
 pub struct pdfrum_edit::CircleSpec
 impl pdfrum_edit::CircleSpec
 pub fn pdfrum_edit::CircleSpec::border(self, pdfrum_edit::AnnotBorder) -> Self
+pub fn pdfrum_edit::CircleSpec::interior(self, peniko::Color) -> Self
 pub fn pdfrum_edit::CircleSpec::new(kurbo::rect::Rect, peniko::Color) -> Self
 impl pdfrum_edit::CircleSpec
 pub fn pdfrum_edit::CircleSpec::contents(self, impl core::convert::Into<alloc::string::String>) -> Self
@@ -556,6 +567,7 @@ pub fn pdfrum_edit::SaveOptions::default() -> Self
 pub struct pdfrum_edit::SquareSpec
 impl pdfrum_edit::SquareSpec
 pub fn pdfrum_edit::SquareSpec::border(self, pdfrum_edit::AnnotBorder) -> Self
+pub fn pdfrum_edit::SquareSpec::interior(self, peniko::Color) -> Self
 pub fn pdfrum_edit::SquareSpec::new(kurbo::rect::Rect, peniko::Color) -> Self
 impl pdfrum_edit::SquareSpec
 pub fn pdfrum_edit::SquareSpec::contents(self, impl core::convert::Into<alloc::string::String>) -> Self
