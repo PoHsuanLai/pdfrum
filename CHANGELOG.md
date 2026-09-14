@@ -53,6 +53,15 @@ first crates.io release.
 
 ### Changed
 
+- `AnnotBorderStyle` is an alias of `pdfrum_doc::ap::BorderStyle` rather
+  than a second enum over the same five `/BS /S` values. The read side,
+  the form layer, and the annotation writer now name one type. The two
+  sides still differ in how they reach a value — reading takes the first
+  byte of `/S`, so `/Dotted` reads as `Dash`, while writing goes through
+  the new `BorderStyleName::as_bytes` and emits only the five legal
+  names. `AnnotBorderStyle::Dashed` is spelled `Dash`, and `as_bytes`
+  needs `BorderStyleName` in scope. Both shipped unreleased, so no
+  published API changes.
 - The per-subtype `AnnotSpec::with_*` setters remain, but prefer the
   typed builders above: a setter that does not apply to the variant it
   is called on cannot change anything, and now trips a debug assertion
