@@ -6,7 +6,7 @@
 
 use kurbo::{Point, Rect};
 use pdfrum_common::{Diagnostics, PageIndex};
-use pdfrum_doc::{AnnotFlags, Subtype};
+use pdfrum_doc::{AnnotFlags, Subtype, vt::Alignment};
 use pdfrum_object::{
     Array, ByteSpan, Dict, Name, ObjRef, Object, PdfString, Resolve, Stream, encode_text,
 };
@@ -194,11 +194,20 @@ impl LineEndingStyle {
 /// assert_eq!(border.style, AnnotBorderStyle::Solid);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct AnnotBorder {
     /// Border width (`/W`) in points.
     pub width: f32,
     /// Border style (`/S`).
     pub style: AnnotBorderStyle,
+    /// Dash pattern `/D` as `[on gap phase]`, for a [`AnnotBorderStyle::Dash`]
+    /// border.
+    ///
+    /// `None` writes no `/D`, and a reader then falls back to its own default
+    /// of `[3 0 0]` — so a dashed border without this is dashed, just not to a
+    /// pattern the file states. The key is written only for a dashed style,
+    /// since it means nothing to the others.
+    pub dash: Option<[i64; 3]>,
 }
 
 impl Default for AnnotBorder {
@@ -206,6 +215,7 @@ impl Default for AnnotBorder {
         Self {
             width: 2.0,
             style: AnnotBorderStyle::Solid,
+            dash: None,
         }
     }
 }
@@ -225,6 +235,7 @@ impl AnnotBorder {
         Self {
             width,
             style: AnnotBorderStyle::Solid,
+            dash: None,
         }
     }
 
@@ -232,6 +243,26 @@ impl AnnotBorder {
     #[must_use]
     pub fn with_style(mut self, style: AnnotBorderStyle) -> Self {
         self.style = style;
+        self
+    }
+
+    /// Sets `/D`, the dash pattern, as `[on gap phase]`.
+    ///
+    /// Only a [`AnnotBorderStyle::Dash`] border writes it. The reader takes
+    /// the three entries as on-length, gap-length and phase, and an absent
+    /// `/D` as its own `[3 0 0]`.
+    ///
+    /// ```
+    /// use pdfrum_edit::{AnnotBorder, AnnotBorderStyle};
+    ///
+    /// let border = AnnotBorder::solid(1.0)
+    ///     .with_style(AnnotBorderStyle::Dash)
+    ///     .with_dash([4, 2, 0]);
+    /// assert_eq!(border.dash, Some([4, 2, 0]));
+    /// ```
+    #[must_use]
+    pub fn with_dash(mut self, dash: [i64; 3]) -> Self {
+        self.dash = Some(dash);
         self
     }
 }
@@ -509,6 +540,9 @@ pub enum AnnotSpec {
         contents: Option<String>,
         /// Border style dictionary (`/BS`).
         border: AnnotBorder,
+        /// Interior fill `/IC`. `None` leaves the shape unfilled, which is
+        /// what an absent or empty `/IC` means to a reader.
+        interior: Option<Color>,
     },
     /// An underline over one or more text runs (`/Subtype /Underline`).
     ///
@@ -587,6 +621,9 @@ pub enum AnnotSpec {
         contents: String,
         /// Default appearance string (`/DA`), e.g. [`DEFAULT_DA`].
         da: String,
+        /// Text alignment, written as `/Q`. `None` writes no key, which a
+        /// reader takes as flush left.
+        align: Option<Alignment>,
     },
     /// A circle / ellipse annotation (`/Subtype /Circle`).
     ///
@@ -602,6 +639,9 @@ pub enum AnnotSpec {
         contents: Option<String>,
         /// Border style dictionary (`/BS`).
         border: AnnotBorder,
+        /// Interior fill `/IC`. `None` leaves the shape unfilled, which is
+        /// what an absent or empty `/IC` means to a reader.
+        interior: Option<Color>,
     },
     /// A straight line (`/Subtype /Line`) with endpoints `/L`.
     ///
@@ -744,6 +784,7 @@ impl AnnotSpec {
             color,
             contents: None,
             border: AnnotBorder::default(),
+            interior: None,
         }
     }
 
@@ -776,6 +817,7 @@ impl AnnotSpec {
             color,
             contents: contents.into(),
             da: da.into(),
+            align: None,
         }
     }
 
@@ -796,6 +838,7 @@ impl AnnotSpec {
             color,
             contents: None,
             border: AnnotBorder::default(),
+            interior: None,
         }
     }
 
@@ -882,7 +925,65 @@ impl AnnotSpec {
         }
     }
 
-    /// Sets `/IC` on [`AnnotSpec::Line`] for filled ending interiors.
+    /// Sets `/Q`, the text alignment, on a [`AnnotSpec::FreeText`].
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_doc::vt::Alignment;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let spec = AnnotSpec::free_text(
+    ///     Rect::new(0.0, 0.0, 100.0, 20.0),
+    ///     Color::from_rgb8(0, 0, 0),
+    ///     "centred",
+    ///     pdfrum_edit::DEFAULT_DA,
+    /// )
+    /// .with_align(Alignment::Center);
+    /// assert!(matches!(spec, AnnotSpec::FreeText { align: Some(Alignment::Center), .. }));
+    /// ```
+    #[must_use]
+    pub fn with_align(self, align: Alignment) -> Self {
+        match self {
+            Self::FreeText {
+                rect,
+                color,
+                contents,
+                da,
+                ..
+            } => Self::FreeText {
+                rect,
+                color,
+                contents,
+                da,
+                align: Some(align),
+            },
+            other => {
+                debug_assert!(
+                    false,
+                    "AnnotSpec::with_align applies to FreeText, not {other:?}"
+                );
+                other
+            }
+        }
+    }
+
+    /// Sets `/IC`: the fill inside a Square or Circle, and the fill of a
+    /// Line's endings.
+    ///
+    /// The appearance generator reads `/IC` for all three — `shape_preamble`
+    /// fills a rectangle or ellipse with it, and the line-ending shapes take
+    /// it as their interior.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let filled = AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 0))
+    ///     .with_interior(Color::from_rgb8(255, 255, 0));
+    /// assert!(matches!(filled, AnnotSpec::Square { interior: Some(_), .. }));
+    /// ```
     #[must_use]
     pub fn with_interior(self, color: Color) -> Self {
         match self {
@@ -905,10 +1006,36 @@ impl AnnotSpec {
                 line_endings,
                 interior: Some(color),
             },
+            Self::Square {
+                rect,
+                color: c,
+                contents,
+                border,
+                ..
+            } => Self::Square {
+                rect,
+                color: c,
+                contents,
+                border,
+                interior: Some(color),
+            },
+            Self::Circle {
+                rect,
+                color: c,
+                contents,
+                border,
+                ..
+            } => Self::Circle {
+                rect,
+                color: c,
+                contents,
+                border,
+                interior: Some(color),
+            },
             other => {
                 debug_assert!(
                     false,
-                    "AnnotSpec::with_interior applies to Line, not {other:?}"
+                    "AnnotSpec::with_interior applies to Line, Square and Circle, not {other:?}"
                 );
                 other
             }
@@ -1258,12 +1385,14 @@ impl AnnotSpec {
                 rect,
                 color,
                 border,
+                interior,
                 ..
             } => Self::Square {
                 rect,
                 color,
                 contents,
                 border,
+                interior,
             },
             Self::Underline {
                 rect, color, quads, ..
@@ -1306,12 +1435,14 @@ impl AnnotSpec {
                 rect,
                 color,
                 border,
+                interior,
                 ..
             } => Self::Circle {
                 rect,
                 color,
                 contents,
                 border,
+                interior,
             },
             Self::Line {
                 rect,
@@ -1373,6 +1504,7 @@ impl AnnotSpec {
     ///         border: AnnotBorder {
     ///             width,
     ///             style: AnnotBorderStyle::Dash,
+    ///             ..
     ///         },
     ///         ..
     ///     } if (width - 1.0).abs() < f32::EPSILON
@@ -1385,12 +1517,14 @@ impl AnnotSpec {
                 rect,
                 color,
                 contents,
+                interior,
                 ..
             } => Self::Square {
                 rect,
                 color,
                 contents,
                 border,
+                interior,
             },
             Self::Ink {
                 rect,
@@ -1409,12 +1543,14 @@ impl AnnotSpec {
                 rect,
                 color,
                 contents,
+                interior,
                 ..
             } => Self::Circle {
                 rect,
                 color,
                 contents,
                 border,
+                interior,
             },
             Self::Line {
                 rect,
@@ -1635,6 +1771,26 @@ impl AnnotSpec {
     pub fn with_flags(self, flags: AnnotFlags) -> AnnotWrite {
         self.with_meta(AnnotMeta::default().with_flags(flags))
     }
+
+    /// Sets `/CA`, the constant opacity, from 0.0 to 1.0.
+    ///
+    /// Applies to every subtype: the generator folds it into the appearance's
+    /// `/ExtGState`, so a translucent highlight is written the same way an
+    /// opaque one is.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotSpec;
+    /// use kurbo::Rect;
+    /// use peniko::Color;
+    ///
+    /// let write = AnnotSpec::highlight(Rect::new(0.0, 0.0, 10.0, 2.0), Color::from_rgb8(255, 255, 0))
+    ///     .with_opacity(0.4);
+    /// assert_eq!(write.meta.opacity, Some(0.4));
+    /// ```
+    #[must_use]
+    pub fn with_opacity(self, opacity: f32) -> AnnotWrite {
+        self.with_meta(AnnotMeta::default().with_opacity(opacity))
+    }
 }
 
 /// Optional dictionary fields common to every annotation subtype.
@@ -1642,7 +1798,7 @@ impl AnnotSpec {
 /// Applied when writing via [`add_annotation`] / [`AnnotWrite`].
 ///
 /// `/F` defaults to [`AnnotFlags::PRINT`] when [`Self::flags`] is `None`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnnotMeta {
     /// Author / title string written as `/T`.
     pub author: Option<String>,
@@ -1652,6 +1808,12 @@ pub struct AnnotMeta {
     pub modified: Option<String>,
     /// Annotation flags written as `/F`. `None` means [`AnnotFlags::PRINT`].
     pub flags: Option<AnnotFlags>,
+    /// Constant opacity written as `/CA`, from 0.0 (invisible) to 1.0.
+    ///
+    /// `None` writes no key, which a reader takes as fully opaque. The
+    /// appearance generator reads `/CA` into the stream's `/ExtGState`, so a
+    /// written one is honoured without the caller drawing anything.
+    pub opacity: Option<f32>,
 }
 
 impl AnnotMeta {
@@ -1688,6 +1850,19 @@ impl AnnotMeta {
     #[must_use]
     pub fn with_flags(mut self, flags: AnnotFlags) -> Self {
         self.flags = Some(flags);
+        self
+    }
+
+    /// Sets `/CA`, the constant opacity, clamped to 0.0..=1.0 when written.
+    ///
+    /// ```
+    /// use pdfrum_edit::AnnotMeta;
+    ///
+    /// assert_eq!(AnnotMeta::default().with_opacity(0.4).opacity, Some(0.4));
+    /// ```
+    #[must_use]
+    pub fn with_opacity(mut self, opacity: f32) -> Self {
+        self.opacity = Some(opacity);
         self
     }
 }
@@ -1750,6 +1925,13 @@ impl AnnotWrite {
     #[must_use]
     pub fn with_flags(mut self, flags: AnnotFlags) -> Self {
         self.meta.flags = Some(flags);
+        self
+    }
+
+    /// Sets `/CA`, the constant opacity, from 0.0 to 1.0.
+    #[must_use]
+    pub fn with_opacity(mut self, opacity: f32) -> Self {
+        self.meta.opacity = Some(opacity);
         self
     }
 }
@@ -2119,6 +2301,12 @@ fn apply_meta(dict: &mut Dict, meta: &AnnotMeta) {
     }
     let flags = meta.flags.unwrap_or(AnnotFlags::PRINT);
     dict.insert(names::F.clone(), Object::Int(flags.bits()));
+    // `/CA` goes in before the appearance is generated, so `ext_gstate_dict`
+    // picks it up and the stream carries the alpha rather than the caller
+    // having to draw it.
+    if let Some(opacity) = meta.opacity {
+        dict.insert(Name::from("CA"), Object::Real(opacity.clamp(0.0, 1.0)));
+    }
 }
 
 /// Generate `/AP /N` for `dict` when a subtype generator exists.
@@ -2302,12 +2490,18 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             contents,
             border,
+            interior,
         } => {
             let mut dict = common(Subtype::Square, rect, color, page_ref);
             dict.insert(
                 names::BS.clone(),
                 Object::Dict(border_style_dict(border, true)),
             );
+            // An absent `/IC` and an empty one both mean "do not fill", which
+            // is what `None` says; only a colour writes the key.
+            if let Some(interior) = interior {
+                dict.insert(names::IC.clone(), color_object(interior));
+            }
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -2332,10 +2526,16 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             contents,
             da,
+            align,
         } => {
             let mut dict = common(Subtype::FreeText, rect, color, page_ref);
             dict.insert(names::CONTENTS.clone(), Object::Str(pdf_string(&contents)));
             dict.insert(names::DA.clone(), Object::Str(pdf_string(&da)));
+            // An absent `/Q` reads as flush left, so only a stated alignment
+            // writes the key.
+            if let Some(align) = align {
+                dict.insert(names::Q.clone(), Object::Int(align.to_quadding()));
+            }
             Ok(dict)
         }
         AnnotSpec::Circle {
@@ -2343,12 +2543,18 @@ fn build_dict(spec: AnnotSpec, page_ref: ObjRef) -> Result<Dict> {
             color,
             contents,
             border,
+            interior,
         } => {
             let mut dict = common(Subtype::Circle, rect, color, page_ref);
             dict.insert(
                 names::BS.clone(),
                 Object::Dict(border_style_dict(border, true)),
             );
+            // An absent `/IC` and an empty one both mean "do not fill", which
+            // is what `None` says; only a colour writes the key.
+            if let Some(interior) = interior {
+                dict.insert(names::IC.clone(), color_object(interior));
+            }
             insert_contents(&mut dict, contents.as_deref());
             Ok(dict)
         }
@@ -2783,6 +2989,18 @@ fn border_style_dict(border: AnnotBorder, with_type: bool) -> Dict {
         names::S.clone(),
         Object::Name(Name::from(border.style.as_bytes())),
     );
+    // `/D` means nothing to a style that is not dashed, so it is written only
+    // where a reader would consult it.
+    if let (AnnotBorderStyle::Dash, Some([on, gap, phase])) = (border.style, border.dash) {
+        bs.insert(
+            names::D.clone(),
+            Object::Array(Array::of([
+                Object::Int(on),
+                Object::Int(gap),
+                Object::Int(phase),
+            ])),
+        );
+    }
     bs
 }
 

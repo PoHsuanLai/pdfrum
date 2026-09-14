@@ -164,10 +164,7 @@ fn square_and_ink_custom_border_round_trip() {
                 kurbo::Point::new(140.0, 140.0),
             ]],
         )
-        .with_border(AnnotBorder {
-            width: 3.0,
-            style: AnnotBorderStyle::Underline,
-        }),
+        .with_border(AnnotBorder::solid(3.0).with_style(AnnotBorderStyle::Underline)),
     )
     .expect("ink");
 
