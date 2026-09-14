@@ -125,9 +125,10 @@ pub use pdfrum_edit::pdf_date;
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
     AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta,
-    AnnotRemoteDest, AnnotSpec, AnnotWrite, DEFAULT_DA, LineEndingStyle, Quad, add_annotation,
-    delete_annotation, delete_annotation_at, ensure_named_destination, set_named_destination,
-    update_annotation, update_annotation_at,
+    AnnotRemoteDest, AnnotSpec, AnnotWrite, CaretSpec, CircleSpec, DEFAULT_DA, InkSpec,
+    LineEndingStyle, LineSpec, LinkSpec, MarkupKind, MarkupSpec, Quad, SquareSpec, TextSpec,
+    add_annotation, delete_annotation, delete_annotation_at, ensure_named_destination,
+    set_named_destination, update_annotation, update_annotation_at,
 };
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
