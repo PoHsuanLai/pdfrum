@@ -1,13 +1,5 @@
 pub mod pdfrum_edit
 pub use pdfrum_edit::StandardFont
-#[non_exhaustive] pub enum pdfrum_edit::AnnotBorderStyle
-pub pdfrum_edit::AnnotBorderStyle::Beveled
-pub pdfrum_edit::AnnotBorderStyle::Dashed
-pub pdfrum_edit::AnnotBorderStyle::Inset
-pub pdfrum_edit::AnnotBorderStyle::Solid
-pub pdfrum_edit::AnnotBorderStyle::Underline
-impl pdfrum_edit::AnnotBorderStyle
-pub const fn pdfrum_edit::AnnotBorderStyle::as_bytes(self) -> &'static [u8]
 #[non_exhaustive] pub enum pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotGoToView::Fit
 pub pdfrum_edit::AnnotGoToView::FitB
@@ -629,6 +621,10 @@ pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::TextSpec) -> Self
 pub struct pdfrum_edit::UnknownFlattenMode(_)
 pub struct pdfrum_edit::UnknownStampPosition(_)
 pub const pdfrum_edit::DEFAULT_DA: &str
+pub trait pdfrum_edit::BorderStyleName
+pub fn pdfrum_edit::BorderStyleName::as_bytes(&self) -> &'static [u8]
+impl pdfrum_edit::BorderStyleName for pdfrum_edit::AnnotBorderStyle
+pub fn pdfrum_edit::AnnotBorderStyle::as_bytes(&self) -> &'static [u8]
 pub fn pdfrum_edit::add_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::convert::Into<pdfrum_edit::AnnotWrite>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<usize, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
@@ -664,4 +660,5 @@ pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
 pub fn pdfrum_edit::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
 pub fn pdfrum_edit::write_point(&mut alloc::string::String, kurbo::point::Point)
 pub fn pdfrum_edit::write_rect(&mut alloc::string::String, kurbo::rect::Rect)
+pub type pdfrum_edit::AnnotBorderStyle = pdfrum_doc::ap::border::BorderStyle
 pub type pdfrum_edit::ShareCounts = alloc::collections::btree::set::BTreeSet<u32>

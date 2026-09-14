@@ -151,7 +151,7 @@ fn square_and_ink_custom_border_round_trip() {
             Rect::new(100.0, 100.0, 200.0, 180.0),
             Color::from_rgb8(0, 128, 255),
         )
-        .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dashed)),
+        .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dash)),
     )
     .expect("square");
     edit.add_annotation(
