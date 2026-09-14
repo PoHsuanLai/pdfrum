@@ -7,6 +7,16 @@ first crates.io release.
 
 ### Added
 
+- Per-subtype annotation builders — `MarkupSpec` (with `MarkupKind`),
+  `TextSpec`, `SquareSpec`, `CircleSpec`, `InkSpec`, `LineSpec`,
+  `LinkSpec`, and `CaretSpec` — each carrying only the options its
+  subtype has, and converting with `Into<AnnotSpec>` so they are accepted
+  wherever a spec is. `LineSpec::interior` exists, `TextSpec::interior`
+  does not compile, where `AnnotSpec::with_interior` on a `Text` was
+  accepted and dropped.
+- `AnnotSpec::link_action` builds a Link from an `AnnotLinkAction`
+  already in hand; the other `link_*` constructors are this one with the
+  action spelled out.
 - `DocEdit::add_annotation` / `pdfrum_edit::add_annotation` with typed
   `AnnotSpec` variants — enough for Rotero to drop lopdf when writing
   annotations. Text markup (Highlight, Underline, `StrikeOut`, Squiggly)
@@ -52,6 +62,10 @@ first crates.io release.
   names. `AnnotBorderStyle::Dashed` is spelled `Dash`, and `as_bytes`
   needs `BorderStyleName` in scope. Both shipped unreleased, so no
   published API changes.
+- The per-subtype `AnnotSpec::with_*` setters remain, but prefer the
+  typed builders above: a setter that does not apply to the variant it
+  is called on cannot change anything, and now trips a debug assertion
+  rather than silently dropping the call.
 - Every `AnnotSpec` variant is `#[non_exhaustive]`, so a later subtype
   option is an additive change rather than a breaking one. Build specs
   through the constructors (`AnnotSpec::line`, …) and the `with_*`
