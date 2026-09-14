@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotSpec, Color, DEFAULT_DA, Document, Point, Quad, Rect, SaveOptions, Subtype};
+use pdfrum::{
+    Color, DEFAULT_DA, Document, FreeTextSpec, InkSpec, MarkupKind, MarkupSpec, Point, Quad, Rect,
+    SaveOptions, SquareSpec, Subtype, TextSpec,
+};
 
 fn save_reopen(edit: &pdfrum::DocEdit<'_>) -> Document {
     let mut bytes = Vec::new();
@@ -28,7 +31,7 @@ fn highlight_round_trips_subtype_rect_contents_and_quads() {
     let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
     edit.add_annotation(
         0,
-        AnnotSpec::highlight(rect, yellow()).with_contents("mark"),
+        MarkupSpec::new(MarkupKind::Highlight, rect, yellow()).contents("mark"),
     )
     .expect("write");
     let saved = save_reopen(&edit);
@@ -63,7 +66,7 @@ fn text_note_writes_comment_icon_and_contents() {
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
     let mut edit = doc.edit();
     let rect = Rect::new(50.0, 50.0, 70.0, 70.0);
-    edit.add_annotation(0, AnnotSpec::text(rect, yellow()).with_contents("sticky"))
+    edit.add_annotation(0, TextSpec::new(rect, yellow()).contents("sticky"))
         .expect("write");
     let saved = save_reopen(&edit);
     let annot = saved
@@ -89,7 +92,7 @@ fn square_writes_border_style() {
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
     let mut edit = doc.edit();
     let rect = Rect::new(100.0, 100.0, 200.0, 180.0);
-    edit.add_annotation(0, AnnotSpec::square(rect, Color::from_rgb8(0, 128, 255)))
+    edit.add_annotation(0, SquareSpec::new(rect, Color::from_rgb8(0, 128, 255)))
         .expect("write");
     let saved = save_reopen(&edit);
     let annot = saved
@@ -116,7 +119,7 @@ fn underline_round_trips_quads() {
     let rect = Rect::new(80.0, 600.0, 300.0, 612.0);
     edit.add_annotation(
         0,
-        AnnotSpec::underline(rect, Color::from_rgb8(0, 0, 255)).with_contents("u"),
+        MarkupSpec::new(MarkupKind::Underline, rect, Color::from_rgb8(0, 0, 255)).contents("u"),
     )
     .expect("write");
     let saved = save_reopen(&edit);
@@ -138,7 +141,7 @@ fn strike_out_round_trips_quads() {
     let rect = Rect::new(80.0, 580.0, 300.0, 592.0);
     edit.add_annotation(
         0,
-        AnnotSpec::strike_out(rect, Color::from_rgb8(200, 0, 0)).with_contents("so"),
+        MarkupSpec::new(MarkupKind::StrikeOut, rect, Color::from_rgb8(200, 0, 0)).contents("so"),
     )
     .expect("write");
     let saved = save_reopen(&edit);
@@ -160,7 +163,7 @@ fn squiggly_round_trips_quads() {
     let rect = Rect::new(80.0, 560.0, 300.0, 572.0);
     edit.add_annotation(
         0,
-        AnnotSpec::squiggly(rect, Color::from_rgb8(0, 160, 0)).with_contents("sq"),
+        MarkupSpec::new(MarkupKind::Squiggly, rect, Color::from_rgb8(0, 160, 0)).contents("sq"),
     )
     .expect("write");
     let saved = save_reopen(&edit);
@@ -188,11 +191,8 @@ fn ink_writes_inklist_strokes() {
         ],
         vec![Point::new(50.0, 100.0), Point::new(110.0, 110.0)],
     ];
-    edit.add_annotation(
-        0,
-        AnnotSpec::ink(rect, Color::from_rgb8(200, 0, 0), strokes),
-    )
-    .expect("write");
+    edit.add_annotation(0, InkSpec::new(rect, Color::from_rgb8(200, 0, 0), strokes))
+        .expect("write");
     let saved = save_reopen(&edit);
     let annot = saved
         .page(0)
@@ -219,7 +219,7 @@ fn free_text_writes_contents_and_da() {
     let rect = Rect::new(200.0, 200.0, 400.0, 260.0);
     edit.add_annotation(
         0,
-        AnnotSpec::free_text(rect, Color::BLACK, "Hello café", DEFAULT_DA),
+        FreeTextSpec::new(rect, Color::BLACK, "Hello café").da(DEFAULT_DA),
     )
     .expect("write");
     let saved = save_reopen(&edit);
@@ -245,7 +245,12 @@ fn empty_quads_are_refused() {
     let err = edit
         .add_annotation(
             0,
-            AnnotSpec::highlight(Rect::new(0.0, 0.0, 1.0, 1.0), yellow()).with_quads([]),
+            MarkupSpec::new(
+                MarkupKind::Highlight,
+                Rect::new(0.0, 0.0, 1.0, 1.0),
+                yellow(),
+            )
+            .quads([]),
         )
         .expect_err("empty quads");
     let msg = err.to_string();
@@ -260,11 +265,11 @@ fn multiple_subtypes_share_one_annots_array() {
     let doc = Document::open("tests/fixtures/hello_world.pdf").expect("fixture");
     let mut edit = doc.edit();
     let rect = Rect::new(10.0, 10.0, 30.0, 30.0);
-    edit.add_annotation(0, AnnotSpec::text(rect, yellow()).with_contents("a"))
+    edit.add_annotation(0, TextSpec::new(rect, yellow()).contents("a"))
         .expect("text");
     edit.add_annotation(
         0,
-        AnnotSpec::square(Rect::new(40.0, 40.0, 80.0, 80.0), yellow()),
+        SquareSpec::new(Rect::new(40.0, 40.0, 80.0, 80.0), yellow()),
     )
     .expect("square");
     let saved = save_reopen(&edit);
@@ -286,7 +291,7 @@ fn appending_to_existing_annots_keeps_prior_entries() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::text(Rect::new(5.0, 5.0, 25.0, 25.0), yellow()).with_contents("extra"),
+        TextSpec::new(Rect::new(5.0, 5.0, 25.0, 25.0), yellow()).contents("extra"),
     )
     .expect("write");
     let saved = save_reopen(&edit);

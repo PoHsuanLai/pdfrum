@@ -58,11 +58,17 @@ use pdfrum_object::{Name, ObjRef};
 use peniko::Color;
 
 use crate::annot::{
-    AnnotBorder, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotSpec, LineEndingStyle,
-    Quad,
+    AnnotBorder, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta, AnnotSpec,
+    AnnotWrite, LineEndingStyle, Quad,
 };
 
-/// Declares the shared `contents` setter and the `From` conversion.
+/// Declares the setters every subtype shares.
+///
+/// `contents` stays on the builder, since `/Contents` is part of the spec.
+/// The rest are annotation *metadata* rather than subtype options, so they
+/// answer [`AnnotWrite`] — the same shape `AnnotSpec`'s own metadata setters
+/// have, and the reason a typed builder no longer has to fall back to the
+/// enum to name an author.
 macro_rules! spec_builder {
     ($builder:ident, $doc:literal) => {
         impl $builder {
@@ -73,6 +79,55 @@ macro_rules! spec_builder {
             pub fn contents(mut self, contents: impl Into<String>) -> Self {
                 self.contents = Some(contents.into());
                 self
+            }
+
+            #[doc = $doc]
+            ///
+            /// Sets `/T`, the author.
+            #[must_use]
+            pub fn author(self, author: impl Into<String>) -> AnnotWrite {
+                AnnotSpec::from(self).with_author(author)
+            }
+
+            #[doc = $doc]
+            ///
+            /// Sets `/NM`, the annotation's unique name.
+            #[must_use]
+            pub fn name(self, name: impl Into<String>) -> AnnotWrite {
+                AnnotSpec::from(self).with_name(name)
+            }
+
+            #[doc = $doc]
+            ///
+            /// Sets `/M`, the modification date.
+            #[must_use]
+            pub fn modified(self, modified: impl Into<String>) -> AnnotWrite {
+                AnnotSpec::from(self).with_modified(modified)
+            }
+
+            #[doc = $doc]
+            ///
+            /// Sets `/F`, the annotation flags.
+            #[must_use]
+            pub fn flags(self, flags: pdfrum_doc::AnnotFlags) -> AnnotWrite {
+                AnnotSpec::from(self).with_flags(flags)
+            }
+
+            #[doc = $doc]
+            ///
+            /// Sets every metadata field at once.
+            #[must_use]
+            pub fn meta(self, meta: AnnotMeta) -> AnnotWrite {
+                AnnotSpec::from(self).with_meta(meta)
+            }
+        }
+
+        // So a builder reaches `add_annotation` directly, the way an
+        // `AnnotSpec` does — without it every call site would need an
+        // `.into()` naming a type the caller never mentions.
+        impl From<$builder> for AnnotWrite {
+            fn from(builder: $builder) -> Self {
+                AnnotSpec::from(builder).into()
             }
         }
     };
@@ -156,16 +211,31 @@ impl From<MarkupSpec> for AnnotSpec {
             quads,
             contents,
         } = b;
-        let spec = match kind {
-            MarkupKind::Highlight => Self::highlight(rect, color),
-            MarkupKind::Underline => Self::underline(rect, color),
-            MarkupKind::StrikeOut => Self::strike_out(rect, color),
-            MarkupKind::Squiggly => Self::squiggly(rect, color),
-        }
-        .with_quads(quads);
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        match kind {
+            MarkupKind::Highlight => Self::Highlight {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            MarkupKind::Underline => Self::Underline {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            MarkupKind::StrikeOut => Self::StrikeOut {
+                rect,
+                color,
+                quads,
+                contents,
+            },
+            MarkupKind::Squiggly => Self::Squiggly {
+                rect,
+                color,
+                quads,
+                contents,
+            },
         }
     }
 }
@@ -230,13 +300,12 @@ impl From<TextSpec> for AnnotSpec {
             icon,
             open,
         } = b;
-        let mut spec = Self::text(rect, color).with_open(open);
-        if let Some(icon) = icon {
-            spec = spec.with_icon(icon);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Text {
+            rect,
+            color,
+            contents,
+            icon: icon.unwrap_or_else(|| crate::names::COMMENT.clone()),
+            open,
         }
     }
 }
@@ -293,16 +362,12 @@ impl From<SquareSpec> for AnnotSpec {
             border,
             interior,
         } = b;
-        let mut spec = Self::square(rect, color);
-        if let Some(border) = border {
-            spec = spec.with_border(border);
-        }
-        if let Some(interior) = interior {
-            spec = spec.with_interior(interior);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Square {
+            rect,
+            color,
+            contents,
+            border: border.unwrap_or_default(),
+            interior,
         }
     }
 }
@@ -359,16 +424,12 @@ impl From<CircleSpec> for AnnotSpec {
             border,
             interior,
         } = b;
-        let mut spec = Self::circle(rect, color);
-        if let Some(border) = border {
-            spec = spec.with_border(border);
-        }
-        if let Some(interior) = interior {
-            spec = spec.with_interior(interior);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Circle {
+            rect,
+            color,
+            contents,
+            border: border.unwrap_or_default(),
+            interior,
         }
     }
 }
@@ -415,13 +476,12 @@ impl From<InkSpec> for AnnotSpec {
             contents,
             border,
         } = b;
-        let mut spec = Self::ink(rect, color, strokes);
-        if let Some(border) = border {
-            spec = spec.with_border(border);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Ink {
+            rect,
+            color,
+            strokes,
+            contents,
+            border: border.unwrap_or_default(),
         }
     }
 }
@@ -506,19 +566,15 @@ impl From<LineSpec> for AnnotSpec {
             endings,
             interior,
         } = b;
-        let mut spec = Self::line(rect, color, start, end);
-        if let Some(border) = border {
-            spec = spec.with_border(border);
-        }
-        if let Some((s, e)) = endings {
-            spec = spec.with_line_endings(s, e);
-        }
-        if let Some(interior) = interior {
-            spec = spec.with_interior(interior);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Line {
+            rect,
+            color,
+            start,
+            end,
+            contents,
+            border: border.unwrap_or_default(),
+            line_endings: endings,
+            interior,
         }
     }
 }
@@ -591,6 +647,38 @@ impl LinkSpec {
         Self::new(rect, AnnotLinkAction::NamedExisting { name: name.into() })
     }
 
+    /// A link into another file, at a page number and view.
+    #[must_use]
+    pub fn goto_r(rect: Rect, file: impl Into<String>, page: i64, view: AnnotGoToView) -> Self {
+        Self::new(
+            rect,
+            AnnotLinkAction::GoToR {
+                file: file.into(),
+                dest: crate::AnnotRemoteDest::Page { page, view },
+                new_window: None,
+            },
+        )
+    }
+
+    /// A link into another file, at a destination that file names.
+    #[must_use]
+    pub fn goto_r_named(rect: Rect, file: impl Into<String>, name: impl Into<String>) -> Self {
+        Self::new(
+            rect,
+            AnnotLinkAction::GoToR {
+                file: file.into(),
+                dest: crate::AnnotRemoteDest::Named(name.into()),
+                new_window: None,
+            },
+        )
+    }
+
+    /// A link that launches a file or application.
+    #[must_use]
+    pub fn launch(rect: Rect, file: impl Into<String>) -> Self {
+        Self::new(rect, AnnotLinkAction::Launch { file: file.into() })
+    }
+
     /// Sets `/C`, the colour of the link's border chrome.
     #[must_use]
     pub fn color(mut self, color: Color) -> Self {
@@ -625,19 +713,16 @@ impl From<LinkSpec> for AnnotSpec {
             border,
             highlight,
         } = b;
-        let mut spec = Self::link_action(rect, action);
-        if let Some(color) = color {
-            spec = spec.with_color(color);
-        }
-        if let Some(border) = border {
-            spec = spec.with_border(border);
-        }
-        if let Some(highlight) = highlight {
-            spec = spec.with_highlight(highlight);
-        }
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Link {
+            rect,
+            action,
+            contents,
+            color,
+            // A link's border defaults to a hairline, not the width-2 the
+            // drawn shapes take: a link boxed as thickly as a square would be
+            // wrong over text.
+            border: border.unwrap_or_else(|| AnnotBorder::solid(1.0)),
+            highlight: highlight.unwrap_or_default(),
         }
     }
 }
@@ -671,10 +756,116 @@ impl From<CaretSpec> for AnnotSpec {
             color,
             contents,
         } = b;
-        let spec = AnnotSpec::caret(rect, color);
-        match contents {
-            Some(c) => spec.with_contents(c),
-            None => spec,
+        Self::Caret {
+            rect,
+            color,
+            contents,
         }
+    }
+}
+
+/// A free-text annotation (`/Subtype /FreeText`): text drawn on the page
+/// rather than held behind an icon.
+///
+/// The one subtype whose text is *required* — a free-text annotation with no
+/// `/Contents` has nothing to draw — so it is a constructor argument here
+/// rather than the optional `contents` every other builder has, and this
+/// builder declares the shared metadata setters itself instead of taking them
+/// from `spec_builder!`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FreeTextSpec {
+    rect: Rect,
+    color: Color,
+    contents: String,
+    da: Option<String>,
+    align: Option<pdfrum_doc::vt::Alignment>,
+}
+
+impl FreeTextSpec {
+    /// Free text over `rect`, with [`DEFAULT_DA`](crate::DEFAULT_DA) as the
+    /// default appearance.
+    #[must_use]
+    pub fn new(rect: Rect, color: Color, contents: impl Into<String>) -> Self {
+        Self {
+            rect,
+            color,
+            contents: contents.into(),
+            da: None,
+            align: None,
+        }
+    }
+
+    /// Sets `/DA`, the default-appearance string naming the font and size the
+    /// body is laid out with.
+    ///
+    /// Left unset this is [`DEFAULT_DA`](crate::DEFAULT_DA).
+    #[must_use]
+    pub fn da(mut self, da: impl Into<String>) -> Self {
+        self.da = Some(da.into());
+        self
+    }
+
+    /// Sets `/Q`, the text alignment.
+    ///
+    /// Unset leaves the key out, which a reader takes as flush left.
+    #[must_use]
+    pub fn align(mut self, align: pdfrum_doc::vt::Alignment) -> Self {
+        self.align = Some(align);
+        self
+    }
+
+    /// Sets `/T`, the author.
+    #[must_use]
+    pub fn author(self, author: impl Into<String>) -> AnnotWrite {
+        AnnotSpec::from(self).with_author(author)
+    }
+
+    /// Sets `/NM`, the annotation's unique name.
+    #[must_use]
+    pub fn name(self, name: impl Into<String>) -> AnnotWrite {
+        AnnotSpec::from(self).with_name(name)
+    }
+
+    /// Sets `/M`, the modification date.
+    #[must_use]
+    pub fn modified(self, modified: impl Into<String>) -> AnnotWrite {
+        AnnotSpec::from(self).with_modified(modified)
+    }
+
+    /// Sets `/F`, the annotation flags.
+    #[must_use]
+    pub fn flags(self, flags: pdfrum_doc::AnnotFlags) -> AnnotWrite {
+        AnnotSpec::from(self).with_flags(flags)
+    }
+
+    /// Sets every metadata field at once.
+    #[must_use]
+    pub fn meta(self, meta: AnnotMeta) -> AnnotWrite {
+        AnnotSpec::from(self).with_meta(meta)
+    }
+}
+
+impl From<FreeTextSpec> for AnnotSpec {
+    fn from(b: FreeTextSpec) -> Self {
+        let FreeTextSpec {
+            rect,
+            color,
+            contents,
+            da,
+            align,
+        } = b;
+        Self::FreeText {
+            rect,
+            color,
+            contents,
+            da: da.unwrap_or_else(|| crate::DEFAULT_DA.to_owned()),
+            align,
+        }
+    }
+}
+
+impl From<FreeTextSpec> for AnnotWrite {
+    fn from(builder: FreeTextSpec) -> Self {
+        AnnotSpec::from(builder).into()
     }
 }
