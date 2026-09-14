@@ -188,9 +188,9 @@ checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
 
 [[package]]
 name = "font-types"
-version = "0.12.4"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e64eb721ca85a34323425f4041adc5d82704d3782d5f8f03793bc012419dce23"
+checksum = "b8eb065f3251655b3c90e22e5e363f310fc5332fb3402e37bbc94752283248f6"
 dependencies = [
  "bytemuck",
 ]
@@ -340,7 +340,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "pdfrum-cmap"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pdfrum-common",
  "pdfrum-object",
@@ -349,14 +349,14 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-common"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kurbo",
 ]
 
 [[package]]
 name = "pdfrum-crypt"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes",
  "cbc",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-doc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-edit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "getrandom",
  "kurbo",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-filters"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hayro-ccitt",
  "miniz_oxide",
@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-font"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pdfrum-cmap",
  "pdfrum-common",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-object"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "pdfrum-common",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-page"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hayro-jbig2",
  "hayro-jpeg2000",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-parser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pdfrum-common",
  "pdfrum-crypt",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-text"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "pdfrum-type1"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pdfrum-common",
  "read-fonts",
@@ -564,9 +564,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "read-fonts"
-version = "0.43.3"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "005c8acf251756c478b0bf402885bfd88a1476020c4c7e6060edc1aa68da38ea"
+checksum = "d5a0cf4bb6cbce4c29756270d189a5e400ac05e91192161d83a0bcb6e68492e8"
 dependencies = [
  "bytemuck",
  "font-types",
@@ -615,9 +615,9 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "skrifa"
-version = "0.46.2"
+version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4febebda507fb889c545a37a135517769d1391941013561292897961d1887d6"
+checksum = "526e654b303ff4ad73a5a40b25de2b3ce3d039c5e3b6da5f89ae6e57004cb40f"
 dependencies = [
  "bytemuck",
  "read-fonts",
@@ -713,15 +713,15 @@ dependencies = [
 
 [[package]]
 name = "weezl"
-version = "0.1.12"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
+checksum = "d4ca08e5ef825b65b056d9efbd95c8750683f0a6d0466d02e96dc2e4e360f3d2"
 
 [[package]]
 name = "zeroize"
-version = "1.8.2"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 
 [[package]]
 name = "zune-core"
