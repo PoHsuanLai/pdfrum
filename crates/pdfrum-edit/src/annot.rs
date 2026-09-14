@@ -968,6 +968,34 @@ impl AnnotSpec {
         }
     }
 
+    /// A link at `rect` running `action`, with the default border, no `/C`,
+    /// and `/H /I`.
+    ///
+    /// The other `link_*` constructors are this one with the action spelled
+    /// out; use it when the action is already in hand.
+    ///
+    /// ```
+    /// use kurbo::Rect;
+    /// use pdfrum_edit::{AnnotLinkAction, AnnotSpec};
+    ///
+    /// let spec = AnnotSpec::link_action(
+    ///     Rect::new(0.0, 0.0, 10.0, 10.0),
+    ///     AnnotLinkAction::Uri("https://example.com".into()),
+    /// );
+    /// assert!(matches!(spec, AnnotSpec::Link { .. }));
+    /// ```
+    #[must_use]
+    pub fn link_action(rect: Rect, action: AnnotLinkAction) -> Self {
+        Self::Link {
+            rect,
+            action,
+            contents: None,
+            color: None,
+            border: AnnotBorder::solid(1.0),
+            highlight: AnnotLinkHighlight::default(),
+        }
+    }
+
     /// A `GoTo` link whose `/D` is `name`, also registering that name under
     /// `/Names /Dests` for `page` + `view`.
     ///

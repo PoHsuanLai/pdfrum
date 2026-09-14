@@ -24,9 +24,11 @@ pub use pdfrum::BuildContext
 pub use pdfrum::Button
 pub use pdfrum::ByteSpan
 pub use pdfrum::Canvas
+pub use pdfrum::CaretSpec
 pub use pdfrum::Cascade
 pub use pdfrum::CharBox
 pub use pdfrum::CharIndex
+pub use pdfrum::CircleSpec
 pub use pdfrum::Color
 pub use pdfrum::ColorMode
 pub use pdfrum::ColorScheme
@@ -59,6 +61,7 @@ pub use pdfrum::IdSource
 pub use pdfrum::ImageBuilder
 pub use pdfrum::IndexMap
 pub use pdfrum::IndexOutOfRange
+pub use pdfrum::InkSpec
 pub use pdfrum::Key
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
@@ -68,7 +71,11 @@ pub use pdfrum::Limits
 pub use pdfrum::LineCap
 pub use pdfrum::LineEndingStyle
 pub use pdfrum::LineJoin
+pub use pdfrum::LineSpec
 pub use pdfrum::Link
+pub use pdfrum::LinkSpec
+pub use pdfrum::MarkupKind
+pub use pdfrum::MarkupSpec
 pub use pdfrum::MissingGlyph
 pub use pdfrum::MiterLimit
 pub use pdfrum::Modifiers
@@ -124,6 +131,7 @@ pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
 pub use pdfrum::Shape
 pub use pdfrum::Size
+pub use pdfrum::SquareSpec
 pub use pdfrum::StampOptions
 pub use pdfrum::StampOptionsBuilder
 pub use pdfrum::StampPosition
@@ -140,6 +148,7 @@ pub use pdfrum::TextError
 pub use pdfrum::TextIndex
 pub use pdfrum::TextPage
 pub use pdfrum::TextRenderMode
+pub use pdfrum::TextSpec
 pub use pdfrum::TinySkiaBackend
 pub use pdfrum::UnknownFlattenMode
 pub use pdfrum::UnknownStampPosition
