@@ -75,6 +75,27 @@ compile untouched.
   annotations left usually means. The per-page `flatten` made that a loop
   that also re-pruned `/AcroForm` once per page. Answers `Done` when any page
   had something to draw.
+- `add_form_field` **creates** a form field — a text field, a check box, or a
+  radio group — where before the write side could only fill fields a file
+  already declared. It writes the widget annotation, the field dictionary, the
+  `/AcroForm /Fields` entry, and the appearance stream, so the field is
+  addressable by name, listed on its page, and drawn without the reader
+  rebuilding it. A field and its widget are one object when the field has a
+  single control; a radio group gets a parent field with one widget kid per
+  button, and only the chosen button's `/AS` names its export value.
+  `FieldSpec` carries the attributes: `/V`, `/DV`, `/TU`, `/DA`, `/MaxLen`,
+  and the `/Ff` bits worth naming (`read_only`, `required`, `multiline`,
+  `password`, `comb`) plus a `flags` escape hatch for the rest. A name the
+  document already uses is refused rather than silently merged into the
+  existing field, since the reader treats a shared name as one field with two
+  controls.
+- `add_form_font` registers a face in `/AcroForm /DR /Font` so a field's `/DA`
+  can name it. A created field gives the form a `Helv` if it has none, because
+  the default `/DA` names that face and a `/DR` without it lays every value out
+  in a substituted one that measures differently.
+- `DEFAULT_FIELD_DA`, the appearance string a created field takes by default:
+  black `Helv` at the auto-size sentinel, so the generator picks a size that
+  fits the widget rather than clipping a fixed one.
 - `FieldKind::is_choice`, the `/Opt`-backed kinds — the two that carry `/I`.
 - `set_need_appearances` sets or clears `/AcroForm /NeedAppearances`, asking a
   reader to build every field's appearance from its value and `/DA`. Clearing
