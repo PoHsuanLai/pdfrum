@@ -12,6 +12,7 @@
 // `mod` already means crate-visible.
 mod annot;
 mod annot_spec;
+mod associated;
 mod attach;
 mod build_graph;
 mod canvas;
@@ -51,6 +52,10 @@ pub use annot::{
 pub use annot_spec::{
     CaretSpec, CircleSpec, FreeTextSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec,
     SquareSpec, TextSpec,
+};
+pub use associated::{
+    Relationship, associate_file_with_document, associate_file_with_page,
+    document_associated_files, page_associated_files,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,

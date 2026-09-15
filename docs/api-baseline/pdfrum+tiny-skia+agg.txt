@@ -130,6 +130,7 @@ pub use pdfrum::Quad
 pub use pdfrum::RasterBackend
 pub use pdfrum::ReadError
 pub use pdfrum::Rect
+pub use pdfrum::Relationship
 pub use pdfrum::RenderCaches
 pub use pdfrum::RenderDevice
 pub use pdfrum::RenderError
@@ -174,13 +175,17 @@ pub use pdfrum::add_annotation
 pub use pdfrum::add_attachment
 pub use pdfrum::add_form_field
 pub use pdfrum::add_form_font
+pub use pdfrum::associate_file_with_document
+pub use pdfrum::associate_file_with_page
 pub use pdfrum::clear_open_action
 pub use pdfrum::delete_annotation
 pub use pdfrum::delete_annotation_at
 pub use pdfrum::delete_attachment
+pub use pdfrum::document_associated_files
 pub use pdfrum::ensure_named_destination
 pub use pdfrum::flatten
 pub use pdfrum::flatten_document
+pub use pdfrum::page_associated_files
 pub use pdfrum::pdf_date
 pub use pdfrum::remove_attachment
 pub use pdfrum::set_attachment_description
