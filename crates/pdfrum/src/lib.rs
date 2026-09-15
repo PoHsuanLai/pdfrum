@@ -48,7 +48,10 @@ pub use form_session::{
 #[cfg(feature = "svg-import")]
 pub use pdfrum_edit::SvgForm;
 #[cfg(feature = "edit")]
-pub use pdfrum_edit::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
+pub use pdfrum_edit::{
+    BookmarkSpec, BookmarkTarget, Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke,
+    set_xmp_metadata,
+};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{FlattenMode, Flattened, UnknownFlattenMode, flatten, flatten_document};
 #[cfg(feature = "edit")]

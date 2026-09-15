@@ -773,6 +773,31 @@ impl<'a> DocEdit<'a> {
         Ok(out?)
     }
 
+    /// Sets or removes the document's XMP metadata stream.
+    ///
+    /// `packet` is written verbatim; `None` removes the stream. See
+    /// [`pdfrum_edit::set_xmp_metadata`].
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog to hold the metadata.
+    pub fn set_xmp_metadata(&mut self, packet: Option<&[u8]>) -> crate::Result<()> {
+        Ok(pdfrum_edit::set_xmp_metadata(&mut self.inner, packet)?)
+    }
+
+    /// Replaces the document's outline — its bookmarks.
+    ///
+    /// `items` is a pre-order walk carrying a depth, the same shape
+    /// [`Document::outline`](crate::Document::outline) reports. An empty list
+    /// removes the outline.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog to hold the outline.
+    pub fn set_outline(&mut self, items: &[pdfrum_edit::BookmarkSpec]) -> crate::Result<()> {
+        Ok(pdfrum_edit::set_outline(&mut self.inner, items)?)
+    }
+
     /// Create an annotation on `page` and append it to the page's `/Annots`.
     ///
     /// Covers the six subtypes Rotero writes today — `Highlight`, `Text` (note),

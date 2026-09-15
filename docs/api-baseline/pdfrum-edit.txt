@@ -148,6 +148,12 @@ impl core::convert::From<pdfrum_edit::SquareSpec> for pdfrum_edit::AnnotSpec
 pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::SquareSpec) -> Self
 impl core::convert::From<pdfrum_edit::TextSpec> for pdfrum_edit::AnnotSpec
 pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::TextSpec) -> Self
+pub enum pdfrum_edit::BookmarkTarget
+pub pdfrum_edit::BookmarkTarget::Named(alloc::string::String)
+pub pdfrum_edit::BookmarkTarget::None
+pub pdfrum_edit::BookmarkTarget::Page
+pub pdfrum_edit::BookmarkTarget::Page::page: pdfrum_object::object::ObjRef
+pub pdfrum_edit::BookmarkTarget::Page::view: pdfrum_edit::AnnotGoToView
 pub enum pdfrum_edit::ContentsShape
 pub pdfrum_edit::ContentsShape::Absent
 pub pdfrum_edit::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
@@ -337,6 +343,21 @@ pub fn pdfrum_edit::AttachmentOptionsBuilder::build(self) -> pdfrum_edit::Attach
 pub fn pdfrum_edit::AttachmentOptionsBuilder::description(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AttachmentOptionsBuilder::mime_type(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AttachmentOptionsBuilder::modified(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub struct pdfrum_edit::BookmarkSpec
+pub pdfrum_edit::BookmarkSpec::color: core::option::Option<(f32, f32, f32)>
+pub pdfrum_edit::BookmarkSpec::depth: usize
+pub pdfrum_edit::BookmarkSpec::open: bool
+pub pdfrum_edit::BookmarkSpec::style: core::option::Option<i64>
+pub pdfrum_edit::BookmarkSpec::target: pdfrum_edit::BookmarkTarget
+pub pdfrum_edit::BookmarkSpec::title: alloc::string::String
+impl pdfrum_edit::BookmarkSpec
+pub fn pdfrum_edit::BookmarkSpec::color(self, (f32, f32, f32)) -> Self
+pub fn pdfrum_edit::BookmarkSpec::depth(self, usize) -> Self
+pub fn pdfrum_edit::BookmarkSpec::named(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::BookmarkSpec::new(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::BookmarkSpec::open(self, bool) -> Self
+pub fn pdfrum_edit::BookmarkSpec::page(self, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> Self
+pub fn pdfrum_edit::BookmarkSpec::style(self, i64) -> Self
 pub struct pdfrum_edit::Canvas<'a, 'b>
 impl pdfrum_edit::Canvas<'_, '_>
 pub fn pdfrum_edit::Canvas<'_, '_>::bounds(&self) -> kurbo::rect::Rect
@@ -740,9 +761,11 @@ pub fn pdfrum_edit::set_attachment_param(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_
 pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
 pub fn pdfrum_edit::set_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_need_appearances(&mut pdfrum_edit::EditDoc<'_>, bool) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_outline(&mut pdfrum_edit::EditDoc<'_>, &[pdfrum_edit::BookmarkSpec]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_widget_appearance(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_edit::WidgetAppearance) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_xmp_metadata(&mut pdfrum_edit::EditDoc<'_>, core::option::Option<&[u8]>) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
 pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> f64
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
