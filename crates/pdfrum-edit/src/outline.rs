@@ -133,7 +133,7 @@ impl BookmarkSpec {
 ///
 /// # Errors
 ///
-/// [`Error::NoDestinationCatalog`] when the document has no catalog to hold
+/// [`Error::NoDestinationCatalog`](crate::Error::NoDestinationCatalog) when the document has no catalog to hold
 /// the outline.
 ///
 /// ```
