@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_edit::{
-    EditDoc, IdSource, ImportOptions, NUpOptions, PageRange, SaveMode, SaveOptions, import_pages,
-    n_page_to_one, save,
+    EditDoc, IdSource, ImportOptions, NUpOptions, PageRange, SaveMode, SaveOptions, Size,
+    import_pages, n_page_to_one, save,
 };
 use pdfrum_parser::{LoadOptions, load};
 
@@ -37,12 +37,11 @@ fuzz_target!(|data: &[u8]| {
 
     let pages = PageRange::all(src.page_count().min(MAX_PAGES));
     let saved = |edit: &EditDoc<'_>| {
-        let options = SaveOptions {
-            mode: SaveMode::Full,
-            remove_security: true,
-            id_source: IdSource::Fixed([0x7E; 16]),
-            ..SaveOptions::default()
-        };
+        let options = SaveOptions::builder()
+            .mode(SaveMode::Full)
+            .remove_security(true)
+            .id_source(IdSource::Fixed([0x7E; 16]))
+            .build();
         let mut out = Vec::new();
         save(edit, &options, &mut out).ok().map(|()| out)
     };
@@ -78,10 +77,10 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let mut edit = EditDoc::new(&dest);
-    let grid = NUpOptions {
-        sheet: (612.0, 792.0),
-        grid: (2, 2),
-    };
+    let grid = NUpOptions::builder()
+        .sheet(Size::new(612.0, 792.0))
+        .grid(2, 2)
+        .build();
     if n_page_to_one(&mut edit, &src, &pages, &grid).is_ok()
         && let Some(out) = saved(&edit)
     {

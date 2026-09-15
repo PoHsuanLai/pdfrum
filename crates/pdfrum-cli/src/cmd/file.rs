@@ -112,12 +112,14 @@ pub fn encrypt(req: &EncryptRequest<'_>, term: Term) -> Result<ExitCode> {
     };
     let mut options = save_options(req.deterministic, doc.bytes());
     options.update = Update::Rewrite;
-    options.encrypt = Some(Encryption {
-        user_password: req.user_password.as_bytes().to_vec(),
-        owner_password: req.owner_password.as_bytes().to_vec(),
-        permissions,
-        encrypt_metadata: req.encrypt_metadata,
-    });
+    options.encrypt = Some(
+        Encryption::builder()
+            .user_password(req.user_password.as_bytes().to_vec())
+            .owner_password(req.owner_password.as_bytes().to_vec())
+            .permissions(permissions)
+            .encrypt_metadata(req.encrypt_metadata)
+            .build(),
+    );
     let mut bytes = Vec::new();
     doc.write_to(&mut bytes, &options)?;
     sink.finish(

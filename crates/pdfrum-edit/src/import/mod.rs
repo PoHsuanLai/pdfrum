@@ -91,7 +91,11 @@ pub use range::PageRange;
 const LETTER: [i64; 4] = [0, 0, 612, 792];
 
 /// How an import behaves.
+///
+/// `#[non_exhaustive]`; build one with [`ImportOptions::builder`], or start
+/// from [`ImportOptions::default`] and assign the fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct ImportOptions {
     /// Where in the destination's page list the imported pages go. Pages at
     /// and after this index shift up.
@@ -101,11 +105,17 @@ pub struct ImportOptions {
 }
 
 /// How an N-up imposition behaves.
+///
+/// `#[non_exhaustive]`; build one with [`NUpOptions::builder`], whose
+/// `.sheet` takes a [`kurbo::Size`] and whose `.grid` takes columns and rows
+/// as two arguments — the bare tuples below are unlabelled, and a caller who
+/// swaps them gets a rotated sheet or a transposed grid with no complaint.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct NUpOptions {
-    /// The sheet's size in points.
+    /// The sheet's size in points, as `(width, height)`.
     pub sheet: (f32, f32),
-    /// Columns and rows of sub-pages per sheet.
+    /// Sub-pages per sheet, as `(columns, rows)`.
     pub grid: (u32, u32),
 }
 
@@ -115,6 +125,103 @@ impl Default for NUpOptions {
             sheet: (612.0, 792.0),
             grid: (2, 1),
         }
+    }
+}
+
+impl ImportOptions {
+    /// A builder over the defaults.
+    ///
+    /// ```
+    /// use pdfrum_edit::ImportOptions;
+    ///
+    /// let options = ImportOptions::builder().at(3u32).viewer_preferences(true).build();
+    /// assert_eq!(u32::from(options.at), 3);
+    /// assert!(options.viewer_preferences);
+    /// ```
+    #[must_use]
+    pub fn builder() -> ImportOptionsBuilder {
+        ImportOptionsBuilder(ImportOptions::default())
+    }
+}
+
+/// Builds an [`ImportOptions`] one setting at a time.
+#[derive(Debug, Clone, Copy)]
+pub struct ImportOptionsBuilder(ImportOptions);
+
+impl ImportOptionsBuilder {
+    /// Where in the destination's page list the imported pages go.
+    #[must_use]
+    pub fn at(mut self, at: impl Into<PageIndex>) -> Self {
+        self.0.at = at.into();
+        self
+    }
+
+    /// Also copy the source catalog's `/ViewerPreferences`.
+    #[must_use]
+    pub fn viewer_preferences(mut self, copy: bool) -> Self {
+        self.0.viewer_preferences = copy;
+        self
+    }
+
+    /// The options built so far.
+    #[must_use]
+    pub fn build(self) -> ImportOptions {
+        self.0
+    }
+}
+
+impl NUpOptions {
+    /// A builder over the defaults: US Letter, two across and one down.
+    ///
+    /// ```
+    /// use kurbo::Size;
+    /// use pdfrum_edit::NUpOptions;
+    ///
+    /// // A4 landscape, four up in a 2x2 grid.
+    /// let options = NUpOptions::builder()
+    ///     .sheet(Size::new(842.0, 595.0))
+    ///     .grid(2, 2)
+    ///     .build();
+    ///
+    /// assert_eq!(options.grid, (2, 2));
+    /// ```
+    #[must_use]
+    pub fn builder() -> NUpOptionsBuilder {
+        NUpOptionsBuilder(NUpOptions::default())
+    }
+}
+
+/// Builds an [`NUpOptions`] one setting at a time.
+///
+/// The two setters exist to name what the bare tuples do not: a
+/// [`kurbo::Size`] says which number is the width, and `grid(columns, rows)`
+/// says which is which.
+#[derive(Debug, Clone, Copy)]
+pub struct NUpOptionsBuilder(NUpOptions);
+
+impl NUpOptionsBuilder {
+    /// The sheet's size in points.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "PDF reals are f32; sheet sizes fit"
+    )]
+    pub fn sheet(mut self, sheet: kurbo::Size) -> Self {
+        self.0.sheet = (sheet.width as f32, sheet.height as f32);
+        self
+    }
+
+    /// Sub-pages per sheet.
+    #[must_use]
+    pub fn grid(mut self, columns: u32, rows: u32) -> Self {
+        self.0.grid = (columns, rows);
+        self
+    }
+
+    /// The options built so far.
+    #[must_use]
+    pub fn build(self) -> NUpOptions {
+        self.0
     }
 }
 

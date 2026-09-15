@@ -148,6 +148,14 @@ pdfrum_object::names! {
     OPT = "Opt";
     /// A field's default value, restored by a reset action (`/DV`).
     DV = "DV";
+    // ---- Catalog navigation and labelling (tables 28, 159) ----
+
+    /// The action a reader runs when the document opens (`/OpenAction`).
+    OPEN_ACTION = "OpenAction";
+    /// A number tree's leaf array (`/Nums`).
+    NUMS = "Nums";
+    /// The number the first page of a label range takes (`/St`).
+    ST = "St";
     // Subtype spellings (/Highlight, /Text, …) come from
     // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }

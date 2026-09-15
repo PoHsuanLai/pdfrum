@@ -35,11 +35,10 @@ use pdfrum_parser::{Document, LoadOptions, load};
 
 /// A save whose output is reproducible, so a test can compare two of them.
 fn fixed_options(mode: SaveMode) -> SaveOptions {
-    SaveOptions {
-        mode,
-        id_source: IdSource::Fixed([0x5A; 16]),
-        ..SaveOptions::default()
-    }
+    SaveOptions::builder()
+        .mode(mode)
+        .id_source(IdSource::Fixed([0x5A; 16]))
+        .build()
 }
 
 fn open(bytes: &[u8]) -> Document {
@@ -406,10 +405,7 @@ fn saving_a_reloaded_save_is_idempotent() {
 fn a_random_id_source_changes_the_output_and_nothing_else() {
     let doc = open(HELLO);
     let edit = EditDoc::new(&doc);
-    let random = SaveOptions {
-        id_source: IdSource::Random,
-        ..SaveOptions::default()
-    };
+    let random = SaveOptions::builder().id_source(IdSource::Random).build();
 
     let mut first = Vec::new();
     save(&edit, &random, &mut first).expect("saves");
@@ -807,10 +803,8 @@ fn a_document_declaring_encrypt_refuses_to_save_without_remove_security() {
     );
 
     // With `remove_security`, it saves — and the output declares no cipher.
-    let options = SaveOptions {
-        remove_security: true,
-        ..fixed_options(SaveMode::Full)
-    };
+    let mut options = fixed_options(SaveMode::Full);
+    options.remove_security = true;
     let mut out = Vec::new();
     save(&edit, &options, &mut out).expect("saves decrypted");
     let reloaded = open(&out);
