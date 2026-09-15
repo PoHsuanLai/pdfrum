@@ -1553,6 +1553,36 @@ pub fn set_named_destination(
     crate::dests::upsert_named_dest(edit, &name, dest)
 }
 
+/// Removes a named destination, answering whether it was there.
+///
+/// `Ok(false)` for a name the document does not carry — a delete that finds
+/// nothing is not an error, it is a delete with nothing to do, which is the
+/// convention [`delete_attachment`](crate::delete_attachment) already
+/// follows.
+///
+/// A link or bookmark still naming the removed destination is left alone:
+/// this answers what the name tree holds, not what points at it, and a
+/// dangling `/Dest` is a document-level question a caller decides.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn delete_named_destination(edit: &mut EditDoc<'_>, name: &str) -> Result<bool> {
+    crate::dests::delete_named_dest(edit, name)
+}
+
+/// Every name the document's `/Names /Dests` carries, sorted.
+///
+/// The read side resolves one name at a time; this is what a caller needs to
+/// see what is there at all.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub fn named_destinations(edit: &EditDoc<'_>) -> Result<Vec<String>> {
+    crate::dests::named_dest_names(edit)
+}
+
 /// Like [`set_named_destination`], but leaves an existing name untouched.
 ///
 /// Returns `true` when a new entry was written.

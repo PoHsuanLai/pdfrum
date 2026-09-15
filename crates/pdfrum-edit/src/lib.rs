@@ -41,8 +41,9 @@ mod write;
 pub use annot::{
     AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta,
     AnnotRemoteDest, AnnotSpec, AnnotWrite, BorderStyleName, DEFAULT_DA, LineEndingStyle, Quad,
-    add_annotation, delete_annotation, delete_annotation_at, ensure_named_destination,
-    set_named_destination, update_annotation, update_annotation_at,
+    add_annotation, delete_annotation, delete_annotation_at, delete_named_destination,
+    ensure_named_destination, named_destinations, set_named_destination, update_annotation,
+    update_annotation_at,
 };
 pub use annot_spec::{
     CaretSpec, CircleSpec, FreeTextSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec,
@@ -72,7 +73,10 @@ pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_o
 pub use info::{pdf_date, set_info_entry, set_xmp_metadata};
 pub use outline::{BookmarkSpec, BookmarkTarget, set_outline};
 pub use page_objects::{ImageBuilder, PathBuilder, TextBuilder};
-pub use pages::{PageBox, add_blank_page, delete_pages, set_page_box, set_page_rotation};
+pub use pages::{
+    PageBox, add_blank_page, delete_pages, reorder_pages, set_page_box, set_page_rotation,
+    set_page_rotation_to,
+};
 pub use pdfa_convert::{convert as to_pdfa, pdf_date_to_iso8601};
 pub use pdfrum_font::StandardFont;
 pub use stamp::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};

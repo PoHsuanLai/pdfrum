@@ -359,3 +359,98 @@ pub(crate) fn ensure_named_dest(edit: &mut EditDoc<'_>, name: &str, dest: Object
     upsert_named_dest(edit, name, dest)?;
     Ok(true)
 }
+
+/// Removes a named destination, answering whether it was there.
+///
+/// `Ok(false)` for a name the document does not carry, matching
+/// [`delete_attachment`](crate::delete_attachment): a delete that finds
+/// nothing is not an error, it is a delete that had nothing to do.
+///
+/// Removing the last entry leaves an empty `/Dests` tree rather than pruning
+/// `/Names` — the tree is where the next `set_named_destination` writes, and
+/// a document that named destinations once usually names them again.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub(crate) fn delete_named_dest(edit: &mut EditDoc<'_>, name: &str) -> Result<bool> {
+    // A `/Kids` hierarchy holds its entries in leaves, so the flat rewrite
+    // below would drop the structure. Walk it in place first.
+    if try_delete_from_kids(edit, name)? {
+        return Ok(true);
+    }
+    let mut entries = dest_entries(edit)?;
+    let before = entries.len();
+    entries.retain(|(existing, _)| existing != name);
+    if entries.len() == before {
+        return Ok(false);
+    }
+    write_dest_entries_flat(edit, &entries)?;
+    Ok(true)
+}
+
+/// Removes `name` from whichever leaf of a `/Kids` hierarchy holds it.
+///
+/// Answers `false` when there is no hierarchy, or no leaf carries the name —
+/// the caller then falls back to the flat rewrite.
+fn try_delete_from_kids(edit: &mut EditDoc<'_>, name: &str) -> Result<bool> {
+    let Some(tree_ref) = dests_tree_ref(edit)? else {
+        return Ok(false);
+    };
+    let Some(tree) = dict_at(edit, tree_ref) else {
+        return Ok(false);
+    };
+    let Some(kids) = tree.array(names::KIDS, edit) else {
+        return Ok(false);
+    };
+    for index in 0..kids.len() {
+        let Some(leaf_ref) = kids.reference_at(index) else {
+            continue;
+        };
+        let Some(mut leaf) = dict_at(edit, leaf_ref) else {
+            continue;
+        };
+        let mut entries = leaf_entries(&leaf, edit);
+        let before = entries.len();
+        entries.retain(|(existing, _)| existing != name);
+        if entries.len() == before {
+            continue;
+        }
+        write_leaf(&mut leaf, &entries);
+        edit.replace(leaf_ref, Object::Dict(leaf));
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// Every name the document's `/Names /Dests` carries, in tree order.
+///
+/// The read side resolves one name at a time; this is the listing a caller
+/// needs to know what is there before deciding what to remove.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog.
+pub(crate) fn named_dest_names(edit: &EditDoc<'_>) -> Result<Vec<String>> {
+    let mut names: Vec<String> = dest_entries(edit)?
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+
+    // A `/Kids` hierarchy keeps its entries in the leaves, which
+    // `dest_entries` does not descend into.
+    if let Some(tree_ref) = dests_tree_ref(edit)?
+        && let Some(tree) = dict_at(edit, tree_ref)
+        && let Some(kids) = tree.array(names::KIDS, edit)
+    {
+        for index in 0..kids.len() {
+            let Some(leaf) = kids.dict_at(index, edit) else {
+                continue;
+            };
+            names.extend(leaf_entries(&leaf, edit).into_iter().map(|(name, _)| name));
+        }
+    }
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
