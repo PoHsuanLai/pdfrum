@@ -7,9 +7,9 @@ use std::time::SystemTime;
 
 use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
-use pdfrum_object::names;
 #[cfg(feature = "forms")]
-use pdfrum_object::{Dict, Name, Object};
+use pdfrum_object::{Dict, Object};
+use pdfrum_object::{Name, names};
 
 #[cfg(feature = "forms")]
 use crate::Form;
