@@ -35,6 +35,7 @@ pub use pdfrum::Color
 pub use pdfrum::ColorMode
 pub use pdfrum::ColorScheme
 pub use pdfrum::DEFAULT_DA
+pub use pdfrum::DEFAULT_FIELD_DA
 pub use pdfrum::Dash
 pub use pdfrum::Deadline
 pub use pdfrum::Dest
@@ -49,7 +50,9 @@ pub use pdfrum::Encryption
 pub use pdfrum::Event
 pub use pdfrum::FieldFlags
 pub use pdfrum::FieldKind
+pub use pdfrum::FieldKindSpec
 pub use pdfrum::FieldRef
+pub use pdfrum::FieldSpec
 pub use pdfrum::FieldWrites
 pub use pdfrum::Fill
 pub use pdfrum::FindOptions
@@ -161,6 +164,8 @@ pub use pdfrum::Word
 pub use pdfrum::XrefEntry
 pub use pdfrum::add_annotation
 pub use pdfrum::add_attachment
+pub use pdfrum::add_form_field
+pub use pdfrum::add_form_font
 pub use pdfrum::delete_annotation
 pub use pdfrum::delete_annotation_at
 pub use pdfrum::delete_attachment
