@@ -1,4 +1,5 @@
 pub mod pdfrum_edit
+pub use pdfrum_edit::Size
 pub use pdfrum_edit::StandardFont
 #[non_exhaustive] pub enum pdfrum_edit::AnnotGoToView
 pub pdfrum_edit::AnnotGoToView::Fit
