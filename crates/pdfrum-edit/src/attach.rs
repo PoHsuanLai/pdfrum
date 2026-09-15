@@ -187,6 +187,99 @@ pub(crate) fn attachment_entries(
         .collect())
 }
 
+/// The tree's entries with their values **unresolved**.
+///
+/// [`attachment_entries`] goes through the name tree's `lookup_by_index`,
+/// which resolves each value — so a specification written as a reference comes
+/// back as a dictionary. That is right for reading, and wrong for every write
+/// path here: rewriting the tree from resolved entries *inlines* every
+/// specification that was indirect, which loses the object identity `/AF`
+/// needs and duplicates the dictionary on the next save.
+///
+/// So the write paths read through here instead, keeping whatever spelling the
+/// tree already had.
+pub(crate) fn raw_attachment_entries(
+    edit: &EditDoc<'_>,
+    limits: &Limits,
+) -> Result<Vec<(String, Object)>> {
+    let named = attachment_entries(edit, limits)?;
+    let mut out = Vec::with_capacity(named.len());
+    for (index, (name, resolved)) in named.into_iter().enumerate() {
+        let value = match attachment_spec_ref(edit, limits, index)? {
+            Some(reference) => Object::Ref(reference),
+            None => resolved,
+        };
+        out.push((name, value));
+    }
+    Ok(out)
+}
+
+/// The reference naming attachment `index`'s file specification, when the
+/// tree holds one indirectly.
+///
+/// [`attachment_entries`] goes through the name tree's `lookup_by_index`,
+/// which **resolves** each value — so a specification written as a reference
+/// comes back as a dictionary and its identity is lost. `/AF` needs that
+/// identity: an associated file is the *same object* as the attachment, not a
+/// copy of it. So this walks the leaves itself and keeps the raw entry.
+///
+/// `None` when there is no such attachment, or when its specification really
+/// is written inline.
+pub(crate) fn attachment_spec_ref(
+    edit: &EditDoc<'_>,
+    limits: &Limits,
+    index: usize,
+) -> Result<Option<ObjRef>> {
+    let Some(root) = edit.base().trailer().reference(&Name::from("Root")) else {
+        return Err(Error::NoDestinationCatalog);
+    };
+    let Ok(catalog) = edit.fetch(root) else {
+        return Ok(None);
+    };
+    let Some(files) = catalog
+        .as_dict()
+        .and_then(|catalog| catalog.dict(&Name::from("Names"), edit))
+        .and_then(|names| names.dict(&Name::from("EmbeddedFiles"), edit))
+    else {
+        return Ok(None);
+    };
+    let mut cursor = 0;
+    Ok(raw_entry_at(edit, limits, &files, index, &mut cursor, 0))
+}
+
+/// The raw value of the `index`-th entry of a name tree, without resolving it.
+fn raw_entry_at(
+    edit: &EditDoc<'_>,
+    limits: &Limits,
+    node: &Dict,
+    target: usize,
+    cursor: &mut usize,
+    depth: u32,
+) -> Option<ObjRef> {
+    if depth > limits.max_name_tree_depth {
+        return None;
+    }
+    if let Some(leaf) = node.array(&Name::from("Names"), edit) {
+        let count = leaf.len() / 2;
+        if target >= *cursor + count {
+            *cursor += count;
+            return None;
+        }
+        let slot = (target - *cursor) * 2;
+        return leaf.reference_at(slot + 1);
+    }
+    let kids = node.array(&Name::from("Kids"), edit)?;
+    for slot in 0..kids.len() {
+        let Some(kid) = kids.dict_at(slot, edit) else {
+            continue;
+        };
+        if let Some(found) = raw_entry_at(edit, limits, &kid, target, cursor, depth + 1) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 /// The file specification of attachment `index` — its reference when it
 /// is indirect — and its dictionary; `None` when out of range or not a
 /// dictionary.
@@ -195,7 +288,7 @@ pub(crate) fn attachment_spec(
     limits: &Limits,
     index: usize,
 ) -> Result<Option<(Option<ObjRef>, Dict)>> {
-    let entries = attachment_entries(edit, limits)?;
+    let entries = raw_attachment_entries(edit, limits)?;
     let Some(entry) = entries.get(index) else {
         return Ok(None);
     };
@@ -312,7 +405,7 @@ pub(crate) fn store_attachment_spec(
         edit.replace(reference, Object::Dict(spec));
         return Ok(());
     }
-    let mut entries = attachment_entries(edit, limits)?;
+    let mut entries = raw_attachment_entries(edit, limits)?;
     if let Some(entry) = entries.get_mut(index) {
         entry.1 = Object::Dict(spec);
     }
@@ -326,7 +419,7 @@ pub(crate) fn store_attachment_spec(
 ///
 /// When the document has no catalog to hold the tree.
 pub fn delete_attachment(edit: &mut EditDoc<'_>, limits: &Limits, index: usize) -> Result<bool> {
-    let mut entries = attachment_entries(edit, limits)?;
+    let mut entries = raw_attachment_entries(edit, limits)?;
     if index >= entries.len() {
         return Ok(false);
     }
@@ -377,7 +470,7 @@ pub fn add_attachment(
     bytes: &[u8],
     options: &AttachmentOptions,
 ) -> Result<usize> {
-    let mut entries = attachment_entries(edit, limits)?;
+    let mut entries = raw_attachment_entries(edit, limits)?;
     let stream_ref = edit.add(Object::Stream(Box::new(embedded_file(
         bytes,
         options.mime_type.as_deref(),
@@ -430,7 +523,7 @@ pub fn add_attachment(
 ///
 /// When the document has no catalog to hold the tree.
 pub fn remove_attachment(edit: &mut EditDoc<'_>, limits: &Limits, name: &str) -> Result<bool> {
-    let mut entries = attachment_entries(edit, limits)?;
+    let mut entries = raw_attachment_entries(edit, limits)?;
     let before = entries.len();
     entries.retain(|(existing, _)| existing != name);
     if entries.len() == before {
@@ -531,7 +624,7 @@ pub fn set_attachment_name(
     index: usize,
     name: &str,
 ) -> Result<bool> {
-    let mut entries = attachment_entries(edit, limits)?;
+    let mut entries = raw_attachment_entries(edit, limits)?;
     let Some((existing, _)) = entries.get(index) else {
         return Ok(false);
     };
@@ -553,7 +646,7 @@ pub fn set_attachment_name(
         spec.insert(Name::from("F"), value.clone());
         spec.insert(Name::from("UF"), value);
         store_attachment_spec(edit, limits, index, reference, spec)?;
-        entries = attachment_entries(edit, limits)?;
+        entries = raw_attachment_entries(edit, limits)?;
     }
 
     if let Some(slot) = entries.get_mut(index) {
