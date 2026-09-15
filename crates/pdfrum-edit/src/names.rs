@@ -23,6 +23,17 @@ pdfrum_object::names! {
     /// The document catalog's own `/Type` value (`/Catalog`).
     CATALOG = "Catalog";
 
+    // ---- Outline items (table 153) ----
+
+    /// The next item at this outline level (`/Next`).
+    NEXT = "Next";
+    /// The last child of an outline item (`/Last`).
+    LAST = "Last";
+    /// An outline item's or link's destination (`/Dest`).
+    DEST = "Dest";
+    /// The catalog's outline tree root (`/Outlines`).
+    OUTLINES = "Outlines";
+
     // ---- Image XObjects (table 89) ----
 
     /// Whether a DCT stream's components were transformed
