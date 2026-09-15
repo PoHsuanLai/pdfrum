@@ -512,7 +512,7 @@ pub enum AnnotSpec {
     },
     /// A sticky-note text annotation (`/Subtype /Text`).
     ///
-    /// Defaults to `/Name /Comment` and `/Open false` (see [`AnnotSpec::text`]).
+    /// Defaults to `/Name /Comment` and `/Open false` (see [`TextSpec`](crate::TextSpec)).
     #[non_exhaustive]
     Text {
         /// The annotation's `/Rect` in page space.
@@ -906,12 +906,16 @@ impl AnnotSpec {
     /// opaque one is.
     ///
     /// ```
-    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_edit::{AnnotSpec, MarkupKind, MarkupSpec};
     /// use kurbo::Rect;
     /// use peniko::Color;
     ///
-    /// let write = AnnotSpec::highlight(Rect::new(0.0, 0.0, 10.0, 2.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_opacity(0.4);
+    /// let spec = MarkupSpec::new(
+    ///     MarkupKind::Highlight,
+    ///     Rect::new(0.0, 0.0, 10.0, 2.0),
+    ///     Color::from_rgb8(255, 255, 0),
+    /// );
+    /// let write = AnnotSpec::from(spec).with_opacity(0.4);
     /// assert_eq!(write.meta.opacity, Some(0.4));
     /// ```
     #[must_use]
