@@ -74,6 +74,29 @@ impl Alignment {
             _ => Alignment::Left,
         }
     }
+
+    /// The `/Q` value for this alignment — the inverse of
+    /// [`from_quadding`](Self::from_quadding) over the three it names.
+    ///
+    /// Reading is lenient where writing is not: `from_quadding` takes any
+    /// unknown number as `Left`, so the round trip holds in this direction
+    /// only.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::Alignment;
+    ///
+    /// for alignment in [Alignment::Left, Alignment::Center, Alignment::Right] {
+    ///     assert_eq!(Alignment::from_quadding(alignment.to_quadding()), alignment);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn to_quadding(self) -> i64 {
+        match self {
+            Alignment::Left => 0,
+            Alignment::Center => 1,
+            Alignment::Right => 2,
+        }
+    }
 }
 
 /// The font-space scale: widths and ascents arrive per thousand units.
