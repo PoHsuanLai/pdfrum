@@ -178,7 +178,8 @@ pub fn set_page_rotation(
     })
 }
 
-/// Sets a page's `/Rotate` from the read side's own [`Rotation`].
+/// Sets a page's `/Rotate` from the read side's own
+/// [`Rotation`](pdfrum_page::Rotation).
 ///
 /// [`set_page_rotation`] takes degrees and rounds to the nearest quarter
 /// turn, which is the right shape for a `--rotate 90` flag but the wrong one
