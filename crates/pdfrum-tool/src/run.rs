@@ -293,10 +293,9 @@ fn save_document(
     // An encrypted document saves encrypted, under the handler the
     // `--password=` opened it with, so the output needs that same password.
     // `--save-decrypted` writes plaintext instead.
-    let save_options = pdfrum_edit::SaveOptions {
-        remove_security: options.save_decrypted,
-        ..pdfrum_edit::SaveOptions::default()
-    };
+    let save_options = pdfrum_edit::SaveOptions::builder()
+        .remove_security(options.save_decrypted)
+        .build();
 
     let mut out = Vec::new();
     if let Err(err) = pdfrum_edit::save(&edit, &save_options, &mut out) {

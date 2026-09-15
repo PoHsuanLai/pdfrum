@@ -41,6 +41,17 @@ compile untouched.
   `SquareSpec::new(r, c).border(b)`, and the result converts with `.into()`
   wherever a spec is taken. `AnnotWrite` gained bare-verb spellings of its own
   metadata setters so a chain reads the same after the first one.
+- Four options types gained `#[non_exhaustive]`: `pdfrum_edit::SaveOptions`,
+  `Encryption`, `ImportOptions` and `NUpOptions`. Each has a `builder()` now,
+  so the migration is mechanical — `SaveOptions { mode, ..Default::default() }`
+  becomes `SaveOptions::builder().mode(mode).build()`, and a caller who only
+  assigns fields can keep doing that from `default()`. The attribute is the
+  point: without it, every option added later is a major break. The facade's
+  own `pdfrum::SaveOptions` already carried it and is unchanged.
+- `pdfrum::Metadata` gained `trapped` and `custom`. It is already
+  `#[non_exhaustive]`, so a struct literal outside this crate never compiled;
+  what breaks is an exhaustive destructuring, and `Metadata::builder()` is the
+  construction path. Reading a `Metadata` is unaffected.
 
 ### Fixed
 
@@ -63,7 +74,6 @@ compile untouched.
 
 
 ### Added
-
 - `WidgetAppearance` and `set_widget_appearance` write a widget's `/MK`
   appearance characteristics — `/BG` background, `/BC` border colour, `/R`
   rotation, and `/CA` caption. The generator reads `/MK` on every
@@ -134,6 +144,43 @@ compile untouched.
   verbatim into the `/Type /Metadata /Subtype /XML` stream the writer already
   knew never to compress, so a reader scanning the raw bytes can still find
   it. `None` removes the stream.
+- `set_page_labels` writes `/PageLabels`, the number tree that decides the
+  page numbers a reader shows. `PageLabelRange` names a starting page, a
+  `PageLabelStyle`, an optional `/P` prefix and an optional `/St` first
+  number; ranges may be given in any order and are sorted, since a number tree
+  whose keys do not ascend gives the reader's lower-bound scan the wrong rule.
+  An empty slice removes the tree. The reader (`pdfrum_doc::page_label`) has
+  been complete since 0.2 with no writer at all, and this pairs with
+  `delete_pages` / `import_pages`, which invalidate labels.
+- `set_viewer_preferences` writes `/ViewerPreferences` from a
+  `ViewerPreferences` builder — the six booleans, `/Direction`,
+  `/PrintScaling`, `/NumCopies` and `/Duplex`. A preference the builder leaves
+  unset keeps whatever the document had, so one can be changed without reading
+  the rest. `set_open_action` and `clear_open_action` write and remove the
+  catalog's `/OpenAction` as a destination on a page, which is what "open at
+  this page" means; the action-dictionary form is not offered.
+- `set_info_name` sets an `/Info` entry whose value is a **name**. `/Trapped`
+  is the one such key the specification defines, and writing `Unknown` as a
+  *string* is a different object than the name a PDF/X validator reads.
+- `pdfrum::Metadata` carries `/Trapped` (as a three-state `Trapped`, because
+  `Unknown` is a real answer a prepress workflow distinguishes from an absent
+  key) and every other `/Info` key the document holds, in `custom` — so
+  reading a `Metadata`, changing one field and writing it back no longer drops
+  the producer's own keys. `Metadata::builder()` constructs one from outside
+  the crate.
+- `set_attachment_file_with` replaces an attachment's bytes **keeping** the
+  MIME type and date the options name. `set_attachment_file` drops both, which
+  is documented but rarely meant: the `/Subtype` a viewer picks an application
+  by and the file's own `/Params /ModDate` both vanish on a plain replace.
+- `set_attachment_name` renames an attachment. The name is the tree key and is
+  written to the specification's `/F` and `/UF` too, so the name a viewer
+  shows and the name it looks the attachment up by stay the same string; a
+  name another attachment already has is refused, since the tree is keyed by
+  name.
+- `builder()` on `SaveOptions`, `Encryption`, `ImportOptions` and
+  `NUpOptions`. `NUpOptionsBuilder` takes a `kurbo::Size` for the sheet and
+  `.grid(columns, rows)` for the grid, where the bare `(f32, f32)` and
+  `(u32, u32)` tuples say nothing about which number is which.
 - `reorder_pages` arranges the pages into a new order given as old indices.
   The CLI faked this three times over by building a throwaway document,
   importing into it and deleting the template page. A list that is not a

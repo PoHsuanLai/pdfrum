@@ -7,9 +7,9 @@ use std::time::SystemTime;
 
 use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
-use pdfrum_object::names;
 #[cfg(feature = "forms")]
 use pdfrum_object::{Dict, Object};
+use pdfrum_object::{Name, names};
 
 #[cfg(feature = "forms")]
 use crate::Form;
@@ -466,10 +466,10 @@ impl Document {
             &mut edit,
             &source.inner,
             &pdfrum_edit::PageRange::of(pages),
-            &pdfrum_edit::ImportOptions {
-                at: at.into(),
-                viewer_preferences: false,
-            },
+            &pdfrum_edit::ImportOptions::builder()
+                .at(at)
+                .viewer_preferences(false)
+                .build(),
         )?;
         let mut bytes = Vec::new();
         write_edit(&edit, &SaveOptions::default(), &mut bytes)?;
@@ -694,6 +694,49 @@ impl<'a> DocEdit<'a> {
             &self.doc.limits,
             index,
             bytes,
+        )?)
+    }
+
+    /// Replaces the bytes of the attachment at `index`, keeping the MIME type
+    /// and date `options` names; `false` when out of range.
+    ///
+    /// [`Self::set_attachment_file`] drops both, which loses the `/Subtype` a
+    /// viewer picks an application by and the file's own `/Params /ModDate`.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog.
+    pub fn set_attachment_file_with(
+        &mut self,
+        index: usize,
+        bytes: &[u8],
+        options: &pdfrum_edit::AttachmentOptions,
+    ) -> crate::Result<bool> {
+        Ok(pdfrum_edit::set_attachment_file_with(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+            bytes,
+            options,
+        )?)
+    }
+
+    /// Renames the attachment at `index`; `false` when out of range.
+    ///
+    /// The name is the tree key and is also written to the specification's
+    /// `/F` and `/UF`, so the name a viewer shows and the name it looks the
+    /// attachment up by stay the same string.
+    ///
+    /// # Errors
+    ///
+    /// When the document has no catalog, or another attachment already has
+    /// that name.
+    pub fn set_attachment_name(&mut self, index: usize, name: &str) -> crate::Result<bool> {
+        Ok(pdfrum_edit::set_attachment_name(
+            &mut self.inner,
+            &self.doc.limits,
+            index,
+            name,
         )?)
     }
 
@@ -1032,8 +1075,9 @@ impl DocEdit<'_> {
     /// input saves to the same bytes.
     ///
     /// The catalog's XMP `/Metadata` stream is not touched. A document that
-    /// carries both will have the two disagree after this; rewriting the
-    /// packet is not something this crate does.
+    /// carries both will have the two disagree after this, which PDF/A does
+    /// not allow — a packet saying the same thing has to be written
+    /// alongside.
     ///
     /// ```
     /// use pdfrum::{Document, SaveOptions};
@@ -1067,6 +1111,19 @@ impl DocEdit<'_> {
         for (key, value) in entries {
             pdfrum_edit::set_info_entry(&mut self.inner, key, value.as_deref());
         }
+        // `/Trapped` is a name, not a text string: a PDF/X validator reads the
+        // name, and `(Unknown)` written as a string is a different object.
+        pdfrum_edit::set_info_name(
+            &mut self.inner,
+            &Name::from("Trapped"),
+            metadata
+                .trapped
+                .map(|trapped| Name::from(trapped.as_str().as_bytes()))
+                .as_ref(),
+        );
+        for (key, value) in &metadata.custom {
+            pdfrum_edit::set_info_entry(&mut self.inner, &Name::from(key.as_bytes()), Some(value));
+        }
         self.stamp_mod_date = true;
     }
 
@@ -1088,10 +1145,10 @@ impl DocEdit<'_> {
             &mut self.inner,
             &source.inner,
             &pdfrum_edit::PageRange::of(pages),
-            &pdfrum_edit::ImportOptions {
-                at: at.into(),
-                viewer_preferences: false,
-            },
+            &pdfrum_edit::ImportOptions::builder()
+                .at(at)
+                .viewer_preferences(false)
+                .build(),
         )?;
         Ok(())
     }
@@ -1179,10 +1236,6 @@ impl DocEdit<'_> {
     ///
     /// [`Error::Save`](crate::Error::Save) when a page does not exist, the
     /// grid or sheet is empty, or this document has no catalog.
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "a sheet size in points fits f32, which is what the file stores"
-    )]
     pub fn n_up(
         &mut self,
         source: &Document,
@@ -1195,10 +1248,10 @@ impl DocEdit<'_> {
             &mut self.inner,
             &source.inner,
             &pdfrum_edit::PageRange::of(pages),
-            &pdfrum_edit::NUpOptions {
-                sheet: (sheet.width as f32, sheet.height as f32),
-                grid: (columns, rows),
-            },
+            &pdfrum_edit::NUpOptions::builder()
+                .sheet(sheet)
+                .grid(columns, rows)
+                .build(),
         )?;
         Ok(())
     }
@@ -1426,22 +1479,21 @@ impl DocEdit<'_> {
 /// ```
 impl From<&SaveOptions> for pdfrum_edit::SaveOptions {
     fn from(options: &SaveOptions) -> Self {
-        Self {
-            mode: match options.update {
-                Update::Rewrite => SaveMode::Full,
-                Update::Incremental => SaveMode::Incremental,
-            },
-            version: options.version,
-            // An encrypted document saves **encrypted**, under the handler its
-            // password opened, so the output opens with that same password. The
-            // regenerated content streams of an edited page go through the same
-            // cipher as everything else, because they are written the same way.
-            remove_security: options.remove_security,
-            subset_new_fonts: options.subset_new_fonts,
-            id_source: options.id_source,
-            encrypt: options.encrypt.clone(),
-            ..Self::default()
-        }
+        let mut engine = Self::default();
+        engine.mode = match options.update {
+            Update::Rewrite => SaveMode::Full,
+            Update::Incremental => SaveMode::Incremental,
+        };
+        engine.version = options.version;
+        // An encrypted document saves **encrypted**, under the handler its
+        // password opened, so the output opens with that same password. The
+        // regenerated content streams of an edited page go through the same
+        // cipher as everything else, because they are written the same way.
+        engine.remove_security = options.remove_security;
+        engine.subset_new_fonts = options.subset_new_fonts;
+        engine.id_source = options.id_source;
+        engine.encrypt.clone_from(&options.encrypt);
+        engine
     }
 }
 

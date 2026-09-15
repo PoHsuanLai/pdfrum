@@ -32,8 +32,8 @@ mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{
-    Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions,
-    OpenOptionsBuilder, Revision, UnknownFontFileKind,
+    Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, MetadataBuilder, OpenOptions,
+    OpenOptionsBuilder, Revision, Trapped, UnknownFontFileKind,
 };
 pub use error::{Error, ErrorCode, Result, UnknownErrorCode};
 #[cfg(feature = "forms")]
@@ -136,14 +136,23 @@ pub use pdfrum_edit::{
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
-    remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,
+    remove_attachment, set_attachment_description, set_attachment_file, set_attachment_file_with,
+    set_attachment_name, set_attachment_param,
 };
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{DEFAULT_FIELD_DA, FieldKindSpec, FieldSpec, add_form_field, add_form_font};
+pub use pdfrum_edit::{
+    Duplex, PageLabelRange, PageLabelStyle, ViewerPreferences, clear_open_action, set_open_action,
+    set_page_labels, set_viewer_preferences,
+};
+// The facade has its own `SaveOptions` and builder; the engine's belongs to
+// `pdfrum_edit` and is reached there.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{Encryption, IdSource, PageBox};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{EncryptionBuilder, ImportOptionsBuilder, NUpOptionsBuilder};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{StampOptions, StampOptionsBuilder, StampPosition, UnknownStampPosition};
 /// SVG drawn into a page as vectors: [`Canvas::draw_svg`] inline,
