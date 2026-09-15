@@ -23,14 +23,13 @@ fuzz_target!(|data: &[u8]| {
     let edit = EditDoc::new(&doc);
 
     // A fixed identifier so a crash reproduces from the input alone.
-    let options = SaveOptions {
-        mode: SaveMode::Full,
-        // v1 writes plaintext; an encrypted document without this is refused
-        // rather than mis-saved, which is itself a behavior worth reaching.
-        remove_security: true,
-        id_source: IdSource::Fixed([0x3C; 16]),
-        ..SaveOptions::default()
-    };
+    // v1 writes plaintext; an encrypted document without `remove_security` is
+    // refused rather than mis-saved, which is itself a behavior worth reaching.
+    let options = SaveOptions::builder()
+        .mode(SaveMode::Full)
+        .remove_security(true)
+        .id_source(IdSource::Fixed([0x3C; 16]))
+        .build();
 
     let mut out = Vec::new();
     if save(&edit, &options, &mut out).is_err() {
@@ -56,10 +55,8 @@ fuzz_target!(|data: &[u8]| {
 
     // The incremental path, over the same input. Its own invariant is the
     // append discipline: the original bytes must survive as a prefix.
-    let incremental = SaveOptions {
-        mode: SaveMode::Incremental,
-        ..options
-    };
+    let mut incremental = options.clone();
+    incremental.mode = SaveMode::Incremental;
     let mut appended = Vec::new();
     if save(&edit, &incremental, &mut appended).is_ok() {
         let body = doc.bytes();
