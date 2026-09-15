@@ -62,10 +62,10 @@ pub use content::{
 pub use doc::EditDoc;
 pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
-pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode, flatten};
+pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode, flatten, flatten_document};
 pub use font::embed::{EmbeddedFont, FontEncoding, MissingGlyph, string_width};
 pub use font::{GidMap, Subsetted, subset};
-pub use form::set_need_appearances;
+pub use form::{WidgetAppearance, set_need_appearances, set_widget_appearance};
 pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
 pub use info::{pdf_date, set_info_entry};

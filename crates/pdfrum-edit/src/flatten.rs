@@ -646,6 +646,58 @@ pub fn flatten(
     Ok(Flattened::Done)
 }
 
+/// Flattens every page, the way a caller who wants "no annotations left"
+/// means it.
+///
+/// [`flatten`] takes one page, so doing the whole document by hand means a
+/// loop that also re-prunes `/AcroForm` once per page. This does the loop
+/// once.
+///
+/// Answers [`Flattened::Done`] when **any** page had something to draw, and
+/// [`Flattened::NothingToDo`] only when no page did — so an empty answer means
+/// the document had no annotations anywhere, not that the last page happened
+/// to have none.
+///
+/// A page that fails stops the walk and returns its error; pages before it
+/// keep their edits, which are already in `edit`.
+///
+/// ```
+/// use pdfrum::{Document, FlattenMode, Flattened, SaveOptions};
+///
+/// let doc = Document::open("tests/fixtures/annotiter.pdf")?;
+/// let mut edit = doc.edit();
+/// assert_eq!(edit.flatten_document(FlattenMode::Display)?, Flattened::Done);
+///
+/// let plain = Document::open("tests/fixtures/hello_world.pdf")?;
+/// assert_eq!(
+///     plain.edit().flatten_document(FlattenMode::Display)?,
+///     Flattened::NothingToDo,
+/// );
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// As [`flatten`], for the first page that raises one.
+pub fn flatten_document(
+    edit: &mut EditDoc<'_>,
+    limits: &Limits,
+    mode: FlattenMode,
+    diags: &mut Diagnostics,
+) -> Result<Flattened> {
+    let mut any = false;
+    for index in 0..edit.base().page_count() {
+        if flatten(edit, limits, index, mode, diags)? == Flattened::Done {
+            any = true;
+        }
+    }
+    Ok(if any {
+        Flattened::Done
+    } else {
+        Flattened::NothingToDo
+    })
+}
+
 /// A rectangle as the four-number array the file writes.
 #[expect(
     clippy::cast_possible_truncation,

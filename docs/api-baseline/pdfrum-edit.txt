@@ -620,6 +620,13 @@ impl core::convert::From<pdfrum_edit::TextSpec> for pdfrum_edit::AnnotSpec
 pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::TextSpec) -> Self
 pub struct pdfrum_edit::UnknownFlattenMode(_)
 pub struct pdfrum_edit::UnknownStampPosition(_)
+pub struct pdfrum_edit::WidgetAppearance
+impl pdfrum_edit::WidgetAppearance
+pub fn pdfrum_edit::WidgetAppearance::background(self, peniko::Color) -> Self
+pub fn pdfrum_edit::WidgetAppearance::border(self, peniko::Color) -> Self
+pub fn pdfrum_edit::WidgetAppearance::caption(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::WidgetAppearance::new() -> Self
+pub fn pdfrum_edit::WidgetAppearance::rotation(self, i64) -> Self
 pub const pdfrum_edit::DEFAULT_DA: &str
 pub trait pdfrum_edit::BorderStyleName
 pub fn pdfrum_edit::BorderStyleName::as_bytes(&self) -> &'static [u8]
@@ -636,6 +643,7 @@ pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_com
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::ensure_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
+pub fn pdfrum_edit::flatten_document(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::pdf_date(std::time::SystemTime) -> alloc::string::String
@@ -651,6 +659,7 @@ pub fn pdfrum_edit::set_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl co
 pub fn pdfrum_edit::set_need_appearances(&mut pdfrum_edit::EditDoc<'_>, bool) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_widget_appearance(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_edit::WidgetAppearance) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
 pub fn pdfrum_edit::string_width(pdfrum_object::object::ObjRef, &[u8], &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> f64
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
