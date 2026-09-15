@@ -2911,7 +2911,7 @@ fn link_action_dict(action: &AnnotLinkAction) -> Dict {
 }
 
 /// Explicit destination array `[page /Fit|…]`.
-fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
+pub(crate) fn goto_dest_array(page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Array {
     dest_array_with_page(Object::Ref(page), view)
 }
 
