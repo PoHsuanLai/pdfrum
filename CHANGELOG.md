@@ -5,6 +5,8 @@ first crates.io release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+
 ### Breaking
 
 This release breaks source compatibility. The crate is young enough that the
@@ -127,14 +129,14 @@ compile untouched.
   highlights, where translucency is the norm. Out-of-range values are clamped
   rather than refused.
 - `/IC` interior fill on Square and Circle, through `SquareSpec::interior` /
-  `CircleSpec::interior` and the widened `AnnotSpec::with_interior`. The
-  appearance generator has always filled these shapes from `/IC`; the setter
-  was restricted to Line, so a filled callout box could not be written.
+  `CircleSpec::interior`. The appearance generator has always filled these
+  shapes from `/IC`; the old `AnnotSpec` setter was restricted to Line, so a
+  filled callout box could not be written.
 - `/BS /D` dash patterns, through `AnnotBorder::with_dash`. A dashed border
   previously wrote `/S /D` with no pattern, leaving a reader to fall back to
   its own `[3 0 0]`. Written only for a dashed style, since it means nothing
   to the others.
-- `/Q` text alignment on `FreeText`, through `AnnotSpec::with_align`, reusing
+- `/Q` text alignment on `FreeText`, through `FreeTextSpec::align`, reusing
   the read side's `pdfrum_doc::vt::Alignment` rather than a second enum over
   the same three values. `Alignment::to_quadding` is its inverse. Every
   free-text annotation pdfrum wrote was flush left.
@@ -271,15 +273,9 @@ compile untouched.
   names. `AnnotBorderStyle::Dashed` is spelled `Dash`, and `as_bytes`
   needs `BorderStyleName` in scope. Both shipped unreleased, so no
   published API changes.
-- The per-subtype `AnnotSpec::with_*` setters remain, but prefer the
-  typed builders above: a setter that does not apply to the variant it
-  is called on cannot change anything, and now trips a debug assertion
-  rather than silently dropping the call.
 - Every `AnnotSpec` variant is `#[non_exhaustive]`, so a later subtype
-  option is an additive change rather than a breaking one. Build specs
-  through the constructors (`AnnotSpec::line`, …) and the `with_*`
-  builders rather than a struct literal.
-
+  option is additive. Build through the typed `*Spec` builders rather than
+  a struct literal.
 
 ## [0.2.0] - 2026-09-11
 
@@ -458,7 +454,8 @@ compile untouched.
 - Weakest rendering: vertical text, uncoloured tiling patterns, and image
   transformers.
 
-[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PoHsuanLai/pdfrum/releases/tag/v0.1.0

@@ -14,7 +14,7 @@ pdfrum is an independent project, not affiliated with Google's PDFium,
 which it uses as a read-only conformance oracle.
 
 ```toml
-pdfrum = "0.2"
+pdfrum = "0.3"
 ```
 
 ```rust
@@ -137,7 +137,7 @@ are on by default.
 its backend.
 
 ```toml
-pdfrum = { version = "0.2", default-features = false, features = ["tiny-skia", "codecs-all"] }
+pdfrum = { version = "0.3", default-features = false, features = ["tiny-skia", "codecs-all"] }
 ```
 
 ## Alternatives

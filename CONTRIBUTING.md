@@ -137,7 +137,7 @@ what reproduces our own builds. Keep `--locked` in CI.
 Workspace versions bump together. `scripts/prepare-release.nu` cuts
 `CHANGELOG.md` (`[Unreleased]` becomes `[x.y.z] - date`) and, if you pass a
 version, writes it into `Cargo.toml`. `just prepare-release` uses the version
-already in the manifest; `just prepare-release 0.2.0` bumps first.
+already in the manifest; `just prepare-release 0.3.0` bumps first.
 
 Commit that, open a PR, merge to `main`. Once CI is green,
 `.github/workflows/tag-release.yml` tags `v*` and the publish workflow
