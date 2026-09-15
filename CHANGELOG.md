@@ -71,6 +71,14 @@ compile untouched.
   field with two controls — that lookup is unchanged for the widgets it was
   written for — but an *edited* dictionary that is not yet in the file now
   wins over the stale one the file still points at.
+- Adding a second attachment no longer inlines the first. Every attachment
+  write rewrites the whole `/Names /EmbeddedFiles` tree, and it rewrote it from
+  the name tree's *resolved* entries — so a file specification written as a
+  reference came back as a dictionary and was written out inline, losing its
+  object identity and duplicating the dictionary on the next save. The write
+  paths now read the tree's raw entries and keep whatever spelling it had.
+  `/AF` is what made this visible, since an associated file has to be the same
+  object as the attachment rather than a copy of it.
 
 
 ### Added
@@ -144,6 +152,16 @@ compile untouched.
   verbatim into the `/Type /Metadata /Subtype /XML` stream the writer already
   knew never to compress, so a reader scanning the raw bytes can still find
   it. `None` removes the stream.
+- `associate_file_with_document` and `associate_file_with_page` write `/AF`,
+  the array that says an embedded file *belongs to* the document or to one
+  page rather than merely riding along in it, with `Relationship`
+  (`/AFRelationship`) saying how. The distinction is what PDF/A-3 and the
+  electronic-invoice profiles built on it are about: the invoice XML has to be
+  declared the alternative representation of the rendered page, not an
+  attachment that happens to sit beside it. `document_associated_files` and
+  `page_associated_files` read the associations back as attachment indices.
+  Neither call embeds anything — the file is one the document already carries,
+  which is why every entry names an attachment by index.
 - `set_page_labels` writes `/PageLabels`, the number tree that decides the
   page numbers a reader shows. `PageLabelRange` names a starting page, a
   `PageLabelStyle`, an optional `/P` prefix and an optional `/St` first

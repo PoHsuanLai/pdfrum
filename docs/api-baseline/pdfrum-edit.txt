@@ -284,6 +284,18 @@ pub pdfrum_edit::PixelFormat::Gray8
 pub pdfrum_edit::PixelFormat::Mask1
 pub pdfrum_edit::PixelFormat::Rgb8
 pub pdfrum_edit::PixelFormat::Rgba8
+pub enum pdfrum_edit::Relationship
+pub pdfrum_edit::Relationship::Alternative
+pub pdfrum_edit::Relationship::Data
+pub pdfrum_edit::Relationship::EncryptedPayload
+pub pdfrum_edit::Relationship::FormData
+pub pdfrum_edit::Relationship::Schema
+pub pdfrum_edit::Relationship::Source
+pub pdfrum_edit::Relationship::Supplement
+pub pdfrum_edit::Relationship::Unspecified
+impl pdfrum_edit::Relationship
+pub fn pdfrum_edit::Relationship::as_str(self) -> &'static str
+pub fn pdfrum_edit::Relationship::from_bytes(&[u8]) -> core::option::Option<pdfrum_edit::Relationship>
 pub enum pdfrum_edit::SaveMode
 pub pdfrum_edit::SaveMode::Full
 pub pdfrum_edit::SaveMode::Incremental
@@ -839,6 +851,8 @@ pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl
 pub fn pdfrum_edit::add_form_field(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_edit::FieldSpec) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_form_font(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::AsRef<str>, &pdfrum_edit::EmbeddedFont) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
+pub fn pdfrum_edit::associate_file_with_document(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, pdfrum_edit::Relationship) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::associate_file_with_page(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize, pdfrum_edit::Relationship) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
 pub fn pdfrum_edit::clear_open_action(&mut pdfrum_edit::EditDoc<'_>) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> core::result::Result<bool, pdfrum_edit::Error>
@@ -846,12 +860,14 @@ pub fn pdfrum_edit::delete_annotation_at(&mut pdfrum_edit::EditDoc<'_>, impl cor
 pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_named_destination(&mut pdfrum_edit::EditDoc<'_>, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::document_associated_files(&pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits) -> core::result::Result<alloc::vec::Vec<(usize, pdfrum_edit::Relationship)>, pdfrum_edit::Error>
 pub fn pdfrum_edit::ensure_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::flatten(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
 pub fn pdfrum_edit::flatten_document(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, pdfrum_edit::FlattenMode, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_edit::Flattened, pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::named_destinations(&pdfrum_edit::EditDoc<'_>) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, pdfrum_edit::Error>
+pub fn pdfrum_edit::page_associated_files(&pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<alloc::vec::Vec<(usize, pdfrum_edit::Relationship)>, pdfrum_edit::Error>
 pub fn pdfrum_edit::pdf_date(std::time::SystemTime) -> alloc::string::String
 pub fn pdfrum_edit::pdf_date_to_iso8601(&str) -> alloc::string::String
 pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::PageRewrite>
