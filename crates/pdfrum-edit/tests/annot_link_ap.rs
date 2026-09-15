@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    AnnotBorder, AnnotBorderStyle, AnnotLinkHighlight, AnnotSpec, Color, Document, Name, Rect,
+    AnnotBorder, AnnotBorderStyle, AnnotLinkHighlight, Color, Document, LinkSpec, Name, Rect,
     SaveOptions, Subtype,
 };
 
@@ -33,13 +33,13 @@ fn link_writes_bs_color_and_highlight() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::link(
+        LinkSpec::uri(
             Rect::new(72.0, 700.0, 200.0, 720.0),
             "https://example.test/",
         )
-        .with_color(Color::from_rgb8(0, 0, 255))
-        .with_border(AnnotBorder::solid(1.5).with_style(AnnotBorderStyle::Underline))
-        .with_highlight(AnnotLinkHighlight::Outline),
+        .color(Color::from_rgb8(0, 0, 255))
+        .border(AnnotBorder::solid(1.5).with_style(AnnotBorderStyle::Underline))
+        .highlight(AnnotLinkHighlight::Outline),
     )
     .expect("add");
     let saved = save_reopen(&edit);

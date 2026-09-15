@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use pdfrum_doc::vt::Alignment;
 use pdfrum_edit::{
-    AnnotBorder, AnnotBorderStyle, AnnotSpec, CircleSpec, DEFAULT_DA, EditDoc, SaveOptions,
-    SquareSpec, add_annotation, save,
+    AnnotBorder, AnnotBorderStyle, AnnotSpec, CircleSpec, DEFAULT_DA, EditDoc, FreeTextSpec,
+    MarkupKind, MarkupSpec, SaveOptions, SquareSpec, add_annotation, save,
 };
 use pdfrum_object::{Dict, Name, Object, Resolve};
 use pdfrum_parser::{Document, LoadOptions, load};
@@ -57,16 +57,28 @@ fn annot(doc: &Document) -> Dict {
 
 #[test]
 fn opacity_is_written_and_clamped() {
-    let doc =
-        written(AnnotSpec::highlight(rect(), Color::from_rgb8(255, 255, 0)).with_opacity(0.4));
+    let doc = written(
+        AnnotSpec::from(MarkupSpec::new(
+            MarkupKind::Highlight,
+            rect(),
+            Color::from_rgb8(255, 255, 0),
+        ))
+        .with_opacity(0.4),
+    );
     let dict = annot(&doc);
     assert_eq!(dict.number(&Name::from("CA"), &doc), Some(0.4));
 
     // Out of range is clamped rather than refused: a reader takes `/CA`
     // outside 0..1 as undefined, and the nearest legal value is what was
     // meant.
-    let doc =
-        written(AnnotSpec::highlight(rect(), Color::from_rgb8(255, 255, 0)).with_opacity(2.5));
+    let doc = written(
+        AnnotSpec::from(MarkupSpec::new(
+            MarkupKind::Highlight,
+            rect(),
+            Color::from_rgb8(255, 255, 0),
+        ))
+        .with_opacity(2.5),
+    );
     assert_eq!(annot(&doc).number(&Name::from("CA"), &doc), Some(1.0));
 }
 
@@ -74,7 +86,11 @@ fn opacity_is_written_and_clamped() {
 fn no_opacity_writes_no_key() {
     // An absent `/CA` reads as fully opaque, which is the right default —
     // writing `1.0` everywhere would be noise.
-    let doc = written(AnnotSpec::highlight(rect(), Color::from_rgb8(255, 255, 0)));
+    let doc = written(AnnotSpec::from(MarkupSpec::new(
+        MarkupKind::Highlight,
+        rect(),
+        Color::from_rgb8(255, 255, 0),
+    )));
     assert!(annot(&doc).get(&Name::from("CA"), &doc).is_none());
 }
 
@@ -151,10 +167,11 @@ fn free_text_alignment_round_trips() {
         (Alignment::Center, 1),
         (Alignment::Right, 2),
     ] {
-        let doc = written(
-            AnnotSpec::free_text(rect(), Color::from_rgb8(0, 0, 0), "text", DEFAULT_DA)
-                .with_align(align),
-        );
+        let doc = written(AnnotSpec::from(
+            FreeTextSpec::new(rect(), Color::from_rgb8(0, 0, 0), "text")
+                .da(DEFAULT_DA)
+                .align(align),
+        ));
         assert_eq!(
             annot(&doc).int(&Name::from("Q"), &doc),
             Some(quadding),
@@ -165,11 +182,8 @@ fn free_text_alignment_round_trips() {
 
 #[test]
 fn free_text_without_an_alignment_writes_no_quadding() {
-    let doc = written(AnnotSpec::free_text(
-        rect(),
-        Color::from_rgb8(0, 0, 0),
-        "text",
-        DEFAULT_DA,
+    let doc = written(AnnotSpec::from(
+        FreeTextSpec::new(rect(), Color::from_rgb8(0, 0, 0), "text").da(DEFAULT_DA),
     ));
     assert!(annot(&doc).get(&Name::from("Q"), &doc).is_none());
 }
@@ -179,7 +193,9 @@ fn opacity_reaches_the_generated_appearance() {
     // The point of `/CA` is that the generator folds it into the appearance's
     // `/ExtGState` — a written key that never reached the stream would leave
     // the annotation opaque in any reader that draws the `/AP`.
-    let doc = written(AnnotSpec::square(rect(), Color::from_rgb8(0, 0, 0)).with_opacity(0.25));
+    let doc = written(
+        AnnotSpec::from(SquareSpec::new(rect(), Color::from_rgb8(0, 0, 0))).with_opacity(0.25),
+    );
     let dict = annot(&doc);
     let ap = dict.dict(&Name::from("AP"), &doc).expect("an /AP");
     let stream = match ap.raw(&Name::from("N")) {

@@ -44,8 +44,8 @@ pub use annot::{
     set_named_destination, update_annotation, update_annotation_at,
 };
 pub use annot_spec::{
-    CaretSpec, CircleSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec, SquareSpec,
-    TextSpec,
+    CaretSpec, CircleSpec, FreeTextSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec,
+    SquareSpec, TextSpec,
 };
 pub use attach::{
     AttachmentOptions, AttachmentOptionsBuilder, add_attachment, delete_attachment,
