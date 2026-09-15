@@ -113,6 +113,23 @@ compile untouched.
   verbatim into the `/Type /Metadata /Subtype /XML` stream the writer already
   knew never to compress, so a reader scanning the raw bytes can still find
   it. `None` removes the stream.
+- `reorder_pages` arranges the pages into a new order given as old indices.
+  The CLI faked this three times over by building a throwaway document,
+  importing into it and deleting the template page. A list that is not a
+  permutation of every page is refused rather than guessed at: naming fewer
+  pages is a deletion and naming one twice is a duplication, and both have
+  their own call. The page tree flattens in the process, with inherited
+  `/Resources`, `/MediaBox`, `/CropBox` and `/Rotate` resolved onto each page
+  first so nothing is lost.
+- `set_page_rotation_to` takes the read side's own `Rotation` where
+  `set_page_rotation` takes degrees and rounds. The CLI had been reading a
+  `Rotation` and hand-converting it back to `i32` to feed the writer — a round
+  trip through a type that can only lose information.
+- `delete_named_destination` and `named_destinations` finish the name-tree
+  CRUD. Delete answers `Ok(false)` for a name that was not there, matching
+  `delete_attachment`; a `/Kids` hierarchy is edited in its leaves rather than
+  flattened. A link still naming a removed destination is left alone — this
+  answers what the tree holds, not what points at it.
 - Per-subtype annotation builders — `MarkupSpec` (with `MarkupKind`),
   `TextSpec`, `SquareSpec`, `CircleSpec`, `InkSpec`, `LineSpec`,
   `LinkSpec`, and `CaretSpec` — each carrying only the options its
