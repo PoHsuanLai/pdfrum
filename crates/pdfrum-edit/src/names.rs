@@ -125,6 +125,29 @@ pdfrum_object::names! {
     FIT_BV = "FitBV";
     /// XYZ destination mode (`/XYZ`).
     XYZ = "XYZ";
+
+    // ---- Interactive forms, writer side (tables 218, 220, 226-230) ----
+
+    /// The root field array on `/AcroForm` (`/Fields`).
+    FIELDS = "Fields";
+    /// The form's default resource dictionary (`/DR`).
+    DR = "DR";
+    /// A widget annotation's subtype (`/Widget`).
+    WIDGET = "Widget";
+    /// A text field's `/FT` value (`/Tx`).
+    TX = "Tx";
+    /// A button field's `/FT` value (`/Btn`).
+    BTN = "Btn";
+    /// A choice field's `/FT` value (`/Ch`).
+    CH = "Ch";
+    /// The state a toggle shows when it is clear (`/Off`).
+    OFF = "Off";
+    /// The longest value a text field accepts (`/MaxLen`).
+    MAX_LEN = "MaxLen";
+    /// A choice field's options (`/Opt`).
+    OPT = "Opt";
+    /// A field's default value, restored by a reset action (`/DV`).
+    DV = "DV";
     // Subtype spellings (/Highlight, /Text, …) come from
     // `pdfrum_doc::Subtype::as_bytes` at write time — do not duplicate them here.
 }

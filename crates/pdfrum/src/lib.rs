@@ -139,6 +139,8 @@ pub use pdfrum_edit::{
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_param,
 };
 #[cfg(feature = "edit")]
+pub use pdfrum_edit::{DEFAULT_FIELD_DA, FieldKindSpec, FieldSpec, add_form_field, add_form_font};
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{Encryption, IdSource, PageBox};

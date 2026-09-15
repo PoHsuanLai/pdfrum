@@ -170,9 +170,12 @@ pub pdfrum_edit::Error::AnnotNotOnPage(pdfrum_object::object::ObjRef, pdfrum_com
 pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
+pub pdfrum_edit::Error::DuplicateFieldName(alloc::string::String)
+pub pdfrum_edit::Error::EmptyFieldName
 pub pdfrum_edit::Error::EmptyFontProgram
 pub pdfrum_edit::Error::EmptyImage
 pub pdfrum_edit::Error::EmptyQuadPoints
+pub pdfrum_edit::Error::EmptyRadioGroup
 pub pdfrum_edit::Error::EmptyToUnicodeCMap
 pub pdfrum_edit::Error::EncryptedSaveUnsupported
 pub pdfrum_edit::Error::ImageDataLength
@@ -189,6 +192,14 @@ pub pdfrum_edit::Error::PasswordNotText
 pub pdfrum_edit::Error::Subset(alloc::string::String)
 pub pdfrum_edit::Error::UnrecognisedFontProgram
 pub pdfrum_edit::Error::UnrecognisedImageData
+#[non_exhaustive] pub enum pdfrum_edit::FieldKindSpec
+pub pdfrum_edit::FieldKindSpec::Check
+pub pdfrum_edit::FieldKindSpec::Check::on: alloc::string::String
+pub pdfrum_edit::FieldKindSpec::Radio
+pub pdfrum_edit::FieldKindSpec::Radio::buttons: alloc::vec::Vec<(kurbo::rect::Rect, alloc::string::String)>
+pub pdfrum_edit::FieldKindSpec::Text
+impl pdfrum_edit::FieldKindSpec
+pub fn pdfrum_edit::FieldKindSpec::check() -> Self
 pub enum pdfrum_edit::Fill
 pub pdfrum_edit::Fill::EvenOdd
 pub pdfrum_edit::Fill::NonZero
@@ -463,6 +474,22 @@ impl<'a> pdfrum_edit::Encryptor<'a>
 pub fn pdfrum_edit::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_edit::Encryptor<'a>::encrypts_metadata(&self) -> bool
 pub const fn pdfrum_edit::Encryptor<'a>::new(&'a pdfrum_crypt::handler::SecurityHandler, &'a pdfrum_edit::IvSource, u32) -> Self
+pub struct pdfrum_edit::FieldSpec
+impl pdfrum_edit::FieldSpec
+pub fn pdfrum_edit::FieldSpec::appearance(self, pdfrum_edit::WidgetAppearance) -> Self
+pub fn pdfrum_edit::FieldSpec::comb(self, bool) -> Self
+pub fn pdfrum_edit::FieldSpec::da(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::FieldSpec::default_value(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::FieldSpec::flags(self, i64) -> Self
+pub fn pdfrum_edit::FieldSpec::max_len(self, i64) -> Self
+pub fn pdfrum_edit::FieldSpec::multiline(self, bool) -> Self
+pub fn pdfrum_edit::FieldSpec::name(&self) -> &str
+pub fn pdfrum_edit::FieldSpec::new(impl core::convert::Into<alloc::string::String>, kurbo::rect::Rect, pdfrum_edit::FieldKindSpec) -> Self
+pub fn pdfrum_edit::FieldSpec::password(self, bool) -> Self
+pub fn pdfrum_edit::FieldSpec::read_only(self, bool) -> Self
+pub fn pdfrum_edit::FieldSpec::required(self, bool) -> Self
+pub fn pdfrum_edit::FieldSpec::tooltip(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::FieldSpec::value(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub struct pdfrum_edit::FileId
 pub pdfrum_edit::FileId::array: pdfrum_object::array::Array
 pub pdfrum_edit::FileId::rekeyed: bool
@@ -732,6 +759,7 @@ pub fn pdfrum_edit::WidgetAppearance::caption(self, impl core::convert::Into<all
 pub fn pdfrum_edit::WidgetAppearance::new() -> Self
 pub fn pdfrum_edit::WidgetAppearance::rotation(self, i64) -> Self
 pub const pdfrum_edit::DEFAULT_DA: &str
+pub const pdfrum_edit::DEFAULT_FIELD_DA: &str
 pub trait pdfrum_edit::BorderStyleName
 pub fn pdfrum_edit::BorderStyleName::as_bytes(&self) -> &'static [u8]
 impl pdfrum_edit::BorderStyleName for pdfrum_edit::AnnotBorderStyle
@@ -739,6 +767,8 @@ pub fn pdfrum_edit::AnnotBorderStyle::as_bytes(&self) -> &'static [u8]
 pub fn pdfrum_edit::add_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, impl core::convert::Into<pdfrum_edit::AnnotWrite>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, &str, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<usize, pdfrum_edit::Error>
 pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
+pub fn pdfrum_edit::add_form_field(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_edit::FieldSpec) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
+pub fn pdfrum_edit::add_form_font(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::AsRef<str>, &pdfrum_edit::EmbeddedFont) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
 pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> core::result::Result<bool, pdfrum_edit::Error>

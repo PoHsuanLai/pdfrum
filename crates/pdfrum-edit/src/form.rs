@@ -80,6 +80,15 @@ impl WidgetAppearance {
         self
     }
 
+    /// These characteristics alone, as a fresh `/MK`.
+    ///
+    /// A created widget has nothing to merge into, so it takes this; an
+    /// existing one goes through [`Self::merge_into`] instead and keeps the
+    /// keys the builder says nothing about.
+    pub(crate) fn to_dict(&self) -> Dict {
+        self.merge_into(Dict::new())
+    }
+
     /// Merges these characteristics into an existing `/MK`, keeping keys the
     /// builder says nothing about.
     fn merge_into(&self, mut mk: Dict) -> Dict {
@@ -104,7 +113,7 @@ impl WidgetAppearance {
 
 /// The `/MK` key. `pdfrum-doc` owns the constant; this crate spells it here
 /// rather than depending on that module's name table for one entry.
-fn mk_key() -> Name {
+pub(crate) fn mk_key() -> Name {
     Name::from("MK")
 }
 
