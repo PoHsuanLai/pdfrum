@@ -580,6 +580,7 @@ fn construct_edit_variants() -> usize {
     let _ = SaveError::EmptyQuadPoints;
     let _ = SaveError::AnnotNotOnPage(ObjRef::new(1, 0), PageIndex::from(0u32));
     let _ = SaveError::AnnotIndexOutOfRange(0, PageIndex::from(0u32));
+    let _ = SaveError::DuplicateAttachmentName(String::new());
     let _ = SaveError::ImageDataLength {
         expected: 0,
         found: 0,
@@ -592,7 +593,8 @@ fn construct_edit_variants() -> usize {
     let _ = SaveError::DuplicateFieldName(String::new());
     let _ = SaveError::EmptyFieldName;
     let _ = SaveError::EmptyRadioGroup;
-    n += 25;
+    let _ = SaveError::DuplicateAttachmentName(String::new());
+    n += 26;
 
     let _ = FieldKindSpec::Text;
     let _ = FieldKindSpec::Check { on: String::new() };
@@ -983,7 +985,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 25 + 3 + 2 + 5 + 8 + 8 + 10 + 4);
+    assert_eq!(construct_edit_variants(), 26 + 3 + 2 + 5 + 8 + 8 + 10 + 4);
 }
 
 #[test]
@@ -1070,6 +1072,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 393 -> 395 (`AnnotRemoteDest` Page + Named).
     // 395 -> 390 (`AnnotBorderStyle` is an alias of `pdfrum_doc::ap::BorderStyle`;
     // its five variants are counted in that crate's snapshot, not the facade's).
+    // 390 -> 391 (`SaveError::DuplicateAttachmentName`).
     // The stroke pass adds `LineCap` (3) and `LineJoin` (3) on
     // the facade; `PdfaLevel`, `PdfaClause` and `PdfaSubject` are
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
@@ -1078,7 +1081,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 390 -> 393 (`SaveError` gained `DuplicateFieldName`, `EmptyFieldName`
     // and `EmptyRadioGroup` with form-field creation).
     // 393 -> 396 (`FieldKindSpec` Text/Check/Radio).
-    assert_eq!(constructed, 396, "default-feature variant count");
+    // 396 -> 397 (`SaveError::DuplicateAttachmentName`).
+    assert_eq!(constructed, 397, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 47, "default-feature enum count");
 }
 
