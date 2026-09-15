@@ -55,21 +55,20 @@ fn import_and_save(subset_new_fonts: bool) -> Vec<u8> {
         &mut edit,
         &src,
         &PageRange::of([0u32]),
-        &ImportOptions {
-            at: PageIndex::new(0),
-            viewer_preferences: false,
-        },
+        &ImportOptions::builder()
+            .at(PageIndex::new(0))
+            .viewer_preferences(false)
+            .build(),
     )
     .expect("imports");
 
     let mut out = Vec::new();
     save(
         &edit,
-        &SaveOptions {
-            subset_new_fonts,
-            id_source: IdSource::Fixed([7; 16]),
-            ..SaveOptions::default()
-        },
+        &SaveOptions::builder()
+            .subset_new_fonts(subset_new_fonts)
+            .id_source(IdSource::Fixed([7; 16]))
+            .build(),
         &mut out,
     )
     .expect("saves");
@@ -432,10 +431,11 @@ fn a_save_with_no_new_fonts_is_unchanged_by_the_option() {
     let edit = EditDoc::new(&doc);
     let mut off = Vec::new();
     let mut on = Vec::new();
-    let options = |subset| SaveOptions {
-        subset_new_fonts: subset,
-        id_source: IdSource::Fixed([1; 16]),
-        ..SaveOptions::default()
+    let options = |subset| {
+        SaveOptions::builder()
+            .subset_new_fonts(subset)
+            .id_source(IdSource::Fixed([1; 16]))
+            .build()
     };
     save(&edit, &options(false), &mut off).expect("saves");
     save(&edit, &options(true), &mut on).expect("saves");
@@ -454,22 +454,21 @@ fn an_incremental_save_subsets_and_stays_readable() {
         &mut edit,
         &src,
         &PageRange::of([0u32]),
-        &ImportOptions {
-            at: PageIndex::new(0),
-            viewer_preferences: false,
-        },
+        &ImportOptions::builder()
+            .at(PageIndex::new(0))
+            .viewer_preferences(false)
+            .build(),
     )
     .expect("imports");
 
     let mut out = Vec::new();
     save(
         &edit,
-        &SaveOptions {
-            mode: SaveMode::Incremental,
-            subset_new_fonts: true,
-            id_source: IdSource::Fixed([7; 16]),
-            ..SaveOptions::default()
-        },
+        &SaveOptions::builder()
+            .mode(SaveMode::Incremental)
+            .subset_new_fonts(true)
+            .id_source(IdSource::Fixed([7; 16]))
+            .build(),
         &mut out,
     )
     .expect("saves");

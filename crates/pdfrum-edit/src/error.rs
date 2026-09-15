@@ -183,6 +183,12 @@ pub enum Error {
     /// `add_form_field` was given a radio group with no buttons.
     #[error("a radio group needs at least one button")]
     EmptyRadioGroup,
+    /// `set_attachment_name` was given a name another attachment already has.
+    ///
+    /// The embedded-files tree is keyed by name, so writing a duplicate would
+    /// leave one of the two unreachable by the only lookup there is.
+    #[error("another attachment is already named {0:?}")]
+    DuplicateAttachmentName(String),
 
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
