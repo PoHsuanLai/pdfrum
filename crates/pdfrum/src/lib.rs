@@ -141,16 +141,22 @@ pub use pdfrum_edit::{
 };
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{DEFAULT_FIELD_DA, FieldKindSpec, FieldSpec, add_form_field, add_form_font};
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{
     Duplex, PageLabelRange, PageLabelStyle, ViewerPreferences, clear_open_action, set_open_action,
     set_page_labels, set_viewer_preferences,
 };
-// The facade has its own `SaveOptions` and builder; the engine's belongs to
-// `pdfrum_edit` and is reached there.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{Encryption, IdSource, PageBox};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{
+    Relationship, associate_file_with_document, associate_file_with_page,
+    document_associated_files, page_associated_files,
+};
+// The facade has its own `SaveOptions` and builder; the engine's belongs to
+// `pdfrum_edit` and is reached there.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EncryptionBuilder, ImportOptionsBuilder, NUpOptionsBuilder};
 #[cfg(feature = "edit")]

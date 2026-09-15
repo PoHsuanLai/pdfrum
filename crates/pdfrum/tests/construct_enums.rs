@@ -47,6 +47,11 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "pdfrum_edit::FieldKindSpec",
         "FieldKindSpec",
     ),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::Relationship",
+        "Relationship",
+    ),
     ("pdfrum-edit.txt", "pdfrum_edit::Paint", "Paint"),
     ("pdfrum-edit.txt", "pdfrum_edit::Fill", "Fill"),
     ("pdfrum-edit.txt", "pdfrum_edit::LineCap", "LineCap"),
@@ -603,6 +608,16 @@ fn construct_edit_variants() -> usize {
     };
     n += 3;
 
+    let _ = Relationship::Source;
+    let _ = Relationship::Data;
+    let _ = Relationship::Alternative;
+    let _ = Relationship::Supplement;
+    let _ = Relationship::EncryptedPayload;
+    let _ = Relationship::FormData;
+    let _ = Relationship::Schema;
+    let _ = Relationship::Unspecified;
+    n += 8;
+
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
     n += 2;
@@ -985,7 +1000,10 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 26 + 3 + 2 + 5 + 8 + 8 + 10 + 4);
+    assert_eq!(
+        construct_edit_variants(),
+        26 + 3 + 8 + 2 + 5 + 8 + 8 + 10 + 4
+    );
 }
 
 #[test]
@@ -1082,8 +1100,9 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // and `EmptyRadioGroup` with form-field creation).
     // 393 -> 396 (`FieldKindSpec` Text/Check/Radio).
     // 396 -> 397 (`SaveError::DuplicateAttachmentName`).
-    assert_eq!(constructed, 397, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 47, "default-feature enum count");
+    // 397 -> 405 (`Relationship` eight variants).
+    assert_eq!(constructed, 405, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 48, "default-feature enum count");
 }
 
 #[test]
