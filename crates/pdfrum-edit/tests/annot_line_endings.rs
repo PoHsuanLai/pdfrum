@@ -7,9 +7,7 @@
 
 use std::sync::Arc;
 
-use pdfrum::{
-    AnnotSpec, Color, Document, LineEndingStyle, Name, Point, Rect, SaveOptions, Subtype,
-};
+use pdfrum::{Color, Document, LineEndingStyle, LineSpec, Name, Point, Rect, SaveOptions, Subtype};
 
 fn hello() -> Document {
     Document::open(concat!(
@@ -32,7 +30,7 @@ fn default_line_omits_le() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             Rect::new(10.0, 10.0, 100.0, 100.0),
             Color::BLACK,
             Point::new(20.0, 20.0),
@@ -63,13 +61,13 @@ fn line_endings_round_trip() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             Rect::new(10.0, 10.0, 100.0, 100.0),
             Color::BLACK,
             Point::new(20.0, 20.0),
             Point::new(80.0, 80.0),
         )
-        .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow),
+        .endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -109,13 +107,13 @@ fn line_endings_still_generate_ap() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             Rect::new(10.0, 10.0, 100.0, 100.0),
             Color::BLACK,
             Point::new(20.0, 20.0),
             Point::new(80.0, 80.0),
         )
-        .with_line_endings(LineEndingStyle::OpenArrow, LineEndingStyle::ClosedArrow),
+        .endings(LineEndingStyle::OpenArrow, LineEndingStyle::ClosedArrow),
     )
     .expect("add");
     let saved = save_reopen(&edit);
@@ -145,14 +143,14 @@ fn line_interior_ic_round_trips() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             Rect::new(10.0, 10.0, 110.0, 30.0),
             Color::from_rgb8(0, 0, 0),
             Point::new(10.0, 20.0),
             Point::new(110.0, 20.0),
         )
-        .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow)
-        .with_interior(Color::from_rgb8(255, 0, 0)),
+        .endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow)
+        .interior(Color::from_rgb8(255, 0, 0)),
     )
     .expect("add");
     let saved = save_reopen(&edit);

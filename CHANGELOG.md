@@ -23,6 +23,24 @@ compile untouched.
 - `AnnotBorder` is `#[non_exhaustive]`, so its new `dash` field — and any
   later one — is additive rather than breaking. Build one with
   `AnnotBorder::solid(..).with_style(..)` instead of a struct literal.
+- The `AnnotSpec::*` constructors and the per-variant `with_*` setters are
+  gone. The typed builders replace them, and now carry everything the enum
+  could say: `spec_builder!` emits `author`, `name`, `modified`, `flags` and
+  `meta` alongside `contents`, so a builder no longer has to convert to
+  `AnnotSpec` to name an author. `FreeTextSpec` fills the one subtype that had
+  no builder.
+
+  Eight of the removed setters — `with_interior`, `with_quads`, `with_border`,
+  `with_icon`, `with_open`, `with_color`, `with_highlight`,
+  `with_line_endings` — applied to some variants and not others, and on the
+  wrong one they tripped a debug assertion and then **silently did nothing in
+  release**. That is the failure `annot_spec.rs` was written to prevent, and
+  the reason the old path could not simply stay.
+
+  Migration is mechanical: `AnnotSpec::square(r, c).with_border(b)` becomes
+  `SquareSpec::new(r, c).border(b)`, and the result converts with `.into()`
+  wherever a spec is taken. `AnnotWrite` gained bare-verb spellings of its own
+  metadata setters so a chain reads the same after the first one.
 
 ### Fixed
 
@@ -42,6 +60,7 @@ compile untouched.
   field with two controls — that lookup is unchanged for the widgets it was
   written for — but an *edited* dictionary that is not yet in the file now
   wins over the stale one the file still points at.
+
 
 ### Added
 

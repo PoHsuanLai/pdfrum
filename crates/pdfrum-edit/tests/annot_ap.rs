@@ -5,7 +5,10 @@
     reason = "helpers shared by the tests below; a panic here is a failure"
 )]
 
-use pdfrum::{AnnotSpec, Color, Document, FlattenMode, Flattened, Name, Rect, SaveOptions};
+use pdfrum::{
+    CaretSpec, Color, Document, FlattenMode, Flattened, InkSpec, LineSpec, LinkSpec, MarkupKind,
+    MarkupSpec, Name, Rect, SaveOptions,
+};
 use std::sync::Arc;
 
 fn hello() -> Document {
@@ -21,8 +24,11 @@ fn highlight_write_includes_appearance_and_flattens() {
     let doc = hello();
     let mut edit = doc.edit();
     let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
-    edit.add_annotation(0, AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0)))
-        .expect("add");
+    edit.add_annotation(
+        0,
+        MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(255, 230, 0)),
+    )
+    .expect("add");
 
     let mut out = Vec::new();
     edit.write_to(&mut out, &SaveOptions::default())
@@ -56,7 +62,7 @@ fn ink_and_underline_get_appearances() {
     let rect = Rect::new(50.0, 50.0, 150.0, 150.0);
     edit.add_annotation(
         0,
-        AnnotSpec::ink(
+        InkSpec::new(
             rect,
             Color::from_rgb8(0, 0, 0),
             vec![vec![
@@ -68,7 +74,8 @@ fn ink_and_underline_get_appearances() {
     .expect("ink");
     edit.add_annotation(
         0,
-        AnnotSpec::underline(
+        MarkupSpec::new(
+            MarkupKind::Underline,
             Rect::new(72.0, 680.0, 200.0, 700.0),
             Color::from_rgb8(0, 0, 255),
         ),
@@ -99,7 +106,8 @@ fn strike_out_and_squiggly_get_appearances() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::strike_out(
+        MarkupSpec::new(
+            MarkupKind::StrikeOut,
             Rect::new(72.0, 660.0, 200.0, 680.0),
             Color::from_rgb8(200, 0, 0),
         ),
@@ -107,7 +115,8 @@ fn strike_out_and_squiggly_get_appearances() {
     .expect("strike_out");
     edit.add_annotation(
         0,
-        AnnotSpec::squiggly(
+        MarkupSpec::new(
+            MarkupKind::Squiggly,
             Rect::new(72.0, 640.0, 200.0, 660.0),
             Color::from_rgb8(0, 160, 0),
         ),
@@ -138,7 +147,7 @@ fn line_link_caret_get_appearances() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::line(
+        LineSpec::new(
             Rect::new(10.0, 10.0, 100.0, 100.0),
             Color::from_rgb8(0, 0, 0),
             kurbo::Point::new(20.0, 20.0),
@@ -148,7 +157,7 @@ fn line_link_caret_get_appearances() {
     .expect("line");
     edit.add_annotation(
         0,
-        AnnotSpec::link(
+        LinkSpec::uri(
             Rect::new(72.0, 700.0, 200.0, 720.0),
             "https://example.test/",
         ),
@@ -156,7 +165,7 @@ fn line_link_caret_get_appearances() {
     .expect("link");
     edit.add_annotation(
         0,
-        AnnotSpec::caret(
+        CaretSpec::new(
             Rect::new(30.0, 30.0, 40.0, 50.0),
             Color::from_rgb8(200, 0, 0),
         ),

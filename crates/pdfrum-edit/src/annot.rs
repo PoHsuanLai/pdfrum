@@ -100,7 +100,7 @@ impl From<Rect> for Quad {
 /// [`BorderStyleName::as_bytes`], which emits exactly the five legal names.
 ///
 /// ```
-/// use pdfrum_edit::{AnnotBorderStyle, BorderStyleName};
+/// use pdfrum_edit::{AnnotBorderStyle, BorderStyleName, MarkupKind, MarkupSpec, SquareSpec, TextSpec};
 ///
 /// assert_eq!(AnnotBorderStyle::Solid.as_bytes(), b"S");
 /// assert_eq!(AnnotBorderStyle::Dash.as_bytes(), b"D");
@@ -479,14 +479,14 @@ pub enum AnnotLinkAction {
 /// every field at the call site.
 ///
 /// ```
-/// use pdfrum::{AnnotSpec, Color, Document, Rect, SaveOptions};
+/// use pdfrum::{Color, Document, MarkupKind, MarkupSpec, Rect, SaveOptions};
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 /// let mut edit = doc.edit();
 /// let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
 /// edit.add_annotation(
 ///     0,
-///     AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0)).with_contents("note"),
+///     MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(255, 230, 0)).contents("note"),
 /// )?;
 /// let mut bytes = Vec::new();
 /// edit.write_to(&mut bytes, &SaveOptions::default())?;
@@ -512,7 +512,7 @@ pub enum AnnotSpec {
     },
     /// A sticky-note text annotation (`/Subtype /Text`).
     ///
-    /// Defaults to `/Name /Comment` and `/Open false` (see [`AnnotSpec::text`]).
+    /// Defaults to `/Name /Comment` and `/Open false` (see [`TextSpec`](crate::TextSpec)).
     #[non_exhaustive]
     Text {
         /// The annotation's `/Rect` in page space.
@@ -702,648 +702,19 @@ pub enum AnnotSpec {
 }
 
 impl AnnotSpec {
-    /// A highlight covering `rect` as a single quadrilateral, with no
-    /// contents.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::highlight(Rect::new(0.0, 0.0, 10.0, 2.0), Color::from_rgb8(255, 255, 0));
-    /// assert!(matches!(spec, AnnotSpec::Highlight { contents: None, .. }));
-    /// ```
-    #[must_use]
-    pub fn highlight(rect: Rect, color: Color) -> Self {
-        Self::Highlight {
-            rect,
-            color,
-            quads: vec![Quad::from(rect)],
-            contents: None,
-        }
-    }
-
-    /// An underline covering `rect` as a single quadrilateral, with no
-    /// contents.
-    #[must_use]
-    pub fn underline(rect: Rect, color: Color) -> Self {
-        Self::Underline {
-            rect,
-            color,
-            quads: vec![Quad::from(rect)],
-            contents: None,
-        }
-    }
-
-    /// A strike-out covering `rect` as a single quadrilateral, with no
-    /// contents.
-    #[must_use]
-    pub fn strike_out(rect: Rect, color: Color) -> Self {
-        Self::StrikeOut {
-            rect,
-            color,
-            quads: vec![Quad::from(rect)],
-            contents: None,
-        }
-    }
-
-    /// A squiggly underline covering `rect` as a single quadrilateral, with no
-    /// contents.
-    #[must_use]
-    pub fn squiggly(rect: Rect, color: Color) -> Self {
-        Self::Squiggly {
-            rect,
-            color,
-            quads: vec![Quad::from(rect)],
-            contents: None,
-        }
-    }
-
-    /// A sticky-note text annotation with no contents.
-    ///
-    /// Uses `/Name /Comment` and `/Open false`. Override with
-    /// [`AnnotSpec::with_icon`] / [`AnnotSpec::with_open`].
-    #[must_use]
-    pub fn text(rect: Rect, color: Color) -> Self {
-        Self::Text {
-            rect,
-            color,
-            contents: None,
-            icon: names::COMMENT.clone(),
-            open: false,
-        }
-    }
-
-    /// A square / area annotation with no contents.
-    ///
-    /// Uses a solid `/BS` of width 2. Override with [`AnnotSpec::with_border`].
-    #[must_use]
-    pub fn square(rect: Rect, color: Color) -> Self {
-        Self::Square {
-            rect,
-            color,
-            contents: None,
-            border: AnnotBorder::default(),
-            interior: None,
-        }
-    }
-
-    /// Freehand ink with the given strokes and no contents.
-    ///
-    /// Uses a solid `/BS` of width 2. Override with [`AnnotSpec::with_border`].
-    #[must_use]
-    pub fn ink(rect: Rect, color: Color, strokes: Vec<Vec<Point>>) -> Self {
-        Self::Ink {
-            rect,
-            color,
-            strokes,
-            contents: None,
-            border: AnnotBorder::default(),
-        }
-    }
-
-    /// A free-text annotation with required contents and `/DA`.
-    ///
-    /// Pass [`DEFAULT_DA`] when the caller has no custom appearance string.
-    #[must_use]
-    pub fn free_text(
-        rect: Rect,
-        color: Color,
-        contents: impl Into<String>,
-        da: impl Into<String>,
-    ) -> Self {
-        Self::FreeText {
-            rect,
-            color,
-            contents: contents.into(),
-            da: da.into(),
-            align: None,
-        }
-    }
-
-    /// A circle / ellipse with no contents and a solid width-2 border.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::circle(Rect::new(0.0, 0.0, 20.0, 20.0), Color::from_rgb8(0, 0, 255));
-    /// assert!(matches!(spec, AnnotSpec::Circle { contents: None, .. }));
-    /// ```
-    #[must_use]
-    pub fn circle(rect: Rect, color: Color) -> Self {
-        Self::Circle {
-            rect,
-            color,
-            contents: None,
-            border: AnnotBorder::default(),
-            interior: None,
-        }
-    }
-
-    /// A line from `start` to `end` with no contents and a solid width-2 border.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::{Point, Rect};
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::line(
-    ///     Rect::new(0.0, 0.0, 100.0, 100.0),
-    ///     Color::from_rgb8(0, 0, 0),
-    ///     Point::new(10.0, 10.0),
-    ///     Point::new(90.0, 90.0),
-    /// );
-    /// assert!(matches!(spec, AnnotSpec::Line { contents: None, .. }));
-    /// ```
-    #[must_use]
-    pub fn line(rect: Rect, color: Color, start: Point, end: Point) -> Self {
-        Self::Line {
-            rect,
-            color,
-            start,
-            end,
-            contents: None,
-            border: AnnotBorder::default(),
-            line_endings: None,
-            interior: None,
-        }
-    }
-
-    /// Sets `/LE` on [`AnnotSpec::Line`]. Other variants are unchanged.
-    ///
-    /// ```
-    /// use pdfrum_edit::{AnnotSpec, LineEndingStyle};
-    /// use kurbo::{Point, Rect};
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::line(
-    ///     Rect::new(0.0, 0.0, 10.0, 10.0),
-    ///     Color::BLACK,
-    ///     Point::new(0.0, 0.0),
-    ///     Point::new(10.0, 10.0),
-    /// )
-    /// .with_line_endings(LineEndingStyle::None, LineEndingStyle::ClosedArrow);
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Line {
-    ///         line_endings: Some((LineEndingStyle::None, LineEndingStyle::ClosedArrow)),
-    ///         ..
-    ///     }
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn with_line_endings(self, start: LineEndingStyle, end: LineEndingStyle) -> Self {
-        match self {
-            Self::Line {
-                rect,
-                color,
-                start: s,
-                end: e,
-                contents,
-                border,
-                interior,
-                ..
-            } => Self::Line {
-                rect,
-                color,
-                start: s,
-                end: e,
-                contents,
-                border,
-                line_endings: Some((start, end)),
-                interior,
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_line_endings applies to Line, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
-    /// Sets `/Q`, the text alignment, on a [`AnnotSpec::FreeText`].
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use pdfrum_doc::vt::Alignment;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::free_text(
-    ///     Rect::new(0.0, 0.0, 100.0, 20.0),
-    ///     Color::from_rgb8(0, 0, 0),
-    ///     "centred",
-    ///     pdfrum_edit::DEFAULT_DA,
-    /// )
-    /// .with_align(Alignment::Center);
-    /// assert!(matches!(spec, AnnotSpec::FreeText { align: Some(Alignment::Center), .. }));
-    /// ```
-    #[must_use]
-    pub fn with_align(self, align: Alignment) -> Self {
-        match self {
-            Self::FreeText {
-                rect,
-                color,
-                contents,
-                da,
-                ..
-            } => Self::FreeText {
-                rect,
-                color,
-                contents,
-                da,
-                align: Some(align),
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_align applies to FreeText, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
-    /// Sets `/IC`: the fill inside a Square or Circle, and the fill of a
-    /// Line's endings.
-    ///
-    /// The appearance generator reads `/IC` for all three — `shape_preamble`
-    /// fills a rectangle or ellipse with it, and the line-ending shapes take
-    /// it as their interior.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let filled = AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 0))
-    ///     .with_interior(Color::from_rgb8(255, 255, 0));
-    /// assert!(matches!(filled, AnnotSpec::Square { interior: Some(_), .. }));
-    /// ```
-    #[must_use]
-    pub fn with_interior(self, color: Color) -> Self {
-        match self {
-            Self::Line {
-                rect,
-                color: c,
-                start,
-                end,
-                contents,
-                border,
-                line_endings,
-                ..
-            } => Self::Line {
-                rect,
-                color: c,
-                start,
-                end,
-                contents,
-                border,
-                line_endings,
-                interior: Some(color),
-            },
-            Self::Square {
-                rect,
-                color: c,
-                contents,
-                border,
-                ..
-            } => Self::Square {
-                rect,
-                color: c,
-                contents,
-                border,
-                interior: Some(color),
-            },
-            Self::Circle {
-                rect,
-                color: c,
-                contents,
-                border,
-                ..
-            } => Self::Circle {
-                rect,
-                color: c,
-                contents,
-                border,
-                interior: Some(color),
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_interior applies to Line, Square and Circle, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
-    /// A URI link annotation.
-    ///
-    /// ```
-    /// use pdfrum_edit::{AnnotLinkAction, AnnotSpec};
-    /// use kurbo::Rect;
-    ///
-    /// let spec = AnnotSpec::link(Rect::new(0.0, 0.0, 50.0, 12.0), "https://example.test/");
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Link {
-    ///         action: AnnotLinkAction::Uri(ref u),
-    ///         ..
-    ///     } if u == "https://example.test/"
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn link(rect: Rect, uri: impl Into<String>) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::Uri(uri.into()),
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A `GoTo` link to `page` with the given view.
-    ///
-    /// ```
-    /// use pdfrum_edit::{AnnotGoToView, AnnotLinkAction, AnnotSpec};
-    /// use kurbo::Rect;
-    /// use pdfrum_object::ObjRef;
-    ///
-    /// let page = ObjRef::new(3, 0);
-    /// let spec = AnnotSpec::link_goto(Rect::new(0.0, 0.0, 50.0, 12.0), page, AnnotGoToView::Fit);
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Link {
-    ///         action: AnnotLinkAction::GoTo { view: AnnotGoToView::Fit, .. },
-    ///         ..
-    ///     }
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn link_goto(rect: Rect, page: pdfrum_object::ObjRef, view: AnnotGoToView) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::GoTo { page, view },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A link at `rect` running `action`, with the default border, no `/C`,
-    /// and `/H /I`.
-    ///
-    /// The other `link_*` constructors are this one with the action spelled
-    /// out; use it when the action is already in hand.
-    ///
-    /// ```
-    /// use kurbo::Rect;
-    /// use pdfrum_edit::{AnnotLinkAction, AnnotSpec};
-    ///
-    /// let spec = AnnotSpec::link_action(
-    ///     Rect::new(0.0, 0.0, 10.0, 10.0),
-    ///     AnnotLinkAction::Uri("https://example.com".into()),
-    /// );
-    /// assert!(matches!(spec, AnnotSpec::Link { .. }));
-    /// ```
-    #[must_use]
-    pub fn link_action(rect: Rect, action: AnnotLinkAction) -> Self {
-        Self::Link {
-            rect,
-            action,
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A `GoTo` link whose `/D` is `name`, also registering that name under
-    /// `/Names /Dests` for `page` + `view`.
-    ///
-    /// ```
-    /// use pdfrum_edit::{AnnotGoToView, AnnotLinkAction, AnnotSpec};
-    /// use kurbo::Rect;
-    /// use pdfrum_object::ObjRef;
-    ///
-    /// let page = ObjRef::new(3, 0);
-    /// let spec = AnnotSpec::link_named(
-    ///     Rect::new(0.0, 0.0, 50.0, 12.0),
-    ///     "Chapter1",
-    ///     page,
-    ///     AnnotGoToView::Fit,
-    /// );
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Link {
-    ///         action: AnnotLinkAction::Named { .. },
-    ///         ..
-    ///     }
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn link_named(
-        rect: Rect,
-        name: impl Into<String>,
-        page: pdfrum_object::ObjRef,
-        view: AnnotGoToView,
-    ) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::Named {
-                name: name.into(),
-                page,
-                view,
-            },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A `GoTo` link to an existing named destination (no name-tree upsert).
-    #[must_use]
-    pub fn link_named_existing(rect: Rect, name: impl Into<String>) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::NamedExisting { name: name.into() },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A remote `GoToR` link to `file` at `page` with the given view.
-    #[must_use]
-    pub fn link_goto_r(
-        rect: Rect,
-        file: impl Into<String>,
-        page: i64,
-        view: AnnotGoToView,
-    ) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::GoToR {
-                file: file.into(),
-                dest: AnnotRemoteDest::Page { page, view },
-                new_window: None,
-            },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A remote `GoToR` link to a named destination in `file`.
-    #[must_use]
-    pub fn link_goto_r_named(rect: Rect, file: impl Into<String>, name: impl Into<String>) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::GoToR {
-                file: file.into(),
-                dest: AnnotRemoteDest::Named(name.into()),
-                new_window: None,
-            },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A `Launch` link naming `file`.
-    #[must_use]
-    pub fn link_launch(rect: Rect, file: impl Into<String>) -> Self {
-        Self::Link {
-            rect,
-            action: AnnotLinkAction::Launch { file: file.into() },
-            contents: None,
-            color: None,
-            border: AnnotBorder::solid(1.0),
-            highlight: AnnotLinkHighlight::default(),
-        }
-    }
-
-    /// A caret annotation with no contents.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::caret(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 0));
-    /// assert!(matches!(spec, AnnotSpec::Caret { contents: None, .. }));
-    /// ```
-    #[must_use]
-    pub fn caret(rect: Rect, color: Color) -> Self {
-        Self::Caret {
-            rect,
-            color,
-            contents: None,
-        }
-    }
-
-    /// Replaces the `/QuadPoints` of a text-markup annotation
-    /// ([`AnnotSpec::Highlight`], [`AnnotSpec::Underline`],
-    /// [`AnnotSpec::StrikeOut`], [`AnnotSpec::Squiggly`]).
-    ///
-    /// Quads are written in tl/tr/bl/br order. Writing a spec whose quads are
-    /// empty fails with [`crate::Error::EmptyQuadPoints`]; pair this with
-    /// `pdfrum_text::rects_loose` to mark up a selection on the em-box.
-    ///
-    /// Other variants are unchanged.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let rect = Rect::new(0.0, 0.0, 10.0, 4.0);
-    /// let spec = AnnotSpec::highlight(rect, Color::from_rgb8(255, 255, 0))
-    ///     .with_quads([Rect::new(0.0, 0.0, 5.0, 4.0).into()]);
-    /// assert!(matches!(spec, AnnotSpec::Highlight { ref quads, .. } if quads.len() == 1));
-    /// ```
-    #[must_use]
-    pub fn with_quads(self, quads: impl IntoIterator<Item = Quad>) -> Self {
-        let quads: Vec<Quad> = quads.into_iter().collect();
-        match self {
-            Self::Highlight {
-                rect,
-                color,
-                contents,
-                ..
-            } => Self::Highlight {
-                rect,
-                color,
-                quads,
-                contents,
-            },
-            Self::Underline {
-                rect,
-                color,
-                contents,
-                ..
-            } => Self::Underline {
-                rect,
-                color,
-                quads,
-                contents,
-            },
-            Self::StrikeOut {
-                rect,
-                color,
-                contents,
-                ..
-            } => Self::StrikeOut {
-                rect,
-                color,
-                quads,
-                contents,
-            },
-            Self::Squiggly {
-                rect,
-                color,
-                contents,
-                ..
-            } => Self::Squiggly {
-                rect,
-                color,
-                quads,
-                contents,
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_quads applies to Highlight, Underline, StrikeOut, or Squiggly, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
     /// Sets `/Contents` on variants that take optional contents.
     ///
     /// [`AnnotSpec::FreeText`] already requires contents at construction; this
     /// leaves it unchanged.
     ///
     /// ```
-    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_edit::{AnnotSpec, TextSpec};
     /// use kurbo::Rect;
     /// use peniko::Color;
     ///
-    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_contents("sticky");
+    /// let spec: AnnotSpec = TextSpec::new(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .contents("sticky")
+    ///     .into();
     /// assert!(matches!(
     ///     spec,
     ///     AnnotSpec::Text {
@@ -1487,250 +858,6 @@ impl AnnotSpec {
         }
     }
 
-    /// Sets `/BS` on [`AnnotSpec::Square`] or [`AnnotSpec::Ink`].
-    ///
-    /// Other variants are unchanged.
-    ///
-    /// ```
-    /// use pdfrum_edit::{AnnotBorder, AnnotBorderStyle, AnnotSpec};
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255))
-    ///     .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dash));
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Square {
-    ///         border: AnnotBorder {
-    ///             width,
-    ///             style: AnnotBorderStyle::Dash,
-    ///             ..
-    ///         },
-    ///         ..
-    ///     } if (width - 1.0).abs() < f32::EPSILON
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn with_border(self, border: AnnotBorder) -> Self {
-        match self {
-            Self::Square {
-                rect,
-                color,
-                contents,
-                interior,
-                ..
-            } => Self::Square {
-                rect,
-                color,
-                contents,
-                border,
-                interior,
-            },
-            Self::Ink {
-                rect,
-                color,
-                strokes,
-                contents,
-                ..
-            } => Self::Ink {
-                rect,
-                color,
-                strokes,
-                contents,
-                border,
-            },
-            Self::Circle {
-                rect,
-                color,
-                contents,
-                interior,
-                ..
-            } => Self::Circle {
-                rect,
-                color,
-                contents,
-                border,
-                interior,
-            },
-            Self::Line {
-                rect,
-                color,
-                start,
-                end,
-                contents,
-                line_endings,
-                interior,
-                ..
-            } => Self::Line {
-                rect,
-                color,
-                start,
-                end,
-                contents,
-                border,
-                line_endings,
-                interior,
-            },
-            Self::Link {
-                rect,
-                action,
-                contents,
-                color,
-                highlight,
-                ..
-            } => Self::Link {
-                rect,
-                action,
-                contents,
-                color,
-                border,
-                highlight,
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_border applies to Square, Circle, Ink, or Link, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
-    /// Sets the sticky-note icon (`/Name`) on [`AnnotSpec::Text`].
-    ///
-    /// Other variants are unchanged. Common values: `Comment`, `Key`, `Note`,
-    /// `Help`, `NewParagraph`, `Paragraph`, `Insert`.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use pdfrum_object::Name;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_icon(Name::from("Key"));
-    /// assert!(matches!(
-    ///     spec,
-    ///     AnnotSpec::Text { ref icon, .. } if icon.as_bytes() == b"Key"
-    /// ));
-    /// ```
-    #[must_use]
-    pub fn with_icon(self, icon: impl Into<Name>) -> Self {
-        let icon = icon.into();
-        match self {
-            Self::Text {
-                rect,
-                color,
-                contents,
-                open,
-                ..
-            } => Self::Text {
-                rect,
-                color,
-                contents,
-                icon,
-                open,
-            },
-            other => {
-                debug_assert!(false, "AnnotSpec::with_icon applies to Text, not {other:?}");
-                other
-            }
-        }
-    }
-
-    /// Sets whether a sticky-note pop-up starts open (`/Open`) on
-    /// [`AnnotSpec::Text`]. Other variants are unchanged.
-    ///
-    /// ```
-    /// use pdfrum_edit::AnnotSpec;
-    /// use kurbo::Rect;
-    /// use peniko::Color;
-    ///
-    /// let spec = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_open(true);
-    /// assert!(matches!(spec, AnnotSpec::Text { open: true, .. }));
-    /// ```
-    #[must_use]
-    pub fn with_open(self, open: bool) -> Self {
-        match self {
-            Self::Text {
-                rect,
-                color,
-                contents,
-                icon,
-                ..
-            } => Self::Text {
-                rect,
-                color,
-                contents,
-                icon,
-                open,
-            },
-            other => {
-                debug_assert!(false, "AnnotSpec::with_open applies to Text, not {other:?}");
-                other
-            }
-        }
-    }
-
-    /// Sets `/C` on [`AnnotSpec::Link`]. Other variants are unchanged.
-    #[must_use]
-    pub fn with_color(self, color: Color) -> Self {
-        match self {
-            Self::Link {
-                rect,
-                action,
-                contents,
-                border,
-                highlight,
-                ..
-            } => Self::Link {
-                rect,
-                action,
-                contents,
-                color: Some(color),
-                border,
-                highlight,
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_color applies to Link, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
-    /// Sets `/H` on [`AnnotSpec::Link`]. Other variants are unchanged.
-    #[must_use]
-    pub fn with_highlight(self, highlight: AnnotLinkHighlight) -> Self {
-        match self {
-            Self::Link {
-                rect,
-                action,
-                contents,
-                color,
-                border,
-                ..
-            } => Self::Link {
-                rect,
-                action,
-                contents,
-                color,
-                border,
-                highlight,
-            },
-            other => {
-                debug_assert!(
-                    false,
-                    "AnnotSpec::with_highlight applies to Link, not {other:?}"
-                );
-                other
-            }
-        }
-    }
-
     /// Attach author (`/T`), unique name (`/NM`), and/or modification date (`/M`).
     #[must_use]
     pub fn with_meta(self, meta: AnnotMeta) -> AnnotWrite {
@@ -1759,12 +886,12 @@ impl AnnotSpec {
     ///
     /// ```
     /// use pdfrum_doc::AnnotFlags;
-    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_edit::{AnnotSpec, TextSpec};
     /// use kurbo::Rect;
     /// use peniko::Color;
     ///
-    /// let write = AnnotSpec::text(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM);
+    /// let write = TextSpec::new(Rect::new(0.0, 0.0, 1.0, 1.0), Color::from_rgb8(255, 255, 0))
+    ///     .flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM);
     /// assert_eq!(write.meta.flags, Some(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM));
     /// ```
     #[must_use]
@@ -1779,12 +906,16 @@ impl AnnotSpec {
     /// opaque one is.
     ///
     /// ```
-    /// use pdfrum_edit::AnnotSpec;
+    /// use pdfrum_edit::{AnnotSpec, MarkupKind, MarkupSpec};
     /// use kurbo::Rect;
     /// use peniko::Color;
     ///
-    /// let write = AnnotSpec::highlight(Rect::new(0.0, 0.0, 10.0, 2.0), Color::from_rgb8(255, 255, 0))
-    ///     .with_opacity(0.4);
+    /// let spec = MarkupSpec::new(
+    ///     MarkupKind::Highlight,
+    ///     Rect::new(0.0, 0.0, 10.0, 2.0),
+    ///     Color::from_rgb8(255, 255, 0),
+    /// );
+    /// let write = AnnotSpec::from(spec).with_opacity(0.4);
     /// assert_eq!(write.meta.opacity, Some(0.4));
     /// ```
     #[must_use]
@@ -1934,6 +1065,44 @@ impl AnnotWrite {
         self.meta.opacity = Some(opacity);
         self
     }
+
+    /// Sets `/Contents`. The bare-verb spelling the typed builders use, so a
+    /// chain that starts on a builder keeps reading the same way after the
+    /// first metadata setter hands back an `AnnotWrite`.
+    #[must_use]
+    pub fn contents(self, contents: impl Into<String>) -> Self {
+        self.with_contents(contents)
+    }
+
+    /// Sets `/T`, the author. See [`AnnotWrite::contents`] on the spelling.
+    #[must_use]
+    pub fn author(self, author: impl Into<String>) -> Self {
+        self.with_author(author)
+    }
+
+    /// Sets `/NM`, the annotation's unique name.
+    #[must_use]
+    pub fn name(self, name: impl Into<String>) -> Self {
+        self.with_name(name)
+    }
+
+    /// Sets `/M`, the modification date.
+    #[must_use]
+    pub fn modified(self, modified: impl Into<String>) -> Self {
+        self.with_modified(modified)
+    }
+
+    /// Sets `/F`, the annotation flags.
+    #[must_use]
+    pub fn flags(self, flags: AnnotFlags) -> Self {
+        self.with_flags(flags)
+    }
+
+    /// Sets every metadata field at once.
+    #[must_use]
+    pub fn meta(self, meta: AnnotMeta) -> Self {
+        self.with_meta(meta)
+    }
 }
 
 /// Adds an annotation described by `spec` to `page`, returning the new
@@ -1976,7 +1145,7 @@ pub fn add_annotation(
 /// `/Annots`.
 ///
 /// ```
-/// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation};
+/// use pdfrum_edit::{TextSpec, add_annotation, update_annotation};
 /// use pdfrum_edit::EditDoc;
 /// use kurbo::Rect;
 /// use peniko::Color;
@@ -1987,12 +1156,12 @@ pub fn add_annotation(
 /// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
 /// # let mut edit = EditDoc::new(&base);
 /// let rect = Rect::new(10.0, 10.0, 40.0, 40.0);
-/// let r = add_annotation(&mut edit, 0, AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)))?;
+/// let r = add_annotation(&mut edit, 0, TextSpec::new(rect, Color::from_rgb8(255, 200, 0)))?;
 /// update_annotation(
 ///     &mut edit,
 ///     0,
 ///     r,
-///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("updated"),
+///     TextSpec::new(rect, Color::from_rgb8(255, 200, 0)).contents("updated"),
 /// )?;
 /// # Ok::<(), pdfrum_edit::Error>(())
 /// ```
@@ -2030,7 +1199,7 @@ pub fn update_annotation(
 /// not on that page.
 ///
 /// ```
-/// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation};
+/// use pdfrum_edit::{AnnotSpec, SquareSpec, add_annotation, delete_annotation};
 /// use pdfrum_edit::EditDoc;
 /// use kurbo::Rect;
 /// use peniko::Color;
@@ -2043,7 +1212,7 @@ pub fn update_annotation(
 /// let r = add_annotation(
 ///     &mut edit,
 ///     0,
-///     AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
+///     SquareSpec::new(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
 /// )?;
 /// assert!(delete_annotation(&mut edit, 0, r)?);
 /// assert!(!delete_annotation(&mut edit, 0, r)?);
@@ -2077,7 +1246,7 @@ pub fn delete_annotation(
 /// indirect/inline `/Annots` arrays work.
 ///
 /// ```
-/// use pdfrum_edit::{AnnotSpec, add_annotation, update_annotation_at};
+/// use pdfrum_edit::{TextSpec, add_annotation, update_annotation_at};
 /// use pdfrum_edit::EditDoc;
 /// use kurbo::Rect;
 /// use peniko::Color;
@@ -2088,12 +1257,12 @@ pub fn delete_annotation(
 /// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
 /// # let mut edit = EditDoc::new(&base);
 /// let rect = Rect::new(10.0, 10.0, 40.0, 40.0);
-/// add_annotation(&mut edit, 0, AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)))?;
+/// add_annotation(&mut edit, 0, TextSpec::new(rect, Color::from_rgb8(255, 200, 0)))?;
 /// update_annotation_at(
 ///     &mut edit,
 ///     0,
 ///     0,
-///     AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0)).with_contents("by index"),
+///     TextSpec::new(rect, Color::from_rgb8(255, 200, 0)).contents("by index"),
 /// )?;
 /// # Ok::<(), pdfrum_edit::Error>(())
 /// ```
@@ -2121,7 +1290,7 @@ pub fn update_annotation_at(
 /// array only.
 ///
 /// ```
-/// use pdfrum_edit::{AnnotSpec, add_annotation, delete_annotation_at};
+/// use pdfrum_edit::{AnnotSpec, SquareSpec, add_annotation, delete_annotation_at};
 /// use pdfrum_edit::EditDoc;
 /// use kurbo::Rect;
 /// use peniko::Color;
@@ -2134,7 +1303,7 @@ pub fn update_annotation_at(
 /// add_annotation(
 ///     &mut edit,
 ///     0,
-///     AnnotSpec::square(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
+///     SquareSpec::new(Rect::new(0.0, 0.0, 10.0, 10.0), Color::from_rgb8(0, 0, 255)),
 /// )?;
 /// assert!(delete_annotation_at(&mut edit, 0, 0)?);
 /// # Ok::<(), pdfrum_edit::Error>(())

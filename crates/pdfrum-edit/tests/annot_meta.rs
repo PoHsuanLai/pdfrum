@@ -7,7 +7,9 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotSpec, Color, Document, Rect, SaveOptions};
+use pdfrum::{
+    Color, Document, InkSpec, MarkupKind, MarkupSpec, Rect, SaveOptions, SquareSpec, TextSpec,
+};
 
 fn hello() -> Document {
     Document::open(concat!(
@@ -24,11 +26,11 @@ fn write_includes_author_name_and_modified() {
     let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
     edit.add_annotation(
         0,
-        AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0))
-            .with_contents("note body")
-            .with_author("Po-Hsuan Lai")
-            .with_name("ann-42")
-            .with_modified("D:20260912013000Z"),
+        MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(255, 230, 0))
+            .contents("note body")
+            .author("Po-Hsuan Lai")
+            .name("ann-42")
+            .modified("D:20260912013000Z"),
     )
     .expect("add");
 
@@ -55,8 +57,8 @@ fn write_respects_custom_flags() {
     let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
     edit.add_annotation(
         0,
-        AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0))
-            .with_flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM),
+        MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(255, 230, 0))
+            .flags(AnnotFlags::PRINT | AnnotFlags::NO_ZOOM),
     )
     .expect("add");
 
@@ -85,7 +87,7 @@ fn default_flags_remain_print_only() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::text(
+        TextSpec::new(
             Rect::new(10.0, 10.0, 30.0, 30.0),
             Color::from_rgb8(255, 200, 0),
         ),
@@ -114,10 +116,10 @@ fn text_icon_and_open_round_trip() {
     let rect = Rect::new(40.0, 40.0, 60.0, 60.0);
     edit.add_annotation(
         0,
-        AnnotSpec::text(rect, Color::from_rgb8(255, 200, 0))
-            .with_contents("keyed")
-            .with_icon(Name::from("Key"))
-            .with_open(true),
+        TextSpec::new(rect, Color::from_rgb8(255, 200, 0))
+            .contents("keyed")
+            .icon(Name::from("Key"))
+            .open(true),
     )
     .expect("add");
 
@@ -147,16 +149,16 @@ fn square_and_ink_custom_border_round_trip() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::square(
+        SquareSpec::new(
             Rect::new(100.0, 100.0, 200.0, 180.0),
             Color::from_rgb8(0, 128, 255),
         )
-        .with_border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dash)),
+        .border(AnnotBorder::solid(1.0).with_style(AnnotBorderStyle::Dash)),
     )
     .expect("square");
     edit.add_annotation(
         0,
-        AnnotSpec::ink(
+        InkSpec::new(
             Rect::new(50.0, 50.0, 150.0, 150.0),
             Color::from_rgb8(0, 0, 0),
             vec![vec![
@@ -164,7 +166,7 @@ fn square_and_ink_custom_border_round_trip() {
                 kurbo::Point::new(140.0, 140.0),
             ]],
         )
-        .with_border(AnnotBorder::solid(3.0).with_style(AnnotBorderStyle::Underline)),
+        .border(AnnotBorder::solid(3.0).with_style(AnnotBorderStyle::Underline)),
     )
     .expect("ink");
 

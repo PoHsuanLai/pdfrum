@@ -7,7 +7,10 @@
 
 use std::sync::Arc;
 
-use pdfrum::{AnnotSpec, Color, Document, Name, Rect, SaveOptions, Subtype};
+use pdfrum::{
+    CaretSpec, Color, Document, MarkupKind, MarkupSpec, Name, Rect, SaveOptions, SquareSpec,
+    Subtype, TextSpec,
+};
 
 fn hello() -> Document {
     Document::open(concat!(
@@ -30,13 +33,17 @@ fn add_update_reopen_keeps_ref_and_regenerates_ap() {
     let mut edit = doc.edit();
     let rect = Rect::new(72.0, 700.0, 200.0, 720.0);
     let annot_ref = edit
-        .add_annotation(0, AnnotSpec::highlight(rect, Color::from_rgb8(255, 230, 0)))
+        .add_annotation(
+            0,
+            MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(255, 230, 0)),
+        )
         .expect("add");
 
     edit.update_annotation(
         0,
         annot_ref,
-        AnnotSpec::highlight(rect, Color::from_rgb8(0, 200, 0)).with_contents("updated"),
+        MarkupSpec::new(MarkupKind::Highlight, rect, Color::from_rgb8(0, 200, 0))
+            .contents("updated"),
     )
     .expect("update");
 
@@ -62,7 +69,7 @@ fn add_delete_gone_on_reopen() {
     let a = edit
         .add_annotation(
             0,
-            AnnotSpec::text(
+            TextSpec::new(
                 Rect::new(10.0, 10.0, 30.0, 30.0),
                 Color::from_rgb8(255, 200, 0),
             ),
@@ -71,7 +78,7 @@ fn add_delete_gone_on_reopen() {
     let b = edit
         .add_annotation(
             0,
-            AnnotSpec::square(
+            SquareSpec::new(
                 Rect::new(40.0, 40.0, 80.0, 80.0),
                 Color::from_rgb8(0, 0, 255),
             ),
@@ -95,7 +102,7 @@ fn update_rejects_annot_not_on_page() {
     let a = edit
         .add_annotation(
             0,
-            AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
+            CaretSpec::new(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
         )
         .expect("add");
     assert!(edit.delete_annotation(0, a).expect("delete"));
@@ -103,7 +110,7 @@ fn update_rejects_annot_not_on_page() {
         .update_annotation(
             0,
             a,
-            AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK).with_contents("nope"),
+            CaretSpec::new(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK).contents("nope"),
         )
         .expect_err("must fail");
     let msg = err.to_string();
@@ -119,7 +126,7 @@ fn update_and_delete_by_annots_index() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::text(
+        TextSpec::new(
             Rect::new(10.0, 10.0, 30.0, 30.0),
             Color::from_rgb8(255, 200, 0),
         ),
@@ -127,7 +134,7 @@ fn update_and_delete_by_annots_index() {
     .expect("add a");
     edit.add_annotation(
         0,
-        AnnotSpec::square(
+        SquareSpec::new(
             Rect::new(40.0, 40.0, 80.0, 80.0),
             Color::from_rgb8(0, 0, 255),
         ),
@@ -137,11 +144,11 @@ fn update_and_delete_by_annots_index() {
     edit.update_annotation_at(
         0,
         0,
-        AnnotSpec::text(
+        TextSpec::new(
             Rect::new(10.0, 10.0, 30.0, 30.0),
             Color::from_rgb8(255, 200, 0),
         )
-        .with_contents("first"),
+        .contents("first"),
     )
     .expect("update at 0");
 
@@ -160,14 +167,14 @@ fn index_helpers_reject_out_of_range() {
     let mut edit = doc.edit();
     edit.add_annotation(
         0,
-        AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
+        CaretSpec::new(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
     )
     .expect("add");
     let err = edit
         .update_annotation_at(
             0,
             3,
-            AnnotSpec::caret(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
+            CaretSpec::new(Rect::new(1.0, 1.0, 5.0, 5.0), Color::BLACK),
         )
         .expect_err("oob");
     let msg = err.to_string();
@@ -185,7 +192,7 @@ fn index_helpers_reject_out_of_range() {
 
 #[test]
 fn index_helpers_promote_and_delete_inline_annots() {
-    use pdfrum_edit::EditDoc;
+    use pdfrum_edit::{EditDoc, TextSpec};
     use pdfrum_object::{Array, Dict, Name, Object};
     use pdfrum_parser::{LoadOptions, load};
 
@@ -223,11 +230,11 @@ fn index_helpers_promote_and_delete_inline_annots() {
         &mut edit,
         0,
         0,
-        AnnotSpec::text(
+        TextSpec::new(
             Rect::new(1.0, 1.0, 20.0, 20.0),
             Color::from_rgb8(255, 200, 0),
         )
-        .with_contents("promoted"),
+        .contents("promoted"),
     )
     .expect("update inline");
 
