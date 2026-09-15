@@ -8,8 +8,8 @@
 //!
 //! The builders here carry one subtype each, so only the options that subtype
 //! has exist as methods. Asking a [`TextSpec`] for an interior colour does not
-//! compile, where [`AnnotSpec::with_interior`] on a `Text` would have been
-//! accepted and dropped.
+//! compile, where the removed `AnnotSpec::with_interior` accepted a `Text`
+//! and dropped the call.
 //!
 //! An option that does not belong to a subtype is not a method on that
 //! subtype's builder, so the mistake is a compile error rather than a
