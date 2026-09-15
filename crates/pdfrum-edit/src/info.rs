@@ -125,6 +125,69 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (year, month, day)
 }
 
+/// Sets or removes the document's XMP metadata stream (`/Metadata`).
+///
+/// XMP is the modern metadata channel; `/Info` is the older one, and a
+/// document that carries both is expected to keep them agreeing — PDF/A
+/// requires it, which is why [`to_pdfa`](crate::to_pdfa) regenerates the
+/// packet from `/Info` rather than trusting what is there.
+///
+/// `packet` is the XMP itself, as bytes: this writes it verbatim into a
+/// `/Type /Metadata /Subtype /XML` stream, which the writer knows never to
+/// compress — a reader that scans for the packet without parsing the PDF has
+/// to be able to find it. `None` removes the stream.
+///
+/// # Errors
+///
+/// [`Error::NoDestinationCatalog`] when the document has no catalog to hold
+/// the metadata.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum_edit::{EditDoc, SaveOptions, save, set_xmp_metadata};
+/// use pdfrum_parser::{LoadOptions, load};
+///
+/// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+/// let doc = load(bytes, &LoadOptions::default())?;
+/// let mut edit = EditDoc::new(&doc);
+/// set_xmp_metadata(&mut edit, Some(b"<x:xmpmeta xmlns:x='adobe:ns:meta/'/>"))?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn set_xmp_metadata(dest: &mut EditDoc<'_>, packet: Option<&[u8]>) -> Result<(), crate::Error> {
+    let Some(root) = dest.base().trailer().reference(names::ROOT) else {
+        return Err(crate::Error::NoDestinationCatalog);
+    };
+    let Some(mut catalog) = dest
+        .fetch(root)
+        .ok()
+        .and_then(|object| object.as_dict().cloned())
+    else {
+        return Err(crate::Error::NoDestinationCatalog);
+    };
+
+    let Some(packet) = packet else {
+        catalog.remove(names::METADATA);
+        dest.replace(root, Object::Dict(catalog));
+        return Ok(());
+    };
+
+    let mut dict = Dict::new();
+    dict.insert(names::TYPE.clone(), Object::Name(names::METADATA.clone()));
+    dict.insert(names::SUBTYPE.clone(), Object::Name(names::XML.clone()));
+    let stream = pdfrum_object::Stream::new(dict, pdfrum_object::ByteSpan::from(packet.to_vec()));
+
+    // An existing `/Metadata` is replaced in place when it is indirect, so a
+    // reference held anywhere else still names the current packet.
+    if let Some(Object::Ref(existing)) = catalog.raw(names::METADATA).cloned() {
+        dest.replace(existing, Object::Stream(Box::new(stream)));
+    } else {
+        let reference = dest.add(Object::Stream(Box::new(stream)));
+        catalog.insert(names::METADATA.clone(), Object::Ref(reference));
+        dest.replace(root, Object::Dict(catalog));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

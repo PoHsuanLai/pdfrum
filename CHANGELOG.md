@@ -80,6 +80,20 @@ compile untouched.
   the read side's `pdfrum_doc::vt::Alignment` rather than a second enum over
   the same three values. `Alignment::to_quadding` is its inverse. Every
   free-text annotation pdfrum wrote was flush left.
+- `set_outline` writes the document outline — its bookmarks. The reader hands
+  back a flat list carrying a depth, and writing takes the same shape: a
+  caller describes the tree as depth-tagged items and this builds the
+  doubly-linked `/First` `/Last` `/Next` `/Prev` `/Parent` structure a PDF
+  actually holds. `/Count` follows the convention a reader expects — positive
+  on an open item, negated on a closed one, absent on a leaf. A depth that
+  jumps by more than one is clamped to one deeper, since no tree has that
+  shape. Nothing in the writer touched `/Outlines` before this, so a merge or
+  a split dropped every bookmark in the document silently.
+- `set_xmp_metadata` writes the `/Metadata` XMP packet. The generator existed
+  but was reachable only through PDF/A conversion; the packet is now written
+  verbatim into the `/Type /Metadata /Subtype /XML` stream the writer already
+  knew never to compress, so a reader scanning the raw bytes can still find
+  it. `None` removes the stream.
 - Per-subtype annotation builders — `MarkupSpec` (with `MarkupKind`),
   `TextSpec`, `SquareSpec`, `CircleSpec`, `InkSpec`, `LineSpec`,
   `LinkSpec`, and `CaretSpec` — each carrying only the options its
