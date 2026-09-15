@@ -139,7 +139,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 ///
 /// # Errors
 ///
-/// [`Error::NoDestinationCatalog`] when the document has no catalog to hold
+/// [`Error::NoDestinationCatalog`](crate::Error::NoDestinationCatalog) when the document has no catalog to hold
 /// the metadata.
 ///
 /// ```
