@@ -1270,54 +1270,77 @@ pub fn generate_appearances_with_text<R: Resolve>(
         if crate::annot::is_popup(&dict, r) {
             continue;
         }
-        // The width closure has to outlive the `TextFont` that borrows it, so
-        // it is built here rather than inside the lookup.
-        let named = fonts.and_then(|fonts| fonts.face(&font_name_of(&dict, catalog, r)));
-        // A second face, for the characters this one's charset does not cover.
-        // The **widths** have to know about it as well as the bytes: a run set
-        // in two faces advances by two faces' metrics, and measuring it all
-        // with the first gives a line the wrong length wherever the second one
-        // writes. So the substitute enters through the width closure the
-        // layout is built from, not only through the encoder.
-        let da_charset = named.map_or(pdfrum_font::Charset::Ansi, font_map::font_charset);
-        let substitute = fonts.and_then(|fonts| {
-            font_map::SUBSTITUTABLE_CHARSETS
-                .iter()
-                .find(|charset| **charset != da_charset)
-                .and_then(|charset| fonts.substitute(*charset))
-        });
-        let width = named.map(|font| {
-            move |code: u32| match substitute {
-                Some(sub) if !font_map::da_font_writes(font, da_charset, code) => {
-                    font_map::substitute_width(sub.font, code)
-                }
-                _ => TextFont::char_width(font, code),
-            }
-        });
-        let text_font = named.zip(width.as_ref()).map(|(font, width)| TextFont {
-            metrics: TextFont::metrics_of(font, width),
-            font,
-        });
-        let generated = generate_one(&dict, r, diags)
-            .or_else(|| generate_text_bearing(&dict, catalog, text_font.as_ref(), r, diags))
-            .or_else(|| {
-                // A widget's own body needs the same font the free-text
-                // generator wanted, so a caller with one gets the field's
-                // value laid out and a caller without one gets the chrome
-                // alone.
-                match text_font.as_ref() {
-                    Some(font) => widget::generate_with_text(&dict, catalog, font, substitute, r),
-                    None => widget::generate(&dict, r),
-                }
-                .inspect(|_| {
-                    diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
+        let generated = with_text_font(&dict, catalog, fonts, r, |text_font, substitute| {
+            generate_one(&dict, r, diags)
+                .or_else(|| generate_text_bearing(&dict, catalog, text_font, r, diags))
+                .or_else(|| {
+                    // A widget's own body needs the same font the free-text
+                    // generator wanted, so a caller with one gets the field's
+                    // value laid out and a caller without one gets the chrome
+                    // alone.
+                    match text_font {
+                        Some(font) => {
+                            widget::generate_with_text(&dict, catalog, font, substitute, r)
+                        }
+                        None => widget::generate(&dict, r),
+                    }
+                    .inspect(|_| {
+                        diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
+                    })
                 })
-            });
+        });
         if let Some(generated) = generated {
             overlay.set(index, generated);
         }
     }
     overlay
+}
+
+/// Resolves the face an annotation's `/DA` names and calls `use_font` with it.
+///
+/// The [`TextFont`] borrows a width closure, and that closure has to outlive
+/// it, so this cannot hand one back — it owns the closure for the length of the
+/// call and lends the font instead. Both the page-wide generator and the
+/// form-fill path go through here so the two agree on which face writes a
+/// field, including the second one that covers what the first one's charset
+/// does not.
+///
+/// `use_font` is called with `None` when there is no usable face, which is the
+/// signal to draw a widget's chrome alone.
+pub(crate) fn with_text_font<R: Resolve, T>(
+    dict: &Dict,
+    catalog: &Dict,
+    fonts: Option<&FormFonts>,
+    r: &R,
+    use_font: impl FnOnce(Option<&TextFont<'_>>, Option<Substitute<'_>>) -> T,
+) -> T {
+    let named = fonts.and_then(|fonts| fonts.face(&font_name_of(dict, catalog, r)));
+    // A second face, for the characters this one's charset does not cover.
+    // The **widths** have to know about it as well as the bytes: a run set in
+    // two faces advances by two faces' metrics, and measuring it all with the
+    // first gives a line the wrong length wherever the second one writes. So
+    // the substitute enters through the width closure the layout is built
+    // from, not only through the encoder.
+    let da_charset = named.map_or(pdfrum_font::Charset::Ansi, font_map::font_charset);
+    let substitute = fonts.and_then(|fonts| {
+        font_map::SUBSTITUTABLE_CHARSETS
+            .iter()
+            .find(|charset| **charset != da_charset)
+            .and_then(|charset| fonts.substitute(*charset))
+    });
+    let width = named.map(|font| {
+        move |code: u32| match substitute {
+            Some(sub) if !font_map::da_font_writes(font, da_charset, code) => {
+                font_map::substitute_width(sub.font, code)
+            }
+            _ => TextFont::char_width(font, code),
+        }
+    });
+    let text_font = named.zip(width.as_ref()).map(|(font, width)| TextFont {
+        metrics: TextFont::metrics_of(font, width),
+        font,
+    });
+    use_font(text_font.as_ref(), substitute)
 }
 
 /// The `/DR /Font` resource name one annotation's default appearance names.

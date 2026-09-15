@@ -385,7 +385,14 @@ pub(crate) fn generate<R: Resolve>(
     // and the field is the first of them. Everything else here — the plate,
     // the colour, the default appearance — is read off the widget, because
     // those are per-control.
-    let valued = field_dict_of(dict, form.as_ref(), r);
+    //
+    // A dictionary that carries its own `/V` is its own value source, though,
+    // and that case has to win: a form fill hands this an *edited* dictionary
+    // that is not yet in the file, while `/Fields` still points at the stale
+    // one. Resolving by name there would draw the value the fill replaced.
+    let valued = (!dict.contains_key(names::V))
+        .then(|| field_dict_of(dict, form.as_ref(), r))
+        .flatten();
     let valued = valued.as_ref().unwrap_or(dict);
 
     let input = BodyInput {
