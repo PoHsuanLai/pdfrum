@@ -42,6 +42,11 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "StampPosition",
     ),
     ("pdfrum-edit.txt", "pdfrum_edit::FlattenMode", "FlattenMode"),
+    (
+        "pdfrum-edit.txt",
+        "pdfrum_edit::FieldKindSpec",
+        "FieldKindSpec",
+    ),
     ("pdfrum-edit.txt", "pdfrum_edit::Paint", "Paint"),
     ("pdfrum-edit.txt", "pdfrum_edit::Fill", "Fill"),
     ("pdfrum-edit.txt", "pdfrum_edit::LineCap", "LineCap"),
@@ -584,7 +589,17 @@ fn construct_edit_variants() -> usize {
         offset: 0,
     });
     let _ = SaveError::InlinePage(PageIndex::from(0u32));
-    n += 22;
+    let _ = SaveError::DuplicateFieldName(String::new());
+    let _ = SaveError::EmptyFieldName;
+    let _ = SaveError::EmptyRadioGroup;
+    n += 25;
+
+    let _ = FieldKindSpec::Text;
+    let _ = FieldKindSpec::Check { on: String::new() };
+    let _ = FieldKindSpec::Radio {
+        buttons: Vec::new(),
+    };
+    n += 3;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -968,7 +983,7 @@ fn doc_enum_variants_are_constructible() {
 
 #[test]
 fn edit_enum_variants_are_constructible() {
-    assert_eq!(construct_edit_variants(), 22 + 2 + 5 + 8 + 8 + 10 + 4);
+    assert_eq!(construct_edit_variants(), 25 + 3 + 2 + 5 + 8 + 8 + 10 + 4);
 }
 
 #[test]
@@ -1060,8 +1075,11 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // `pdfrum-doc`'s and counted in the member-crate half below, not here.
     // The duplicate `Rotation` block (4) that survived the type's move to
     // `pdfrum-page` is gone from this half and constructed there instead.
-    assert_eq!(constructed, 390, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 46, "default-feature enum count");
+    // 390 -> 393 (`SaveError` gained `DuplicateFieldName`, `EmptyFieldName`
+    // and `EmptyRadioGroup` with form-field creation).
+    // 393 -> 396 (`FieldKindSpec` Text/Check/Radio).
+    assert_eq!(constructed, 396, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 47, "default-feature enum count");
 }
 
 #[test]
