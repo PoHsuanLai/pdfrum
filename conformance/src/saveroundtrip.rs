@@ -541,10 +541,9 @@ fn check_incremental(
     }
 
     let edit = pdfrum_edit::EditDoc::new(&doc);
-    let options = pdfrum_edit::SaveOptions {
-        mode: pdfrum_edit::SaveMode::Incremental,
-        ..pdfrum_edit::SaveOptions::default()
-    };
+    let options = pdfrum_edit::SaveOptions::builder()
+        .mode(pdfrum_edit::SaveMode::Incremental)
+        .build();
     let mut out = Vec::new();
     if pdfrum_edit::save(&edit, &options, &mut out).is_err() {
         return false;

@@ -86,7 +86,12 @@ pub enum SaveMode {
 }
 
 /// Everything a save may be asked to do differently.
+///
+/// `#[non_exhaustive]`, so a later option is an addition rather than a break;
+/// build one with [`SaveOptions::builder`], or start from
+/// [`SaveOptions::default`] and assign the fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SaveOptions {
     /// Whether to append or rewrite.
     pub mode: SaveMode,
@@ -140,7 +145,10 @@ pub struct SaveOptions {
 }
 
 /// How a document is to be encrypted on save (ISO 32000-2 §7.6.4.4).
+///
+/// `#[non_exhaustive]`; build one with [`Encryption::builder`].
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Encryption {
     /// Opens the document with the rights `permissions` grants. Empty means
     /// anyone can open it.
@@ -165,6 +173,156 @@ impl Default for SaveOptions {
             id_source: IdSource::Random,
             encrypt: None,
         }
+    }
+}
+
+impl SaveOptions {
+    /// A builder over the defaults.
+    ///
+    /// ```
+    /// use pdfrum_edit::{SaveMode, SaveOptions};
+    ///
+    /// let options = SaveOptions::builder()
+    ///     .mode(SaveMode::Incremental)
+    ///     .subset_new_fonts(true)
+    ///     .build();
+    ///
+    /// assert_eq!(options.mode, SaveMode::Incremental);
+    /// assert!(options.subset_new_fonts);
+    /// ```
+    #[must_use]
+    pub fn builder() -> SaveOptionsBuilder {
+        SaveOptionsBuilder(SaveOptions::default())
+    }
+}
+
+/// Builds a [`SaveOptions`] one setting at a time.
+///
+/// Every setting starts at its [`SaveOptions::default`] value, so only the
+/// ones a caller cares about need naming.
+#[derive(Debug, Clone)]
+pub struct SaveOptionsBuilder(SaveOptions);
+
+impl SaveOptionsBuilder {
+    /// Whether to append or rewrite.
+    #[must_use]
+    pub fn mode(mut self, mode: SaveMode) -> Self {
+        self.0.mode = mode;
+        self
+    }
+
+    /// Keep the original bytes as the file's prefix.
+    #[must_use]
+    pub fn keep_original(mut self, keep: bool) -> Self {
+        self.0.keep_original = keep;
+        self
+    }
+
+    /// Drop the security handler, writing the document in the clear.
+    #[must_use]
+    pub fn remove_security(mut self, remove: bool) -> Self {
+        self.0.remove_security = remove;
+        self
+    }
+
+    /// Subset newly embedded fonts.
+    #[must_use]
+    pub fn subset_new_fonts(mut self, subset: bool) -> Self {
+        self.0.subset_new_fonts = subset;
+        self
+    }
+
+    /// The version to declare in the header.
+    #[must_use]
+    pub fn version(mut self, version: PdfVersion) -> Self {
+        self.0.version = Some(version);
+        self
+    }
+
+    /// Where `/ID` and subset tags come from.
+    #[must_use]
+    pub fn id_source(mut self, source: IdSource) -> Self {
+        self.0.id_source = source;
+        self
+    }
+
+    /// Encrypt an unencrypted document on the way out.
+    #[must_use]
+    pub fn encrypt(mut self, encryption: Encryption) -> Self {
+        self.0.encrypt = Some(encryption);
+        self
+    }
+
+    /// The options built so far.
+    #[must_use]
+    pub fn build(self) -> SaveOptions {
+        self.0
+    }
+}
+
+impl Encryption {
+    /// A builder over the defaults: no passwords, every permission granted,
+    /// and the metadata stream enciphered with the rest.
+    ///
+    /// ```
+    /// use pdfrum_edit::Encryption;
+    ///
+    /// let encryption = Encryption::builder()
+    ///     .user_password(b"open-me".to_vec())
+    ///     .encrypt_metadata(false)
+    ///     .build();
+    ///
+    /// assert_eq!(encryption.user_password, b"open-me");
+    /// assert!(!encryption.encrypt_metadata);
+    /// ```
+    #[must_use]
+    pub fn builder() -> EncryptionBuilder {
+        EncryptionBuilder(Encryption {
+            user_password: Vec::new(),
+            owner_password: Vec::new(),
+            permissions: pdfrum_crypt::Permissions::ALL,
+            encrypt_metadata: true,
+        })
+    }
+}
+
+/// Builds an [`Encryption`] one setting at a time.
+#[derive(Debug, Clone)]
+pub struct EncryptionBuilder(Encryption);
+
+impl EncryptionBuilder {
+    /// Opens the document with the rights `permissions` grants.
+    #[must_use]
+    pub fn user_password(mut self, password: Vec<u8>) -> Self {
+        self.0.user_password = password;
+        self
+    }
+
+    /// Opens the document with every right.
+    #[must_use]
+    pub fn owner_password(mut self, password: Vec<u8>) -> Self {
+        self.0.owner_password = password;
+        self
+    }
+
+    /// What a reader who opened with the user password may do.
+    #[must_use]
+    pub fn permissions(mut self, permissions: pdfrum_crypt::Permissions) -> Self {
+        self.0.permissions = permissions;
+        self
+    }
+
+    /// Whether the XMP metadata stream is enciphered too.
+    #[must_use]
+    pub fn encrypt_metadata(mut self, encrypt: bool) -> Self {
+        self.0.encrypt_metadata = encrypt;
+        self
+    }
+
+    /// The encryption built so far.
+    #[must_use]
+    pub fn build(self) -> Encryption {
+        self.0
     }
 }
 

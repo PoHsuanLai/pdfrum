@@ -466,6 +466,106 @@ pub fn set_attachment_file(
     Ok(true)
 }
 
+/// Replaces attachment `index`'s embedded file, carrying the MIME type and
+/// date `options` names.
+///
+/// [`set_attachment_file`] drops both, which is documented but rarely what a
+/// caller means: an attachment that had a `/Subtype` of `text/csv` and a
+/// `/Params /ModDate` loses them on a replace, so a viewer stops offering the
+/// right application and the file's own time is gone. This is that function
+/// with somewhere to put them.
+///
+/// `Ok(false)` when there is no such attachment.
+///
+/// # Errors
+///
+/// When the document has no catalog to hold the tree.
+pub fn set_attachment_file_with(
+    edit: &mut EditDoc<'_>,
+    limits: &Limits,
+    index: usize,
+    bytes: &[u8],
+    options: &AttachmentOptions,
+) -> Result<bool> {
+    let Some((reference, mut spec)) = attachment_spec(edit, limits, index)? else {
+        return Ok(false);
+    };
+    let stream_ref = edit.add(Object::Stream(Box::new(embedded_file(
+        bytes,
+        options.mime_type.as_deref(),
+        options.modified.as_deref(),
+    ))));
+    let mut ef = Dict::new();
+    ef.insert(Name::from("F"), Object::Ref(stream_ref));
+    spec.insert(Name::from("EF"), Object::Dict(ef));
+    // `/Desc` lives on the file specification, not on the stream, so it is
+    // set here rather than passed to `embedded_file`.
+    if let Some(description) = options.description.as_deref() {
+        spec.insert(
+            Name::from("Desc"),
+            Object::Str(PdfString::literal(encode_text(description))),
+        );
+    }
+    store_attachment_spec(edit, limits, index, reference, spec)?;
+    Ok(true)
+}
+
+/// Renames attachment `index`, answering whether there was one to rename.
+///
+/// The name is the tree **key**, and it is also written to the specification's
+/// `/F` and `/UF` so that the two agree — a reader shows one and looks the
+/// attachment up by the other, and a document where they disagree is a
+/// document whose attachment cannot be saved under the name it displays.
+///
+/// A name already in use is refused with [`Error::DuplicateAttachmentName`]:
+/// the tree is keyed by name, so writing it would make one of the two
+/// unreachable.
+///
+/// # Errors
+///
+/// - When the document has no catalog to hold the tree.
+/// - [`Error::DuplicateAttachmentName`] when another attachment has that name.
+pub fn set_attachment_name(
+    edit: &mut EditDoc<'_>,
+    limits: &Limits,
+    index: usize,
+    name: &str,
+) -> Result<bool> {
+    let mut entries = attachment_entries(edit, limits)?;
+    let Some((existing, _)) = entries.get(index) else {
+        return Ok(false);
+    };
+    if existing == name {
+        return Ok(true);
+    }
+    if entries
+        .iter()
+        .enumerate()
+        .any(|(other, (taken, _))| other != index && taken == name)
+    {
+        return Err(Error::DuplicateAttachmentName(name.to_owned()));
+    }
+
+    // The specification's own `/F` and `/UF` are rewritten alongside the key,
+    // so the displayed name and the lookup name stay the same string.
+    if let Some((reference, mut spec)) = attachment_spec(edit, limits, index)? {
+        let value = Object::Str(PdfString::literal(encode_text(name)));
+        spec.insert(Name::from("F"), value.clone());
+        spec.insert(Name::from("UF"), value);
+        store_attachment_spec(edit, limits, index, reference, spec)?;
+        entries = attachment_entries(edit, limits)?;
+    }
+
+    if let Some(slot) = entries.get_mut(index) {
+        name.clone_into(&mut slot.0);
+    }
+    // The tree is sorted by key, so a rename can move the entry; rewriting the
+    // whole tree is what keeps it ordered.
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+    write_attachment_entries(edit, entries)?;
+    Ok(true)
+}
+
 /// Sets a `/Params` text entry on attachment `index`'s embedded file —
 /// `CreationDate`, `ModDate`, any key — creating `/Params` when missing;
 /// a `CheckSum` given as `<HEX…>` is stored as that hex string.

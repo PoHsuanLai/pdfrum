@@ -60,6 +60,54 @@ pub fn set_info_entry(dest: &mut EditDoc<'_>, key: &Name, text: Option<&str>) {
     store_info(dest, existing, info);
 }
 
+/// Sets or removes an `/Info` entry whose value is a **name**.
+///
+/// `/Trapped` is the one such key the specification defines (ISO 32000-1
+/// table 317), and it is why this exists alongside [`set_info_entry`]: writing
+/// `Unknown` as a *string* is a different object, and a PDF/X validator reads
+/// the name.
+///
+/// `None` removes the key. `name` is written verbatim — no escaping and no
+/// validation, because a `Name` is already the parsed thing.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum_edit::{EditDoc, SaveOptions, save, set_info_name};
+/// use pdfrum_object::{Name, Object, names};
+/// use pdfrum_parser::{LoadOptions, load};
+///
+/// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+/// let doc = load(bytes, &LoadOptions::default())?;
+/// let mut edit = EditDoc::new(&doc);
+/// set_info_name(&mut edit, &Name::from("Trapped"), Some(&Name::from("False")));
+///
+/// let mut out = Vec::new();
+/// save(&edit, &SaveOptions::default(), &mut out)?;
+/// let reloaded = load(Arc::from(&out[..]), &LoadOptions::default())?;
+/// let info = reloaded.trailer().dict(names::INFO, &reloaded).expect("an /Info");
+/// assert_eq!(
+///     info.raw(&Name::from("Trapped")).and_then(Object::as_name),
+///     Some(&Name::from("False")),
+/// );
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn set_info_name(dest: &mut EditDoc<'_>, key: &Name, name: Option<&Name>) {
+    let existing = dest.trailer().reference(names::INFO);
+    let mut info = existing
+        .and_then(|r| dest.fetch(r).ok())
+        .as_deref()
+        .and_then(Object::as_dict)
+        .cloned()
+        .unwrap_or_default();
+    match name {
+        Some(name) => info.insert(key.clone(), Object::Name(name.clone())),
+        None => {
+            info.remove(key);
+        }
+    }
+    store_info(dest, existing, info);
+}
+
 /// Write `info` back where the trailer will find it.
 fn store_info(dest: &mut EditDoc<'_>, existing: Option<ObjRef>, info: Dict) {
     let object = Object::Dict(info);

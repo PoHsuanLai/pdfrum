@@ -22,11 +22,10 @@ fn open(bytes: &[u8]) -> Document {
 }
 
 fn commit(edit: &EditDoc<'_>) -> Document {
-    let options = SaveOptions {
-        mode: SaveMode::Full,
-        id_source: IdSource::Fixed([0x22; 16]),
-        ..SaveOptions::default()
-    };
+    let options = SaveOptions::builder()
+        .mode(SaveMode::Full)
+        .id_source(IdSource::Fixed([0x22; 16]))
+        .build();
     let mut out = Vec::new();
     save(edit, &options, &mut out).expect("saves");
     open(&out)

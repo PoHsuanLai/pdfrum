@@ -859,9 +859,178 @@ pub struct Metadata {
     pub creation_date: Option<String>,
     /// `/ModDate`, as written.
     pub modification_date: Option<String>,
+    /// `/Trapped`: whether the document has been trapped for printing.
+    ///
+    /// The three legal values are `True`, `False` and `Unknown`, and the key
+    /// is a **name**, not a boolean — which is why this is not `Option<bool>`:
+    /// `Unknown` is a real answer a prepress workflow distinguishes from an
+    /// absent key, and PDF/X requires the key to be present and not
+    /// `Unknown`.
+    pub trapped: Option<Trapped>,
+    /// Any other `/Info` key the document carries, in the order read.
+    ///
+    /// `/Info` is open: ISO 32000-1 §14.3.3 lets a producer add keys of its
+    /// own, and several do. The eight named fields above are lifted out; this
+    /// carries the rest, so a round-trip through [`Metadata`] does not drop
+    /// them.
+    pub custom: Vec<(String, String)>,
+}
+
+/// A document's `/Trapped` state (ISO 32000-1 table 317).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trapped {
+    /// `/True`: the document has been trapped.
+    Yes,
+    /// `/False`: it has not.
+    No,
+    /// `/Unknown`: it may have been, in part. The default when the key is
+    /// absent, and *not* the same as absent to a PDF/X validator.
+    Unknown,
+}
+
+impl Trapped {
+    /// The `/Trapped` name this state writes.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Yes => "True",
+            Self::No => "False",
+            Self::Unknown => "Unknown",
+        }
+    }
+
+    /// The state a `/Trapped` name means, or nothing for a value outside the
+    /// three the specification allows.
+    #[must_use]
+    pub fn from_bytes(bytes: &[u8]) -> Option<Trapped> {
+        match bytes {
+            b"True" => Some(Self::Yes),
+            b"False" => Some(Self::No),
+            b"Unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+}
+
+/// Builds a [`Metadata`] field by field.
+///
+/// `Metadata` is `#[non_exhaustive]`, so a caller outside this crate cannot
+/// write the struct literal; this is how one is made for a
+/// [`Document::blank`], and it is also what keeps a later field from being a
+/// breaking change.
+///
+/// ```
+/// use pdfrum::{Metadata, Trapped};
+///
+/// let metadata = Metadata::builder()
+///     .title("Quarterly report")
+///     .author("Ada Lovelace")
+///     .trapped(Trapped::No)
+///     .custom("Department", "Research")
+///     .build();
+///
+/// assert_eq!(metadata.title.as_deref(), Some("Quarterly report"));
+/// assert_eq!(metadata.trapped, Some(Trapped::No));
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct MetadataBuilder {
+    metadata: Metadata,
+}
+
+impl MetadataBuilder {
+    /// `/Title`.
+    #[must_use]
+    pub fn title(mut self, value: impl Into<String>) -> Self {
+        self.metadata.title = Some(value.into());
+        self
+    }
+
+    /// `/Author`.
+    #[must_use]
+    pub fn author(mut self, value: impl Into<String>) -> Self {
+        self.metadata.author = Some(value.into());
+        self
+    }
+
+    /// `/Subject`.
+    #[must_use]
+    pub fn subject(mut self, value: impl Into<String>) -> Self {
+        self.metadata.subject = Some(value.into());
+        self
+    }
+
+    /// `/Keywords`.
+    #[must_use]
+    pub fn keywords(mut self, value: impl Into<String>) -> Self {
+        self.metadata.keywords = Some(value.into());
+        self
+    }
+
+    /// `/Creator` — the application the content came from.
+    #[must_use]
+    pub fn creator(mut self, value: impl Into<String>) -> Self {
+        self.metadata.creator = Some(value.into());
+        self
+    }
+
+    /// `/Producer` — the library that wrote the PDF.
+    #[must_use]
+    pub fn producer(mut self, value: impl Into<String>) -> Self {
+        self.metadata.producer = Some(value.into());
+        self
+    }
+
+    /// `/CreationDate`, as a PDF date string. [`pdf_date`](crate::pdf_date)
+    /// builds one.
+    #[must_use]
+    pub fn creation_date(mut self, value: impl Into<String>) -> Self {
+        self.metadata.creation_date = Some(value.into());
+        self
+    }
+
+    /// `/ModDate`, as a PDF date string.
+    #[must_use]
+    pub fn modification_date(mut self, value: impl Into<String>) -> Self {
+        self.metadata.modification_date = Some(value.into());
+        self
+    }
+
+    /// `/Trapped`.
+    #[must_use]
+    pub fn trapped(mut self, value: Trapped) -> Self {
+        self.metadata.trapped = Some(value);
+        self
+    }
+
+    /// One `/Info` key outside the named eight. A key given twice keeps both
+    /// entries, and the write applies them in order, so the last one wins.
+    #[must_use]
+    pub fn custom(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata.custom.push((key.into(), value.into()));
+        self
+    }
+
+    /// The metadata built so far.
+    #[must_use]
+    pub fn build(self) -> Metadata {
+        self.metadata
+    }
 }
 
 impl Metadata {
+    /// A builder for metadata to write onto a document.
+    ///
+    /// ```
+    /// use pdfrum::Metadata;
+    ///
+    /// let metadata = Metadata::builder().title("Report").build();
+    /// assert_eq!(metadata.title.as_deref(), Some("Report"));
+    /// ```
+    #[must_use]
+    pub fn builder() -> MetadataBuilder {
+        MetadataBuilder::default()
+    }
+
     fn read(doc: &Document) -> Metadata {
         let Some(info) = doc
             .inner
@@ -881,8 +1050,40 @@ impl Metadata {
             producer: text("Producer"),
             creation_date: text("CreationDate"),
             modification_date: text("ModDate"),
+            trapped: info
+                .raw(&Name::from("Trapped"))
+                .and_then(Object::as_name)
+                .and_then(|name| Trapped::from_bytes(name.as_bytes())),
+            custom: custom_info_entries(&info, doc),
         }
     }
+}
+
+/// The `/Info` keys that are not one of the nine [`Metadata`] names.
+///
+/// Only text-valued ones: `/Info` is a dictionary of text strings by
+/// convention, and a producer that put an array or a dictionary there is
+/// carrying something this type has no way to hand back. Dropping it is
+/// better than pretending it round-trips.
+fn custom_info_entries(info: &Dict, doc: &Document) -> Vec<(String, String)> {
+    const NAMED: [&str; 9] = [
+        "Title",
+        "Author",
+        "Subject",
+        "Keywords",
+        "Creator",
+        "Producer",
+        "CreationDate",
+        "ModDate",
+        "Trapped",
+    ];
+    info.keys()
+        .filter(|key| !NAMED.iter().any(|named| key.as_bytes() == named.as_bytes()))
+        .filter_map(|key| {
+            let value = info.text(key, &doc.inner)?;
+            Some((String::from_utf8_lossy(key.as_bytes()).into_owned(), value))
+        })
+        .collect()
 }
 
 /// One embedded font program, from [`Document::embedded_fonts`].
