@@ -16,6 +16,13 @@ compile untouched.
   pass `&Dict::new()` and `None` to keep the old chrome-only behaviour; a
   caller that wants filled fields to be *visible* should pass the real catalog
   and `FormFonts::load`'s answer, which is what `Document::save_form` now does.
+- `AnnotMeta` no longer derives `Eq`. It carries an `f32` opacity now, which
+  has no total equality; `PartialEq` is unchanged. The API baseline does not
+  track trait impls, so this is called out here rather than showing in that
+  diff.
+- `AnnotBorder` is `#[non_exhaustive]`, so its new `dash` field — and any
+  later one — is additive rather than breaking. Build one with
+  `AnnotBorder::solid(..).with_style(..)` instead of a struct literal.
 
 ### Fixed
 
@@ -55,6 +62,24 @@ compile untouched.
   removes the key rather than writing `false`, which is the same thing to a
   reader. A document with no `/AcroForm` gains one, since a flag with no form
   to hang on would be dropped by the next reader that rewrites the catalog.
+- `/CA` constant opacity on every annotation subtype, through
+  `AnnotSpec::with_opacity` / `AnnotMeta::with_opacity`. The generator already
+  folded `/CA` into each appearance's `/ExtGState`; the writer never emitted
+  it, so every annotation pdfrum wrote was forced opaque — including
+  highlights, where translucency is the norm. Out-of-range values are clamped
+  rather than refused.
+- `/IC` interior fill on Square and Circle, through `SquareSpec::interior` /
+  `CircleSpec::interior` and the widened `AnnotSpec::with_interior`. The
+  appearance generator has always filled these shapes from `/IC`; the setter
+  was restricted to Line, so a filled callout box could not be written.
+- `/BS /D` dash patterns, through `AnnotBorder::with_dash`. A dashed border
+  previously wrote `/S /D` with no pattern, leaving a reader to fall back to
+  its own `[3 0 0]`. Written only for a dashed style, since it means nothing
+  to the others.
+- `/Q` text alignment on `FreeText`, through `AnnotSpec::with_align`, reusing
+  the read side's `pdfrum_doc::vt::Alignment` rather than a second enum over
+  the same three values. `Alignment::to_quadding` is its inverse. Every
+  free-text annotation pdfrum wrote was flush left.
 - Per-subtype annotation builders — `MarkupSpec` (with `MarkupKind`),
   `TextSpec`, `SquareSpec`, `CircleSpec`, `InkSpec`, `LineSpec`,
   `LinkSpec`, and `CaretSpec` — each carrying only the options its

@@ -658,6 +658,7 @@ pub pdfrum_doc::vt::Alignment::Left
 pub pdfrum_doc::vt::Alignment::Right
 impl pdfrum_doc::vt::Alignment
 pub fn pdfrum_doc::vt::Alignment::from_quadding(i64) -> pdfrum_doc::vt::Alignment
+pub fn pdfrum_doc::vt::Alignment::to_quadding(self) -> i64
 pub enum pdfrum_doc::vt::Direction
 pub pdfrum_doc::vt::Direction::Auto
 pub pdfrum_doc::vt::Direction::Ltr
