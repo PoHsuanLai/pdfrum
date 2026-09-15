@@ -23,6 +23,7 @@ mod error;
 mod flatten;
 mod font;
 mod form;
+mod form_field;
 mod image;
 mod import;
 mod info;
@@ -67,6 +68,7 @@ pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode, flatten, flatten_d
 pub use font::embed::{EmbeddedFont, FontEncoding, MissingGlyph, string_width};
 pub use font::{GidMap, Subsetted, subset};
 pub use form::{WidgetAppearance, set_need_appearances, set_widget_appearance};
+pub use form_field::{DEFAULT_FIELD_DA, FieldKindSpec, FieldSpec, add_form_field, add_form_font};
 pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
 pub use info::{pdf_date, set_info_entry, set_xmp_metadata};

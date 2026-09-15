@@ -164,6 +164,26 @@ pub enum Error {
     #[error("annotation index {0} is out of range on page {1}")]
     AnnotIndexOutOfRange(usize, PageIndex),
 
+    /// `add_form_field` was given a name the document already uses.
+    ///
+    /// A field's fully qualified name is its identity, not a label: the reader
+    /// merges two fields sharing one into a single field with two controls,
+    /// and every lookup, action and script then addresses both at once. So a
+    /// collision is refused rather than written.
+    #[error("the document already has a form field named {0:?}")]
+    DuplicateFieldName(String),
+
+    /// `add_form_field` was given an empty name.
+    ///
+    /// The reader drops a field with no name anywhere in its ancestry, so such
+    /// a field would be written and then silently lost on the next load.
+    #[error("a form field needs a name")]
+    EmptyFieldName,
+
+    /// `add_form_field` was given a radio group with no buttons.
+    #[error("a radio group needs at least one button")]
+    EmptyRadioGroup,
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),
