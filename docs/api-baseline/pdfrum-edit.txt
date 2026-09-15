@@ -164,12 +164,19 @@ pub fn pdfrum_edit::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum
 pub fn pdfrum_edit::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
 pub fn pdfrum_edit::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
 pub fn pdfrum_edit::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<usize, usize>)
+pub enum pdfrum_edit::Duplex
+pub pdfrum_edit::Duplex::DuplexFlipLongEdge
+pub pdfrum_edit::Duplex::DuplexFlipShortEdge
+pub pdfrum_edit::Duplex::Simplex
+impl pdfrum_edit::Duplex
+pub fn pdfrum_edit::Duplex::as_str(self) -> &'static str
 #[non_exhaustive] pub enum pdfrum_edit::Error
 pub pdfrum_edit::Error::AnnotIndexOutOfRange(usize, pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::AnnotNotOnPage(pdfrum_object::object::ObjRef, pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
+pub pdfrum_edit::Error::DuplicateAttachmentName(alloc::string::String)
 pub pdfrum_edit::Error::DuplicateFieldName(alloc::string::String)
 pub pdfrum_edit::Error::EmptyFieldName
 pub pdfrum_edit::Error::EmptyFontProgram
@@ -256,6 +263,13 @@ pub pdfrum_edit::PageBox::Bleed
 pub pdfrum_edit::PageBox::Crop
 pub pdfrum_edit::PageBox::Media
 pub pdfrum_edit::PageBox::Trim
+pub enum pdfrum_edit::PageLabelStyle
+pub pdfrum_edit::PageLabelStyle::Decimal
+pub pdfrum_edit::PageLabelStyle::LowerLetters
+pub pdfrum_edit::PageLabelStyle::LowerRoman
+pub pdfrum_edit::PageLabelStyle::None
+pub pdfrum_edit::PageLabelStyle::UpperLetters
+pub pdfrum_edit::PageLabelStyle::UpperRoman
 pub enum pdfrum_edit::Paint
 pub pdfrum_edit::Paint::Fill(peniko::Color)
 pub pdfrum_edit::Paint::FillStroke(peniko::Color, pdfrum_edit::Stroke)
@@ -464,11 +478,20 @@ impl pdfrum_edit::EmbeddedImage
 pub fn pdfrum_edit::EmbeddedImage::height(&self) -> u32
 pub fn pdfrum_edit::EmbeddedImage::object(&self) -> pdfrum_object::object::ObjRef
 pub fn pdfrum_edit::EmbeddedImage::width(&self) -> u32
-pub struct pdfrum_edit::Encryption
+#[non_exhaustive] pub struct pdfrum_edit::Encryption
 pub pdfrum_edit::Encryption::encrypt_metadata: bool
 pub pdfrum_edit::Encryption::owner_password: alloc::vec::Vec<u8>
 pub pdfrum_edit::Encryption::permissions: pdfrum_crypt::permissions::Permissions
 pub pdfrum_edit::Encryption::user_password: alloc::vec::Vec<u8>
+impl pdfrum_edit::Encryption
+pub fn pdfrum_edit::Encryption::builder() -> pdfrum_edit::EncryptionBuilder
+pub struct pdfrum_edit::EncryptionBuilder(_)
+impl pdfrum_edit::EncryptionBuilder
+pub fn pdfrum_edit::EncryptionBuilder::build(self) -> pdfrum_edit::Encryption
+pub fn pdfrum_edit::EncryptionBuilder::encrypt_metadata(self, bool) -> Self
+pub fn pdfrum_edit::EncryptionBuilder::owner_password(self, alloc::vec::Vec<u8>) -> Self
+pub fn pdfrum_edit::EncryptionBuilder::permissions(self, pdfrum_crypt::permissions::Permissions) -> Self
+pub fn pdfrum_edit::EncryptionBuilder::user_password(self, alloc::vec::Vec<u8>) -> Self
 pub struct pdfrum_edit::Encryptor<'a>
 impl<'a> pdfrum_edit::Encryptor<'a>
 pub fn pdfrum_edit::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
@@ -520,9 +543,16 @@ pub pdfrum_edit::ImageBuilder::source: pdfrum_object::object::ObjRef
 impl pdfrum_edit::ImageBuilder
 pub fn pdfrum_edit::ImageBuilder::at(pdfrum_object::object::ObjRef, kurbo::rect::Rect) -> Self
 pub fn pdfrum_edit::ImageBuilder::build(self) -> pdfrum_page::page::PageObject
-pub struct pdfrum_edit::ImportOptions
+#[non_exhaustive] pub struct pdfrum_edit::ImportOptions
 pub pdfrum_edit::ImportOptions::at: pdfrum_common::page_index::PageIndex
 pub pdfrum_edit::ImportOptions::viewer_preferences: bool
+impl pdfrum_edit::ImportOptions
+pub fn pdfrum_edit::ImportOptions::builder() -> pdfrum_edit::ImportOptionsBuilder
+pub struct pdfrum_edit::ImportOptionsBuilder(_)
+impl pdfrum_edit::ImportOptionsBuilder
+pub fn pdfrum_edit::ImportOptionsBuilder::at(self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> Self
+pub fn pdfrum_edit::ImportOptionsBuilder::build(self) -> pdfrum_edit::ImportOptions
+pub fn pdfrum_edit::ImportOptionsBuilder::viewer_preferences(self, bool) -> Self
 pub struct pdfrum_edit::InkSpec
 impl pdfrum_edit::InkSpec
 pub fn pdfrum_edit::InkSpec::author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
@@ -610,11 +640,24 @@ pub fn pdfrum_edit::MiterLimit::get(self) -> f64
 pub fn pdfrum_edit::MiterLimit::new(f64) -> Self
 impl core::default::Default for pdfrum_edit::MiterLimit
 pub fn pdfrum_edit::MiterLimit::default() -> Self
-pub struct pdfrum_edit::NUpOptions
+#[non_exhaustive] pub struct pdfrum_edit::NUpOptions
 pub pdfrum_edit::NUpOptions::grid: (u32, u32)
 pub pdfrum_edit::NUpOptions::sheet: (f32, f32)
+impl pdfrum_edit::NUpOptions
+pub fn pdfrum_edit::NUpOptions::builder() -> pdfrum_edit::NUpOptionsBuilder
 impl core::default::Default for pdfrum_edit::NUpOptions
 pub fn pdfrum_edit::NUpOptions::default() -> Self
+pub struct pdfrum_edit::NUpOptionsBuilder(_)
+impl pdfrum_edit::NUpOptionsBuilder
+pub fn pdfrum_edit::NUpOptionsBuilder::build(self) -> pdfrum_edit::NUpOptions
+pub fn pdfrum_edit::NUpOptionsBuilder::grid(self, u32, u32) -> Self
+pub fn pdfrum_edit::NUpOptionsBuilder::sheet(self, kurbo::size::Size) -> Self
+pub struct pdfrum_edit::PageLabelRange
+impl pdfrum_edit::PageLabelRange
+pub fn pdfrum_edit::PageLabelRange::first(self, i64) -> Self
+pub fn pdfrum_edit::PageLabelRange::new(impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageLabelStyle) -> Self
+pub fn pdfrum_edit::PageLabelRange::prefix(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum_edit::PageLabelRange::start(&self) -> pdfrum_common::page_index::PageIndex
 pub struct pdfrum_edit::PageRange(_)
 impl pdfrum_edit::PageRange
 pub fn pdfrum_edit::PageRange::all(u32) -> Self
@@ -659,7 +702,7 @@ pub fn pdfrum_edit::ResourceTable::realize(&mut self, &str, pdfrum_object::objec
 pub fn pdfrum_edit::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object::dict::Dict) -> pdfrum_object::name::Name
 pub fn pdfrum_edit::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
 pub fn pdfrum_edit::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
-pub struct pdfrum_edit::SaveOptions
+#[non_exhaustive] pub struct pdfrum_edit::SaveOptions
 pub pdfrum_edit::SaveOptions::encrypt: core::option::Option<pdfrum_edit::Encryption>
 pub pdfrum_edit::SaveOptions::id_source: pdfrum_edit::IdSource
 pub pdfrum_edit::SaveOptions::keep_original: bool
@@ -667,8 +710,20 @@ pub pdfrum_edit::SaveOptions::mode: pdfrum_edit::SaveMode
 pub pdfrum_edit::SaveOptions::remove_security: bool
 pub pdfrum_edit::SaveOptions::subset_new_fonts: bool
 pub pdfrum_edit::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
+impl pdfrum_edit::SaveOptions
+pub fn pdfrum_edit::SaveOptions::builder() -> pdfrum_edit::SaveOptionsBuilder
 impl core::default::Default for pdfrum_edit::SaveOptions
 pub fn pdfrum_edit::SaveOptions::default() -> Self
+pub struct pdfrum_edit::SaveOptionsBuilder(_)
+impl pdfrum_edit::SaveOptionsBuilder
+pub fn pdfrum_edit::SaveOptionsBuilder::build(self) -> pdfrum_edit::SaveOptions
+pub fn pdfrum_edit::SaveOptionsBuilder::encrypt(self, pdfrum_edit::Encryption) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::id_source(self, pdfrum_edit::IdSource) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::keep_original(self, bool) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::mode(self, pdfrum_edit::SaveMode) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::remove_security(self, bool) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::subset_new_fonts(self, bool) -> Self
+pub fn pdfrum_edit::SaveOptionsBuilder::version(self, pdfrum_common::version::PdfVersion) -> Self
 pub struct pdfrum_edit::SquareSpec
 impl pdfrum_edit::SquareSpec
 pub fn pdfrum_edit::SquareSpec::author(self, impl core::convert::Into<alloc::string::String>) -> pdfrum_edit::AnnotWrite
@@ -751,6 +806,19 @@ impl core::convert::From<pdfrum_edit::TextSpec> for pdfrum_edit::AnnotWrite
 pub fn pdfrum_edit::AnnotWrite::from(pdfrum_edit::TextSpec) -> Self
 pub struct pdfrum_edit::UnknownFlattenMode(_)
 pub struct pdfrum_edit::UnknownStampPosition(_)
+pub struct pdfrum_edit::ViewerPreferences
+impl pdfrum_edit::ViewerPreferences
+pub fn pdfrum_edit::ViewerPreferences::center_window(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::direction_r2l(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::display_doc_title(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::duplex(self, pdfrum_edit::Duplex) -> Self
+pub fn pdfrum_edit::ViewerPreferences::fit_window(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::hide_menubar(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::hide_toolbar(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::hide_window_ui(self, bool) -> Self
+pub fn pdfrum_edit::ViewerPreferences::new() -> Self
+pub fn pdfrum_edit::ViewerPreferences::num_copies(self, i64) -> Self
+pub fn pdfrum_edit::ViewerPreferences::print_scaling(self, bool) -> Self
 pub struct pdfrum_edit::WidgetAppearance
 impl pdfrum_edit::WidgetAppearance
 pub fn pdfrum_edit::WidgetAppearance::background(self, peniko::Color) -> Self
@@ -771,6 +839,7 @@ pub fn pdfrum_edit::add_form_field(&mut pdfrum_edit::EditDoc<'_>, impl core::con
 pub fn pdfrum_edit::add_form_font(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::AsRef<str>, &pdfrum_edit::EmbeddedFont) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
+pub fn pdfrum_edit::clear_open_action(&mut pdfrum_edit::EditDoc<'_>) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_annotation_at(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_attachment(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize) -> core::result::Result<bool, pdfrum_edit::Error>
@@ -790,14 +859,20 @@ pub fn pdfrum_edit::reorder_pages(&mut pdfrum_edit::EditDoc<'_>, &[usize]) -> co
 pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_attachment_description(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_attachment_file(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &[u8]) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::set_attachment_file_with(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &[u8], &pdfrum_edit::AttachmentOptions) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::set_attachment_name(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_attachment_param(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, &str, &str) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::set_info_entry(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&str>)
+pub fn pdfrum_edit::set_info_name(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_object::name::Name, core::option::Option<&pdfrum_object::name::Name>)
 pub fn pdfrum_edit::set_named_destination(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<alloc::string::String>, pdfrum_object::object::ObjRef, pdfrum_edit::AnnotGoToView) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_need_appearances(&mut pdfrum_edit::EditDoc<'_>, bool) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_open_action(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::AnnotGoToView) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_outline(&mut pdfrum_edit::EditDoc<'_>, &[pdfrum_edit::BookmarkSpec]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_page_labels(&mut pdfrum_edit::EditDoc<'_>, &[pdfrum_edit::PageLabelRange]) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_page_rotation_to(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_page::page::Rotation) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_viewer_preferences(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::ViewerPreferences) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_widget_appearance(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_edit::WidgetAppearance) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::set_xmp_metadata(&mut pdfrum_edit::EditDoc<'_>, core::option::Option<&[u8]>) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts

@@ -40,27 +40,26 @@ fn open(bytes: &[u8], password: &[u8]) -> Result<Document, LoadError> {
 fn encrypted(bytes: &[u8], encryption: Encryption, id_source: IdSource) -> Vec<u8> {
     let doc = open(bytes, b"").expect("opens");
     let edit = EditDoc::new(&doc);
-    let options = SaveOptions {
-        mode: SaveMode::Full,
-        id_source,
-        encrypt: Some(encryption),
-        ..SaveOptions::default()
-    };
+    let options = SaveOptions::builder()
+        .mode(SaveMode::Full)
+        .id_source(id_source)
+        .encrypt(encryption)
+        .build();
     let mut out = Vec::new();
     save(&edit, &options, &mut out).expect("saves");
     out
 }
 
 fn print_only() -> Encryption {
-    Encryption {
-        user_password: b"reader".to_vec(),
-        owner_password: b"owner".to_vec(),
-        permissions: Permissions {
+    Encryption::builder()
+        .user_password(b"reader".to_vec())
+        .owner_password(b"owner".to_vec())
+        .permissions(Permissions {
             print: true,
             ..Permissions::NONE
-        },
-        encrypt_metadata: true,
-    }
+        })
+        .encrypt_metadata(true)
+        .build()
 }
 
 #[test]
@@ -154,11 +153,10 @@ fn a_fixed_id_source_makes_an_unencrypted_save_reproducible() {
     let plain = |seed| {
         let doc = open(&hello(), b"").expect("opens");
         let edit = EditDoc::new(&doc);
-        let options = SaveOptions {
-            mode: SaveMode::Full,
-            id_source: IdSource::Fixed(seed),
-            ..SaveOptions::default()
-        };
+        let options = SaveOptions::builder()
+            .mode(SaveMode::Full)
+            .id_source(IdSource::Fixed(seed))
+            .build();
         let mut out = Vec::new();
         save(&edit, &options, &mut out).expect("saves");
         out
@@ -206,10 +204,7 @@ fn an_encrypted_document_is_not_re_keyed_in_one_save() {
     let once = encrypted(&hello(), print_only(), IdSource::Fixed([1; 16]));
     let doc = open(&once, b"owner").expect("opens");
     let edit = EditDoc::new(&doc);
-    let options = SaveOptions {
-        encrypt: Some(print_only()),
-        ..SaveOptions::default()
-    };
+    let options = SaveOptions::builder().encrypt(print_only()).build();
     let mut out = Vec::new();
     assert!(matches!(
         save(&edit, &options, &mut out),

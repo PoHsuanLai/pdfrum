@@ -96,11 +96,10 @@ fn open(name: &str, password: &[u8]) -> Option<Document> {
 /// A save whose identifiers come from a seed, so two runs share `/ID`.
 /// Encrypted payloads are not pinned: AES vectors come from the OS.
 fn fixed(mode: SaveMode) -> SaveOptions {
-    SaveOptions {
-        mode,
-        id_source: IdSource::Fixed([0x5A; 16]),
-        ..SaveOptions::default()
-    }
+    SaveOptions::builder()
+        .mode(mode)
+        .id_source(IdSource::Fixed([0x5A; 16]))
+        .build()
 }
 
 /// Save `doc` and hand back the bytes.
@@ -338,10 +337,8 @@ fn remove_security_still_writes_a_decrypted_document() {
         let Some(doc) = open(name, password) else {
             return;
         };
-        let opts = SaveOptions {
-            remove_security: true,
-            ..fixed(SaveMode::Full)
-        };
+        let mut opts = fixed(SaveMode::Full);
+        opts.remove_security = true;
         let out = saved(&doc, &opts);
         let reopened = reload(&out, None)
             .unwrap_or_else(|| unreachable!("{name} did not open without a password"));

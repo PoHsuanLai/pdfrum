@@ -37,11 +37,10 @@ fn open(bytes: &[u8]) -> Document {
 /// Save an edited document and reopen it, which is the only way to see what
 /// the edits actually produced.
 fn commit(edit: &EditDoc<'_>) -> Document {
-    let options = SaveOptions {
-        mode: SaveMode::Full,
-        id_source: IdSource::Fixed([0x11; 16]),
-        ..SaveOptions::default()
-    };
+    let options = SaveOptions::builder()
+        .mode(SaveMode::Full)
+        .id_source(IdSource::Fixed([0x11; 16]))
+        .build();
     let mut out = Vec::new();
     save(edit, &options, &mut out).expect("saves");
     open(&out)
@@ -103,10 +102,7 @@ fn importing_appends_pages_in_the_order_named() {
         &mut edit,
         &src,
         &PageRange::all(3),
-        &ImportOptions {
-            at: PageIndex::new(1),
-            ..ImportOptions::default()
-        },
+        &ImportOptions::builder().at(PageIndex::new(1)).build(),
     )
     .expect("imports");
 
@@ -130,10 +126,7 @@ fn pages_land_at_the_index_named_and_shift_the_rest() {
         &mut edit,
         &src,
         &range,
-        &ImportOptions {
-            at: PageIndex::FIRST,
-            ..ImportOptions::default()
-        },
+        &ImportOptions::builder().at(PageIndex::FIRST).build(),
     )
     .expect("imports");
 
@@ -154,10 +147,7 @@ fn an_index_past_the_end_appends() {
         &mut edit,
         &src,
         &PageRange::all(1),
-        &ImportOptions {
-            at: PageIndex::new(999),
-            ..ImportOptions::default()
-        },
+        &ImportOptions::builder().at(PageIndex::new(999)).build(),
     )
     .expect("imports");
     assert_eq!(markers(&commit(&edit)), vec![None, Some(0)]);
@@ -538,10 +528,10 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n"
         &mut edit,
         &src,
         &PageRange::all(1),
-        &ImportOptions {
-            at: PageIndex::FIRST,
-            viewer_preferences: true,
-        },
+        &ImportOptions::builder()
+            .at(PageIndex::FIRST)
+            .viewer_preferences(true)
+            .build(),
     )
     .expect("imports");
 
@@ -599,10 +589,10 @@ fn n_up_produces_the_expected_sheet_counts() {
             &mut edit,
             &src,
             &PageRange::all(u32::try_from(pages).expect("fits")),
-            &NUpOptions {
-                sheet: (612.0, 792.0),
-                grid: (x, y),
-            },
+            &NUpOptions::builder()
+                .sheet(kurbo::Size::new(612.0, 792.0))
+                .grid(x, y)
+                .build(),
         )
         .expect("imposes");
 
@@ -624,22 +614,22 @@ fn n_up_refuses_a_zero_dimension() {
     let dest = open(&dest_bytes);
 
     for options in [
-        NUpOptions {
-            sheet: (612.0, 792.0),
-            grid: (0, 1),
-        },
-        NUpOptions {
-            sheet: (612.0, 792.0),
-            grid: (1, 0),
-        },
-        NUpOptions {
-            sheet: (0.0, 792.0),
-            grid: (1, 1),
-        },
-        NUpOptions {
-            sheet: (612.0, 0.0),
-            grid: (1, 1),
-        },
+        NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 792.0))
+            .grid(0, 1)
+            .build(),
+        NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 792.0))
+            .grid(1, 0)
+            .build(),
+        NUpOptions::builder()
+            .sheet(kurbo::Size::new(0.0, 792.0))
+            .grid(1, 1)
+            .build(),
+        NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 0.0))
+            .grid(1, 1)
+            .build(),
     ] {
         let mut edit = EditDoc::new(&dest);
         assert!(
@@ -663,10 +653,10 @@ fn every_n_up_sheet_has_the_size_asked_for() {
         &mut edit,
         &src,
         &PageRange::all(4),
-        &NUpOptions {
-            sheet: (792.0, 612.0),
-            grid: (2, 1),
-        },
+        &NUpOptions::builder()
+            .sheet(kurbo::Size::new(792.0, 612.0))
+            .grid(2, 1)
+            .build(),
     )
     .expect("imposes");
 
@@ -702,10 +692,10 @@ fn a_page_reused_on_a_later_sheet_is_registered_on_that_sheet() {
         &mut edit,
         &src,
         &PageRange::of([0, 0, 0, 0]),
-        &NUpOptions {
-            sheet: (612.0, 792.0),
-            grid: (1, 1),
-        },
+        &NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 792.0))
+            .grid(1, 1)
+            .build(),
     )
     .expect("imposes");
 
@@ -769,10 +759,10 @@ fn a_page_used_twice_makes_one_form() {
         &mut edit,
         &src,
         &PageRange::of([0, 0]),
-        &NUpOptions {
-            sheet: (612.0, 792.0),
-            grid: (2, 1),
-        },
+        &NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 792.0))
+            .grid(2, 1)
+            .build(),
     )
     .expect("imposes");
 
@@ -807,10 +797,10 @@ fn an_n_up_form_is_a_form_xobject_carrying_only_resources() {
         &mut edit,
         &src,
         &PageRange::all(1),
-        &NUpOptions {
-            sheet: (612.0, 792.0),
-            grid: (1, 1),
-        },
+        &NUpOptions::builder()
+            .sheet(kurbo::Size::new(612.0, 792.0))
+            .grid(1, 1)
+            .build(),
     )
     .expect("imposes");
 
@@ -860,11 +850,10 @@ fn an_imported_document_is_one_another_reader_opens() {
     )
     .expect("imports");
 
-    let options = SaveOptions {
-        mode: SaveMode::Full,
-        id_source: IdSource::Fixed([0x11; 16]),
-        ..SaveOptions::default()
-    };
+    let options = SaveOptions::builder()
+        .mode(SaveMode::Full)
+        .id_source(IdSource::Fixed([0x11; 16]))
+        .build();
     let mut out = Vec::new();
     save(&edit, &options, &mut out).expect("saves");
 
