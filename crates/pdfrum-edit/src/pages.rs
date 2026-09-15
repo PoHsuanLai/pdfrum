@@ -178,6 +178,45 @@ pub fn set_page_rotation(
     })
 }
 
+/// Sets a page's `/Rotate` from the read side's own [`Rotation`].
+///
+/// [`set_page_rotation`] takes degrees and rounds to the nearest quarter
+/// turn, which is the right shape for a `--rotate 90` flag but the wrong one
+/// for a caller that already holds the value
+/// [`Page::rotate`](pdfrum_page::Page) answered: a round trip through `i32`
+/// and back is a chance to round something that was already exact.
+///
+/// # Errors
+///
+/// [`Error::PageIndexOutOfRange`] when there is no such page or the page is
+/// written inline.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum_edit::{EditDoc, set_page_rotation_to};
+/// use pdfrum_page::Rotation;
+/// use pdfrum_parser::{LoadOptions, load};
+///
+/// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+/// let doc = load(bytes, &LoadOptions::default())?;
+/// let mut edit = EditDoc::new(&doc);
+/// set_page_rotation_to(&mut edit, 0u32, Rotation::Quarter)?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn set_page_rotation_to(
+    dest: &mut EditDoc<'_>,
+    index: impl Into<PageIndex>,
+    rotation: pdfrum_page::Rotation,
+) -> Result<(), Error> {
+    let index = index.into();
+    edit_page(dest, index, |page| {
+        page.insert(
+            names::ROTATE.clone(),
+            Object::Int(i64::from(rotation.degrees())),
+        );
+    })
+}
+
 /// Set one of a page's boxes.
 ///
 /// # Errors
@@ -223,4 +262,147 @@ fn dict_of(dest: &EditDoc<'_>, reference: ObjRef) -> Option<Dict> {
 
 fn rect_object(rect: [f32; 4]) -> Object {
     Object::Array(rect.into_iter().map(Object::Real).collect())
+}
+
+/// Reorders the document's pages to the sequence `order` names.
+///
+/// `order` is the new arrangement written as old indices: `[2, 0, 1]` puts
+/// what was page 3 first. Every page must appear exactly once — a list that
+/// repeats an index or leaves one out is not a reordering, and is refused
+/// rather than guessed at.
+///
+/// The page tree is flattened to a single level in the process, because a
+/// reordering that preserved an inherited-attribute hierarchy would have to
+/// decide which node each page now belongs under, and any answer changes what
+/// the page inherits. Flattening keeps every page's own attributes intact,
+/// which is what a caller reordering pages means; inherited `/Resources`,
+/// `/MediaBox`, `/CropBox` and `/Rotate` are resolved onto each page first so
+/// nothing is lost.
+///
+/// # Errors
+///
+/// [`Error::PageIndexOutOfRange`] when an index names no page, when a page is
+/// written inline and has no reference to move, or when `order` is not a
+/// permutation of every page.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum_edit::{EditDoc, reorder_pages};
+/// use pdfrum_parser::{LoadOptions, load};
+///
+/// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/hello.pdf")[..]);
+/// let doc = load(bytes, &LoadOptions::default())?;
+/// let mut edit = EditDoc::new(&doc);
+/// // A one-page document has exactly one arrangement.
+/// reorder_pages(&mut edit, &[0])?;
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn reorder_pages(dest: &mut EditDoc<'_>, order: &[usize]) -> Result<(), Error> {
+    let count = usize::try_from(dest.base().page_count()).unwrap_or(usize::MAX);
+    if order.len() != count {
+        // Naming fewer pages than the document has is a deletion wearing a
+        // reorder's clothes; naming more is a duplication. Both have their
+        // own call.
+        return Err(Error::PageIndexOutOfRange(PageIndex::from(
+            u32::try_from(order.len().min(count)).unwrap_or(0),
+        )));
+    }
+    let mut seen = vec![false; count];
+    for &index in order {
+        let slot = seen
+            .get_mut(index)
+            .ok_or(Error::PageIndexOutOfRange(PageIndex::from(
+                u32::try_from(index).unwrap_or(u32::MAX),
+            )))?;
+        if *slot {
+            return Err(Error::PageIndexOutOfRange(PageIndex::from(
+                u32::try_from(index).unwrap_or(u32::MAX),
+            )));
+        }
+        *slot = true;
+    }
+
+    // Resolve what each page inherits before the tree it inherits through is
+    // replaced.
+    let mut pages = Vec::with_capacity(count);
+    for &index in order {
+        let page_index = PageIndex::from(u32::try_from(index).unwrap_or(u32::MAX));
+        let page = dest
+            .base()
+            .page(page_index)
+            .map_err(|_| Error::PageIndexOutOfRange(page_index))?;
+        let reference = page
+            .reference
+            .ok_or(Error::PageIndexOutOfRange(page_index))?;
+        pages.push((reference, page.dict.clone()));
+    }
+
+    let Some(root_ref) = dest.base().trailer().reference(names::ROOT) else {
+        return Err(Error::NoDestinationCatalog);
+    };
+    let Some(catalog) = dict_of(dest, root_ref) else {
+        return Err(Error::NoDestinationCatalog);
+    };
+    let Some(Object::Ref(tree_ref)) = catalog.raw(names::PAGES).cloned() else {
+        return Err(Error::NoDestinationCatalog);
+    };
+
+    for (reference, mut dict) in pages {
+        // Every page now hangs off the root, so it carries what it used to
+        // inherit.
+        for key in [
+            names::RESOURCES.clone(),
+            names::MEDIA_BOX.clone(),
+            names::CROP_BOX.clone(),
+            names::ROTATE.clone(),
+        ] {
+            if !dict.contains_key(&key)
+                && let Some(inherited) = inherited_of(dest, &dict, &key)
+            {
+                dict.insert(key, inherited);
+            }
+        }
+        dict.insert(names::PARENT.clone(), Object::Ref(tree_ref));
+        dest.replace(reference, Object::Dict(dict));
+    }
+
+    let kids: Array = order
+        .iter()
+        .filter_map(|&index| {
+            let page_index = PageIndex::from(u32::try_from(index).unwrap_or(u32::MAX));
+            dest.base()
+                .page(page_index)
+                .ok()
+                .and_then(|page| page.reference)
+                .map(Object::Ref)
+        })
+        .collect();
+
+    let mut tree = dict_of(dest, tree_ref).unwrap_or_default();
+    tree.insert(names::TYPE.clone(), Object::Name(names::PAGES.clone()));
+    tree.insert(
+        names::COUNT.clone(),
+        Object::Int(i64::try_from(order.len()).unwrap_or(0)),
+    );
+    tree.insert(names::KIDS.clone(), Object::Array(kids));
+    tree.remove(names::PARENT);
+    dest.replace(tree_ref, Object::Dict(tree));
+    Ok(())
+}
+
+/// One inheritable attribute, walked up from `dict` through `/Parent`.
+fn inherited_of(dest: &EditDoc<'_>, dict: &Dict, key: &Name) -> Option<Object> {
+    let mut current = dict.clone();
+    // A malformed file can loop its `/Parent` chain; the page tree is never
+    // deep, so a bounded walk is both safe and sufficient.
+    for _ in 0..64 {
+        if let Some(value) = current.raw(key) {
+            return Some(value.clone());
+        }
+        let Some(Object::Ref(parent)) = current.raw(names::PARENT).cloned() else {
+            return None;
+        };
+        current = dict_of(dest, parent)?;
+    }
+    None
 }
