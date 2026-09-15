@@ -87,6 +87,9 @@ pub use pages::{
     set_page_rotation_to,
 };
 pub use pdfa_convert::{convert as to_pdfa, pdf_date_to_iso8601};
+// `NUpOptionsBuilder::sheet` takes a `Size`, so the type has to be reachable
+// from this crate rather than only from whatever else the caller depends on.
+pub use kurbo::Size;
 pub use pdfrum_font::StandardFont;
 pub use prefs::{
     Duplex, ViewerPreferences, clear_open_action, set_open_action, set_viewer_preferences,
