@@ -143,7 +143,7 @@ hayro-jpeg2000 = { version = "=0.4.0", default-features = false, features = ["st
 # example uses. We consume `Image::new_embedded`.
 hayro-jbig2 = { version = "=0.3.0", default-features = false, features = ["std", "simd"] }
 hayro-ccitt = "=0.3.0"
-moxcms = "=0.9.0"
+moxcms = "=0.9.1"
 
 # crypto, text, numeric
 aes = "=0.9.3"
@@ -161,7 +161,7 @@ unicode-bidi = "=0.3.18"
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
 unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
-smallvec = "=1.16.0"
+smallvec = "=1.16.1"
 # Shared byte buffers. Owner and data pointer are decoupled, so a `Vec` can be
 # adopted without copying it — see `pdfrum_object::ByteSpan`. Zero transitive
 # dependencies, MIT, pure Rust.
