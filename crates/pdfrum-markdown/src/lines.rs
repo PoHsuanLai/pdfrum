@@ -229,13 +229,14 @@ pub fn lines(text: &TextPage, facts: &ObjectFacts) -> Vec<Line> {
             }
             continue;
         }
-        if current.already_drawn(unicode, c.char_box) {
+        let object = c.object.map(|o| o.0);
+        if current.already_drawn(unicode, c.char_box, object) {
             continue;
         }
-        let object = c.object.map(|o| o.0);
         current.push(
             unicode,
             c.char_box,
+            object,
             drawn_size(c),
             object.map(|o| facts.get(o)),
         );
@@ -299,8 +300,9 @@ struct LineBuilder {
     head_over: bool,
     mcids: Vec<i64>,
     segments: Vec<Segment>,
-    /// Every character kept so far with its box, for the repeat check.
-    drawn: Vec<(char, Rect)>,
+    /// Every character kept so far with its box and the object that drew
+    /// it, for the repeat check.
+    drawn: Vec<(char, Rect, Option<u32>)>,
     pending_space: bool,
 }
 
@@ -311,16 +313,26 @@ impl LineBuilder {
         }
     }
 
-    /// Whether `ch` is already on this line at `char_box`.
-    fn already_drawn(&self, ch: char, char_box: Rect) -> bool {
+    /// Whether `ch` is already on this line at `char_box`, drawn by another
+    /// object: a fake-bold overprint or a redrawn run. One glyph that stands
+    /// for several characters gives each the glyph's box, and a conjunct
+    /// like Devanagari `त्त` repeats a letter in it — that is one drawing,
+    /// not two, and the letter stays.
+    fn already_drawn(&self, ch: char, char_box: Rect, object: Option<u32>) -> bool {
         !ch.is_whitespace()
-            && self
-                .drawn
-                .iter()
-                .any(|(other, b)| *other == ch && same_place(*b, char_box))
+            && self.drawn.iter().any(|(other, b, by)| {
+                *other == ch && same_place(*b, char_box) && (by.is_none() || *by != object)
+            })
     }
 
-    fn push(&mut self, ch: char, char_box: Rect, font_size: f32, facts: Option<Facts>) {
+    fn push(
+        &mut self,
+        ch: char,
+        char_box: Rect,
+        object: Option<u32>,
+        font_size: f32,
+        facts: Option<Facts>,
+    ) {
         if self.pending_space {
             self.text.push(' ');
             if let Some(segment) = self.segments.last_mut() {
@@ -329,7 +341,7 @@ impl LineBuilder {
             self.pending_space = false;
         }
         self.text.push(ch);
-        self.drawn.push((ch, char_box));
+        self.drawn.push((ch, char_box, object));
         let has_area = char_box.width() > 0.0 && char_box.height() > 0.0;
         let mcid = facts.and_then(|f| f.mcid);
         match self.segments.last_mut() {
@@ -493,6 +505,23 @@ mod tests {
         let got = lines(&page, &ObjectFacts::default());
         let texts: Vec<&str> = got.iter().map(|l| l.text.as_str()).collect();
         assert_eq!(texts, ["Welcome", "Welcome"]);
+    }
+
+    #[test]
+    fn a_letter_one_glyph_repeats_is_not_a_redraw() {
+        // `त्त`: one conjunct glyph, one object, three characters sharing
+        // its box, the first and last the same letter.
+        let glyph = |ch: char| CharBox {
+            object: Some(ObjectIndex(3)),
+            ..drawn(ch, 100.0, 700.0)
+        };
+        let page = TextPage {
+            chars: vec![glyph('त'), glyph('\u{94d}'), glyph('त')],
+            ..TextPage::default()
+        };
+        let got = lines(&page, &ObjectFacts::default());
+        let texts: Vec<&str> = got.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts, ["त्त"]);
     }
 
     #[test]

@@ -1,12 +1,16 @@
-//! The four-way direction segmenter.
+//! The four-way direction segmenter, and the reordering that replaces it on
+//! a line with right-to-left text in it.
 //!
-//! **This is not the Unicode Bidirectional Algorithm.** PDFium buckets raw
+//! **Neither is the Unicode Bidirectional Algorithm.** PDFium buckets raw
 //! bidi classes four ways, splits a line wherever the bucket changes, and
 //! reverses the characters inside a right-to-left run. There are no embedding
 //! levels, no paragraph resolution and no explicit-direction handling; the
-//! only mirroring is a single table lookup, applied later. Feeding the same
-//! text through a real UBA implementation gives different output, which is
-//! why this crate does not use `unicode-bidi`.
+//! only mirroring is a single table lookup, applied later. That is still how
+//! a line with no right-to-left letter is read, so every such line comes out
+//! as the oracle's. A line with one is put in logical order by
+//! [`logical_order`], which resolves levels the way UAX #9 does but on text
+//! already laid out — the reverse of the problem `unicode-bidi` solves, which
+//! is why this crate does not use it.
 
 use crate::unicode::{BidiClass, bidi_class};
 
@@ -163,6 +167,219 @@ pub fn is_right_to_left(codes: &[u32]) -> bool {
     segments(codes, true).overall() == Direction::Right
 }
 
+/// How a character takes part in reordering a line read back from the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Strength {
+    Left,
+    Right,
+    /// A run of digits, with the separators and terminators that belong to
+    /// it: `1,234`, `12.5`, `50%`.
+    Number,
+    Neutral,
+}
+
+/// A line's characters in logical order, from the visual order the page
+/// placed them in — `None` when the line holds no right-to-left letter, and
+/// the segmenter's order is left alone. A line with no letter of either
+/// direction — `3/5.`, the end of a sentence wrapped alone — follows the one
+/// before it, which `after_right` says was right-to-left.
+///
+/// Each entry is an index into `codes` and whether that character sits in a
+/// right-to-left run; the flag beside them is whether the line itself reads
+/// right to left, for the next line to follow. `joins_previous[i]` says
+/// character `i` is part of the same unit as `i - 1`: an `/ActualText`
+/// string, already logical, which moves as one piece and is never turned
+/// round inside.
+///
+/// `[oracle-bug]` PDFium's segmenter reverses each right-to-left run in
+/// place but keeps the runs in visual order, so a Hebrew line's words come
+/// out last word first — `2024 זה חוק` for `חוק זה 2024` — and it turns an
+/// `/ActualText` run forwards only when its *first* character came from one,
+/// which Chrome, marking each Arabic letter separately, defeats on nearly
+/// every word. This is the reordering of UAX #9 rule L2 run backwards. The
+/// line's direction is right-to-left when `rtl` says so or when it holds more
+/// right-to-left letters than left-to-right ones; a neutral takes the
+/// direction its neighbours share, else the line's; a number is laid out
+/// left to right inside right-to-left text. The levels are resolved on the
+/// visual order, which is what the page gives, rather than on a logical one
+/// nobody has: an embedding the page does not show cannot be recovered, and
+/// a number between Latin and Hebrew text reads with the Latin before it.
+#[must_use]
+pub fn logical_order(
+    codes: &[u32],
+    joins_previous: &[bool],
+    rtl: bool,
+    after_right: bool,
+) -> Option<(Vec<(usize, bool)>, bool)> {
+    let mut strengths: Vec<Strength> = codes
+        .iter()
+        .map(|&code| match bidi_class(code) {
+            BidiClass::L => Strength::Left,
+            BidiClass::R | BidiClass::Al => Strength::Right,
+            BidiClass::En | BidiClass::An => Strength::Number,
+            _ => Strength::Neutral,
+        })
+        .collect();
+    let rights = strengths.iter().filter(|s| **s == Strength::Right).count();
+    let lefts = strengths.iter().filter(|s| **s == Strength::Left).count();
+    if rights == 0 && !(lefts == 0 && after_right) {
+        return None;
+    }
+    let line = if rtl || rights > lefts || lefts == 0 {
+        Strength::Right
+    } else {
+        Strength::Left
+    };
+    absorb_number_punctuation(codes, &mut strengths);
+
+    let resolved = resolve(&strengths, line);
+    let base: u8 = u8::from(line == Strength::Right);
+    let levels: Vec<u8> = resolved
+        .iter()
+        .map(|s| match s {
+            Strength::Left => base * 2,
+            Strength::Right => 1,
+            Strength::Number => 2,
+            Strength::Neutral => base,
+        })
+        .collect();
+
+    Some((reorder(&levels, joins_previous), line == Strength::Right))
+}
+
+/// Each character's direction, numbers and neutrals settled against their
+/// neighbours and the line's direction `line`.
+fn resolve(strengths: &[Strength], line: Strength) -> Vec<Strength> {
+    // In a left-to-right line a number read after Latin text is part of it;
+    // one beside Hebrew or Arabic, or at the start of a line that goes on
+    // right to left, is laid out inside that text.
+    let nearest = |from: usize, step: isize| -> Option<Strength> {
+        let mut at = from.checked_add_signed(step)?;
+        loop {
+            match strengths.get(at)? {
+                Strength::Left => return Some(Strength::Left),
+                Strength::Right => return Some(Strength::Right),
+                _ => at = at.checked_add_signed(step)?,
+            }
+        }
+    };
+    let numbers: Vec<Strength> = (0..strengths.len())
+        .map(|i| match strengths.get(i) {
+            Some(Strength::Number) if line == Strength::Left => {
+                match (nearest(i, -1), nearest(i, 1)) {
+                    (Some(Strength::Left), _) | (None, None | Some(Strength::Left)) => {
+                        Strength::Left
+                    }
+                    _ => Strength::Number,
+                }
+            }
+            Some(s) => *s,
+            None => Strength::Neutral,
+        })
+        .collect();
+
+    // A neutral between two runs of one direction takes it, a number
+    // counting as right-to-left; anything else takes the line's.
+    let as_strong = |s: Strength| match s {
+        Strength::Number => Some(Strength::Right),
+        Strength::Neutral => None,
+        s => Some(s),
+    };
+    let mut resolved = numbers.clone();
+    let mut i = 0;
+    while i < numbers.len() {
+        if numbers.get(i) != Some(&Strength::Neutral) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while numbers.get(i) == Some(&Strength::Neutral) {
+            i += 1;
+        }
+        let before = start
+            .checked_sub(1)
+            .and_then(|j| numbers.get(j).copied())
+            .and_then(as_strong)
+            .unwrap_or(line);
+        let after = numbers.get(i).copied().and_then(as_strong).unwrap_or(line);
+        let direction = if before == after { before } else { line };
+        for slot in resolved.get_mut(start..i).into_iter().flatten() {
+            *slot = direction;
+        }
+    }
+    resolved
+}
+
+/// Rule L2 on `levels`, each `/ActualText` string one unit: the characters'
+/// indices in the new order, each with whether it sits at an odd level.
+fn reorder(levels: &[u8], joins_previous: &[bool]) -> Vec<(usize, bool)> {
+    // The units, each a range of characters and the level of its first.
+    let mut units: Vec<(usize, usize, u8)> = Vec::new();
+    for (i, level) in levels.iter().enumerate() {
+        match units.last_mut() {
+            Some(unit) if joins_previous.get(i).copied().unwrap_or(false) => unit.1 = i + 1,
+            _ => units.push((i, i + 1, *level)),
+        }
+    }
+    // Rule L2 is an involution on the levels it reverses: from the highest
+    // level down to one, every maximal run at or above it is turned round.
+    let highest = units.iter().map(|unit| unit.2).max().unwrap_or(0);
+    for level in (1..=highest).rev() {
+        let mut i = 0;
+        while i < units.len() {
+            if units.get(i).is_some_and(|unit| unit.2 >= level) {
+                let start = i;
+                while units.get(i).is_some_and(|unit| unit.2 >= level) {
+                    i += 1;
+                }
+                if let Some(run) = units.get_mut(start..i) {
+                    run.reverse();
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+    units
+        .into_iter()
+        .flat_map(|(start, end, level)| (start..end).map(move |i| (i, level % 2 == 1)))
+        .collect()
+}
+
+/// Folds into a number what belongs to it (rules W4 and W5): a single
+/// separator between two digits, and a run of terminators beside one.
+fn absorb_number_punctuation(codes: &[u32], strengths: &mut [Strength]) {
+    let class = |i: usize| codes.get(i).map(|&code| bidi_class(code));
+    let is_number = |strengths: &[Strength], i: Option<usize>| {
+        i.and_then(|i| strengths.get(i)) == Some(&Strength::Number)
+    };
+    for i in 0..codes.len() {
+        if matches!(class(i), Some(BidiClass::Cs | BidiClass::Es))
+            && is_number(strengths, i.checked_sub(1))
+            && is_number(strengths, Some(i + 1))
+            && let Some(slot) = strengths.get_mut(i)
+        {
+            *slot = Strength::Number;
+        }
+    }
+    let mut i = 0;
+    while i < codes.len() {
+        if class(i) != Some(BidiClass::Et) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while class(i) == Some(BidiClass::Et) {
+            i += 1;
+        }
+        if is_number(strengths, start.checked_sub(1)) || is_number(strengths, Some(i)) {
+            for slot in strengths.get_mut(start..i).into_iter().flatten() {
+                *slot = Strength::Number;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -194,6 +411,66 @@ mod tests {
         assert_eq!(Direction::of(u32::from(' ')), Direction::Neutral); // WS
         assert_eq!(Direction::of(u32::from('(')), Direction::Neutral); // ON
         assert_eq!(Direction::of(0x202B), Direction::Neutral); // RLE
+    }
+
+    #[test]
+    fn reordering_the_reordered_line_gives_back_the_original() {
+        // What lets a line laid out by L2 be read back by L2: the levels
+        // travel with their characters, and reversing by them again undoes
+        // the first pass.
+        let joins = [false; 9];
+        for levels in [
+            vec![0, 0, 1, 1, 1, 0, 0],
+            vec![1, 1, 2, 2, 1, 1, 1],
+            vec![0, 1, 2, 2, 1, 0, 1, 2, 1],
+            vec![2, 1, 0, 1, 2],
+            vec![1],
+        ] {
+            let there: Vec<usize> = reorder(&levels, &joins).iter().map(|(i, _)| *i).collect();
+            let laid_out: Vec<u8> = there.iter().map(|&i| levels[i]).collect();
+            let back: Vec<usize> = reorder(&laid_out, &joins)
+                .iter()
+                .map(|(i, _)| there[*i])
+                .collect();
+            assert_eq!(back, (0..levels.len()).collect::<Vec<_>>(), "{levels:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_with_no_right_to_left_letter_is_left_to_the_segmenter() {
+        let joins = [false; 16];
+        assert!(logical_order(&codes("plain text 2024"), &joins, false, false).is_none());
+        // The document's R2L preference does not change which path a Latin
+        // line takes; the segmenter answers it, as the oracle does.
+        assert!(logical_order(&codes("plain text"), &joins, true, false).is_none());
+        // Digits alone follow only a right-to-left line.
+        assert!(logical_order(&codes("3/5."), &joins, false, false).is_none());
+        assert!(logical_order(&codes("3/5."), &joins, false, true).is_some());
+    }
+
+    #[test]
+    fn a_number_keeps_its_separators_and_its_sign() {
+        let text = codes("20% 1,250.50");
+        let mut strengths: Vec<Strength> = text
+            .iter()
+            .map(|&code| match bidi_class(code) {
+                BidiClass::En | BidiClass::An => Strength::Number,
+                _ => Strength::Neutral,
+            })
+            .collect();
+        absorb_number_punctuation(&text, &mut strengths);
+        let numbers: String = text
+            .iter()
+            .zip(&strengths)
+            .map(|(&c, s)| {
+                if *s == Strength::Number {
+                    char::from_u32(c).unwrap_or('?')
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        assert_eq!(numbers, "20%_1,250.50");
     }
 
     #[test]

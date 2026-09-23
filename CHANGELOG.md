@@ -5,6 +5,65 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Breaking
+
+- `Block::List`'s `items` are `Vec<ListItem>`, not `Vec<String>`: an item is
+  its `text` and the `children` nested under it, so a law's subparagraphs
+  stay under their paragraph instead of running into its text.
+  `ListItem: From<&str> + From<String>`, so `vec!["one".into()]` still
+  builds a flat list; `pdfrum::ListItem` re-exports it.
+- `pdfrum_markdown::Options` has a second field, `authors_hyphens`; a struct
+  literal needs `..Options::default()`.
+
+### Fixed
+
+- Markdown: a line wrap between two Chinese or Japanese characters joins
+  with no space (CSS Text 3's segment break rule), so `自己之計算` no longer
+  comes out `自己 之計算`. Korean, which spaces its words, keeps the space.
+- Markdown: a tagged list item without a `LBody` — Chrome's shape — no longer
+  says its label twice (`1. 1. …`).
+- Markdown: a tagged list keeps its document's labels (`一、`, `(a)`, a list
+  starting at 3) instead of renumbering from one.
+- Markdown: a tagged paragraph cut by a page break is joined back on the page
+  it starts on, not split at the `---`.
+- Markdown: a hyphen at a line wrap stays when it is in a compound that has
+  another (`state-of-the-art`) or comes before a capital or digit
+  (`COVID-19`); the text layer's joined-line mark no longer leaks into the
+  output as a U+0002 control character.
+- Markdown: a `-` that ends a line in a Chrome-made PDF (`/Producer
+  Skia/PDF`) is kept, `cross-reference` and all: Chrome draws the hyphens it
+  inserts as U+2010, so a `-` it wraps after was the author's.
+- Markdown: an untagged list nests by indentation, a marker set deeper than
+  its list's opening a list under the item above; a wrapped item whose label
+  is part of its text continues under the label.
+- Markdown: `一、` and `（一）`, a law's 款 and 目, are list markers, and a
+  label closed by full-width punctuation is written without a space after
+  it, as the page sets it.
+- Markdown: an untagged paragraph that a page break cuts mid-sentence, the
+  next page opening lower-case or in a script with no capitals, is joined
+  back on the page it starts on.
+- Markdown: a line of Chinese or Japanese at the foot or head of a page is no
+  longer dropped as a footer for being "three words or fewer": characters
+  count two to a word.
+- Markdown: Thai, Lao, Myanmar and Khmer join across a wrap with no space.
+- Markdown: a glyph that stands for a repeated letter (Devanagari `त्त`)
+  keeps both; only another object drawing the same letter in the same place
+  is a redraw.
+- Text: an `/ActualText` span whose objects the x-sort separates — a Thai
+  mark past the next consonant — is written once, and the gap after it is
+  measured from where its ink ends, so Thai and Devanagari words are not cut
+  by spaces.
+- Text: a right-to-left line is read back in logical order (UAX #9 levels,
+  rule L2 reversed), numbers and `/ActualText` spans kept whole, and its
+  brackets are no longer mirrored twice. Lines with no right-to-left letter
+  drawn as such take the old path unchanged: an `/ActualText` string over
+  glyphs drawn left to right is in logical order already.
+- Text: a page of a few short lines drawn a glyph per object — Chrome's way —
+  is no longer read as a column, one character to a line, when PDFium's
+  coverage guess says column but the glyphs step along a baseline. Pages the
+  guess already reads as lines are untouched; a real column drawn glyph by
+  glyph still reads as one.
+
 ## [0.3.0] - 2026-09-16
 
 ### Breaking

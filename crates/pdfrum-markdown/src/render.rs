@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use crate::ast::{Block, ListMarker, lead_in};
+use crate::ast::{Block, ListItem, ListMarker, lead_in};
 
 /// The blocks as Markdown, blank-line separated, ending in one newline;
 /// every image is `![alt](image)`.
@@ -18,6 +18,12 @@ pub fn render(blocks: &[Block]) -> String {
 /// `CommonMark` spec has it.
 #[must_use]
 pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String>) -> String {
+    render_blocks(blocks, &url)
+}
+
+/// [`render_with_images`] behind a trait object, so a list item's children
+/// render through the same function without a new type at every depth.
+fn render_blocks(blocks: &[Block], url: &dyn Fn(usize) -> Option<String>) -> String {
     let mut out = String::new();
     for block in blocks {
         if !out.is_empty() {
@@ -40,29 +46,7 @@ pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String
                 }
                 out.push('\n');
             }
-            Block::List { marker, items } => {
-                for (i, item) in items.iter().enumerate() {
-                    match marker {
-                        ListMarker::Bullet => out.push_str("- "),
-                        ListMarker::Ordered => {
-                            let _ = write!(out, "{}. ", i + 1);
-                        }
-                        // The document's own label. Markdown numbers an
-                        // ordered list itself and cannot be told to write
-                        // `2.1`, so the label goes in the text of a bullet
-                        // item: the words on the page, in the page's order.
-                        ListMarker::Labelled(labels) => {
-                            out.push_str("- ");
-                            if let Some(label) = labels.get(i) {
-                                out.push_str(&escape(label.trim()));
-                                out.push(' ');
-                            }
-                        }
-                    }
-                    out.push_str(&escape_inline(item.trim()));
-                    out.push('\n');
-                }
-            }
+            Block::List { marker, items } => render_list(&mut out, marker, items, url),
             Block::Code(text) => {
                 // A fence longer than any run of backticks inside.
                 let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or(0);
@@ -99,7 +83,7 @@ pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String
                 }
             }
             Block::Image { alt, index } => {
-                let destination = index.and_then(&url).map_or_else(
+                let destination = index.and_then(url).map_or_else(
                     || "image".to_owned(),
                     |url| {
                         if url.contains(|c: char| c.is_whitespace() || matches!(c, '(' | ')')) {
@@ -114,6 +98,59 @@ pub fn render_with_images(blocks: &[Block], url: impl Fn(usize) -> Option<String
         }
     }
     out
+}
+
+/// A list's items, a line each, what is nested under an item indented to
+/// its text.
+fn render_list(
+    out: &mut String,
+    marker: &ListMarker,
+    items: &[ListItem],
+    url: &dyn Fn(usize) -> Option<String>,
+) {
+    for (i, item) in items.iter().enumerate() {
+        let start = out.len();
+        match marker {
+            ListMarker::Bullet => out.push_str("- "),
+            ListMarker::Ordered => {
+                let _ = write!(out, "{}. ", i + 1);
+            }
+            // The document's own label. Markdown numbers an
+            // ordered list itself and cannot be told to write
+            // `2.1`, so the label goes in the text of a bullet
+            // item: the words on the page, in the page's order.
+            ListMarker::Labelled(labels) => {
+                out.push_str("- ");
+                if let Some(label) = labels.get(i) {
+                    let label = label.trim();
+                    out.push_str(&escape(label));
+                    // `一、有價證券`: a label closed by full-width
+                    // punctuation is set without a space, which the
+                    // punctuation carries in its own width.
+                    if !label.ends_with(['、', '）', '．']) {
+                        out.push(' ');
+                    }
+                }
+            }
+        }
+        // What is nested under the item is indented to its
+        // text, past the marker, which is what makes it the
+        // item's and not the next block.
+        let indent = " ".repeat(
+            out.get(start..)
+                .map_or(2, |marker| marker.find(' ').map_or(2, |n| n + 1)),
+        );
+        out.push_str(&escape_inline(item.text.trim()));
+        out.push('\n');
+        let nested = render_blocks(&item.children, url);
+        for line in nested.lines() {
+            if !line.is_empty() {
+                out.push_str(&indent);
+                out.push_str(line);
+            }
+            out.push('\n');
+        }
+    }
 }
 
 /// A table cell: pipes and line breaks cannot appear inside one.
@@ -158,7 +195,42 @@ fn escape_from(text: &str, at_line_start: bool) -> String {
 mod tests {
     use super::{render, render_with_images};
 
-    use crate::ast::{Block, ListMarker};
+    use crate::ast::{Block, ListItem, ListMarker};
+
+    #[test]
+    fn a_nested_list_is_indented_to_its_items_text() {
+        let subparagraphs = Block::List {
+            marker: ListMarker::Labelled(vec!["一、".into(), "二、".into()]),
+            items: vec![
+                "承銷。".into(),
+                ListItem {
+                    text: "自行買賣，其範圍如下：".into(),
+                    children: vec![Block::List {
+                        marker: ListMarker::Bullet,
+                        items: vec!["（一）上市有價證券。".into()],
+                    }],
+                },
+            ],
+        };
+        let article = [Block::List {
+            marker: ListMarker::Ordered,
+            items: vec![
+                ListItem {
+                    text: "證券商之業務如下：".into(),
+                    children: vec![subparagraphs],
+                },
+                "前項業務，應經許可。".into(),
+            ],
+        }];
+        assert_eq!(
+            render(&article),
+            "1. 證券商之業務如下：\n   \
+             - 一、承銷。\n   \
+             - 二、自行買賣，其範圍如下：\n     \
+             - （一）上市有價證券。\n\
+             2. 前項業務，應經許可。\n"
+        );
+    }
 
     #[test]
     fn every_block_kind_renders_as_expected() {

@@ -15,7 +15,7 @@ use pdfrum_doc::structure::StructTree;
 use pdfrum_object::Resolve;
 use pdfrum_page::Page;
 
-pub use ast::Block;
+pub use ast::{Block, ListItem};
 pub use lines::{DrawnImage, Line};
 pub use render::{render, render_with_images};
 
@@ -25,6 +25,13 @@ pub struct Options {
     /// Whether the document reads right to left (`/ViewerPreferences
     /// /Direction /R2L`); the extractor orders bidirectional text by it.
     pub rtl: bool,
+    /// Whether a hyphen that ends a line is the author's, never the
+    /// typesetter's. True of a producer known to draw its own hyphens as a
+    /// different character — Chrome (`Skia/PDF`) draws `U+2010` where it
+    /// hyphenates — so a `-` it wraps after is the word's and stays:
+    /// `cross-reference`, not `crossreference`. False, the default, leaves
+    /// the break to the guess [`heuristics`] makes.
+    pub authors_hyphens: bool,
 }
 
 /// One page of a document, for [`document_blocks`].
@@ -54,10 +61,28 @@ fn content<R: Resolve>(page: &Page, resolver: &R, options: Options, limits: &Lim
         &mut diags,
     );
     let facts = lines::ObjectFacts::from_page(page);
+    let mut lines = lines::lines(&text, &facts);
+    if options.authors_hyphens {
+        for line in &mut lines {
+            authors_hyphen(&mut line.text);
+            for segment in &mut line.segments {
+                authors_hyphen(&mut segment.text);
+            }
+        }
+    }
     Content {
-        lines: lines::lines(&text, &facts),
+        lines,
         images: facts.images().to_vec(),
         crop_box: page.crop_box,
+    }
+}
+
+/// The text layer's mark for a line that ended in a hyphen and was joined
+/// to the next — `U+0002` in the records, `U+00AD` in the text — put back
+/// as the hyphen it was.
+fn authors_hyphen(text: &mut String) {
+    if text.contains(['\u{2}', '\u{ad}']) {
+        *text = text.replace(['\u{2}', '\u{ad}'], "-");
     }
 }
 
@@ -154,11 +179,70 @@ pub fn document_blocks<R: Resolve>(
         let mut dropped = mask.iter().copied();
         content.lines.retain(|_| !dropped.next().unwrap_or(false));
     }
-    contents
+    let mut blocks: Vec<Vec<Block>> = contents
         .iter()
         .zip(pages)
         .map(|(content, input)| blocks_of(content, input.tree, resolver))
-        .collect()
+        .collect();
+    rejoin_across_pages(&mut blocks, pages);
+    blocks
+}
+
+/// A paragraph the page break cut in two, put back together on the page it
+/// starts on. The structure tree says so exactly: one paragraph element
+/// with content on both pages. Without one, typography guesses, and only
+/// where a wrong guess is unlikely — see [`carries_on`].
+fn rejoin_across_pages(blocks: &mut [Vec<Block>], pages: &[PageInput<'_>]) {
+    for i in 1..blocks.len().min(pages.len()) {
+        let (Some(before), Some(after)) = (pages.get(i - 1), pages.get(i)) else {
+            continue;
+        };
+        let tagged = match (before.tree, after.tree) {
+            (Some(a), Some(b)) => Some(tagged::paragraph_spans(a, b)),
+            _ => None,
+        };
+        if tagged == Some(false) {
+            continue;
+        }
+        let (head, tail) = blocks.split_at_mut(i);
+        // The page it started on, past any page it wholly filled.
+        let Some(Block::Paragraph(open)) = head
+            .iter_mut()
+            .rev()
+            .find(|page| !page.is_empty())
+            .and_then(|page| page.last_mut())
+        else {
+            continue;
+        };
+        let Some(page) = tail.first_mut() else {
+            continue;
+        };
+        let joins = match page.first() {
+            Some(Block::Paragraph(rest)) => tagged.is_some() || carries_on(open, rest),
+            _ => false,
+        };
+        if joins && let Block::Paragraph(rest) = page.remove(0) {
+            heuristics::join(open, &rest);
+        }
+    }
+}
+
+/// Whether an untagged page's last paragraph, `before`, runs on into the
+/// next page's first, `after`: `before` stops without the punctuation that
+/// ends a sentence or closes a quote, and `after` opens lower-case — which
+/// no sentence and no heading does — or in a script with no capitals, where
+/// the missing full stop is all there is to go on.
+fn carries_on(before: &str, after: &str) -> bool {
+    const FINISHED: &[char] = &[
+        '.', '!', '?', ':', ';', '…', '"', '\'', ')', ']', '”', '’', '。', '！', '？', '：', '；',
+        '」', '』', '）', '】', '》',
+    ];
+    !before.trim_end().ends_with(FINISHED)
+        && after
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_lowercase() || heuristics::joins_unspaced(c))
 }
 
 /// The page as Markdown: [`page_blocks`] then [`render()`].
@@ -183,4 +267,32 @@ pub fn page_layout<R: Resolve>(
     limits: &Limits,
 ) -> String {
     layout::layout(&page_lines(page, resolver, options, limits), page.crop_box)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{authors_hyphen, carries_on};
+
+    #[test]
+    fn an_untagged_paragraph_carries_on_only_mid_sentence_into_a_lower_case_word() {
+        assert!(carries_on(
+            "the parser recovers from a damaged",
+            "table and reports"
+        ));
+        assert!(carries_on(
+            "證券商應以自己之計算買賣有價",
+            "證券，並應依規定辦理。"
+        ));
+        assert!(!carries_on("It ends here.", "and yet"));
+        assert!(!carries_on("辦理相關之申報事項。", "證券商"));
+        // A heading-less section title, and a sentence that could open one.
+        assert!(!carries_on("Introduction", "The parser"));
+    }
+
+    #[test]
+    fn the_text_layers_hyphen_mark_is_put_back_as_a_hyphen() {
+        let mut text = "a cross\u{2}reference and a cross\u{ad}check".to_owned();
+        authors_hyphen(&mut text);
+        assert_eq!(text, "a cross-reference and a cross-check");
+    }
 }

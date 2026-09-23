@@ -9,7 +9,7 @@ pub pdfrum_markdown::ast::Block::Image
 pub pdfrum_markdown::ast::Block::Image::alt: alloc::string::String
 pub pdfrum_markdown::ast::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::ast::Block::List
-pub pdfrum_markdown::ast::Block::List::items: alloc::vec::Vec<alloc::string::String>
+pub pdfrum_markdown::ast::Block::List::items: alloc::vec::Vec<pdfrum_markdown::ast::ListItem>
 pub pdfrum_markdown::ast::Block::List::marker: pdfrum_markdown::ast::ListMarker
 pub pdfrum_markdown::ast::Block::Paragraph(alloc::string::String)
 pub pdfrum_markdown::ast::Block::Table(alloc::vec::Vec<alloc::vec::Vec<alloc::string::String>>)
@@ -19,6 +19,15 @@ pub enum pdfrum_markdown::ast::ListMarker
 pub pdfrum_markdown::ast::ListMarker::Bullet
 pub pdfrum_markdown::ast::ListMarker::Labelled(alloc::vec::Vec<alloc::string::String>)
 pub pdfrum_markdown::ast::ListMarker::Ordered
+pub struct pdfrum_markdown::ast::ListItem
+pub pdfrum_markdown::ast::ListItem::children: alloc::vec::Vec<pdfrum_markdown::ast::Block>
+pub pdfrum_markdown::ast::ListItem::text: alloc::string::String
+impl pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::all_text(&self) -> alloc::string::String
+impl core::convert::From<&str> for pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::from(alloc::string::String) -> Self
 pub fn pdfrum_markdown::ast::lead_in(&str) -> core::option::Option<(&str, &str)>
 pub mod pdfrum_markdown::heuristics
 pub fn pdfrum_markdown::heuristics::blocks(&[pdfrum_markdown::lines::Line], &[pdfrum_markdown::lines::DrawnImage], kurbo::rect::Rect) -> alloc::vec::Vec<pdfrum_markdown::ast::Block>
@@ -76,7 +85,7 @@ pub pdfrum_markdown::Block::Image
 pub pdfrum_markdown::Block::Image::alt: alloc::string::String
 pub pdfrum_markdown::Block::Image::index: core::option::Option<usize>
 pub pdfrum_markdown::Block::List
-pub pdfrum_markdown::Block::List::items: alloc::vec::Vec<alloc::string::String>
+pub pdfrum_markdown::Block::List::items: alloc::vec::Vec<pdfrum_markdown::ast::ListItem>
 pub pdfrum_markdown::Block::List::marker: pdfrum_markdown::ast::ListMarker
 pub pdfrum_markdown::Block::Paragraph(alloc::string::String)
 pub pdfrum_markdown::Block::Table(alloc::vec::Vec<alloc::vec::Vec<alloc::string::String>>)
@@ -95,7 +104,17 @@ pub pdfrum_markdown::Line::mcids: alloc::vec::Vec<i64>
 pub pdfrum_markdown::Line::mono: bool
 pub pdfrum_markdown::Line::segments: alloc::vec::Vec<pdfrum_markdown::lines::Segment>
 pub pdfrum_markdown::Line::text: alloc::string::String
+pub struct pdfrum_markdown::ListItem
+pub pdfrum_markdown::ListItem::children: alloc::vec::Vec<pdfrum_markdown::ast::Block>
+pub pdfrum_markdown::ListItem::text: alloc::string::String
+impl pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::all_text(&self) -> alloc::string::String
+impl core::convert::From<&str> for pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for pdfrum_markdown::ast::ListItem
+pub fn pdfrum_markdown::ast::ListItem::from(alloc::string::String) -> Self
 pub struct pdfrum_markdown::Options
+pub pdfrum_markdown::Options::authors_hyphens: bool
 pub pdfrum_markdown::Options::rtl: bool
 pub struct pdfrum_markdown::PageInput<'a>
 pub pdfrum_markdown::PageInput::page: &'a pdfrum_page::page::Page
