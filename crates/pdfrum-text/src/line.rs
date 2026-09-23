@@ -165,12 +165,43 @@ pub struct Output {
 /// `rtl` is the document's `/ViewerPreferences /Direction (R2L)` flag, and
 /// is the *only* thing that flips a whole line — the auto-order heuristic is
 /// deliberately not run here.
-pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
+///
+/// All of that is for a line without a right-to-left letter in it. One with
+/// is put in logical order by [`bidi::logical_order`] instead, each
+/// `/ActualText` string moving as one piece; see there for why. So is a line
+/// of only digits and punctuation when `after_right` says the line before it
+/// read right to left. Returns whether this one did.
+pub fn close(line: &mut Line, out: &mut Output, rtl: bool, after_right: bool) -> bool {
     if line.is_empty() {
-        return;
+        return after_right;
     }
     line.collapse_spaces();
     let (text, chars) = line.take();
+
+    // One `/ActualText` string is the characters one object wrote out of it,
+    // side by side.
+    let joins_previous: Vec<bool> = chars
+        .iter()
+        .enumerate()
+        .map(|(i, info)| {
+            i.checked_sub(1)
+                .and_then(|j| chars.get(j))
+                .is_some_and(|previous| {
+                    info.char_type == CharType::ActualText
+                        && previous.char_type == CharType::ActualText
+                        && info.object.is_some()
+                        && previous.object == info.object
+                })
+        })
+        .collect();
+    if let Some((order, right)) = bidi::logical_order(&text, &joins_previous, rtl, after_right) {
+        for (i, is_rtl) in order {
+            if let (Some(unit), Some(info)) = (text.get(i), chars.get(i)) {
+                add(*unit, *info, is_rtl, false, out);
+            }
+        }
+        return right;
+    }
 
     let mut segmented = bidi::segments(&text, false);
     if rtl {
@@ -194,11 +225,11 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
                 .is_some_and(|info| info.char_type == CharType::ActualText);
             if actual_text {
                 for (unit, info) in units.iter().zip(infos) {
-                    add(*unit, *info, true, out);
+                    add(*unit, *info, true, true, out);
                 }
             } else {
                 for (unit, info) in units.iter().zip(infos).rev() {
-                    add(*unit, *info, true, out);
+                    add(*unit, *info, true, true, out);
                 }
             }
         } else {
@@ -208,10 +239,11 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
                 current = Direction::Left;
             }
             for (unit, info) in units.iter().zip(infos) {
-                add(*unit, *info, false, out);
+                add(*unit, *info, false, false, out);
             }
         }
     }
+    false
 }
 
 /// Pushes one character into the final output (`AddCharInfo`).
@@ -230,12 +262,19 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
 ///    disagree about a space.
 /// 3. Normalization multiplies one character record into several, all sharing
 ///    one box, origin and matrix, and retypes them as pieces.
-fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
+///
+/// `mirror` swaps a bracket for its pair, which the segmenter's lines ask for
+/// in every right-to-left run. A line [`bidi::logical_order`] reorders does
+/// not: `[oracle-bug]` a `/ToUnicode` map says what a glyph stands for, and a
+/// shaper that drew the mirrored glyph for `(` at the right-hand end of a
+/// Hebrew phrase still maps it to `(` — Chrome does, and poppler reads it
+/// that way — so mirroring it again writes `)בתוקף(` for `(בתוקף)`.
+fn add(unit: u32, info: CharBox, is_rtl: bool, mirror: bool, out: &mut Output) {
     if !info.is_normal() {
         out.chars.push(info);
         return;
     }
-    let unit = if is_rtl { mirror_char(unit) } else { unit };
+    let unit = if mirror { mirror_char(unit) } else { unit };
     // `[oracle-bug]` The NFKC space normalization, applied to **every**
     // character rather than only inside a right-to-left run. `AddCharInfo`
     // (`cpdf_textpage.cpp:793-795`) consults `GetUnicodeNormalization` — whose
@@ -280,7 +319,14 @@ fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
         out.chars.push(modified);
         return;
     }
-    modified.char_type = CharType::Piece;
+    // `[oracle-bug]` A generated space stays generated. PDFium retypes it
+    // with every other right-to-left character, and a caller asking which
+    // spaces the page drew — the Markdown tier, which files a generated space
+    // with the text before it and a drawn one with no object nowhere — loses
+    // every space between two Hebrew words.
+    if info.char_type != CharType::Generated {
+        modified.char_type = CharType::Piece;
+    }
     for piece in normalized {
         modified.unicode = piece;
         out.text.push(piece);
@@ -370,9 +416,9 @@ mod tests {
         // and starting with a space keep both.
         let mut out = Output::default();
         let mut line = staged("a ");
-        close(&mut line, &mut out, false);
+        close(&mut line, &mut out, false, false);
         let mut line = staged(" b");
-        close(&mut line, &mut out, false);
+        close(&mut line, &mut out, false, false);
         assert_eq!(rendered(&out), "a  b");
     }
 
@@ -397,7 +443,7 @@ mod tests {
     #[test]
     fn a_left_to_right_line_passes_straight_through() {
         let mut out = Output::default();
-        close(&mut staged("hello"), &mut out, false);
+        close(&mut staged("hello"), &mut out, false, false);
         assert_eq!(rendered(&out), "hello");
         assert_eq!(out.chars.len(), 5);
     }
@@ -406,20 +452,90 @@ mod tests {
     fn a_right_to_left_segment_comes_out_in_logical_order() {
         // Hebrew, built in visual order, read back logically.
         let mut out = Output::default();
-        close(&mut staged("\u{05D0}\u{05D1}\u{05D2}"), &mut out, false);
+        close(
+            &mut staged("\u{05D0}\u{05D1}\u{05D2}"),
+            &mut out,
+            false,
+            false,
+        );
         assert_eq!(rendered(&out), "\u{05D2}\u{05D1}\u{05D0}");
     }
 
     #[test]
-    fn a_right_to_left_segment_mirrors_its_brackets() {
+    fn a_right_to_left_line_keeps_its_brackets_as_mapped() {
         let mut out = Output::default();
-        // A Hebrew letter then a bracket. The bracket is a *neutral* segment
-        // following a right-directional one, so it inherits the direction and
-        // mirrors -- but the two are separate segments, and segment order is
-        // not reversed here, only the characters within each one. So the
-        // letter still comes first and the bracket comes back mirrored.
-        close(&mut staged("\u{05D0}("), &mut out, false);
-        assert_eq!(rendered(&out), "\u{05D0})");
+        // A Hebrew letter with a bracket to its right: read right to left,
+        // the bracket comes first, and it is the `(` the page mapped it to.
+        // PDFium kept the letter first and mirrored the bracket, `א)`.
+        close(&mut staged("\u{05D0}("), &mut out, false, false);
+        assert_eq!(rendered(&out), "(\u{05D0}");
+        // `(בתוקף)` as Chrome lays it out: `)` at the left, `(` at the right.
+        let mut out = Output::default();
+        close(&mut staged(")ףקותב("), &mut out, false, false);
+        assert_eq!(rendered(&out), "(בתוקף)");
+    }
+
+    #[test]
+    fn a_right_to_left_line_comes_out_word_by_word_in_logical_order() {
+        // `חוק זה 2024`, placed left to right: the number, then each word
+        // with its letters reversed. The number keeps its digits' order.
+        let mut out = Output::default();
+        close(&mut staged("2024 הז קוח"), &mut out, false, false);
+        assert_eq!(rendered(&out), "חוק זה 2024");
+        // A Latin word inside a Hebrew line stays one word, the right way
+        // round; a number with its separators and sign is one number.
+        let mut out = Output::default();
+        close(&mut staged("PDF ץבוק 1,250.50 ₪"), &mut out, false, false);
+        assert_eq!(rendered(&out), "₪ 1,250.50 קובץ PDF");
+    }
+
+    #[test]
+    fn a_hebrew_word_inside_a_latin_line_is_turned_round_alone() {
+        let mut out = Output::default();
+        close(
+            &mut staged("The word םולש means peace"),
+            &mut out,
+            false,
+            false,
+        );
+        assert_eq!(rendered(&out), "The word שלום means peace");
+    }
+
+    #[test]
+    fn a_line_of_only_digits_follows_the_line_before_it() {
+        // `3/5.` wrapped alone after an Arabic line, placed with the stop at
+        // the left: read right to left it is the stop that comes last.
+        let mut out = Output::default();
+        let right = close(&mut staged(".3/5"), &mut out, false, true);
+        assert_eq!(rendered(&out), "3/5.");
+        assert!(right);
+        // After a left-to-right line, the same characters are left alone.
+        let mut out = Output::default();
+        let right = close(&mut staged(".3/5"), &mut out, false, false);
+        assert_eq!(rendered(&out), ".3/5");
+        assert!(!right);
+    }
+
+    #[test]
+    fn an_actual_text_string_moves_as_one_piece() {
+        // Two Arabic letters, each written from its own `/ActualText`, the
+        // way Chrome marks a shaped cluster: `يع` placed visually as `ع`, `ي`.
+        // Each string is already logical and is not turned round inside;
+        // the strings themselves are put in reading order.
+        let mut line = Line::default();
+        let mut marked = |text: &str, object: u32| {
+            for ch in text.chars() {
+                let mut record = info(u32::from(ch));
+                record.char_type = CharType::ActualText;
+                record.object = Some(crate::charinfo::ObjectIndex(object));
+                line.push(u32::from(ch), record);
+            }
+        };
+        marked("لم", 0);
+        marked("يع", 1);
+        let mut out = Output::default();
+        close(&mut line, &mut out, false, false);
+        assert_eq!(rendered(&out), "يعلم");
     }
 
     #[test]
@@ -429,7 +545,7 @@ mod tests {
         line.push(0x03, info(0x03));
         line.push(u32::from('b'), info(u32::from('b')));
         let mut out = Output::default();
-        close(&mut line, &mut out, false);
+        close(&mut line, &mut out, false, false);
         assert_eq!(rendered(&out), "ab");
         assert_eq!(char_units(&out), [u32::from('a'), 0x03, u32::from('b')]);
     }
@@ -448,7 +564,7 @@ mod tests {
         line.push(u32::from('s'), info(u32::from('s')));
 
         let mut out = Output::default();
-        close(&mut line, &mut out, false);
+        close(&mut line, &mut out, false, false);
         // The text keeps the soft hyphen; the character list keeps 0x2.
         assert_eq!(out.text, [u32::from('a'), 0x00AD, u32::from('s')]);
         assert_eq!(char_units(&out), [u32::from('a'), 0x02, u32::from('s')]);
@@ -459,7 +575,7 @@ mod tests {
     #[test]
     fn a_latin_ligature_normalizes_even_left_to_right() {
         let mut out = Output::default();
-        close(&mut staged("a\u{FB01}b"), &mut out, false);
+        close(&mut staged("a\u{FB01}b"), &mut out, false, false);
         assert_eq!(rendered(&out), "afib");
         // The two pieces share one record's geometry and are retyped.
         assert_eq!(out.chars.len(), 4);
@@ -475,7 +591,7 @@ mod tests {
     #[test]
     fn a_no_break_space_normalizes_in_either_direction() {
         let mut out = Output::default();
-        close(&mut staged("a\u{00A0}b"), &mut out, false);
+        close(&mut staged("a\u{00A0}b"), &mut out, false, false);
         assert_eq!(rendered(&out), "a b");
         // Not retyped as a piece: the space normalization is a substitution,
         // not a decomposition, so the record stays a normal character.
@@ -490,7 +606,7 @@ mod tests {
     #[test]
     fn an_accented_letter_is_not_normalized_left_to_right() {
         let mut out = Output::default();
-        close(&mut staged("a\u{00C0}b"), &mut out, false);
+        close(&mut staged("a\u{00C0}b"), &mut out, false, false);
         assert_eq!(rendered(&out), "a\u{00C0}b");
         assert_eq!(out.chars[1].unicode, 0x00C0);
     }
@@ -498,7 +614,7 @@ mod tests {
     #[test]
     fn the_r2l_preference_flips_a_whole_line() {
         let mut out = Output::default();
-        close(&mut staged("ab"), &mut out, true);
+        close(&mut staged("ab"), &mut out, true, false);
         // A pure-Latin line under an R2L preference has its one left segment
         // emitted as-is, but the overall direction starts Right, so the
         // leading zero-count neutral segment counts as right-directional.
@@ -508,7 +624,7 @@ mod tests {
     #[test]
     fn an_empty_line_closes_to_nothing() {
         let mut out = Output::default();
-        close(&mut Line::default(), &mut out, false);
+        close(&mut Line::default(), &mut out, false, false);
         assert!(out.chars.is_empty() && out.text.is_empty());
     }
 }
