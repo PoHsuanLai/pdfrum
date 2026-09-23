@@ -57,6 +57,11 @@ first crates.io release.
   rule L2 reversed), numbers and `/ActualText` spans kept whole, and its
   brackets are no longer mirrored twice. Lines with no right-to-left letter
   take the old path unchanged.
+- Text: a page of a few short lines drawn a glyph per object — Chrome's way —
+  is no longer read as a column, one character to a line, when PDFium's
+  coverage guess says column but the glyphs step along a baseline. Pages the
+  guess already reads as lines are untouched; a real column drawn glyph by
+  glyph still reads as one.
 
 ## [0.3.0] - 2026-09-16
 
