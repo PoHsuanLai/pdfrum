@@ -165,6 +165,9 @@ pub(crate) struct Builder<'a, R: Resolve> {
     display: Affine,
     /// `/ViewerPreferences /Direction (R2L)`.
     rtl: bool,
+    /// Whether the last line closed read right to left, which a line of
+    /// nothing but digits and punctuation follows.
+    after_right: bool,
     /// Whether this page's spaces-only objects are kept.
     ///
     /// They are normally dropped, as PDFium drops them, because the
@@ -255,6 +258,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
             line_rect: Rect::ZERO,
             display,
             rtl,
+            after_right: false,
             // Exactly one object on the page and it draws only spaces, so
             // there is no second object to act as the neighbour a separator
             // would be generated against, and what is lost is the space the
@@ -399,7 +403,8 @@ impl<'a, R: Resolve> Builder<'a, R> {
 
     /// Closes the staging line into the final output.
     pub(crate) fn close_line(&mut self) {
-        crate::line::close(&mut self.line, &mut self.out, self.rtl);
+        self.after_right =
+            crate::line::close(&mut self.line, &mut self.out, self.rtl, self.after_right);
     }
 
     // -- marked content ----------------------------------------------------

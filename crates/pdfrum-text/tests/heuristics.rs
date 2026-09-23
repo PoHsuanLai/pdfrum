@@ -329,6 +329,19 @@ fn a_span_is_measured_from_where_its_ink_ends() {
     assert_eq!(text(&page), "mi n");
 }
 
+#[test]
+fn arabic_letters_marked_one_by_one_read_right_to_left() {
+    // Chrome marks each shaped Arabic letter with its own `/ActualText` and
+    // lays the word out left to right: `ع` then `ي` for `يع`, then `ل`
+    // after a gap for the next word.
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td /Span << /ActualText <FEFF0639> >> BDC (a) Tj EMC \
+         5.328 0 Td /Span << /ActualText <FEFF064A> >> BDC (b) Tj EMC \
+         15 0 Td /Span << /ActualText <FEFF0644> >> BDC (c) Tj EMC ET",
+    );
+    assert_eq!(text(&page), "\u{0644} \u{064A}\u{0639}");
+}
+
 // ---------------------------------------------------------------------------
 // The character-code-zero path
 
