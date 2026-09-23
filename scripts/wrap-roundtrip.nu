@@ -103,8 +103,8 @@ def main [
             $samples | each {|s|
                 # A soft hyphen is where the word may break, not a character
                 # of it: it comes back as nothing, wrap or no wrap.
-                let text = ($s.text | str replace --all "\u{ad}" '')
-                let want = if $s.kind == 'li' { $'1. (squash $text)' } else { squash $text }
+                let source = ($s.text | str replace --all "\u{ad}" '')
+                let want = if $s.kind == 'li' { $'1. (squash $source)' } else { squash $source }
                 let ok = ($text | str contains $want)
                 # The line most like the sample: the one that shares its
                 # opening, so a miss shows what came back instead.

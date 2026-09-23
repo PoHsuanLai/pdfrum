@@ -122,8 +122,14 @@ fn render_list(
             ListMarker::Labelled(labels) => {
                 out.push_str("- ");
                 if let Some(label) = labels.get(i) {
-                    out.push_str(&escape(label.trim()));
-                    out.push(' ');
+                    let label = label.trim();
+                    out.push_str(&escape(label));
+                    // `一、有價證券`: a label closed by full-width
+                    // punctuation is set without a space, which the
+                    // punctuation carries in its own width.
+                    if !label.ends_with(['、', '）', '．']) {
+                        out.push(' ');
+                    }
                 }
             }
         }
@@ -219,8 +225,8 @@ mod tests {
         assert_eq!(
             render(&article),
             "1. 證券商之業務如下：\n   \
-             - 一、 承銷。\n   \
-             - 二、 自行買賣，其範圍如下：\n     \
+             - 一、承銷。\n   \
+             - 二、自行買賣，其範圍如下：\n     \
              - （一）上市有價證券。\n\
              2. 前項業務，應經許可。\n"
         );
