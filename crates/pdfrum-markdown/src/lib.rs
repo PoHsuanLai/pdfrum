@@ -15,7 +15,7 @@ use pdfrum_doc::structure::StructTree;
 use pdfrum_object::Resolve;
 use pdfrum_page::Page;
 
-pub use ast::Block;
+pub use ast::{Block, ListItem};
 pub use lines::{DrawnImage, Line};
 pub use render::{render, render_with_images};
 
@@ -154,11 +154,50 @@ pub fn document_blocks<R: Resolve>(
         let mut dropped = mask.iter().copied();
         content.lines.retain(|_| !dropped.next().unwrap_or(false));
     }
-    contents
+    let mut blocks: Vec<Vec<Block>> = contents
         .iter()
         .zip(pages)
         .map(|(content, input)| blocks_of(content, input.tree, resolver))
-        .collect()
+        .collect();
+    rejoin_across_pages(&mut blocks, pages);
+    blocks
+}
+
+/// A paragraph the page break cut in two, put back together on the page it
+/// starts on. The structure tree says so exactly: one paragraph element
+/// with content on both pages. Typography alone could only guess, and
+/// guesses wrong at every heading-less section break, so an untagged
+/// document keeps its pages as they are.
+fn rejoin_across_pages(blocks: &mut [Vec<Block>], pages: &[PageInput<'_>]) {
+    for i in 1..blocks.len().min(pages.len()) {
+        let (Some(before), Some(after)) = (pages.get(i - 1), pages.get(i)) else {
+            continue;
+        };
+        let (Some(a), Some(b)) = (before.tree, after.tree) else {
+            continue;
+        };
+        if !tagged::paragraph_spans(a, b) {
+            continue;
+        }
+        let (head, tail) = blocks.split_at_mut(i);
+        // The page it started on, past any page it wholly filled.
+        let Some(Block::Paragraph(open)) = head
+            .iter_mut()
+            .rev()
+            .find(|page| !page.is_empty())
+            .and_then(|page| page.last_mut())
+        else {
+            continue;
+        };
+        let Some(page) = tail.first_mut() else {
+            continue;
+        };
+        if let Some(Block::Paragraph(_)) = page.first()
+            && let Block::Paragraph(rest) = page.remove(0)
+        {
+            heuristics::join(open, &rest);
+        }
+    }
 }
 
 /// The page as Markdown: [`page_blocks`] then [`render()`].

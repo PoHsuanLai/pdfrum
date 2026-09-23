@@ -5,6 +5,42 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Breaking
+
+- `Block::List`'s `items` are `Vec<ListItem>`, not `Vec<String>`: an item is
+  its `text` and the `children` nested under it, so a law's subparagraphs
+  stay under their paragraph instead of running into its text.
+  `ListItem: From<&str> + From<String>`, so `vec!["one".into()]` still
+  builds a flat list; `pdfrum::ListItem` re-exports it.
+
+### Fixed
+
+- Markdown: a line wrap between two Chinese or Japanese characters joins
+  with no space (CSS Text 3's segment break rule), so `自己之計算` no longer
+  comes out `自己 之計算`. Korean, which spaces its words, keeps the space.
+- Markdown: a tagged list item without a `LBody` — Chrome's shape — no longer
+  says its label twice (`1. 1. …`).
+- Markdown: a tagged list keeps its document's labels (`一、`, `(a)`, a list
+  starting at 3) instead of renumbering from one.
+- Markdown: a tagged paragraph cut by a page break is joined back on the page
+  it starts on, not split at the `---`.
+- Markdown: a hyphen at a line wrap stays when it is in a compound that has
+  another (`state-of-the-art`) or comes before a capital or digit
+  (`COVID-19`); the text layer's joined-line mark no longer leaks into the
+  output as a U+0002 control character.
+- Markdown: Thai, Lao, Myanmar and Khmer join across a wrap with no space.
+- Markdown: a glyph that stands for a repeated letter (Devanagari `त्त`)
+  keeps both; only another object drawing the same letter in the same place
+  is a redraw.
+- Text: an `/ActualText` span whose objects the x-sort separates — a Thai
+  mark past the next consonant — is written once, and the gap after it is
+  measured from where its ink ends, so Thai and Devanagari words are not cut
+  by spaces.
+- Text: a right-to-left line is read back in logical order (UAX #9 levels,
+  rule L2 reversed), numbers and `/ActualText` spans kept whole, and its
+  brackets are no longer mirrored twice. Lines with no right-to-left letter
+  take the old path unchanged.
+
 ## [0.3.0] - 2026-09-16
 
 ### Breaking
