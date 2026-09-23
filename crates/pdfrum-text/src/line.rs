@@ -23,7 +23,7 @@
 
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
-use crate::unicode::{mirror_char, normalize, normalize_space};
+use crate::unicode::{BidiClass, bidi_class, mirror_char, normalize, normalize_space};
 use smallvec::SmallVec;
 
 /// The two staging buffers, kept one-to-one.
@@ -157,6 +157,49 @@ pub struct Output {
 /// Closes a line: collapse spaces, segment by direction, and move every
 /// character into the final output (`CloseTempLine`).
 ///
+/// Whether the page drew anything on the line right to left, which is the
+/// only order [`bidi::logical_order`] can undo. A letter drawn as itself
+/// was, and so was an `/ActualText` string unless its boxes step
+/// rightwards: the extractor steps them leftwards over a right-to-left
+/// object, and a string one character long, Chrome's mark on each Arabic
+/// letter, does not step at all. A longer string stepping rightwards stands
+/// in for glyphs drawn left to right — `RTLb` drawn, `שלום` meant — and is
+/// in logical order already, as is a line of nothing else: a line with no
+/// right-to-left letter at all is `true` too, so a line of digits can
+/// still follow a right-to-left one before it.
+fn draws_right_to_left(text: &[u32], chars: &[CharBox], joins_previous: &[bool]) -> bool {
+    let is_right = |code: u32| matches!(bidi_class(code), BidiClass::R | BidiClass::Al);
+    if !text.iter().any(|&code| is_right(code)) {
+        return true;
+    }
+    let mut start = 0;
+    while start < text.len() {
+        // One unit: a character, or an `/ActualText` string whose
+        // characters join the one before.
+        let end = (start + 1..text.len())
+            .find(|&i| !joins_previous.get(i).copied().unwrap_or(false))
+            .unwrap_or(text.len());
+        let units = text.get(start..end).unwrap_or_default();
+        if units.iter().any(|&code| is_right(code)) {
+            let actual = chars
+                .get(start)
+                .is_some_and(|c| c.char_type == CharType::ActualText);
+            let rightwards = match (
+                chars.get(start),
+                end.checked_sub(1).and_then(|l| chars.get(l)),
+            ) {
+                (Some(first), Some(last)) => last.char_box.x0 > first.char_box.x0,
+                _ => false,
+            };
+            if !actual || units.len() == 1 || !rightwards {
+                return true;
+            }
+        }
+        start = end;
+    }
+    false
+}
+
 /// Right-to-left segments are emitted **backwards**, so the characters land
 /// in logical order in a buffer that was built in visual order. A segment
 /// whose first character came from `/ActualText` is the exception: it is
@@ -194,7 +237,11 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool, after_right: bool) ->
                 })
         })
         .collect();
-    if let Some((order, right)) = bidi::logical_order(&text, &joins_previous, rtl, after_right) {
+    let reorders = rtl || draws_right_to_left(&text, &chars, &joins_previous);
+    if let Some((order, right)) = reorders
+        .then(|| bidi::logical_order(&text, &joins_previous, rtl, after_right))
+        .flatten()
+    {
         for (i, is_rtl) in order {
             if let (Some(unit), Some(info)) = (text.get(i), chars.get(i)) {
                 add(*unit, *info, is_rtl, false, out);
@@ -473,6 +520,30 @@ mod tests {
         let mut out = Output::default();
         close(&mut staged(")ףקותב("), &mut out, false, false);
         assert_eq!(rendered(&out), "(בתוקף)");
+    }
+
+    #[test]
+    fn an_actual_text_string_over_glyphs_drawn_left_to_right_keeps_its_order() {
+        // `Hu ` drawn, then `/ActualText` `שלום Ha מים` over the Latin
+        // placeholder `RLR`: the string's boxes step rightwards, so it was
+        // laid down in logical order and nothing on the line is reordered.
+        let mut line = staged("Hu ");
+        for (i, ch) in "שלום Ha מים".chars().enumerate() {
+            let x = 20.0 + 5.0 * i as f64;
+            line.push(
+                u32::from(ch),
+                CharBox {
+                    char_type: CharType::ActualText,
+                    code: None,
+                    object: Some(crate::ObjectIndex(7)),
+                    char_box: Rect::new(x, 0.0, x + 5.0, 10.0),
+                    ..info(u32::from(ch))
+                },
+            );
+        }
+        let mut out = Output::default();
+        close(&mut line, &mut out, false, false);
+        assert_eq!(rendered(&out), "Hu שלום Ha מים");
     }
 
     #[test]
