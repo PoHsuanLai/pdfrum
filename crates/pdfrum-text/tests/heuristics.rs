@@ -206,6 +206,28 @@ fn a_page_whose_text_lives_inside_a_form_scans_nothing() {
     assert_eq!(text(&page), "hello");
 }
 
+#[test]
+fn two_short_lines_drawn_glyph_by_glyph_are_not_a_column() {
+    // Chrome's layout: every glyph its own object. Two close lines of spaced
+    // glyphs fill little of their width band and much of their height band,
+    // so the page-global guess reads a column, and every glyph ended a
+    // vertical line of its own.
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td (a) Tj 10 0 Td (b) Tj 10 0 Td (c) Tj ET \
+         BT /F1 12 Tf 20 88 Td (d) Tj 10 0 Td (e) Tj 10 0 Td (f) Tj ET",
+    );
+    assert_eq!(text(&page), "a b c\r\nd e f");
+}
+
+#[test]
+fn a_column_drawn_glyph_by_glyph_is_still_a_column() {
+    // The same glyphs stepping down the page: the guess stands, and the
+    // column reads as the oracle reads it.
+    let page =
+        extract("BT /F1 12 Tf 20 150 Td (a) Tj 0 -12 Td (b) Tj 0 -12 Td (c) Tj 0 -12 Td (d) Tj ET");
+    assert_eq!(text(&page), "abcd");
+}
+
 // ---------------------------------------------------------------------------
 // Nothing is generated before the first character
 

@@ -42,6 +42,18 @@ const SAMPLES = [
     [he, p, "חוק זה ייכנס לתוקף ביום פרסומו ברשומות, אלא אם כן נקבע אחרת בחוק.", ""]
 ]
 
+# Samples read back from a page of their own, each in its own direction,
+# because what they provoke depends on everything else the page holds. Two
+# short lines of glyphs Chrome draws one by one, with a year among them, is
+# a page PDFium's orientation guess reads as a column, and every glyph came
+# back on a line of its own.
+const ALONE = [
+    [lang, dir, text, known];
+    [he, ltr, "The word שלום means peace, and 2024 is a year.", ""]
+    [he, rtl, "המחיר הוא 1,250.50 ₪ או 20% הנחה (בתוקף).", ""]
+    [en, ltr, "A b c, and d e f; x y z at 12 of 30.", ""]
+]
+
 # Narrow enough that every sample wraps, and different enough that the
 # wraps fall between different characters.
 const WIDTHS = [7 11 15 22]
@@ -63,8 +75,8 @@ def page [samples: table, width: int] {
     let body = (
         $samples
         | each {|s|
-            let dir = if $s.lang in [ar he] { 'rtl' } else { 'ltr' }
-            if $s.kind == 'li' {
+            let dir = $s.dir? | default (if $s.lang in [ar he] { 'rtl' } else { 'ltr' })
+            if $s.kind? == 'li' {
                 $'<ol lang="($s.lang)" dir="($dir)"><li>($s.text)</li></ol>'
             } else {
                 $'<p lang="($s.lang)" dir="($dir)">($s.text)</p>'
@@ -75,6 +87,30 @@ def page [samples: table, width: int] {
     $'<!doctype html><html><head><meta charset="utf-8"><title>wrap</title>
 <style>body{font-family:"Noto Sans","Noto Sans CJK TC","Noto Sans Thai","Noto Sans Devanagari","Noto Sans Arabic","Noto Sans Hebrew",sans-serif;font-size:16px;width:($width)em}p,li{margin:0 0 1em}[lang=ko]{word-break:keep-all}</style>
 </head><body>($body)</body></html>'
+}
+
+# One page of `samples` at `width`, printed and read back: a row per sample.
+def read-back [chrome: string, pdfrum: string, dir: string, name: string, samples: list, width: int] {
+    let html = ($dir | path join $'($name).html')
+    let pdf = ($dir | path join $'($name).pdf')
+    page $samples $width | save --force $html
+    ^$chrome --headless --disable-gpu --no-pdf-header-footer $'--print-to-pdf=($pdf)' $'file://($html)' out+err> /dev/null
+    let lines = (^$pdfrum extract markdown $pdf | lines | each {|l| squash $l })
+    let text = ($lines | str join "\n")
+    $samples | each {|s|
+        # A soft hyphen is where the word may break, not a character of
+        # it: it comes back as nothing, wrap or no wrap.
+        let source = ($s.text | str replace --all "\u{ad}" '')
+        let want = if $s.kind? == 'li' { $'1. (squash $source)' } else { squash $source }
+        let ok = ($text | str contains $want)
+        # The line most like the sample: the one that shares its
+        # opening, so a miss shows what came back instead.
+        let head = ($s.text | str substring 0..2)
+        let got = if $ok { '' } else {
+            $lines | where {|l| $l | str contains $head } | get 0? | default '(not found)'
+        }
+        {width: $width, lang: $s.lang, ok: $ok, known: $s.known, want: $want, got: $got}
+    }
 }
 
 def main [
@@ -92,28 +128,17 @@ def main [
     let samples = if $lang == null { $SAMPLES } else { $SAMPLES | where lang == $lang }
     let dir = (mktemp --directory --tmpdir wrap-roundtrip.XXXXXX)
 
+    let alone = if $lang == null { $ALONE } else { $ALONE | where lang == $lang }
     let results = (
         $WIDTHS | each {|width|
-            let html = ($dir | path join $'w($width).html')
-            let pdf = ($dir | path join $'w($width).pdf')
-            page $samples $width | save --force $html
-            ^$chrome --headless --disable-gpu --no-pdf-header-footer $'--print-to-pdf=($pdf)' $'file://($html)' out+err> /dev/null
-            let lines = (^$pdfrum extract markdown $pdf | lines | each {|l| squash $l })
-            let text = ($lines | str join "\n")
-            $samples | each {|s|
-                # A soft hyphen is where the word may break, not a character
-                # of it: it comes back as nothing, wrap or no wrap.
-                let source = ($s.text | str replace --all "\u{ad}" '')
-                let want = if $s.kind == 'li' { $'1. (squash $source)' } else { squash $source }
-                let ok = ($text | str contains $want)
-                # The line most like the sample: the one that shares its
-                # opening, so a miss shows what came back instead.
-                let head = ($s.text | str substring 0..2)
-                let got = if $ok { '' } else {
-                    $lines | where {|l| $l | str contains $head } | get 0? | default '(not found)'
+            let together = (read-back $chrome $pdfrum $dir $'w($width)' $samples $width)
+            let apart = (
+                $alone | enumerate | each {|a|
+                    read-back $chrome $pdfrum $dir $'w($width)-alone($a.index)' [$a.item] $width
                 }
-                {width: $width, lang: $s.lang, ok: $ok, known: $s.known, want: $want, got: $got}
-            }
+                | flatten
+            )
+            $together | append $apart
         }
         | flatten
     )

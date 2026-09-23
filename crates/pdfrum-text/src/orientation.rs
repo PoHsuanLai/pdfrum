@@ -152,6 +152,52 @@ fn filled(mask: &[bool], start: usize, end: usize) -> f32 {
     ratio
 }
 
+/// The page-global guess, overruled when the one-glyph objects it would
+/// decide for say otherwise.
+///
+/// `[oracle-bug]` A one-glyph object has no direction of its own and takes
+/// [`page_flow`]'s answer, and that answer is a coverage count that two short
+/// lines of spaced-out text tip over: two lines of `The word שלום means peace,
+/// and 2024 is a year.` fill 0.797 of their width band, under the 0.8 that
+/// settles it, and 0.857 of their height band, so the page reads as a column.
+/// Chrome draws every glyph as its own object, so every glyph then ends a
+/// vertical line and the paragraph comes back one character per line — Latin
+/// as readily as Hebrew. The objects themselves know better: one drawn after
+/// another either steps along a baseline or down a column. When a page guessed
+/// to be a column has more one-glyph neighbours stepping along than down, it
+/// is a page of lines. A column drawn glyph by glyph steps down and keeps its
+/// guess, and so does any page the guess already reads across.
+#[must_use]
+pub fn settled_flow(guess: Orientation, runs: &[TextRun]) -> Orientation {
+    if guess != Orientation::Vertical {
+        return guess;
+    }
+    let (mut along, mut down) = (0usize, 0usize);
+    for pair in runs.windows(2) {
+        let [previous, next] = pair else { continue };
+        if previous.count() != 1 || next.count() != 1 {
+            continue;
+        }
+        let dx = (next.position.x - previous.position.x).abs();
+        let dy = (next.position.y - previous.position.y).abs();
+        let length = dx.hypot(dy);
+        if length <= 0.0001 {
+            continue;
+        }
+        // 0.0872 is sin(5 degrees), the cone `object_flow` measures in.
+        if dy / length <= 0.0872 {
+            along += 1;
+        } else if dx / length <= 0.0872 {
+            down += 1;
+        }
+    }
+    if along > down {
+        Orientation::Horizontal
+    } else {
+        guess
+    }
+}
+
 /// The orientation one text object suggests (`GetTextObjectWritingMode`).
 ///
 /// Takes the vector from the first glyph's origin to the last, transformed
