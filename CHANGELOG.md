@@ -12,6 +12,8 @@ first crates.io release.
   stay under their paragraph instead of running into its text.
   `ListItem: From<&str> + From<String>`, so `vec!["one".into()]` still
   builds a flat list; `pdfrum::ListItem` re-exports it.
+- `pdfrum_markdown::Options` has a second field, `authors_hyphens`; a struct
+  literal needs `..Options::default()`.
 
 ### Fixed
 
@@ -28,6 +30,21 @@ first crates.io release.
   another (`state-of-the-art`) or comes before a capital or digit
   (`COVID-19`); the text layer's joined-line mark no longer leaks into the
   output as a U+0002 control character.
+- Markdown: a `-` that ends a line in a Chrome-made PDF (`/Producer
+  Skia/PDF`) is kept, `cross-reference` and all: Chrome draws the hyphens it
+  inserts as U+2010, so a `-` it wraps after was the author's.
+- Markdown: an untagged list nests by indentation, a marker set deeper than
+  its list's opening a list under the item above; a wrapped item whose label
+  is part of its text continues under the label.
+- Markdown: `一、` and `（一）`, a law's 款 and 目, are list markers, and a
+  label closed by full-width punctuation is written without a space after
+  it, as the page sets it.
+- Markdown: an untagged paragraph that a page break cuts mid-sentence, the
+  next page opening lower-case or in a script with no capitals, is joined
+  back on the page it starts on.
+- Markdown: a line of Chinese or Japanese at the foot or head of a page is no
+  longer dropped as a footer for being "three words or fewer": characters
+  count two to a word.
 - Markdown: Thai, Lao, Myanmar and Khmer join across a wrap with no space.
 - Markdown: a glyph that stands for a repeated letter (Devanagari `त्त`)
   keeps both; only another object drawing the same letter in the same place

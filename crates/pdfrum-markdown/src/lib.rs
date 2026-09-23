@@ -190,18 +190,18 @@ pub fn document_blocks<R: Resolve>(
 
 /// A paragraph the page break cut in two, put back together on the page it
 /// starts on. The structure tree says so exactly: one paragraph element
-/// with content on both pages. Typography alone could only guess, and
-/// guesses wrong at every heading-less section break, so an untagged
-/// document keeps its pages as they are.
+/// with content on both pages. Without one, typography guesses, and only
+/// where a wrong guess is unlikely — see [`carries_on`].
 fn rejoin_across_pages(blocks: &mut [Vec<Block>], pages: &[PageInput<'_>]) {
     for i in 1..blocks.len().min(pages.len()) {
         let (Some(before), Some(after)) = (pages.get(i - 1), pages.get(i)) else {
             continue;
         };
-        let (Some(a), Some(b)) = (before.tree, after.tree) else {
-            continue;
+        let tagged = match (before.tree, after.tree) {
+            (Some(a), Some(b)) => Some(tagged::paragraph_spans(a, b)),
+            _ => None,
         };
-        if !tagged::paragraph_spans(a, b) {
+        if tagged == Some(false) {
             continue;
         }
         let (head, tail) = blocks.split_at_mut(i);
@@ -217,12 +217,32 @@ fn rejoin_across_pages(blocks: &mut [Vec<Block>], pages: &[PageInput<'_>]) {
         let Some(page) = tail.first_mut() else {
             continue;
         };
-        if let Some(Block::Paragraph(_)) = page.first()
-            && let Block::Paragraph(rest) = page.remove(0)
-        {
+        let joins = match page.first() {
+            Some(Block::Paragraph(rest)) => tagged.is_some() || carries_on(open, rest),
+            _ => false,
+        };
+        if joins && let Block::Paragraph(rest) = page.remove(0) {
             heuristics::join(open, &rest);
         }
     }
+}
+
+/// Whether an untagged page's last paragraph, `before`, runs on into the
+/// next page's first, `after`: `before` stops without the punctuation that
+/// ends a sentence or closes a quote, and `after` opens lower-case — which
+/// no sentence and no heading does — or in a script with no capitals, where
+/// the missing full stop is all there is to go on.
+fn carries_on(before: &str, after: &str) -> bool {
+    const FINISHED: &[char] = &[
+        '.', '!', '?', ':', ';', '…', '"', '\'', ')', ']', '”', '’', '。', '！', '？', '：', '；',
+        '」', '』', '）', '】', '》',
+    ];
+    !before.trim_end().ends_with(FINISHED)
+        && after
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_lowercase() || heuristics::joins_unspaced(c))
 }
 
 /// The page as Markdown: [`page_blocks`] then [`render()`].
@@ -251,7 +271,23 @@ pub fn page_layout<R: Resolve>(
 
 #[cfg(test)]
 mod tests {
-    use super::authors_hyphen;
+    use super::{authors_hyphen, carries_on};
+
+    #[test]
+    fn an_untagged_paragraph_carries_on_only_mid_sentence_into_a_lower_case_word() {
+        assert!(carries_on(
+            "the parser recovers from a damaged",
+            "table and reports"
+        ));
+        assert!(carries_on(
+            "證券商應以自己之計算買賣有價",
+            "證券，並應依規定辦理。"
+        ));
+        assert!(!carries_on("It ends here.", "and yet"));
+        assert!(!carries_on("辦理相關之申報事項。", "證券商"));
+        // A heading-less section title, and a sentence that could open one.
+        assert!(!carries_on("Introduction", "The parser"));
+    }
 
     #[test]
     fn the_text_layers_hyphen_mark_is_put_back_as_a_hyphen() {
