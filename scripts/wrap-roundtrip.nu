@@ -29,8 +29,9 @@ const SAMPLES = [
     [ja, p, "この法律は、公布の日から起算して六月を超えない範囲内において政令で定める日から施行する。", ""]
     [ja, p, "コンピュータ・プログラムのソースコードは、テキストファイルとして保存されます。", ""]
     [ko, p, "이 법은 공포한 날부터 시행한다. 다만, 제5조의 개정규정은 공포 후 6개월이 경과한 날부터 시행한다.", ""]
-    [en, p, "The parser recovers from a damaged cross-reference table and reports what it had to drop along the way.", "a hyphen at a wrap in a word with no other: the author's and the typesetter's look the same"]
+    [en, p, "The parser recovers from a damaged cross-reference table and reports what it had to drop along the way.", ""]
     [en, p, "The state-of-the-art and up-to-date tools keep the hyphens of their compound words, as in COVID-19 and non-English.", ""]
+    [en, p, "Soft hyphens let a typesetter break inter\u{ad}nation\u{ad}alization and extra\u{ad}ordinarily long words, and vanish.", ""]
     [de, p, "Die Bundesrepublik Deutschland ist ein demokratischer und sozialer Bundesstaat mit Verfassungsgerichtsbarkeit.", ""]
     [ru, p, "Настоящий закон вступает в силу со дня его официального опубликования в установленном порядке.", ""]
     [el, p, "Ο παρών νόμος ισχύει από τη δημοσίευσή του στην Εφημερίδα της Κυβερνήσεως, εκτός αν ορίζεται διαφορετικά.", ""]
@@ -100,7 +101,10 @@ def main [
             let lines = (^$pdfrum extract markdown $pdf | lines | each {|l| squash $l })
             let text = ($lines | str join "\n")
             $samples | each {|s|
-                let want = if $s.kind == 'li' { $'1. (squash $s.text)' } else { squash $s.text }
+                # A soft hyphen is where the word may break, not a character
+                # of it: it comes back as nothing, wrap or no wrap.
+                let text = ($s.text | str replace --all "\u{ad}" '')
+                let want = if $s.kind == 'li' { $'1. (squash $text)' } else { squash $text }
                 let ok = ($text | str contains $want)
                 # The line most like the sample: the one that shares its
                 # opening, so a miss shows what came back instead.
