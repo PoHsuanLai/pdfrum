@@ -56,7 +56,8 @@ first crates.io release.
 - Text: a right-to-left line is read back in logical order (UAX #9 levels,
   rule L2 reversed), numbers and `/ActualText` spans kept whole, and its
   brackets are no longer mirrored twice. Lines with no right-to-left letter
-  take the old path unchanged.
+  drawn as such take the old path unchanged: an `/ActualText` string over
+  glyphs drawn left to right is in logical order already.
 - Text: a page of a few short lines drawn a glyph per object — Chrome's way —
   is no longer read as a column, one character to a line, when PDFium's
   coverage guess says column but the glyphs step along a baseline. Pages the
