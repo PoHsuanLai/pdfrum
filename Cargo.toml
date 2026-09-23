@@ -143,7 +143,7 @@ hayro-jpeg2000 = { version = "=0.4.0", default-features = false, features = ["st
 # example uses. We consume `Image::new_embedded`.
 hayro-jbig2 = { version = "=0.3.0", default-features = false, features = ["std", "simd"] }
 hayro-ccitt = "=0.3.0"
-moxcms = "=0.9.0"
+moxcms = "=0.9.1"
 
 # crypto, text, numeric
 aes = "=0.9.3"
@@ -161,7 +161,7 @@ unicode-bidi = "=0.3.18"
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
 unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
-smallvec = "=1.16.0"
+smallvec = "=1.16.1"
 # Shared byte buffers. Owner and data pointer are decoupled, so a `Vec` can be
 # adopted without copying it — see `pdfrum_object::ByteSpan`. Zero transitive
 # dependencies, MIT, pure Rust.
@@ -184,9 +184,9 @@ boa_engine = { version = "=0.22.0", default-features = false }
 anyhow = "=1.0.104"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
-clap = { version = "=4.6.6", features = ["derive", "env"] }
+clap = { version = "=4.6.7", features = ["derive", "env"] }
 # `completions` and `manpage`: clap's own generators.
-clap_complete = "=4.6.9"
+clap_complete = "=4.6.11"
 clap_mangen = "=0.3.3"
 # Terminal: keys, size and screen for the CLI's `view`, and a silent password
 # prompt. Inline pictures (kitty, iTerm2, half-block) are written by hand:
