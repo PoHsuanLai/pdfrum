@@ -25,6 +25,13 @@ pub struct Options {
     /// Whether the document reads right to left (`/ViewerPreferences
     /// /Direction /R2L`); the extractor orders bidirectional text by it.
     pub rtl: bool,
+    /// Whether a hyphen that ends a line is the author's, never the
+    /// typesetter's. True of a producer known to draw its own hyphens as a
+    /// different character — Chrome (`Skia/PDF`) draws `U+2010` where it
+    /// hyphenates — so a `-` it wraps after is the word's and stays:
+    /// `cross-reference`, not `crossreference`. False, the default, leaves
+    /// the break to the guess [`heuristics`] makes.
+    pub authors_hyphens: bool,
 }
 
 /// One page of a document, for [`document_blocks`].
@@ -54,10 +61,28 @@ fn content<R: Resolve>(page: &Page, resolver: &R, options: Options, limits: &Lim
         &mut diags,
     );
     let facts = lines::ObjectFacts::from_page(page);
+    let mut lines = lines::lines(&text, &facts);
+    if options.authors_hyphens {
+        for line in &mut lines {
+            authors_hyphen(&mut line.text);
+            for segment in &mut line.segments {
+                authors_hyphen(&mut segment.text);
+            }
+        }
+    }
     Content {
-        lines: lines::lines(&text, &facts),
+        lines,
         images: facts.images().to_vec(),
         crop_box: page.crop_box,
+    }
+}
+
+/// The text layer's mark for a line that ended in a hyphen and was joined
+/// to the next — `U+0002` in the records, `U+00AD` in the text — put back
+/// as the hyphen it was.
+fn authors_hyphen(text: &mut String) {
+    if text.contains(['\u{2}', '\u{ad}']) {
+        *text = text.replace(['\u{2}', '\u{ad}'], "-");
     }
 }
 
@@ -222,4 +247,16 @@ pub fn page_layout<R: Resolve>(
     limits: &Limits,
 ) -> String {
     layout::layout(&page_lines(page, resolver, options, limits), page.crop_box)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::authors_hyphen;
+
+    #[test]
+    fn the_text_layers_hyphen_mark_is_put_back_as_a_hyphen() {
+        let mut text = "a cross\u{2}reference and a cross\u{ad}check".to_owned();
+        authors_hyphen(&mut text);
+        assert_eq!(text, "a cross-reference and a cross-check");
+    }
 }
