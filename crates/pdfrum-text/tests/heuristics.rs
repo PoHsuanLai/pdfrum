@@ -291,6 +291,44 @@ fn an_empty_actual_text_leaves_the_glyphs_alone() {
     assert_eq!(text(&page), "ab");
 }
 
+#[test]
+fn a_span_split_by_the_x_sort_is_written_once() {
+    // Chrome's Thai `บัญ`: the span's base at 20, its mark at 26, and the
+    // next consonant, outside the span, at 25.8 — a hair left of the mark.
+    // Sorted by x the span's two objects are no longer adjacent, and the
+    // oracle writes its text again at the mark: `XYcXY`.
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td /Span << /ActualText (XY) >> BDC (a) Tj 6 0 Td (b) Tj EMC \
+         -0.2 0 Td (c) Tj ET",
+    );
+    assert_eq!(text(&page), "XYc");
+}
+
+#[test]
+fn a_span_is_measured_from_where_its_ink_ends() {
+    // Chrome's Devanagari `धि`: the narrow vowel sign drawn first, the wide
+    // consonant after it, one span; the next letter sits where the consonant
+    // ends. Measured from the vowel sign, as the oracle does, that is a
+    // consonant's width away and a space: `mi n`.
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td /Span << /ActualText (mi) >> BDC (i) Tj 3.336 0 Td (m) Tj EMC \
+         9.336 0 Td (n) Tj ET",
+    );
+    assert_eq!(text(&page), "min");
+    // The other way round — Arabic's body, then its dot drawn inside it — the
+    // body is where the cluster ends, and the gap after it still counts.
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td /Span << /ActualText (mi) >> BDC (m) Tj 4 0 Td (.) Tj EMC \
+         5.336 0 Td (n) Tj ET",
+    );
+    assert_eq!(text(&page), "min");
+    let page = extract(
+        "BT /F1 12 Tf 20 100 Td /Span << /ActualText (mi) >> BDC (m) Tj 4 0 Td (.) Tj EMC \
+         13 0 Td (n) Tj ET",
+    );
+    assert_eq!(text(&page), "mi n");
+}
+
 // ---------------------------------------------------------------------------
 // The character-code-zero path
 

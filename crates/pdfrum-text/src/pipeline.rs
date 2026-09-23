@@ -36,7 +36,9 @@ use crate::unicode::{is_alnum, is_alpha, is_print};
 use kurbo::{Affine, Point, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_font::CharCode;
-use pdfrum_object::{Name, Resolve};
+use pdfrum_object::{Dict, Name, Resolve};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 /// The width below which a text object is not worth extracting at all, and
 /// the height below which a character's box is rescued. In page space.
@@ -187,7 +189,33 @@ pub(crate) struct Builder<'a, R: Resolve> {
     /// match for nothing gained. Deciding this per page rather than per
     /// object is the point: the question is about the page.
     keep_spaces_only: bool,
+    /// The `/ActualText` marks already written out, by the address of the
+    /// dictionary that decides them, so a mark is written once however its
+    /// objects were sorted.
+    ///
+    /// `[oracle-bug]` PDFium suppresses an object of an emitted mark only
+    /// when the object just before it belongs to the same mark
+    /// (`cpdf_textpage.cpp` `PreMarkedContent`). Sorting by x separates
+    /// them whenever a shaper positions a combining mark past the base that
+    /// follows it: Chrome draws Thai `บั` as `บ`, then `ั` a hair to the
+    /// right of the next consonant, so the batch reads `บ`, `ญ`, `ั` and
+    /// the span's text comes out twice — `บัญบั`. ISO 32000-1 §14.9.4 makes
+    /// the string a replacement for the whole marked sequence, which is one
+    /// string, once.
+    emitted_marks: HashSet<usize>,
     resolver: &'a R,
+}
+
+/// The dictionary an object's marks are told apart by: the innermost one
+/// that carries properties. Two objects inside one marked sequence share
+/// it by identity; two sequences whose dictionaries merely compare equal
+/// do not.
+fn last_mark_dict(run: &TextRun) -> Option<&Arc<Dict>> {
+    run.marks
+        .marks()
+        .iter()
+        .rev()
+        .find_map(|mark| mark.properties.as_ref())
 }
 
 /// Whether every code the object draws maps to `U+0020`.
@@ -232,6 +260,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
             // would be generated against, and what is lost is the space the
             // upstream report is about.
             keep_spaces_only: matches!(runs, [run] if draws_only_spaces(run)),
+            emitted_marks: HashSet::new(),
             resolver,
         }
     }
@@ -353,6 +382,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
                 self.line_rect = run.rect;
             }
             if state == MarkState::Delay {
+                if let Some(dict) = last_mark_dict(run) {
+                    self.emitted_marks.insert(Arc::as_ptr(dict).addr());
+                }
                 self.process_marked_content(run, diags);
                 self.previous = Some(Previous { index: run.index });
                 continue;
@@ -403,6 +435,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
         let Some(actual_text) = actual_text else {
             return MarkState::Pass;
         };
+        if last_dict.is_some_and(|dict| self.emitted_marks.contains(&Arc::as_ptr(dict).addr())) {
+            return MarkState::Done;
+        }
         if let Some(previous) = self
             .previous
             .as_ref()
@@ -417,7 +452,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
                 let same = a
                     .properties
                     .as_ref()
-                    .is_some_and(|previous| std::sync::Arc::ptr_eq(previous, b));
+                    .is_some_and(|previous| Arc::ptr_eq(previous, b));
                 if same {
                     return MarkState::Done;
                 }
@@ -727,16 +762,49 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// A generated inter-object space carries no object, so it leaves the
     /// answer alone; a generated *inter-word* space does carry one, so it can
     /// pull the answer back to its own object.
+    ///
+    /// `[oracle-bug]` An `/ActualText` string's characters all name the one
+    /// object that wrote it, and for a shaped cluster that is often its
+    /// narrowest glyph. Chrome draws Devanagari `धि` as the vowel sign `ि`
+    /// and then `ध`, both in one span; measured from `ि`, the next cluster
+    /// sits a consonant's width away, and a space is generated inside the
+    /// word — `अधि नि यम`. Arabic has it the other way round, the dots of
+    /// `ن` drawn after its body. When the last object processed belongs to
+    /// the same mark as the last character, the drawn cluster is both, and
+    /// it ends where its ink does: with whichever of the two reaches further
+    /// along the line. Not the one whose advance does — the `ें` of `में`
+    /// is drawn last, inks back over the consonant, and carries an advance
+    /// in `/Widths` the producer never moved by — and not the wider one,
+    /// which the spacing vowel of `ता` is not. Only an upright line is
+    /// judged; any other keeps the object that wrote the text.
     fn previous_run(&self) -> Option<&'a TextRun> {
         let last = self.line.last_char().or_else(|| self.out.chars.last());
         let from_char = last
             .and_then(|info| info.object)
             .and_then(|index| self.find_run(index));
-        from_char.or_else(|| {
-            self.previous
-                .as_ref()
-                .and_then(|previous| self.find_run(previous.index))
-        })
+        let processed = self
+            .previous
+            .as_ref()
+            .and_then(|previous| self.find_run(previous.index));
+        if let (Some(written), Some(processed)) = (from_char, processed)
+            && last.is_some_and(|info| info.char_type == CharType::ActualText)
+            && last_mark_dict(written)
+                .zip(last_mark_dict(processed))
+                .is_some_and(|(a, b)| Arc::ptr_eq(a, b))
+        {
+            let upright = |run: &TextRun| {
+                let [a, b, c, d, ..] = run.text_matrix.as_coeffs();
+                a > 0.0 && b.abs() < 1e-6 && c.abs() < 1e-6 && d != 0.0
+            };
+            return Some(
+                if upright(written) && upright(processed) && processed.rect.x1 > written.rect.x1 {
+                    processed
+                } else {
+                    written
+                },
+            );
+        }
+        from_char.or(processed)
     }
 
     /// Decides what goes between the previous object and this one
