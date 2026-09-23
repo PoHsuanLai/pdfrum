@@ -33,7 +33,7 @@ use kurbo::Rect;
 use pdfrum_doc::structure::{Kid, StructElement, StructTree};
 use pdfrum_object::Resolve;
 
-use crate::ast::{Block, ListMarker};
+use crate::ast::{Block, ListItem, ListMarker};
 use crate::heuristics::{join, normalize, strip_bullet};
 use crate::lines::{DrawnImage, McidText, Run};
 
@@ -112,40 +112,7 @@ fn visit<R: Resolve>(
             figures_within(tree, element, drawn.images, r, out);
         }
         "CODE" => out.push(Block::Code(text_of(tree, element, text_by_mcid, r))),
-        "L" => {
-            let mut items = Vec::new();
-            let mut ordered = false;
-            for kid in &element.kids {
-                if let Kid::Element {
-                    linked: Some(li), ..
-                } = kid
-                    && let Some(item) = tree.elements.get(*li)
-                {
-                    let label = child_of_kind(tree, item, b"LBL")
-                        .map(|l| text_of(tree, l, text_by_mcid, r))
-                        .unwrap_or_default();
-                    ordered |= label.chars().next().is_some_and(|c| c.is_ascii_digit());
-                    let body = child_of_kind(tree, item, b"LBODY").map_or_else(
-                        || text_of(tree, item, text_by_mcid, r),
-                        |b| text_of(tree, b, text_by_mcid, r),
-                    );
-                    // A producer that draws the bullet into the body
-                    // instead of a `Lbl` still gets one bullet, not two.
-                    let body = strip_bullet(&body).to_owned();
-                    if !body.trim().is_empty() {
-                        items.push(body);
-                    }
-                }
-            }
-            if !items.is_empty() {
-                let marker = if ordered {
-                    ListMarker::Ordered
-                } else {
-                    ListMarker::Bullet
-                };
-                out.push(Block::List { marker, items });
-            }
-        }
+        "L" => out.extend(list_of(tree, element, depth, drawn, r)),
         "TABLE" => {
             let mut rows = Vec::new();
             collect_rows(tree, element, text_by_mcid, r, &mut rows);
@@ -175,6 +142,73 @@ fn visit<R: Resolve>(
             flush_direct(&mut direct, out);
         }
     }
+}
+
+/// A list element's block: each `LI` an item, its `Lbl` the marker, and a
+/// list nested in it the item's children. `None` for a list that says
+/// nothing.
+fn list_of<R: Resolve>(
+    tree: &StructTree,
+    element: &StructElement,
+    depth: u8,
+    drawn: Drawn<'_>,
+    r: &R,
+) -> Option<Block> {
+    let text_by_mcid = drawn.text;
+    let mut items = Vec::new();
+    let mut labels = Vec::new();
+    for kid in &element.kids {
+        if let Kid::Element {
+            linked: Some(li), ..
+        } = kid
+            && let Some(item) = tree.elements.get(*li)
+        {
+            let label = child_of_kind(tree, item, b"LBL")
+                .map(|l| text_of(tree, l, text_by_mcid, r))
+                .unwrap_or_default();
+            // Without a `LBody` the body is the item bar its
+            // label, which Chrome, for one, tags but does not wrap.
+            // A list inside the body is the item's children, not
+            // more of its words.
+            let body = child_of_kind(tree, item, b"LBODY");
+            let holder = body.unwrap_or(item);
+            let nested: Vec<usize> = holder
+                .kids
+                .iter()
+                .filter_map(|kid| match kid {
+                    Kid::Element {
+                        linked: Some(i), ..
+                    } => Some(*i),
+                    _ => None,
+                })
+                .filter(|i| tree.elements.get(*i).is_some_and(|e| is_kind(e, b"L")))
+                .collect();
+            let text = match body {
+                Some(body) if nested.is_empty() => text_of(tree, body, text_by_mcid, r),
+                _ => {
+                    let pieces = kid_pieces(tree, holder, text_by_mcid, r, |kid| {
+                        !is_kind(kid, b"LBL") && !is_kind(kid, b"L")
+                    });
+                    normalize(concat(&pieces).text.trim())
+                }
+            };
+            // A producer that draws the bullet into the body
+            // instead of a `Lbl` still gets one bullet, not two.
+            let text = strip_bullet(&text).to_owned();
+            let mut children = Vec::new();
+            for list in nested {
+                visit(tree, list, depth.saturating_add(1), drawn, r, &mut children);
+            }
+            if !text.trim().is_empty() || !children.is_empty() {
+                items.push(ListItem { text, children });
+                labels.push(label);
+            }
+        }
+    }
+    (!items.is_empty()).then(|| Block::List {
+        marker: marker_of(&labels),
+        items,
+    })
 }
 
 /// The paragraph a grouping element's own text makes, if it says anything.
@@ -257,6 +291,71 @@ fn figures_within<R: Resolve>(
             figures_within(tree, child, images, r, out);
         }
     }
+}
+
+/// Whether one paragraph element draws on the page `a` is the view of and
+/// on the page `b` is: the same object, with marked content on each.
+pub(crate) fn paragraph_spans(a: &StructTree, b: &StructTree) -> bool {
+    let paragraph = |e: &StructElement| {
+        ["P", "PARA", "BLOCKQUOTE", "NOTE"]
+            .iter()
+            .any(|kind| is_kind(e, kind.as_bytes()))
+    };
+    b.elements
+        .iter()
+        .filter(|e| paragraph(e) && draws(b, e, 0))
+        .filter_map(|e| e.reference)
+        .any(|r| {
+            a.elements
+                .iter()
+                .any(|e| e.reference == Some(r) && draws(a, e, 0))
+        })
+}
+
+/// Whether `element`, or an element under it, has marked content on the
+/// page `tree` is the view of. A paragraph's text is often a level down,
+/// in a span; the depth bound is for a tree that is deeper than any
+/// paragraph has reason to be.
+fn draws(tree: &StructTree, element: &StructElement, depth: u8) -> bool {
+    element.kids.iter().any(|kid| match kid {
+        Kid::PageContent { .. } | Kid::StreamContent { .. } => true,
+        Kid::Element {
+            linked: Some(i), ..
+        } => {
+            depth < 8
+                && tree
+                    .elements
+                    .get(*i)
+                    .is_some_and(|child| draws(tree, child, depth + 1))
+        }
+        _ => false,
+    })
+}
+
+/// How a list's items are marked, from their `Lbl`s. Labels that are
+/// `1.`, `2.`, … from one are what the renderer writes anyway; any others
+/// — `一、`, `(a)`, a list that starts at 3 — are the document's and are
+/// kept, since they are what a citation names. A bullet, or no label at
+/// all, is a bullet.
+fn marker_of(labels: &[String]) -> ListMarker {
+    let labels: Vec<String> = labels.iter().map(|l| l.trim().to_owned()).collect();
+    if labels.iter().any(|l| strip_bullet(l).is_empty()) {
+        return ListMarker::Bullet;
+    }
+    let counted = labels
+        .iter()
+        .enumerate()
+        .all(|(i, label)| *label == format!("{}.", i + 1));
+    if counted {
+        ListMarker::Ordered
+    } else {
+        ListMarker::Labelled(labels)
+    }
+}
+
+/// Whether `element` is of `kind`, after the role map.
+fn is_kind(element: &StructElement, kind: &[u8]) -> bool {
+    element.kind.eq_ignore_ascii_case(kind)
 }
 
 fn child_of_kind<'t>(
@@ -402,23 +501,7 @@ fn piece_of<R: Resolve>(
     text_by_mcid: &McidText,
     r: &R,
 ) -> Piece {
-    let mut pieces: Vec<Piece> = Vec::new();
-    for kid in &element.kids {
-        match kid {
-            Kid::Element {
-                linked: Some(i), ..
-            } => {
-                if let Some(child) = tree.elements.get(*i) {
-                    pieces.push(piece_of(tree, child, text_by_mcid, r));
-                }
-            }
-            Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
-                pieces.extend(text_by_mcid.runs(*content_id).iter().map(Piece::drawn));
-            }
-            _ => {}
-        }
-    }
-    let drawn = concat(&pieces);
+    let drawn = concat(&kid_pieces(tree, element, text_by_mcid, r, |_| true));
     let actual = element.actual_text(r);
     if actual.trim().is_empty() {
         return drawn;
@@ -439,6 +522,34 @@ fn piece_of<R: Resolve>(
     Piece { text, ..drawn }
 }
 
+/// The pieces an element's kids drew, in order, the child elements `keep`
+/// turns away left out.
+fn kid_pieces<R: Resolve>(
+    tree: &StructTree,
+    element: &StructElement,
+    text_by_mcid: &McidText,
+    r: &R,
+    keep: impl Fn(&StructElement) -> bool,
+) -> Vec<Piece> {
+    let mut pieces: Vec<Piece> = Vec::new();
+    for kid in &element.kids {
+        match kid {
+            Kid::Element {
+                linked: Some(i), ..
+            } => {
+                if let Some(child) = tree.elements.get(*i).filter(|child| keep(child)) {
+                    pieces.push(piece_of(tree, child, text_by_mcid, r));
+                }
+            }
+            Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
+                pieces.extend(text_by_mcid.runs(*content_id).iter().map(Piece::drawn));
+            }
+            _ => {}
+        }
+    }
+    pieces
+}
+
 /// An element's text, normalized and trimmed.
 fn text_of<R: Resolve>(
     tree: &StructTree,
@@ -451,8 +562,12 @@ fn text_of<R: Resolve>(
 
 #[cfg(test)]
 mod tests {
-    use super::{Piece, concat};
+    use super::{Drawn, Piece, blocks, concat, paragraph_spans};
+    use crate::ast::{Block, ListItem, ListMarker};
+    use crate::lines::{Line, Segment, text_by_mcid};
     use kurbo::Rect;
+    use pdfrum_doc::structure::{Kid, StructElement, StructTree};
+    use pdfrum_object::{Dict, NoResolve, ObjRef};
 
     fn on_line(text: &str, line: usize, x: f64) -> Piece {
         Piece {
@@ -517,5 +632,172 @@ mod tests {
         // The same words somewhere else are just the same words.
         let got = concat(&[on_line("no ", 0, 55.0), on_line("no", 0, 80.0)]);
         assert_eq!(got.text, "no no");
+    }
+
+    fn element(kind: &[u8], kids: Vec<Kid>, parent: Option<usize>) -> StructElement {
+        StructElement {
+            dict: Dict::default(),
+            reference: None,
+            kind: kind.to_vec(),
+            kids,
+            parent,
+        }
+    }
+
+    fn child(slot: usize, index: usize) -> Kid {
+        Kid::Element {
+            dict: Dict::default(),
+            reference: None,
+            slot,
+            linked: Some(index),
+        }
+    }
+
+    fn line(top: f64, segments: &[(i64, &str)]) -> Line {
+        let bbox = Rect::new(72.0, top - 10.0, 200.0, top);
+        Line {
+            text: segments.iter().map(|(_, text)| *text).collect(),
+            bbox,
+            font_size: 10.0,
+            bold: false,
+            bold_prefix: 0,
+            mono: false,
+            mcids: segments.iter().map(|(id, _)| *id).collect(),
+            segments: segments
+                .iter()
+                .map(|(id, text)| Segment {
+                    mcid: Some(*id),
+                    text: (*text).to_owned(),
+                    bbox,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn an_item_with_no_body_element_says_its_label_once() {
+        // `L > LI > (Lbl, NonStruct)`, the shape Chrome tags a list in:
+        // the label is a kid of the item, beside the text, not in a body.
+        let tree = StructTree {
+            elements: vec![
+                element(b"L", vec![child(0, 1)], None),
+                element(b"LI", vec![child(0, 2), child(1, 3)], Some(0)),
+                element(b"Lbl", vec![Kid::PageContent { content_id: 0 }], Some(1)),
+                element(
+                    b"NonStruct",
+                    vec![Kid::PageContent { content_id: 1 }],
+                    Some(1),
+                ),
+            ],
+            top: vec![Some(0)],
+        };
+        let lines = [
+            line(700.0, &[(0, "1. "), (1, "經主管機關")]),
+            line(688.0, &[(1, "核准者。")]),
+        ];
+        let text = text_by_mcid(&lines);
+        let drawn = Drawn {
+            text: &text,
+            images: &[],
+        };
+        let (got, _) = blocks(&tree, drawn, &NoResolve);
+        assert_eq!(
+            got,
+            vec![Block::List {
+                marker: ListMarker::Ordered,
+                items: vec!["經主管機關核准者。".into()],
+            }]
+        );
+    }
+
+    #[test]
+    fn a_list_inside_an_item_is_its_children_and_keeps_its_labels() {
+        // 第 6 條: `L > LI > (Lbl, NonStruct, L > LI > (Lbl, NonStruct))`,
+        // the subparagraphs labelled `一、` and `二、` as the law has them.
+        let tree = StructTree {
+            elements: vec![
+                element(b"L", vec![child(0, 1)], None),
+                element(b"LI", vec![child(0, 2), child(1, 3), child(2, 4)], Some(0)),
+                element(b"Lbl", vec![Kid::PageContent { content_id: 0 }], Some(1)),
+                element(
+                    b"NonStruct",
+                    vec![Kid::PageContent { content_id: 1 }],
+                    Some(1),
+                ),
+                element(b"L", vec![child(0, 5), child(1, 8)], Some(1)),
+                element(b"LI", vec![child(0, 6), child(1, 7)], Some(4)),
+                element(b"Lbl", vec![Kid::PageContent { content_id: 2 }], Some(5)),
+                element(
+                    b"NonStruct",
+                    vec![Kid::PageContent { content_id: 3 }],
+                    Some(5),
+                ),
+                element(b"LI", vec![child(0, 9), child(1, 10)], Some(4)),
+                element(b"Lbl", vec![Kid::PageContent { content_id: 4 }], Some(8)),
+                element(
+                    b"NonStruct",
+                    vec![Kid::PageContent { content_id: 5 }],
+                    Some(8),
+                ),
+            ],
+            top: vec![Some(0)],
+        };
+        let lines = [
+            line(700.0, &[(0, "1. "), (1, "證券商之業務如下：")]),
+            line(688.0, &[(2, "一、"), (3, "有價證券之承銷。")]),
+            line(676.0, &[(4, "二、"), (5, "有價證券之自行買賣。")]),
+        ];
+        let text = text_by_mcid(&lines);
+        let drawn = Drawn {
+            text: &text,
+            images: &[],
+        };
+        let (got, _) = blocks(&tree, drawn, &NoResolve);
+        assert_eq!(
+            got,
+            vec![Block::List {
+                marker: ListMarker::Ordered,
+                items: vec![ListItem {
+                    text: "證券商之業務如下：".into(),
+                    children: vec![Block::List {
+                        marker: ListMarker::Labelled(vec!["一、".into(), "二、".into()]),
+                        items: vec!["有價證券之承銷。".into(), "有價證券之自行買賣。".into()],
+                    }],
+                }],
+            }]
+        );
+    }
+
+    #[test]
+    fn a_paragraph_spans_two_pages_when_one_element_draws_on_both() {
+        let shared = ObjRef {
+            num: 12,
+            generation: 0,
+        };
+        let page = |reference: ObjRef, content_id: i64| StructTree {
+            elements: vec![
+                StructElement {
+                    reference: Some(reference),
+                    ..element(b"P", vec![child(0, 1)], None)
+                },
+                element(b"Span", vec![Kid::PageContent { content_id }], Some(0)),
+            ],
+            top: vec![Some(0)],
+        };
+        let other = ObjRef {
+            num: 13,
+            generation: 0,
+        };
+        assert!(paragraph_spans(&page(shared, 4), &page(shared, 0)));
+        assert!(!paragraph_spans(&page(shared, 4), &page(other, 0)));
+        // The element is on the page, but none of its text is.
+        let empty = StructTree {
+            elements: vec![StructElement {
+                reference: Some(shared),
+                ..element(b"P", vec![Kid::Invalid], None)
+            }],
+            top: vec![Some(0)],
+        };
+        assert!(!paragraph_spans(&empty, &page(shared, 0)));
     }
 }
