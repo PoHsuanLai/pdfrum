@@ -54,3 +54,25 @@
 "resources/pixel/image_transformer_other.pdf" = { why = "the oracle's dest-space bilinear complements against 255 on a mod-256 residue, so a constant region is two levels darker than the source the page named", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
 "resources/rotated_image.in" = { why = "the same dest-space bilinear darkens a sheared image two levels, including at sample points where the filter must be an identity", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
 "resources/rotated_image.pdf" = { why = "the same dest-space bilinear darkens a sheared image two levels, including at sample points where the filter must be an identity", cite = "docs/upstream/pdfium/image-transformer-off-by-one-complement.md" }
+
+# The text page's flow guess (cpdf_textpage.cpp:654-721) is a coverage count:
+# a page whose glyphs fill no more than 0.8 of the width band (:711) and
+# more of the height band is read as a column, and a one-glyph text object,
+# which has no direction of its own, takes the page's. On these pages the
+# glyphs step along baselines, so the guess ends a line after every glyph,
+# or joins rows 45 pt apart into one. pdfrum overrules the guess only when
+# one-glyph objects step along a baseline more often than down a column.
+"resources/bug_1768.in" = { why = "`AAA 111` and `2 3 4` sit 45 pt apart, and the oracle's column guess joins them into one line where the page draws two rows", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+"resources/bug_1768.pdf" = { why = "`AAA 111` and `2 3 4` sit 45 pt apart, and the oracle's column guess joins them into one line where the page draws two rows", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+"resources/pixel/bug_846.in" = { why = "four one-glyph objects in two rows of two come back one per line, the oracle's column guess ending a line after every glyph", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+"resources/pixel/bug_846.pdf" = { why = "four one-glyph objects in two rows of two come back one per line, the oracle's column guess ending a line after every glyph", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+"resources/pixel/type3.in" = { why = "two one-glyph objects on one baseline come back on two lines, the oracle's column guess ending a line after each", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+"resources/pixel/type3.pdf" = { why = "two one-glyph objects on one baseline come back on two lines, the oracle's column guess ending a line after each", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:711 (pdfium a043bed4); crates/pdfrum-text/src/orientation.rs `settled_flow`" }
+
+# CloseTempLine (cpdf_textpage.cpp:841-866) reverses each right-to-left
+# segment in place and turns one forwards only when its first character came
+# from /ActualText (:851). The fixture's last line draws `בן` as literal
+# glyphs and then `שלום` as /ActualText in the same segment, so the oracle
+# turns the already-logical string backwards: `םולשבן`.
+"resources/actual_text_rtl.in" = { why = "the oracle reverses an /ActualText string that is already in logical order because a literal right-to-left glyph opens its segment, writing `םולש` for `שלום`", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:851 (pdfium a043bed4); crates/pdfrum-text/src/bidi.rs `logical_order`" }
+"resources/actual_text_rtl.pdf" = { why = "the oracle reverses an /ActualText string that is already in logical order because a literal right-to-left glyph opens its segment, writing `םולש` for `שלום`", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:851 (pdfium a043bed4); crates/pdfrum-text/src/bidi.rs `logical_order`" }

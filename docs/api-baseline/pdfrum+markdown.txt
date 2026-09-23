@@ -83,6 +83,7 @@ pub use pdfrum::LineJoin
 pub use pdfrum::LineSpec
 pub use pdfrum::Link
 pub use pdfrum::LinkSpec
+pub use pdfrum::ListItem
 pub use pdfrum::MarkupKind
 pub use pdfrum::MarkupSpec
 pub use pdfrum::MissingGlyph

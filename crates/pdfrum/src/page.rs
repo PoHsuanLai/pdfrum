@@ -530,6 +530,7 @@ impl<'a> Page<'a> {
         );
         let options = pdfrum_markdown::Options {
             rtl: self.doc.reads_right_to_left(),
+            authors_hyphens: self.doc.authors_hyphens(),
         };
         (graph, tree, options, diags)
     }
@@ -914,6 +915,7 @@ impl Document {
             .collect();
         let options = pdfrum_markdown::Options {
             rtl: self.reads_right_to_left(),
+            authors_hyphens: self.authors_hyphens(),
         };
         let page_inputs: Vec<pdfrum_markdown::PageInput<'_>> = inputs
             .iter()
@@ -947,6 +949,16 @@ impl Document {
             .name(&Name::from("Direction"))
             .map(pdfrum_object::Name::as_bytes)
             == Some(b"R2L".as_slice())
+    }
+
+    /// Whether every hyphen that ends a line is the author's: the producer
+    /// is Chrome's (`/Producer Skia/PDF …`), which draws the hyphens it
+    /// inserts as `U+2010`, so a `-` it wraps after was in the source.
+    #[cfg(feature = "markdown")]
+    pub(crate) fn authors_hyphens(&self) -> bool {
+        self.metadata()
+            .producer
+            .is_some_and(|producer| producer.starts_with("Skia/PDF"))
     }
 }
 

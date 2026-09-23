@@ -15,12 +15,13 @@ pub enum Block {
     /// wrapped in the Markdown marks, the one piece of markup a block holds;
     /// [`lead_in`] takes it apart, and everything after it is plain text.
     Paragraph(String),
-    /// A list; each item is one line of text.
+    /// A list; each item is one line of text, and whatever the document
+    /// nested under it.
     List {
         /// How the items were marked, which decides how they are written.
         marker: ListMarker,
         /// The items, bullets and numbers stripped.
-        items: Vec<String>,
+        items: Vec<ListItem>,
     },
     /// Monospaced text, line breaks kept.
     Code(String),
@@ -56,6 +57,51 @@ pub enum ListMarker {
     Labelled(Vec<String>),
 }
 
+/// One item of a [`Block::List`].
+///
+/// A law's article numbers its paragraphs and, under a paragraph, its
+/// subparagraphs; a citation names the one it means, so the one under the
+/// other stays under it rather than running into its text.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListItem {
+    /// The item's own words, on one line.
+    pub text: String,
+    /// What the document nested under the item, most often a list of its
+    /// own; empty for an item that is just its text.
+    pub children: Vec<Block>,
+}
+
+impl ListItem {
+    /// The item's text and everything nested under it, a line each.
+    #[must_use]
+    pub fn all_text(&self) -> String {
+        let mut out = self.text.clone();
+        for child in &self.children {
+            let text = child.text();
+            if !text.is_empty() {
+                out.push('\n');
+                out.push_str(&text);
+            }
+        }
+        out
+    }
+}
+
+impl From<String> for ListItem {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            children: Vec::new(),
+        }
+    }
+}
+
+impl From<&str> for ListItem {
+    fn from(text: &str) -> Self {
+        text.to_owned().into()
+    }
+}
+
 impl Block {
     /// The text a block carries, for callers that only want words.
     #[must_use]
@@ -65,7 +111,11 @@ impl Block {
                 lead_in(text).map_or_else(|| text.clone(), |(lead, rest)| format!("{lead}{rest}"))
             }
             Self::Heading { text, .. } | Self::Code(text) => text.clone(),
-            Self::List { items, .. } => items.join("\n"),
+            Self::List { items, .. } => items
+                .iter()
+                .map(ListItem::all_text)
+                .collect::<Vec<_>>()
+                .join("\n"),
             Self::Table(rows) => rows
                 .iter()
                 .map(|row| row.join("\t"))

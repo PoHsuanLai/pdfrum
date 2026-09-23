@@ -39,7 +39,12 @@
 //!   numbered from one would write the wrong section. Items with no
 //!   numbers of their own are numbered by the Markdown renderer.
 //! - **Paragraphs.** Consecutive body lines join with a space; a line ending
-//!   in a hyphen followed by a lower-case letter is de-hyphenated; a
+//!   in a hyphen followed by a letter is de-hyphenated, unless the hyphen
+//!   is in a compound that has another or comes before a capital or a
+//!   digit, when it is the author's and stays; one
+//!   whose last character and the next line's first are both East Asian
+//!   wide, Chinese or Japanese but not Korean, or both Thai, Lao, Myanmar
+//!   or Khmer, joins with nothing; a
 //!   vertical gap of more than 0.8 line heights, or a size change, starts
 //!   a new one. Two more rules decide within the gap, the ones every layout
 //!   engine applies to justified and left-aligned prose:
@@ -76,7 +81,7 @@
 
 use kurbo::Rect;
 
-use crate::ast::{Block, ListMarker};
+use crate::ast::{Block, ListItem, ListMarker};
 use crate::lines::{DrawnImage, Line};
 
 /// The fraction of the page height at each edge that is margin.
@@ -255,9 +260,7 @@ fn at_edge(line: &Line, page: Rect) -> bool {
 /// band and looking like a folio, or short and standing apart from the
 /// body, or short and beside one of those — a two-line header goes as one.
 fn margin_mask(context: &[Line], page: Rect) -> Vec<bool> {
-    let short = |line: &Line| {
-        at_edge(line, page) && line.text.split_whitespace().count() <= MARGIN_MAX_WORDS
-    };
+    let short = |line: &Line| at_edge(line, page) && words(&line.text) <= MARGIN_MAX_WORDS;
     let mut dropped: Vec<bool> = context
         .iter()
         .map(|line| {
@@ -284,6 +287,25 @@ fn margin_mask(context: &[Line], page: Rect) -> Vec<bool> {
         }
         dropped = grown;
     }
+}
+
+/// How many words `text` has. A script that runs its words together has
+/// no spaces to count, so a full line of Chinese would be one word, and a
+/// body line at the foot of the page a footer; its characters count two to
+/// a word instead, about the length of a Chinese word, which keeps a short
+/// running title short.
+fn words(text: &str) -> usize {
+    text.split_whitespace()
+        .map(|word| {
+            let unspaced = word.chars().filter(|c| joins_unspaced(*c)).count();
+            let spaced = word
+                .chars()
+                .any(|c| c.is_alphanumeric() && !joins_unspaced(c));
+            unspaced
+                .div_ceil(2)
+                .max(usize::from(spaced || unspaced == 0))
+        })
+        .sum()
 }
 
 /// Whether two lines' boxes are within a line height of each other.
@@ -441,6 +463,22 @@ const MARKER_STYLES: &[MarkerStyle] = &[
         closers: &['）'],
         joins_groups: false,
     },
+    // `（一）` — the same bracket around a Chinese numeral: a law's
+    // 目, the item under a 款.
+    MarkerStyle {
+        open: Some('（'),
+        numeral: is_cjk_numeral,
+        closers: &['）'],
+        joins_groups: false,
+    },
+    // `一、` — a Chinese numeral closed by the enumeration comma: a law's
+    // 款, the item under a paragraph.
+    MarkerStyle {
+        open: None,
+        numeral: is_cjk_numeral,
+        closers: &['、'],
+        joins_groups: false,
+    },
     // `1.`, `2)`, `2.1`, and the CJK-closed `1.1、` of
     // `text_cjk_functions`.
     MarkerStyle {
@@ -450,6 +488,15 @@ const MARKER_STYLES: &[MarkerStyle] = &[
         joins_groups: true,
     },
 ];
+
+/// A Chinese numeral as a law numbers its items: `一` to `十`, and the
+/// `百` and `〇` of the long ones.
+fn is_cjk_numeral(c: char) -> bool {
+    matches!(
+        c,
+        '〇' | '零' | '一' | '二' | '三' | '四' | '五' | '六' | '七' | '八' | '九' | '十' | '百'
+    )
+}
 
 /// U+FF10-U+FF19, the full-width forms of `0`-`9`.
 fn is_fullwidth_digit(c: char) -> bool {
@@ -506,8 +553,10 @@ fn leading_number_in<'a>(text: &'a str, style: &MarkerStyle) -> Option<&'a str> 
             Some(c) if style.closers.contains(&c) => {
                 let closed = text.get(end + c.len_utf8()..)?;
                 // A bracketed label needs no space after it: `（1）显示`
-                // is closed by the bracket itself.
-                let separated = style.open.is_some() || closed.starts_with(char::is_whitespace);
+                // is closed by the bracket itself, and `一、有價證券` by
+                // the comma, which is punctuation with its own space in it.
+                let separated =
+                    style.open.is_some() || c == '、' || closed.starts_with(char::is_whitespace);
                 return (separated && !closed.trim().is_empty())
                     .then(|| text.get(..end + c.len_utf8()))?;
             }
@@ -562,6 +611,20 @@ pub fn normalize(text: &str) -> String {
             continue;
         }
         match c {
+            // The text layer's mark for a line that ended in a hyphen and
+            // was joined to the next — `U+0002` in the character records,
+            // PDFium's, and `U+00AD` in the text — the hyphen either the
+            // word's or the typesetter's, and [`keeps_hyphen`] guesses
+            // which. A control character is never text; at the end of the
+            // line it is the soft hyphen, for [`join`] to decide.
+            '\u{2}' if i + 1 >= chars.len() => out.push('\u{ad}'),
+            '\u{ad}' | '\u{2}' if i > 0 && i + 1 < chars.len() => {
+                let before: String = chars.get(..i).unwrap_or_default().iter().collect();
+                let after: String = chars.get(i + 1..).unwrap_or_default().iter().collect();
+                if keeps_hyphen(&before, &after) {
+                    out.push('-');
+                }
+            }
             '\u{fb00}' => out.push_str("ff"),
             '\u{fb01}' => out.push_str("fi"),
             '\u{fb02}' => out.push_str("fl"),
@@ -576,20 +639,113 @@ pub fn normalize(text: &str) -> String {
 }
 
 /// Join `next` onto `text` across a line break: de-hyphenate a wrapped
-/// word, else a space. Whitespace at the break is the break's, and goes.
+/// word, run two East Asian wide characters together, else a space.
+/// Whitespace at the break is the break's, and goes.
 pub(crate) fn join(text: &mut String, next: &str) {
     let trimmed = text.trim_end().len();
     text.truncate(trimmed);
     let next = next.trim_start();
-    let wrapped = text.ends_with('-')
+    let before = text.chars().next_back();
+    let after = next.chars().next();
+    let wrapped = before.is_some_and(is_hyphen)
         && text.chars().rev().nth(1).is_some_and(char::is_alphabetic)
-        && next.chars().next().is_some_and(char::is_lowercase);
+        && after.is_some_and(char::is_alphanumeric);
     if wrapped {
         text.pop();
-    } else if !text.is_empty() {
+        if keeps_hyphen(text, next) {
+            text.push('-');
+        }
+    } else if !text.is_empty() && !break_vanishes(before, after) {
         text.push(' ');
     }
     text.push_str(next);
+}
+
+/// A hyphen, a hyphen-minus, or the soft hyphen the text layer leaves
+/// where a line ended in one.
+fn is_hyphen(c: char) -> bool {
+    matches!(c, '-' | '\u{2010}' | '\u{ad}')
+}
+
+/// Whether a hyphen that ended a line, between `before` and `after`, was
+/// the word's own. Nothing on the page says: a typesetter's hyphen and an
+/// author's are the same glyph. What is known is that a typesetter breaks
+/// a single word, so a hyphen in a compound that already has one —
+/// `state-of-` `the-art` — is the author's, and so is one before a capital
+/// or a digit, `non-` `English`, `COVID-` `19`, which no hyphenation
+/// dictionary splits. Any other, `cross-` `reference` among them, is taken
+/// for a typesetter's and goes.
+fn keeps_hyphen(before: &str, after: &str) -> bool {
+    let word_before = before
+        .rsplit(char::is_whitespace)
+        .next()
+        .unwrap_or_default();
+    let word_after = after.split(char::is_whitespace).next().unwrap_or_default();
+    after
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_uppercase() || c.is_numeric())
+        || word_before.contains(is_hyphen)
+        || word_after.contains(is_hyphen)
+}
+
+/// CSS Text 3's segment break rule (§4.1.2): a line break beside a zero
+/// width space, or between two East Asian wide characters neither of them
+/// Hangul, is no space at all; nor is one inside Thai, Lao, Myanmar or
+/// Khmer text. Chinese and Japanese do not put spaces
+/// between words, so the wrap was never one; Korean does, and keeps it.
+fn break_vanishes(before: Option<char>, after: Option<char>) -> bool {
+    match (before, after) {
+        (Some('\u{200b}'), _) | (_, Some('\u{200b}')) => true,
+        (Some(a), Some(b)) => (is_wide(a) && is_wide(b)) || (unspaced(a) && unspaced(b)),
+        _ => false,
+    }
+}
+
+/// Whether `c` is in a script that runs its words together — the East
+/// Asian wide characters bar Hangul, and Thai, Lao, Myanmar and Khmer — and
+/// has no capitals to open a sentence with.
+pub(crate) fn joins_unspaced(c: char) -> bool {
+    is_wide(c) || unspaced(c)
+}
+
+/// The Southeast Asian scripts that write no space between words — Thai,
+/// Lao, Myanmar, Khmer — where CSS leaves the break to the engine and every
+/// engine that knows the script removes it: a wrap is between two words
+/// the source ran together.
+fn unspaced(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x0e00..=0x0eff // Thai, Lao
+            | 0x1000..=0x109f // Myanmar
+            | 0x1780..=0x17ff // Khmer
+            | 0x19e0..=0x19ff // Khmer symbols
+    )
+}
+
+/// East Asian Width F, W or H, bar Hangul: the ideographs, kana, bopomofo,
+/// Yi and Tangut, their punctuation, and the full and half width forms.
+/// Emoji are wide too, but a wrap beside one is a space as often as not,
+/// and a space is the safer guess.
+fn is_wide(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x2e80..=0x303e              // CJK radicals, Kangxi, symbols and punctuation
+            | 0x3041..=0x312f        // hiragana, katakana, bopomofo
+            | 0x3190..=0x33ff        // kanbun … CJK compatibility
+            | 0x3400..=0x4dbf        // extension A
+            | 0x4e00..=0x9fff        // unified ideographs
+            | 0xa000..=0xa4cf        // Yi
+            | 0xf900..=0xfaff        // compatibility ideographs
+            | 0xfe10..=0xfe19        // vertical forms
+            | 0xfe30..=0xfe6f        // compatibility and small forms
+            | 0xff01..=0xff60        // fullwidth forms
+            | 0xff61..=0xff9f        // halfwidth punctuation and katakana
+            | 0xffe0..=0xffe6        // fullwidth signs
+            | 0x16fe0..=0x18aff      // ideographic symbols, Tangut
+            | 0x1b000..=0x1b16f      // kana supplement and extended
+            | 0x20000..=0x3fffd // extensions B onward
+    )
 }
 
 /// Whether two consecutive lines belong to one paragraph.
@@ -741,6 +897,81 @@ fn paragraph_head(line: &Line) -> String {
     }
 }
 
+/// The list that opens at `classified[i]`, a `class` line, and the index
+/// of the first line after it. A marker set deeper than the list's opens a
+/// list under the item above, read by [`group`] in turn.
+fn list_at(
+    classified: &[(Class, &Line)],
+    i: usize,
+    class: Class,
+    line: &Line,
+    bodies: &[&Line],
+) -> (Block, usize) {
+    let mut labels: Vec<String> = leading_number(&line.text)
+        .map(|l| vec![l.trim_end_matches(')').to_owned()])
+        .unwrap_or_default();
+    let mut items = vec![ListItem::from(normalize(&item_text(&line.text)))];
+    // A marker set deeper than this list's opens a list of its
+    // own, the last item's: a law's 款 under its paragraph.
+    let deeper = |l: &Line| l.bbox.x0 > line.bbox.x0 + char_width(line);
+    let right_edge = classified
+        .iter()
+        .map(|(_, l)| l.bbox.x1)
+        .fold(page_right_edge(bodies), f64::max);
+    let mut j = i + 1;
+    while let Some((c, next)) = classified.get(j).copied() {
+        if matches!(c, Class::Bullet | Class::Numbered) && deeper(next) {
+            let end = classified
+                .iter()
+                .skip(j)
+                .position(|(c, l)| matches!(c, Class::Heading(_)) || !deeper(l))
+                .map_or(classified.len(), |n| j + n);
+            if let (Some(last), Some(nested)) = (items.last_mut(), classified.get(j..end)) {
+                last.children.extend(group(nested, bodies));
+            }
+            j = end;
+            continue;
+        }
+        if c == class {
+            if let Some(label) = leading_number(&next.text) {
+                labels.push(label.trim_end_matches(')').to_owned());
+            }
+            items.push(normalize(&item_text(&next.text)).into());
+        } else if c == Class::Body
+            && classified.get(j - 1).is_some_and(|(_, prev)| {
+                continues(prev, next)
+                    && (next.bbox.x0 > line.bbox.x0 + 2.0
+                        || (next.bbox.x0 >= line.bbox.x0 - char_width(line)
+                            && prev.bbox.x1 >= right_edge - char_width(prev) * RAGGED_CHARS))
+            })
+        {
+            // A wrapped item continues indented past the bullet,
+            // or under it when the label is part of the text —
+            // `（一）上市有價證` and then `券。` — and the line
+            // before ran into the right edge. Under it is within
+            // a character: a full-width bracket's ink starts
+            // half a character into its cell.
+            if let Some(last) = items.last_mut() {
+                join(&mut last.text, &normalize(&next.text));
+            }
+        } else {
+            break;
+        }
+        j += 1;
+    }
+    // The document's own numbers are kept when every item
+    // carries one, so `2.1` stays `2.1` and a list starting at
+    // 3 starts at 3; anything else the renderer numbers.
+    let marker = if class == Class::Bullet {
+        ListMarker::Bullet
+    } else if labels.len() == items.len() {
+        ListMarker::Labelled(labels)
+    } else {
+        ListMarker::Ordered
+    };
+    (Block::List { marker, items }, j)
+}
+
 /// The blocks of a run of classified lines, `bodies` being every body line
 /// of the page, which is what the ragged-right rule measures columns on.
 fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
@@ -775,44 +1006,9 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
                 i = j;
             }
             Class::Bullet | Class::Numbered => {
-                let mut labels: Vec<String> = leading_number(&line.text)
-                    .map(|l| vec![l.trim_end_matches(')').to_owned()])
-                    .unwrap_or_default();
-                let mut items = vec![normalize(&item_text(&line.text))];
-                let mut j = i + 1;
-                while let Some((c, next)) = classified.get(j).copied() {
-                    if c == class {
-                        if let Some(label) = leading_number(&next.text) {
-                            labels.push(label.trim_end_matches(')').to_owned());
-                        }
-                        items.push(normalize(&item_text(&next.text)));
-                    } else if c == Class::Body
-                        && classified
-                            .get(j - 1)
-                            .is_some_and(|(_, prev)| continues(prev, next))
-                        && next.bbox.x0 > line.bbox.x0 + 2.0
-                    {
-                        // A wrapped item continues indented past the bullet.
-                        if let Some(last) = items.last_mut() {
-                            join(last, &normalize(&next.text));
-                        }
-                    } else {
-                        break;
-                    }
-                    j += 1;
-                }
-                // The document's own numbers are kept when every item
-                // carries one, so `2.1` stays `2.1` and a list starting at
-                // 3 starts at 3; anything else the renderer numbers.
-                let marker = if class == Class::Bullet {
-                    ListMarker::Bullet
-                } else if labels.len() == items.len() {
-                    ListMarker::Labelled(labels)
-                } else {
-                    ListMarker::Ordered
-                };
-                blocks.push(Block::List { marker, items });
-                i = j;
+                let (list, next) = list_at(classified, i, class, line, bodies);
+                blocks.push(list);
+                i = next;
             }
             Class::Body => {
                 let mut text = paragraph_head(line);
@@ -840,10 +1036,10 @@ fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
 #[cfg(test)]
 mod tests {
     use super::{
-        blocks, blocks_among, has_dash_lead_in, is_leader_entry, item_text, leading_number,
-        normalize,
+        blocks, blocks_among, has_dash_lead_in, is_leader_entry, item_text, join, leading_number,
+        normalize, words,
     };
-    use crate::ast::{Block, ListMarker};
+    use crate::ast::{Block, ListItem, ListMarker};
     use crate::lines::{DrawnImage, Line};
     use kurbo::Rect;
 
@@ -866,6 +1062,65 @@ mod tests {
             mcids: Vec::new(),
             segments: Vec::new(),
         }
+    }
+
+    fn joined(first: &str, second: &str) -> String {
+        let mut text = first.to_owned();
+        join(&mut text, second);
+        text
+    }
+
+    #[test]
+    fn a_line_of_chinese_is_as_many_words_as_it_is_long() {
+        assert_eq!(words("理相關之申報事項。證券商應以"), 7);
+        assert_eq!(words("證券交易法"), 3);
+        assert_eq!(words("第 3 頁"), 3);
+        assert_eq!(words("Page 3 of 11"), 4);
+        assert_eq!(words("使用 PDF 檔案"), 3);
+    }
+
+    #[test]
+    fn a_wrap_between_wide_characters_is_no_space() {
+        // Chinese, Japanese kana, and full-width punctuation either side.
+        assert_eq!(joined("以自己", "之計算"), "以自己之計算");
+        assert_eq!(joined("ことが", "できる"), "ことができる");
+        assert_eq!(joined("不在此限：", "一、"), "不在此限：一、");
+        assert_eq!(joined("辦理", "（申報）"), "辦理（申報）");
+        assert_eq!(joined("zero\u{200b}", "width"), "zero\u{200b}width");
+        // Thai writes no spaces between words either.
+        assert_eq!(joined("ให้ใช้บังคับ", "ตั้งแต่วัน"), "ให้ใช้บังคับตั้งแต่วัน");
+    }
+
+    #[test]
+    fn a_wrap_beside_anything_narrower_is_a_space() {
+        // Korean spaces its words; a Latin word beside a Han one keeps
+        // the space it was typeset with.
+        assert_eq!(joined("있습니다", "그러나"), "있습니다 그러나");
+        assert_eq!(joined("使用", "PDF 檔案"), "使用 PDF 檔案");
+        assert_eq!(joined("the PDF", "檔案"), "the PDF 檔案");
+        assert_eq!(joined("plain", "words"), "plain words");
+        assert_eq!(joined("hyph-", "enated"), "hyphenated");
+    }
+
+    #[test]
+    fn a_hyphen_in_a_compound_or_before_a_capital_is_the_authors() {
+        assert_eq!(joined("state-of-", "the-art"), "state-of-the-art");
+        assert_eq!(
+            joined("a state-", "of-the-art tool"),
+            "a state-of-the-art tool"
+        );
+        assert_eq!(joined("non-", "English"), "non-English");
+        assert_eq!(joined("COVID-", "19"), "COVID-19");
+        // A hyphen the typesetter drew, whichever character it is.
+        assert_eq!(joined("inter\u{2010}", "national"), "international");
+        assert_eq!(joined("inter\u{ad}", "national"), "international");
+        // The text layer's joined-line mark, decided the same way.
+        assert_eq!(normalize("state-of\u{ad}the-art"), "state-of-the-art");
+        assert_eq!(normalize("hyphen\u{ad}ated"), "hyphenated");
+        assert_eq!(normalize("state-of\u{2}the-art"), "state-of-the-art");
+        assert_eq!(normalize("hyphen\u{2}ated"), "hyphenated");
+        assert_eq!(normalize("wrapped\u{2}"), "wrapped\u{ad}");
+        assert_eq!(normalize("trailing\u{ad}"), "trailing\u{ad}");
     }
 
     #[test]
@@ -1015,6 +1270,67 @@ mod tests {
             mcids: Vec::new(),
             segments: Vec::new(),
         }
+    }
+
+    /// A line from `x0` to `x1`, its top at `top`, at 12 pt.
+    fn placed(text: &str, x0: f64, x1: f64, top: f64) -> Line {
+        Line {
+            text: text.to_owned(),
+            bbox: Rect::new(x0, top - 12.0, x1, top),
+            font_size: 12.0,
+            bold: false,
+            bold_prefix: 0,
+            mono: false,
+            mcids: Vec::new(),
+            segments: Vec::new(),
+        }
+    }
+
+    /// 第 6 條 untagged, as Chrome sets it: a paragraph numbered `1.`, its
+    /// subparagraphs `一、` indented under it, and under the second of
+    /// those two items whose label is part of their text and whose second
+    /// line starts under the label, the bracket's ink half a character in.
+    #[test]
+    fn an_indented_marker_opens_a_list_under_the_item_above() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            placed("1. 證券商之業務如下：", 52.0, 166.0, 704.0),
+            placed("一、有價證券之承銷及其他經", 70.0, 225.0, 686.0),
+            placed("主管機關核准之相關業務。", 94.0, 213.0, 668.0),
+            placed("二、有價證券之自行買賣，其", 70.0, 225.0, 650.0),
+            placed("範圍如下：", 94.0, 148.0, 632.0),
+            placed("（一）上市有價證", 132.0, 219.0, 614.0),
+            placed("券。", 124.0, 143.0, 596.0),
+            placed("（二）上櫃有價證券。", 132.0, 200.0, 578.0),
+            placed("2. 前項業務，應經主管機關許可。", 52.0, 207.0, 560.0),
+        ];
+        let subitems = Block::List {
+            marker: ListMarker::Labelled(vec!["（一）".into(), "（二）".into()]),
+            items: vec!["上市有價證券。".into(), "上櫃有價證券。".into()],
+        };
+        let subparagraphs = Block::List {
+            marker: ListMarker::Labelled(vec!["一、".into(), "二、".into()]),
+            items: vec![
+                "有價證券之承銷及其他經主管機關核准之相關業務。".into(),
+                ListItem {
+                    text: "有價證券之自行買賣，其範圍如下：".into(),
+                    children: vec![subitems],
+                },
+            ],
+        };
+        assert_eq!(
+            blocks(&lines, &[], page),
+            vec![Block::List {
+                marker: ListMarker::Labelled(vec!["1.".into(), "2.".into()]),
+                items: vec![
+                    ListItem {
+                        text: "證券商之業務如下：".into(),
+                        children: vec![subparagraphs],
+                    },
+                    "前項業務，應經主管機關許可。".into(),
+                ],
+            }]
+        );
     }
 
     #[test]
@@ -1474,9 +1790,16 @@ mod tests {
         assert_eq!(leading_number("１. 全部文档"), Some("１."));
         assert_eq!(leading_number("（１）显示"), Some("（１）"));
 
-        // A bracket with no number, an unclosed bracket, and a marker with
-        // nothing after it are all not markers.
-        assert_eq!(leading_number("（一）显示"), None);
+        // A Chinese numeral is a number too: a law's 款 and 目.
+        assert_eq!(leading_number("（一）显示"), Some("（一）"));
+        assert_eq!(leading_number("一、有價證券之承銷"), Some("一、"));
+        assert_eq!(leading_number("二十一、其他"), Some("二十一、"));
+        assert_eq!(leading_number("1、文件管理"), Some("1、"));
+        // A Chinese numeral in prose is not a label.
+        assert_eq!(leading_number("一個文件"), None);
+        assert_eq!(leading_number("（一個）"), None);
+        // An unclosed bracket, and a marker with nothing after it, are not
+        // markers.
         assert_eq!(leading_number("（1 显示"), None);
         assert_eq!(leading_number("1、"), None);
     }
