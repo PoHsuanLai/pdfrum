@@ -599,7 +599,13 @@ fn construct_edit_variants() -> usize {
     let _ = SaveError::EmptyFieldName;
     let _ = SaveError::EmptyRadioGroup;
     let _ = SaveError::DuplicateAttachmentName(String::new());
-    n += 26;
+    let _ = SaveError::BadPageSize(Size::new(0.0, 0.0));
+    let _ = SaveError::BlankDocument(String::new());
+    let _ = SaveError::TooManyGlyphs;
+    let _ = SaveError::VariableFontsDisabled;
+    let _ = SaveError::ForeignGlyphFont;
+    let _ = SaveError::PngNeedsDecoding;
+    n += 32;
 
     let _ = FieldKindSpec::Text;
     let _ = FieldKindSpec::Check { on: String::new() };
@@ -1002,7 +1008,7 @@ fn doc_enum_variants_are_constructible() {
 fn edit_enum_variants_are_constructible() {
     assert_eq!(
         construct_edit_variants(),
-        26 + 3 + 8 + 2 + 5 + 8 + 8 + 10 + 4
+        32 + 3 + 8 + 2 + 5 + 8 + 8 + 10 + 4
     );
 }
 
@@ -1101,7 +1107,10 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 393 -> 396 (`FieldKindSpec` Text/Check/Radio).
     // 396 -> 397 (`SaveError::DuplicateAttachmentName`).
     // 397 -> 405 (`Relationship` eight variants).
-    assert_eq!(constructed, 405, "default-feature variant count");
+    // 405 -> 411 (`SaveError` gained `BadPageSize`, `BlankDocument`, `TooManyGlyphs`,
+    // `VariableFontsDisabled`, `ForeignGlyphFont` and `PngNeedsDecoding` with glyph runs,
+    // blank documents and PNG passthrough).
+    assert_eq!(constructed, 411, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 48, "default-feature enum count");
 }
 
