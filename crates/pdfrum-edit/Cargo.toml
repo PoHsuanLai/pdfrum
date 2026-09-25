@@ -18,6 +18,10 @@ workspace = true
 
 [features]
 default = []
+# Glyph-run fonts at a variable instance, and CFF2 faces at all: the
+# subsetter instantiates them (converting CFF2 to TrueType outlines). Off by
+# default because it pulls the subsetter's own skrifa and write-fonts.
+variable-fonts = ["subsetter/variable-fonts"]
 # Placing a compiled SVG form; the ingestion itself lives in the facade.
 svg-import = ["dep:usvg", "dep:png"]
 # Text in an ingested SVG, which needs the caller's font set.
@@ -39,11 +43,18 @@ pdfrum-font.workspace = true
 pdfrum-page.workspace = true
 sha2.workspace = true
 subsetter.workspace = true
+# Glyph runs: a face's metrics and cmap at a variable instance, and its
+# `fvar`/`avar` to name that instance in user space for the subsetter.
+skrifa.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
 pdfrum-filters.workspace = true
+# Glyph IDs for the glyph-run tests' fixtures.
+skrifa.workspace = true
+# Encoding the PNGs the passthrough tests embed.
+png.workspace = true
 # Test-only: the page crate's graphics state carries `SmallVec` dash arrays
 # and colour components, so building one by hand needs the type.
 smallvec.workspace = true

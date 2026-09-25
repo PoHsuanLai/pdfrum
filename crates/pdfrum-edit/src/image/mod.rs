@@ -5,6 +5,7 @@
 //! and this allocates the `/XObject` a content stream's `Do` can name.
 
 mod jpeg;
+mod png;
 mod raw;
 
 use pdfrum_object::ObjRef;
@@ -62,6 +63,35 @@ impl EditDoc<'_> {
     /// a JPEG 2000 codestream, or their header cannot be read.
     pub fn embed_jpeg(&mut self, bytes: &[u8]) -> Result<EmbeddedImage, Error> {
         jpeg::embed(self, bytes)
+    }
+
+    /// Embed a PNG as a new image `XObject`, its compressed data passed
+    /// through unchanged.
+    ///
+    /// PNG's `IDAT` stream is what `/FlateDecode` with the PNG predictors
+    /// reads, so a greyscale, RGB or palette PNG that is not interlaced is
+    /// stored as it came: no decode, no re-compression, no larger than the
+    /// file. `/Width`, `/Height`, `/ColorSpace` and `/BitsPerComponent` come
+    /// from its `IHDR` (and `PLTE`).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::PngNeedsDecoding`] for a PNG PDF cannot take as stored — one
+    /// with an alpha channel or `tRNS` transparency (PDF keeps alpha in a
+    /// separate soft mask), an interlaced one, or 16 bits deep: decode it and
+    /// use [`EditDoc::embed_image`]. [`Error::UnrecognisedImageData`] when
+    /// the bytes are not a PNG.
+    ///
+    /// ```
+    /// use pdfrum_edit::{EditDoc, Error, Size, blank_document};
+    ///
+    /// let base = blank_document(&[Size::new(100.0, 100.0)])?;
+    /// let mut edit = EditDoc::new(&base);
+    /// assert!(matches!(edit.embed_png(b"not a png"), Err(Error::UnrecognisedImageData)));
+    /// # Ok::<(), pdfrum_edit::Error>(())
+    /// ```
+    pub fn embed_png(&mut self, bytes: &[u8]) -> Result<EmbeddedImage, Error> {
+        png::embed(self, bytes)
     }
 
     /// Embed raw interleaved samples as a new image `XObject`.

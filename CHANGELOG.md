@@ -64,6 +64,48 @@ first crates.io release.
   guess already reads as lines are untouched; a real column drawn glyph by
   glyph still reads as one.
 
+### Added
+
+- `blank_document` makes a new file of blank pages, one per size, for a
+  caller that writes a PDF from scratch. Until now `EditDoc` could only edit a
+  file that already existed; a fresh one now starts from this, is drawn on
+  with `draw_pages`, and saves like any other.
+- `EditDoc::embed_glyph_font` and `Canvas::glyphs` draw **shaped** text: glyph
+  IDs at the positions a layout engine chose, with the text each glyph was
+  shaped from. `Canvas::text` could only reach a glyph through the font's
+  cmap, so a ligature, a contextual form or a glyph two code points share was
+  out of reach. A run is written as `TJ` with each glyph exactly at its
+  origin; each glyph's cluster text goes into the font's `/ToUnicode` (a
+  ligature maps to every letter it joins), and a cluster of several glyphs,
+  or a glyph already mapped to other text, is wrapped in `/ActualText`. The
+  font is a `/Type0` over the face subset to the glyphs drawn, written when
+  the drawing call returns; a face of a `.ttc` collection is chosen by index,
+  and the program is shared, not copied, until the save writes its subset.
+- `FontInstance` names the instance of a variable face a run is drawn at —
+  the default, a shaper's normalized coordinates, or user-space
+  `AxisValue`s. Normalized coordinates are mapped back through `avar` and
+  `fvar` so the subsetter instances at exactly the location the layout used.
+  The new `variable-fonts` feature (off by default; it pulls the subsetter's
+  own skrifa and write-fonts) instances variable faces and CFF2; without it
+  such a face is refused with `Error::VariableFontsDisabled`.
+- `Canvas::fill_gradient` fills a shape with a linear or radial `Gradient`
+  (axial and radial shadings over stitched functions). Stops whose alpha
+  varies get a luminosity soft mask of the same geometry, so a fade to
+  transparent fades to the page rather than to black.
+- `Canvas::blend` sets a `BlendMode` (`/BM`) for what is drawn after it,
+  scoped by `saved` like `opacity`.
+- `EditDoc::embed_png` passes an opaque, non-interlaced greyscale, RGB or
+  palette PNG through as stored: its `IDAT` is what `/FlateDecode` with the
+  PNG predictors reads, so nothing is decoded or re-compressed. A PNG with
+  alpha, `tRNS`, interlacing or 16-bit samples is refused with
+  `Error::PngNeedsDecoding`; decode it and use `embed_image`.
+- `ByteSpan::from_owner` (pdfrum-object) wraps any owned buffer without
+  copying it, so a 30 MB font collection a renderer already holds can be
+  named directly.
+- `Error` gains `BadPageSize`, `BlankDocument`, `TooManyGlyphs`,
+  `VariableFontsDisabled`, `ForeignGlyphFont` and `PngNeedsDecoding`. It is
+  `#[non_exhaustive]`, so this is additive.
+
 ## [0.3.0] - 2026-09-16
 
 ### Breaking

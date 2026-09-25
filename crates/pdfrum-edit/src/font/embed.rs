@@ -217,7 +217,7 @@ pub struct MissingGlyph {
 
 /// Kind of program, sniffed from the leading bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ProgramKind {
+pub(crate) enum ProgramKind {
     TrueType,
     OpenTypeCff,
     Type1,
@@ -546,7 +546,7 @@ fn embed_custom_composite(
 ///
 /// `Adobe`/`Identity`/`0` because the root's `/Encoding` is `Identity-H`: the
 /// CID *is* the code, so no registry ordering applies.
-fn cid_font_dict(
+pub(crate) fn cid_font_dict(
     doc: &mut EditDoc<'_>,
     name: &[u8],
     subtype: Name,
@@ -575,7 +575,7 @@ fn cid_font_dict(
 }
 
 /// The `/Type0` root naming `Identity-H`, one descendant and a `/ToUnicode`.
-fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
+pub(crate) fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
     Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::FONT.clone())),
         (names::SUBTYPE.clone(), Object::Name(names::TYPE0.clone())),
@@ -607,7 +607,7 @@ fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
 /// - **`/CapHeight`** is OS/2 `sCapHeight` when the face has it, which is the
 ///   capital-letter height ISO 32000-1 table 122 asks for; the ascent is only
 ///   the fallback.
-fn load_font_desc(
+pub(crate) fn load_font_desc(
     doc: &mut EditDoc<'_>,
     font_name: &[u8],
     program: &[u8],
@@ -777,7 +777,7 @@ fn char_maps(glyphs: &GlyphSource, max: u32) -> Vec<(u32, u16)> {
 
 /// The `/W` array: a run of consecutive CIDs sharing one width goes out as
 /// `first last width`, any other consecutive block as `first [w w …]`.
-fn create_widths_array(widths: &BTreeMap<u32, u32>) -> Array {
+pub(crate) fn create_widths_array(widths: &BTreeMap<u32, u32>) -> Array {
     let mut out = Array::new();
     let keys: Vec<u32> = widths.keys().copied().collect();
     let mut i = 0;
@@ -824,7 +824,7 @@ fn create_widths_array(widths: &BTreeMap<u32, u32>) -> Array {
     out
 }
 
-const TO_UNICODE_START: &str = "/CIDInit /ProcSet findresource begin\n\
+pub(crate) const TO_UNICODE_START: &str = "/CIDInit /ProcSet findresource begin\n\
 12 dict begin\n\
 begincmap\n\
 /CIDSystemInfo\n\
@@ -838,12 +838,12 @@ begincmap\n\
 <0000> <FFFF>\n\
 endcodespacerange\n";
 
-const TO_UNICODE_END: &str = "endcmap\n\
+pub(crate) const TO_UNICODE_END: &str = "endcmap\n\
 CMapName currentdict /CMap defineresource pop\n\
 end\n\
 end\n";
 
-const MAX_BF_ENTRIES: usize = 100;
+pub(crate) const MAX_BF_ENTRIES: usize = 100;
 
 /// The generated `/ToUnicode` CMap: `bfchar` for isolated codes, `bfrange`
 /// for consecutive runs — with the destination as a list when the Unicode
@@ -982,7 +982,7 @@ fn write_bfrange_consec(buf: &mut String, map: &BTreeMap<(u32, u32), u32>) {
     }
 }
 
-fn add_charcode(buf: &mut String, number: u32) {
+pub(crate) fn add_charcode(buf: &mut String, number: u32) {
     let _ = std::fmt::Write::write_fmt(buf, format_args!("<{number:04X}>"));
 }
 

@@ -70,6 +70,26 @@ impl ByteSpan {
         }
     }
 
+    /// A window over the whole of a buffer something else owns — a font
+    /// blob a renderer already holds, a memory map — shared, not copied.
+    ///
+    /// For a buffer that is already an `Arc<[u8]>`, [`ByteSpan::whole`] says
+    /// the same thing; this is for owners of any other shape, so a caller
+    /// with a 30 MB font collection in hand does not copy it to name it.
+    ///
+    /// ```
+    /// use pdfrum_object::ByteSpan;
+    ///
+    /// let span = ByteSpan::from_owner(vec![1u8, 2, 3]);
+    /// assert_eq!(span.as_bytes(), &[1, 2, 3]);
+    /// ```
+    #[must_use]
+    pub fn from_owner(owner: impl AsRef<[u8]> + Send + 'static) -> Self {
+        Self {
+            buf: Bytes::from_owner(owner),
+        }
+    }
+
     /// An empty window.
     #[must_use]
     pub fn empty() -> Self {
