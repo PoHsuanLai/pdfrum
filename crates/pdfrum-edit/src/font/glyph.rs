@@ -301,7 +301,8 @@ fn write(doc: &mut EditDoc<'_>, face: &GlyphFace) -> Result<(), Error> {
     };
     let glyphs =
         GlyphSource::from_bytes(program.as_slice()).ok_or(Error::UnrecognisedFontProgram)?;
-    let name = subset_name(&face.name, subset_tag(IdSource::Fixed(fingerprint(face))));
+    let base = instance_base_name(face);
+    let name = subset_name(&base, subset_tag(IdSource::Fixed(fingerprint(face))));
     let descriptor = load_font_desc(doc, &name, &program, kind, &glyphs);
     let widths: BTreeMap<u32, u32> = face
         .widths
@@ -331,6 +332,19 @@ fn write(doc: &mut EditDoc<'_>, face: &GlyphFace) -> Result<(), Error> {
         Object::Dict(type0_font_dict(&name, descendant, to_unicode)),
     );
     Ok(())
+}
+
+/// The face's own name, or the instance's when the subset is not the
+/// default one: `/BaseFont` and `/FontName` then say the weight the glyphs
+/// were cut at, not the default instance's.
+fn instance_base_name(face: &GlyphFace) -> Vec<u8> {
+    FontRef::from_index(&face.program, face.index)
+        .ok()
+        .and_then(|font| {
+            let values = instance::user_values(&font, &face.instance);
+            crate::font::instance_name::instance_name(&font, &values)
+        })
+        .unwrap_or_else(|| face.name.clone())
 }
 
 /// The program subset to the drawn glyphs in CID order, at the instance.
