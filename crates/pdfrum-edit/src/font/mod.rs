@@ -77,6 +77,7 @@ pub(crate) mod collect;
 pub(crate) mod embed;
 pub(crate) mod glyph;
 pub(crate) mod instance;
+pub(crate) mod instance_name;
 pub(crate) mod overrides;
 
 use std::collections::BTreeMap;

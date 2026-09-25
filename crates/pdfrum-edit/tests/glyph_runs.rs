@@ -294,6 +294,29 @@ mod variable {
         );
     }
 
+    /// The embedded subset's `/FontName` at `wght` `weight`, without its tag.
+    fn name_at(weight: f32) -> String {
+        let doc = page(
+            KARLA,
+            FontInstance::User(vec![AxisValue {
+                tag: *b"wght",
+                value: weight,
+            }]),
+            |_| vec![(spelled(KARLA, "mm"), "mm".to_owned(), 60.0)],
+        );
+        let fonts = doc.embedded_fonts();
+        let name = &fonts.first().expect("one font").name;
+        name.split_once('+').expect("a subset tag").1.to_owned()
+    }
+
+    #[test]
+    fn each_subset_is_named_after_its_instance() {
+        // Named instances take fvar's own names; an unnamed one is spelled by
+        // the OpenType recommendation, prefix then value and tag per axis.
+        let names = [name_at(400.0), name_at(700.0), name_at(550.0)];
+        assert_eq!(names, ["Karla-Regular", "Karla-Bold", "Karla_550wght"]);
+    }
+
     #[test]
     fn normalized_coordinates_name_the_same_instance_as_user_values() {
         // What a shaper holds for wght 700: fvar-normalized, then through

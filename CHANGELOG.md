@@ -88,6 +88,11 @@ first crates.io release.
   The new `variable-fonts` feature (off by default; it pulls the subsetter's
   own skrifa and write-fonts) instances variable faces and CFF2; without it
   such a face is refused with `Error::VariableFontsDisabled`.
+- A glyph font subset at a non-default instance is named after that
+  instance in `/BaseFont` and `/FontName`, not after the face's default: a
+  named `fvar` instance takes its own PostScript name (`Karla-Bold`), any
+  other the OpenType recommendation's `Karla_550wght`. A variable CJK face
+  whose default is Thin no longer lists as Thin at every weight.
 - `Canvas::fill_gradient` fills a shape with a linear or radial `Gradient`
   (axial and radial shadings over stitched functions). Stops whose alpha
   varies get a luminosity soft mask of the same geometry, so a fade to
