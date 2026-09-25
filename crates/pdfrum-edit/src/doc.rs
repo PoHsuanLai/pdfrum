@@ -48,6 +48,9 @@ pub struct EditDoc<'a> {
     /// document one it did not have. The trailer is the writer's, built from
     /// the base's, so this is the one key an edit overrides there.
     info: Option<ObjRef>,
+    /// Glyph fonts this session embedded, and what its canvases drew with
+    /// them; written into their font objects as each drawing call returns.
+    pub(crate) glyph_faces: Vec<crate::font::glyph::GlyphFace>,
 }
 
 impl<'a> EditDoc<'a> {
@@ -62,6 +65,7 @@ impl<'a> EditDoc<'a> {
             // can never collide with one the xref already names.
             next_num: base.xref().last_object_number().saturating_add(1),
             info: None,
+            glyph_faces: Vec::new(),
         }
     }
 

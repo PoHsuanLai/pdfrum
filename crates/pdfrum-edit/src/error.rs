@@ -17,6 +17,36 @@ pub enum Error {
     #[error("write failed: {0}")]
     Io(#[from] io::Error),
 
+    /// A page size for [`blank_document`](crate::blank_document) that is not
+    /// finite and positive.
+    #[error("a page must have a finite, positive size, not {0:?}")]
+    BadPageSize(kurbo::Size),
+
+    /// A glyph font drew more than 65 535 distinct glyphs, all an Identity-H
+    /// code can name.
+    #[error("a glyph font can name at most 65535 glyphs")]
+    TooManyGlyphs,
+
+    /// A glyph font needs instancing — a CFF2 face, or a variable instance
+    /// other than the default — and the `variable-fonts` feature is off.
+    #[error("this face needs the variable-fonts feature")]
+    VariableFontsDisabled,
+
+    /// A glyph run named a [`GlyphFont`](crate::GlyphFont) this session did not
+    /// embed.
+    #[error("the glyph font belongs to another editing session")]
+    ForeignGlyphFont,
+
+    /// A PNG [`EditDoc::embed_png`](crate::EditDoc::embed_png) cannot pass
+    /// through as stored: alpha, `tRNS`, interlacing or 16-bit samples.
+    #[error("this PNG must be decoded before it is embedded")]
+    PngNeedsDecoding,
+
+    /// The blank document did not read back. Not expected: the bytes are this
+    /// crate's own; the message is the parser's.
+    #[error("the blank document did not parse: {0}")]
+    BlankDocument(String),
+
     /// The document declares `/Encrypt`, this reader derived no key for it
     /// (an `/Identity` crypt filter, or a handler opened as
     /// [`pdfrum_crypt::SecurityHandler::Identity`]), and `remove_security`

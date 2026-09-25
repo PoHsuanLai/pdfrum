@@ -16,7 +16,15 @@
 //! [`Canvas::text_width`], a single string's advance. A caller who needs
 //! layout has a typesetting problem and brings their own layout to `text`.
 
+mod blend;
+mod glyphs;
+mod gradient;
+
 use std::fmt::Write as _;
+
+pub use blend::BlendMode;
+pub use glyphs::{GlyphRun, RunGlyph};
+pub use gradient::{Gradient, GradientKind, GradientStop};
 
 use crate::{ContentsShape, EmbeddedFont, EmbeddedImage, write_float, write_matrix, write_point};
 use kurbo::{Affine, BezPath, PathEl, Point, Rect, RoundedRect, Shape};
@@ -1428,11 +1436,16 @@ impl EditDoc<'_> {
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     ///
+    /// Glyph fonts ([`EditDoc::embed_glyph_font`]) the drawing used are
+    /// written when it returns: subset to every glyph this session has drawn
+    /// with them so far, with their `/W` and `/ToUnicode`.
+    ///
     /// # Errors
     ///
     /// Whatever `body` refused to draw — a character the font has no glyph
     /// for, most often — and [`Error::InlinePage`] for a page with no
     /// object of its own. Nothing is written when the drawing failed.
+    /// [`Error::Subset`] when a glyph font's face would not subset.
     pub fn draw_page(
         &mut self,
         index: impl Into<PageIndex>,
@@ -1455,6 +1468,25 @@ impl EditDoc<'_> {
     ///
     /// As [`EditDoc::draw_page`].
     pub fn draw_page_with_fonts(
+        &mut self,
+        index: impl Into<PageIndex>,
+        limits: &Limits,
+        #[cfg(feature = "svg-text")] fonts: &crate::svg_text::SvgFonts,
+        body: impl FnOnce(&mut Canvas<'_, '_>),
+    ) -> Result<()> {
+        self.draw_one(
+            index,
+            limits,
+            #[cfg(feature = "svg-text")]
+            fonts,
+            body,
+        )?;
+        crate::font::glyph::finish(self)
+    }
+
+    /// One page's drawing, without writing the glyph fonts it used: the
+    /// callers write those once, after the last page they draw.
+    fn draw_one(
         &mut self,
         index: impl Into<PageIndex>,
         limits: &Limits,
@@ -1567,7 +1599,7 @@ impl EditDoc<'_> {
             {
                 continue;
             }
-            self.draw_page_with_fonts(
+            self.draw_one(
                 index,
                 limits,
                 #[cfg(feature = "svg-text")]
@@ -1575,7 +1607,8 @@ impl EditDoc<'_> {
                 &mut body,
             )?;
         }
-        Ok(())
+        // Once, after every page: a subset is of everything the pages drew.
+        crate::font::glyph::finish(self)
     }
 
     /// The canvas-to-page transform and the displayed size for page `index`.

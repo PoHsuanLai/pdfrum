@@ -14,6 +14,7 @@ mod annot;
 mod annot_spec;
 mod associated;
 mod attach;
+mod blank;
 mod build_graph;
 mod canvas;
 mod content;
@@ -62,10 +63,14 @@ pub use attach::{
     remove_attachment, set_attachment_description, set_attachment_file, set_attachment_file_with,
     set_attachment_name, set_attachment_param,
 };
+pub use blank::blank_document;
 pub use build_graph::build_graph;
 #[cfg(feature = "svg-import")]
 pub use canvas::SvgForm;
-pub use canvas::{Canvas, Dash, Fill, LineCap, LineJoin, MiterLimit, Paint, Stroke};
+pub use canvas::{
+    BlendMode, Canvas, Dash, Fill, GlyphRun, Gradient, GradientKind, GradientStop, LineCap,
+    LineJoin, MiterLimit, Paint, RunGlyph, Stroke,
+};
 pub use content::{
     ContentsShape, PageRewrite, Regenerated, ResourceTable, ShareCounts, apply_rewrite, regenerate,
     shared_objects, write_float, write_matrix, write_point, write_rect,
@@ -75,6 +80,8 @@ pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
 pub use flatten::{FlattenMode, Flattened, UnknownFlattenMode, flatten, flatten_document};
 pub use font::embed::{EmbeddedFont, FontEncoding, MissingGlyph, string_width};
+pub use font::glyph::GlyphFont;
+pub use font::instance::{AxisValue, FontInstance};
 pub use font::{GidMap, Subsetted, subset};
 pub use form::{WidgetAppearance, set_need_appearances, set_widget_appearance};
 pub use form_field::{DEFAULT_FIELD_DA, FieldKindSpec, FieldSpec, add_form_field, add_form_font};
