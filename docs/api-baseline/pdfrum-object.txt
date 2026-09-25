@@ -325,6 +325,7 @@ pub struct pdfrum_object::ByteSpan
 impl pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::as_bytes(&self) -> &[u8]
 pub fn pdfrum_object::ByteSpan::empty() -> Self
+pub fn pdfrum_object::ByteSpan::from_owner(impl core::convert::AsRef<[u8]> + core::marker::Send + 'static) -> Self
 pub fn pdfrum_object::ByteSpan::is_empty(&self) -> bool
 pub fn pdfrum_object::ByteSpan::len(&self) -> usize
 pub fn pdfrum_object::ByteSpan::new(alloc::sync::Arc<[u8]>, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
