@@ -149,6 +149,23 @@ impl core::convert::From<pdfrum_edit::SquareSpec> for pdfrum_edit::AnnotSpec
 pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::SquareSpec) -> Self
 impl core::convert::From<pdfrum_edit::TextSpec> for pdfrum_edit::AnnotSpec
 pub fn pdfrum_edit::AnnotSpec::from(pdfrum_edit::TextSpec) -> Self
+pub enum pdfrum_edit::BlendMode
+pub pdfrum_edit::BlendMode::Color
+pub pdfrum_edit::BlendMode::ColorBurn
+pub pdfrum_edit::BlendMode::ColorDodge
+pub pdfrum_edit::BlendMode::Darken
+pub pdfrum_edit::BlendMode::Difference
+pub pdfrum_edit::BlendMode::Exclusion
+pub pdfrum_edit::BlendMode::HardLight
+pub pdfrum_edit::BlendMode::Hue
+pub pdfrum_edit::BlendMode::Lighten
+pub pdfrum_edit::BlendMode::Luminosity
+pub pdfrum_edit::BlendMode::Multiply
+pub pdfrum_edit::BlendMode::Normal
+pub pdfrum_edit::BlendMode::Overlay
+pub pdfrum_edit::BlendMode::Saturation
+pub pdfrum_edit::BlendMode::Screen
+pub pdfrum_edit::BlendMode::SoftLight
 pub enum pdfrum_edit::BookmarkTarget
 pub pdfrum_edit::BookmarkTarget::Named(alloc::string::String)
 pub pdfrum_edit::BookmarkTarget::None
@@ -177,6 +194,8 @@ pub pdfrum_edit::Error::AnnotNotOnPage(pdfrum_object::object::ObjRef, pdfrum_com
 pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
+pub pdfrum_edit::Error::BadPageSize(kurbo::size::Size)
+pub pdfrum_edit::Error::BlankDocument(alloc::string::String)
 pub pdfrum_edit::Error::DuplicateAttachmentName(alloc::string::String)
 pub pdfrum_edit::Error::DuplicateFieldName(alloc::string::String)
 pub pdfrum_edit::Error::EmptyFieldName
@@ -186,6 +205,7 @@ pub pdfrum_edit::Error::EmptyQuadPoints
 pub pdfrum_edit::Error::EmptyRadioGroup
 pub pdfrum_edit::Error::EmptyToUnicodeCMap
 pub pdfrum_edit::Error::EncryptedSaveUnsupported
+pub pdfrum_edit::Error::ForeignGlyphFont
 pub pdfrum_edit::Error::ImageDataLength
 pub pdfrum_edit::Error::ImageDataLength::expected: usize
 pub pdfrum_edit::Error::ImageDataLength::found: usize
@@ -197,9 +217,12 @@ pub pdfrum_edit::Error::NoEntropy
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
 pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::PasswordNotText
+pub pdfrum_edit::Error::PngNeedsDecoding
 pub pdfrum_edit::Error::Subset(alloc::string::String)
+pub pdfrum_edit::Error::TooManyGlyphs
 pub pdfrum_edit::Error::UnrecognisedFontProgram
 pub pdfrum_edit::Error::UnrecognisedImageData
+pub pdfrum_edit::Error::VariableFontsDisabled
 #[non_exhaustive] pub enum pdfrum_edit::FieldKindSpec
 pub pdfrum_edit::FieldKindSpec::Check
 pub pdfrum_edit::FieldKindSpec::Check::on: alloc::string::String
@@ -227,6 +250,19 @@ pub fn pdfrum_edit::Flattened::fmt(&self, &mut core::fmt::Formatter<'_>) -> core
 pub enum pdfrum_edit::FontEncoding
 pub pdfrum_edit::FontEncoding::Composite
 pub pdfrum_edit::FontEncoding::Simple
+pub enum pdfrum_edit::FontInstance
+pub pdfrum_edit::FontInstance::Default
+pub pdfrum_edit::FontInstance::Normalized(alloc::vec::Vec<i16>)
+pub pdfrum_edit::FontInstance::User(alloc::vec::Vec<pdfrum_edit::AxisValue>)
+pub enum pdfrum_edit::GradientKind
+pub pdfrum_edit::GradientKind::Linear
+pub pdfrum_edit::GradientKind::Linear::end: kurbo::point::Point
+pub pdfrum_edit::GradientKind::Linear::start: kurbo::point::Point
+pub pdfrum_edit::GradientKind::Radial
+pub pdfrum_edit::GradientKind::Radial::end_center: kurbo::point::Point
+pub pdfrum_edit::GradientKind::Radial::end_radius: f64
+pub pdfrum_edit::GradientKind::Radial::start_center: kurbo::point::Point
+pub pdfrum_edit::GradientKind::Radial::start_radius: f64
 pub enum pdfrum_edit::IdSource
 pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
@@ -381,6 +417,9 @@ pub fn pdfrum_edit::AttachmentOptionsBuilder::build(self) -> pdfrum_edit::Attach
 pub fn pdfrum_edit::AttachmentOptionsBuilder::description(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AttachmentOptionsBuilder::mime_type(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn pdfrum_edit::AttachmentOptionsBuilder::modified(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub struct pdfrum_edit::AxisValue
+pub pdfrum_edit::AxisValue::tag: [u8; 4]
+pub pdfrum_edit::AxisValue::value: f32
 pub struct pdfrum_edit::BookmarkSpec
 pub pdfrum_edit::BookmarkSpec::color: core::option::Option<(f32, f32, f32)>
 pub pdfrum_edit::BookmarkSpec::depth: usize
@@ -398,6 +437,8 @@ pub fn pdfrum_edit::BookmarkSpec::page(self, pdfrum_object::object::ObjRef, pdfr
 pub fn pdfrum_edit::BookmarkSpec::style(self, i64) -> Self
 pub struct pdfrum_edit::Canvas<'a, 'b>
 impl pdfrum_edit::Canvas<'_, '_>
+pub fn pdfrum_edit::Canvas<'_, '_>::blend(&mut self, pdfrum_edit::BlendMode)
+impl pdfrum_edit::Canvas<'_, '_>
 pub fn pdfrum_edit::Canvas<'_, '_>::bounds(&self) -> kurbo::rect::Rect
 pub fn pdfrum_edit::Canvas<'_, '_>::clip(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Fill)
 pub fn pdfrum_edit::Canvas<'_, '_>::draw(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Paint, pdfrum_edit::Fill)
@@ -414,6 +455,10 @@ pub fn pdfrum_edit::Canvas<'_, '_>::stroke(&mut self, impl kurbo::shape::Shape, 
 pub fn pdfrum_edit::Canvas<'_, '_>::text(&mut self, &str, &pdfrum_edit::EmbeddedFont, f64, kurbo::point::Point, peniko::Color)
 pub fn pdfrum_edit::Canvas<'_, '_>::text_width(&self, &str, &pdfrum_edit::EmbeddedFont, f64) -> f64
 pub fn pdfrum_edit::Canvas<'_, '_>::transform(&mut self, kurbo::affine::Affine)
+impl pdfrum_edit::Canvas<'_, '_>
+pub fn pdfrum_edit::Canvas<'_, '_>::fill_gradient(&mut self, impl kurbo::shape::Shape, pdfrum_edit::Fill, &pdfrum_edit::Gradient, kurbo::affine::Affine)
+impl pdfrum_edit::Canvas<'_, '_>
+pub fn pdfrum_edit::Canvas<'_, '_>::glyphs(&mut self, &pdfrum_edit::GlyphRun<'_>)
 impl core::fmt::Debug for pdfrum_edit::Canvas<'_, '_>
 pub fn pdfrum_edit::Canvas<'_, '_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_edit::CaretSpec
@@ -462,8 +507,11 @@ pub fn pdfrum_edit::EditDoc<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -
 pub fn pdfrum_edit::EditDoc<'_>::embed_font(&mut self, &[u8], pdfrum_edit::FontEncoding) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 impl pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::embed_glyph_font(&mut self, pdfrum_object::stream::ByteSpan, u32, pdfrum_edit::FontInstance) -> core::result::Result<pdfrum_edit::GlyphFont, pdfrum_edit::Error>
+impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::PixelFormat) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_jpeg(&mut self, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::embed_png(&mut self, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
 impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::stamp_image(&mut self, &pdfrum_edit::EmbeddedImage, f64, &pdfrum_edit::StampOptions, &pdfrum_common::limits::Limits) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::stamp_text(&mut self, &str, &pdfrum_edit::StampOptions, &pdfrum_common::limits::Limits) -> core::result::Result<(), pdfrum_edit::Error>
@@ -550,6 +598,22 @@ pub fn pdfrum_edit::GidMap::get(&self, u16) -> core::option::Option<u16>
 pub fn pdfrum_edit::GidMap::is_empty(&self) -> bool
 pub fn pdfrum_edit::GidMap::len(&self) -> usize
 pub fn pdfrum_edit::GidMap::pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u16, u16)> + '_
+pub struct pdfrum_edit::GlyphFont
+impl pdfrum_edit::GlyphFont
+pub fn pdfrum_edit::GlyphFont::object(&self) -> pdfrum_object::object::ObjRef
+pub struct pdfrum_edit::GlyphRun<'a>
+pub pdfrum_edit::GlyphRun::font: &'a pdfrum_edit::GlyphFont
+pub pdfrum_edit::GlyphRun::glyphs: &'a [pdfrum_edit::RunGlyph]
+pub pdfrum_edit::GlyphRun::paint: pdfrum_edit::Paint
+pub pdfrum_edit::GlyphRun::size: f64
+pub pdfrum_edit::GlyphRun::text: &'a str
+pub pdfrum_edit::GlyphRun::transform: kurbo::affine::Affine
+pub struct pdfrum_edit::Gradient
+pub pdfrum_edit::Gradient::kind: pdfrum_edit::GradientKind
+pub pdfrum_edit::Gradient::stops: alloc::vec::Vec<pdfrum_edit::GradientStop>
+pub struct pdfrum_edit::GradientStop
+pub pdfrum_edit::GradientStop::color: peniko::Color
+pub pdfrum_edit::GradientStop::offset: f64
 pub struct pdfrum_edit::ImageBuilder
 pub pdfrum_edit::ImageBuilder::matrix: kurbo::affine::Affine
 pub pdfrum_edit::ImageBuilder::source: pdfrum_object::object::ObjRef
@@ -715,6 +779,11 @@ pub fn pdfrum_edit::ResourceTable::realize(&mut self, &str, pdfrum_object::objec
 pub fn pdfrum_edit::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object::dict::Dict) -> pdfrum_object::name::Name
 pub fn pdfrum_edit::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
 pub fn pdfrum_edit::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
+pub struct pdfrum_edit::RunGlyph
+pub pdfrum_edit::RunGlyph::id: u16
+pub pdfrum_edit::RunGlyph::text: core::ops::range::Range<usize>
+pub pdfrum_edit::RunGlyph::x: f64
+pub pdfrum_edit::RunGlyph::y: f64
 #[non_exhaustive] pub struct pdfrum_edit::SaveOptions
 pub pdfrum_edit::SaveOptions::encrypt: core::option::Option<pdfrum_edit::Encryption>
 pub pdfrum_edit::SaveOptions::id_source: pdfrum_edit::IdSource
@@ -853,6 +922,7 @@ pub fn pdfrum_edit::add_form_font(&mut pdfrum_edit::EditDoc<'_>, impl core::conv
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
 pub fn pdfrum_edit::associate_file_with_document(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, usize, pdfrum_edit::Relationship) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::associate_file_with_page(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_common::limits::Limits, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, usize, pdfrum_edit::Relationship) -> core::result::Result<bool, pdfrum_edit::Error>
+pub fn pdfrum_edit::blank_document(&[kurbo::size::Size]) -> core::result::Result<pdfrum_parser::doc::Document, pdfrum_edit::Error>
 pub fn pdfrum_edit::build_graph(&pdfrum_parser::doc::PageDict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_page::build::BuildContext, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::page::Page
 pub fn pdfrum_edit::clear_open_action(&mut pdfrum_edit::EditDoc<'_>) -> core::result::Result<bool, pdfrum_edit::Error>
 pub fn pdfrum_edit::delete_annotation(&mut pdfrum_edit::EditDoc<'_>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_object::object::ObjRef) -> core::result::Result<bool, pdfrum_edit::Error>
