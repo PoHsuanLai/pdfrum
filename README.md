@@ -14,7 +14,7 @@ pdfrum is an independent project, not affiliated with Google's PDFium,
 which it uses as a read-only conformance oracle.
 
 ```toml
-pdfrum = "0.3"
+pdfrum = "0.4"
 ```
 
 ```rust
