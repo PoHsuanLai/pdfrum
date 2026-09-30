@@ -5,6 +5,14 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Added
+
+- `pdfrum-anyrender`: an `anyrender` recording `Scene` written as a vector PDF
+  page through `pdfrum-edit`. Paths and gradients stay vectors, images keep
+  their source encoding where PDF allows (a JPEG as-is, an opaque PNG's
+  compressed data as-is), and text is embedded in subsetted faces with its
+  real Unicode.
+
 ## [0.4.0] - 2026-09-26
 
 ### Breaking
