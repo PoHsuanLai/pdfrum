@@ -189,6 +189,7 @@ surfaces that do not publish (`pdfrum-capi`, `pdfrum-wasm`, `pdfrum-tool`).
 | [`pdfrum-edit`](https://docs.rs/pdfrum-edit) | save, import, subsetting, `Canvas`, stamp, flatten, SVG import |
 | [`pdfrum-markdown`](https://docs.rs/pdfrum-markdown) | `Page::markdown` |
 | [`pdfrum-svg`](https://docs.rs/pdfrum-svg) | SVG export |
+| [`pdfrum-anyrender`](https://docs.rs/pdfrum-anyrender) | `anyrender` scenes as vector PDF pages |
 | [`pdfrum-cli`](https://docs.rs/pdfrum-cli) | command line |
 | [`pdfrum-capi`](crates/pdfrum-capi/README.md) | C ABI: `libpdfrum.so`, `pdfrum.h` |
 | [`pdfrum-wasm`](crates/pdfrum-wasm/README.md) | WebAssembly binding |

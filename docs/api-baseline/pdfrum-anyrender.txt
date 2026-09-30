@@ -1,0 +1,62 @@
+pub mod pdfrum_anyrender
+pub enum pdfrum_anyrender::GlyphArea
+pub pdfrum_anyrender::GlyphArea::Anywhere
+pub pdfrum_anyrender::GlyphArea::Within(kurbo::rect::Rect)
+pub enum pdfrum_anyrender::ImageCodec
+pub pdfrum_anyrender::ImageCodec::Jpeg
+pub pdfrum_anyrender::ImageCodec::Png
+impl pdfrum_anyrender::ImageCodec
+pub fn pdfrum_anyrender::ImageCodec::sniff(&[u8]) -> core::option::Option<Self>
+pub struct pdfrum_anyrender::EncodedImage
+impl pdfrum_anyrender::EncodedImage
+pub fn pdfrum_anyrender::EncodedImage::bytes(&self) -> &alloc::sync::Arc<alloc::vec::Vec<u8>>
+pub fn pdfrum_anyrender::EncodedImage::codec(&self) -> pdfrum_anyrender::ImageCodec
+pub fn pdfrum_anyrender::EncodedImage::sniffed(alloc::vec::Vec<u8>) -> core::option::Option<Self>
+impl core::fmt::Debug for pdfrum_anyrender::EncodedImage
+pub fn pdfrum_anyrender::EncodedImage::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_anyrender::GlyphSource<'a>
+pub pdfrum_anyrender::GlyphSource::cluster: usize
+pub pdfrum_anyrender::GlyphSource::text: &'a str
+pub struct pdfrum_anyrender::GlyphTally
+pub pdfrum_anyrender::GlyphTally::cmap_text: usize
+pub pdfrum_anyrender::GlyphTally::drawn: usize
+pub pdfrum_anyrender::GlyphTally::dropped: usize
+pub pdfrum_anyrender::GlyphTally::layout_text: usize
+impl core::ops::arith::Add for pdfrum_anyrender::GlyphTally
+pub type pdfrum_anyrender::GlyphTally::Output = pdfrum_anyrender::GlyphTally
+pub fn pdfrum_anyrender::GlyphTally::add(self, pdfrum_anyrender::GlyphTally) -> pdfrum_anyrender::GlyphTally
+pub struct pdfrum_anyrender::ImageSources
+impl pdfrum_anyrender::ImageSources
+pub fn pdfrum_anyrender::ImageSources::get(&self, u64) -> core::option::Option<&pdfrum_anyrender::EncodedImage>
+pub fn pdfrum_anyrender::ImageSources::insert(&mut self, u64, pdfrum_anyrender::EncodedImage)
+pub fn pdfrum_anyrender::ImageSources::is_empty(&self) -> bool
+pub fn pdfrum_anyrender::ImageSources::len(&self) -> usize
+pub struct pdfrum_anyrender::Page
+pub pdfrum_anyrender::Page::area: pdfrum_anyrender::GlyphArea
+pub pdfrum_anyrender::Page::clip: kurbo::rect::Rect
+pub pdfrum_anyrender::Page::placement: kurbo::affine::Affine
+pub pdfrum_anyrender::Page::scene: anyrender::recording::Scene
+pub pdfrum_anyrender::Page::size: kurbo::size::Size
+pub struct pdfrum_anyrender::RunKey
+impl pdfrum_anyrender::RunKey
+pub fn pdfrum_anyrender::RunKey::new(&linebender_resource_handle::font::FontData, f32, impl core::iter::traits::collect::IntoIterator<Item = anyrender::types::Glyph>) -> Self
+pub struct pdfrum_anyrender::RunText
+impl pdfrum_anyrender::RunText
+pub fn pdfrum_anyrender::RunText::clusters(&self) -> &[core::ops::range::Range<usize>]
+pub fn pdfrum_anyrender::RunText::from_glyphs<'a>(impl core::iter::traits::collect::IntoIterator<Item = pdfrum_anyrender::GlyphSource<'a>>) -> Self
+pub fn pdfrum_anyrender::RunText::is_empty(&self) -> bool
+pub fn pdfrum_anyrender::RunText::len(&self) -> usize
+pub fn pdfrum_anyrender::RunText::text(&self) -> &str
+pub struct pdfrum_anyrender::RunTexts
+impl pdfrum_anyrender::RunTexts
+pub fn pdfrum_anyrender::RunTexts::get(&self, &pdfrum_anyrender::RunKey) -> core::option::Option<&pdfrum_anyrender::RunText>
+pub fn pdfrum_anyrender::RunTexts::insert(&mut self, pdfrum_anyrender::RunKey, pdfrum_anyrender::RunText)
+pub fn pdfrum_anyrender::RunTexts::is_empty(&self) -> bool
+pub fn pdfrum_anyrender::RunTexts::len(&self) -> usize
+pub struct pdfrum_anyrender::Sources
+pub pdfrum_anyrender::Sources::images: pdfrum_anyrender::ImageSources
+pub pdfrum_anyrender::Sources::texts: pdfrum_anyrender::RunTexts
+pub struct pdfrum_anyrender::Written
+pub pdfrum_anyrender::Written::bytes: alloc::vec::Vec<u8>
+pub pdfrum_anyrender::Written::glyphs: pdfrum_anyrender::GlyphTally
+pub fn pdfrum_anyrender::write(&[pdfrum_anyrender::Page], &pdfrum_anyrender::Sources) -> core::result::Result<pdfrum_anyrender::Written, pdfrum_edit::error::Error>
