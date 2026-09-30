@@ -115,6 +115,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "anyrender"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e00e1af5c6ac9b1e8ed8e431529a1024b7386d5385dce2a83494da3d39a6bab5"
+dependencies = [
+ "kurbo",
+ "peniko",
+ "raw-window-handle",
+ "smallvec",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1948,6 +1960,19 @@ dependencies = [
  "resvg",
  "thiserror",
  "usvg",
+]
+
+[[package]]
+name = "pdfrum-anyrender"
+version = "0.4.0"
+dependencies = [
+ "anyrender",
+ "pdfrum",
+ "pdfrum-common",
+ "pdfrum-edit",
+ "pdfrum-object",
+ "peniko",
+ "skrifa 0.47.0",
 ]
 
 [[package]]

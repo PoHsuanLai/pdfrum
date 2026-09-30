@@ -1,0 +1,36 @@
+[package]
+name = "pdfrum-anyrender"
+description = "anyrender scenes as vector PDF pages: paths, gradients, images kept in their source encoding, and embedded, subsetted fonts with real text"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["pdf", "anyrender", "vector", "export"]
+categories = ["graphics", "rendering"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+# The renderer-side vocabulary is `anyrender` (a `Scene` is in the public
+# signature) and `peniko`; everything else is pdfrum. What only the renderer
+# knows (each run's source text, each image's source bytes) arrives as plain
+# data in `Sources`.
+#
+# `variable-fonts` on `pdfrum-edit`: a scene's faces are often variable, and
+# without it a glyph run at an instance is refused.
+[dependencies]
+anyrender.workspace = true
+peniko.workspace = true
+pdfrum-edit = { workspace = true, features = ["variable-fonts"] }
+pdfrum-object.workspace = true
+pdfrum-common.workspace = true
+skrifa.workspace = true
+
+[dev-dependencies]
+# Reading the written pages back.
+pdfrum.workspace = true
