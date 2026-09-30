@@ -7,7 +7,7 @@ encoding where PDF allows (a JPEG as-is, an opaque PNG's compressed data
 as-is).
 
 A page is painted into anyrender's recording `Scene` first, by whatever
-renders through anyrender. [`write`] then embeds every face and image the
+renders through anyrender. [`write()`] then embeds every face and image the
 scenes use and replays each scene onto a pdfrum canvas: anyrender's push/pop
 layers become nested saved graphics states, the only shape a pdfrum canvas
 lets a content stream take.
