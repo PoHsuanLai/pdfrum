@@ -29,6 +29,8 @@ members = [
     "crates/pdfrum-markdown",
     # SVG export. `resvg` is a round-trip-test dev-dependency only.
     "crates/pdfrum-svg",
+    # anyrender scenes to PDF pages, over `pdfrum-edit`.
+    "crates/pdfrum-anyrender",
     "crates/pdfrum-cli",
     # C ABI. The one member that allows `unsafe`, only at `extern "C"`.
     "crates/pdfrum-capi",
@@ -101,6 +103,7 @@ pdfrum-edit = { path = "crates/pdfrum-edit", version = "0.4.0" }
 pdfrum = { path = "crates/pdfrum", version = "0.4.0" }
 pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "0.4.0" }
 pdfrum-svg = { path = "crates/pdfrum-svg", version = "0.4.0" }
+pdfrum-anyrender = { path = "crates/pdfrum-anyrender", version = "0.4.0" }
 # Bench corpus list. A leaf so library crates can share it without depending
 # on the facade. `publish = false`.
 pdfrum-corpus = { path = "benches/corpus-list" }
@@ -110,6 +113,9 @@ pdfrum-corpus = { path = "benches/corpus-list" }
 # preamble. Cargo.lock still pins the exact revision we build.
 kurbo = "0.13.1"
 peniko = "0.6.1"
+# Caret, like `peniko`: `anyrender::Scene` is in `pdfrum-anyrender`'s public
+# signature. Only the recording `Scene` is used; no renderer crate.
+anyrender = "0.13"
 vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
 # GPU vello, used only by `pdfrum-raster-vello`. Default features stay on
