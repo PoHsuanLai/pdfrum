@@ -3,7 +3,7 @@
 
 use kurbo::Affine;
 
-pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
+pub use pdfrum_render::{ColorMode, ColorScheme, DeviceRect, Pixmap, Region, TextAa};
 
 /// Everything a render is parameterised by.
 ///
@@ -17,7 +17,8 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 /// argument to [`Page::render_on`](crate::Page::render_on). Nor about how
 /// much a render may cost: the pixel cap and the deadline are the
 /// document's, set once in [`OpenOptions::limits`](crate::OpenOptions::limits)
-/// and applied to every render of it.
+/// and applied to every render of it. (A stop for *one* render is
+/// [`RenderSession::set_deadline`](crate::RenderSession::set_deadline).)
 ///
 /// `pdfrum_render::RenderOptions` is a **different type**, and the engine's
 /// own. This one's flags are positive and default to the common case, so
@@ -61,6 +62,34 @@ pub struct RenderOptions {
     /// filled-in values visible. Turning it off renders the page's own
     /// content stream alone.
     pub annotations: bool,
+    /// How much of the page to draw: [`Region::Whole`] by default, or one
+    /// [`DeviceRect`] of its device box.
+    ///
+    /// The rectangle is in device pixels under [`transform`](Self::transform),
+    /// counted from the top-left of the page's full device box, and the
+    /// pixmap is exactly its size. Tiles laid side by side make the whole
+    /// image: the engine decides everything in the whole render's frame, so
+    /// a seam is exact on the default `vello-cpu` backend up to an
+    /// occasional one-count difference on an antialiased edge pixel, and a
+    /// few counts on `tiny-skia` and `agg` — see [`Region::Rect`]. The whole
+    /// page is never allocated, so a page whose device box exceeds the
+    /// 65535-pixel ceiling still renders by tile; the document's
+    /// [`Limits::max_render_pixels`](crate::Limits::max_render_pixels) then
+    /// counts the tile's pixels.
+    ///
+    /// A rectangle outside the page's device box is
+    /// [`RenderError::RegionOutOfBounds`](crate::RenderError::RegionOutOfBounds).
+    /// SVG export draws the whole page and refuses a region
+    /// ([`RenderError::RegionUnsupported`](crate::RenderError::RegionUnsupported)).
+    ///
+    /// Every raster backend takes a region: it is a smaller target and a
+    /// shift, which the backends never see. The GPU backend is not run by
+    /// this crate's tests.
+    ///
+    /// To draw many tiles of one page at one scale, interpret it once with
+    /// [`Page::prepare`](crate::Page::prepare) and draw each with
+    /// [`PreparedPage::render_region_on`](crate::PreparedPage::render_region_on).
+    pub region: Region,
 }
 
 impl Default for RenderOptions {
@@ -73,6 +102,7 @@ impl Default for RenderOptions {
             interpolate_images: true,
             background: None,
             annotations: true,
+            region: Region::Whole,
         }
     }
 }
@@ -211,6 +241,21 @@ impl RenderOptionsBuilder {
     /// ```
     pub fn annotations(mut self, annotations: bool) -> Self {
         self.0.annotations = annotations;
+        self
+    }
+
+    /// Draw only a rectangle of the page — [`RenderOptions::region`].
+    ///
+    /// ```
+    /// use pdfrum::{DeviceRect, Region, RenderOptions};
+    ///
+    /// let tile = DeviceRect::new(256, 0, 256, 256)?;
+    /// let options = RenderOptions::builder().scale(8.0).region(Region::Rect(tile)).build();
+    /// assert_eq!(options.region, Region::Rect(tile));
+    /// # Ok::<(), pdfrum::RenderError>(())
+    /// ```
+    pub fn region(mut self, region: Region) -> Self {
+        self.0.region = region;
         self
     }
 
