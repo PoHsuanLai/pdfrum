@@ -5,6 +5,13 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Breaking
+
+- `pdfrum_render::RenderSession` has two more fields, `cancel` and `region`;
+  a struct literal needs `..Default::default()`.
+- `pdfrum::RenderSession` has a private field for its deadline, so it is built
+  with `RenderSession::new()` rather than a struct literal.
+
 ### Added
 
 - `pdfrum-anyrender`: an `anyrender` recording `Scene` written as a vector PDF
@@ -12,6 +19,24 @@ first crates.io release.
   their source encoding where PDF allows (a JPEG as-is, an opaque PNG's
   compressed data as-is), and text is embedded in subsetted faces with its
   real Unicode.
+- Region rendering, for deep-zoom tiling: `RenderOptions::region`
+  (`Region::Whole` or `Region::Rect(DeviceRect)`) and
+  `PreparedPage::render_region_on` draw one rectangle of the page's device
+  box into a pixmap of exactly its size. The whole page is never allocated, so
+  a page past the 65535 px ceiling renders by tile, and
+  `Limits::max_render_pixels` counts the tile. `DeviceRect::new` checks the
+  rectangle is non-empty and within the pixmap limit; one outside the page is
+  `RenderError::RegionOutOfBounds`. Tiles are byte-identical to the whole
+  render on the default `vello-cpu` backend in the tests (an occasional
+  antialiased edge pixel can differ by one count in general); `tiny-skia` and
+  `agg` are within a few counts. SVG export refuses a region with
+  `RenderError::RegionUnsupported`. The engine takes the same through
+  `pdfrum_render::RenderSession::region`.
+- A stop for one render: `RenderSession::set_deadline` takes a `Deadline`
+  that ends only the renders made with that session, with
+  `Error::Limit`, and leaves the document usable. `Limits::deadline` is still
+  the document's, and sticky. The engine's is
+  `pdfrum_render::RenderSession::cancel`.
 
 ## [0.4.0] - 2026-09-26
 
