@@ -1618,3 +1618,173 @@ fn a_cancel_stops_one_render_and_leaves_the_next_alone() {
     )
     .expect("no cancel, no stop");
 }
+
+/// A page with edges that fall between pixels at the scale below: filled
+/// shapes, a stroke and a rotated square, so the seams cross antialiased
+/// coverage rather than empty paper.
+fn busy_page() -> Page {
+    let mut diamond = BezPath::new();
+    diamond.move_to((50.3, 12.1));
+    diamond.line_to((88.7, 47.9));
+    diamond.line_to((50.3, 83.2));
+    diamond.line_to((11.9, 47.9));
+    diamond.close_path();
+    page(
+        100.0,
+        95.0,
+        vec![
+            filled(rect_path(7.3, 5.1, 61.7, 40.9), [0.9, 0.1, 0.2]),
+            filled(diamond, [0.1, 0.4, 0.8]),
+            stroked(rect_path(20.2, 20.2, 80.6, 70.4), [0.0, 0.0, 0.0], 1.7),
+        ],
+    )
+}
+
+/// The largest channel difference between `tile`, placed at (`x`, `y`), and
+/// the same pixels of the whole render.
+fn crop_difference(whole: &Pixmap, tile: &Pixmap, x: u32, y: u32) -> u8 {
+    let mut worst = 0;
+    for ty in 0..tile.height() {
+        for tx in 0..tile.width() {
+            let tiled = tile.pixel(tx, ty).expect("a pixel of the tile");
+            let expected = whole
+                .pixel(x + tx, y + ty)
+                .expect("a pixel of the whole render");
+            for (l, r) in tiled.iter().zip(expected.iter()) {
+                worst = worst.max(l.abs_diff(*r));
+            }
+        }
+    }
+    worst
+}
+
+fn tile_session(rect: pdfrum_render::DeviceRect) -> RenderSession<'static> {
+    RenderSession {
+        region: pdfrum_render::Region::Rect(rect),
+        ..Default::default()
+    }
+}
+
+/// Renders `busy_page` whole and again as `tw` x `th` tiles (ragged at the
+/// right and bottom), and returns the largest channel difference between any
+/// tile pixel and the whole render's.
+fn worst_tile_difference<B: RasterBackend>(backend: &B, tw: u32, th: u32) -> u8 {
+    let scene = busy_page();
+    let opts = RenderOptions {
+        transform: Affine::scale(3.7),
+        ..Default::default()
+    };
+    let whole = render_page(&scene, &opts, backend, &mut Diagnostics::default()).expect("whole");
+    let mut worst = 0;
+    let mut y = 0;
+    while y < whole.height() {
+        let rows = th.min(whole.height() - y);
+        let mut x = 0;
+        while x < whole.width() {
+            let cols = tw.min(whole.width() - x);
+            let rect = pdfrum_render::DeviceRect::new(x, y, cols, rows).expect("rect");
+            let tile = render_page_with(
+                &scene,
+                &opts,
+                backend,
+                tile_session(rect),
+                &mut Diagnostics::default(),
+            )
+            .expect("tile");
+            assert_eq!((tile.width(), tile.height()), (cols, rows));
+            worst = worst.max(crop_difference(&whole, &tile, x, y));
+            x += cols;
+        }
+        y += rows;
+    }
+    worst
+}
+
+/// Tiles of `vello_cpu`, the default backend, are bit-identical to the whole
+/// render's pixels, on page edges that fall between pixels and a stroke
+/// that crosses every seam.
+///
+/// Not a theorem: see `Region`. `vello_cpu` flattens in `f32`, and a tile's
+/// frame is the whole frame shifted by whole pixels, so a different set of
+/// tile sizes can differ by one count on a rare edge pixel. These sizes are
+/// the ones the test pins; the output is deterministic (the SIMD level is
+/// pinned), so it cannot flake.
+#[test]
+fn tiles_side_by_side_are_bit_identical_to_the_whole_render_on_vello_cpu() {
+    for (tw, th) in [
+        (100, 60),
+        (96, 64),
+        (256, 256),
+        (8, 8),
+        (7, 7),
+        (2, 2),
+        (13, 200),
+    ] {
+        assert_eq!(
+            worst_tile_difference(&VelloCpuBackend::new(), tw, th),
+            0,
+            "{tw}x{th} tiles"
+        );
+    }
+}
+
+/// The other raster backends take regions too, but are not bit-identical:
+/// their antialiasing integrates in a way that depends on where an edge
+/// enters the target, so a seam can differ by a few counts.
+#[test]
+fn tiles_on_the_other_backends_match_the_whole_render_to_antialiasing_rounding() {
+    for (tw, th) in [(100, 60), (97, 61), (256, 256)] {
+        let agg = worst_tile_difference(&pdfrum_raster_agg::AggBackend::new(), tw, th);
+        assert!(agg <= 2, "agg {tw}x{th}: {agg}");
+        let tiny = worst_tile_difference(&TinySkiaBackend::new(), tw, th);
+        assert!(tiny <= 24, "tiny-skia {tw}x{th}: {tiny}");
+    }
+}
+
+#[test]
+fn a_region_outside_the_page_is_refused_and_one_inside_a_huge_page_is_drawn() {
+    let p = busy_page();
+    let backend = VelloCpuBackend::new();
+    let opts = RenderOptions {
+        transform: Affine::scale(2.0),
+        ..Default::default()
+    };
+    let rect = pdfrum_render::DeviceRect::new(150, 0, 100, 10).expect("rect");
+    let err = render_page_with(
+        &p,
+        &opts,
+        &backend,
+        tile_session(rect),
+        &mut Diagnostics::default(),
+    )
+    .expect_err("past the right edge of a 200x190 box");
+    assert!(matches!(
+        err,
+        pdfrum_render::Error::RegionOutOfBounds {
+            page_width: 200,
+            page_height: 190,
+            ..
+        }
+    ));
+
+    // 100 points at 1000x is 100000 px wide: no pixmap, but a tile of it.
+    let huge = RenderOptions {
+        transform: Affine::scale(1000.0),
+        ..Default::default()
+    };
+    let whole = render_page(&p, &huge, &backend, &mut Diagnostics::default());
+    assert!(matches!(
+        whole,
+        Err(pdfrum_render::Error::TargetTooLarge { .. })
+    ));
+    let rect = pdfrum_render::DeviceRect::new(30_000, 20_000, 64, 64).expect("rect");
+    let tile = render_page_with(
+        &p,
+        &huge,
+        &backend,
+        tile_session(rect),
+        &mut Diagnostics::default(),
+    )
+    .expect("a tile of a page too big to render whole");
+    assert_eq!((tile.width(), tile.height()), (64, 64));
+}

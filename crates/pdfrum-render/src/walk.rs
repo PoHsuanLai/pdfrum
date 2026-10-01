@@ -36,9 +36,11 @@ use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
 use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
+use crate::region::Region;
 use crate::shading;
 use crate::text::{has_face, paint_kinds, stroke_text_matrices};
 use crate::transfer::TransferFunc;
+use crate::window::WindowBackend;
 
 /// What one render call may reuse or restrict, beyond the page and the
 /// options.
@@ -94,6 +96,12 @@ pub struct RenderSession<'a> {
     /// a viewer abandoning a stale tile raises it and the next render starts
     /// clean.
     pub cancel: Option<&'a Deadline>,
+    /// How much of the page to draw. [`Region::Whole`] by default.
+    ///
+    /// With [`Region::Rect`] the pixmap is exactly the rectangle's size and
+    /// each of its pixels is the pixel a whole-page render has there; the
+    /// whole page is never allocated. See [`Region`].
+    pub region: Region,
 }
 
 /// Render a page into a pixmap.
@@ -219,6 +227,7 @@ pub fn render_page_to_device_with<B: RasterBackend>(
         visible,
         deadline,
         cancel,
+        region,
     } = session;
     // The two `None` arms need somewhere to live that outlasts the call, so
     // each default is bound here and borrowed rather than built inline.
@@ -233,9 +242,14 @@ pub fn render_page_to_device_with<B: RasterBackend>(
         visible,
         caches,
         Stops { deadline, cancel },
+        region,
         diags,
     )
 }
+
+/// Device pixels added around a tile before the cull test: the room an
+/// antialiased or resampled edge, and the one-pixel minimum stroke, need.
+const TILE_CULL_MARGIN: f64 = 2.0;
 
 /// The two stops a render honours: the caller's document-wide deadline and
 /// the one made for this render.
@@ -256,6 +270,11 @@ impl Stops<'_> {
 }
 
 /// The body both entry points share.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the page, its options, the backend, what the session lends, and \
+              where to write diagnostics"
+)]
 fn render_page_inner<B: RasterBackend>(
     page: &Page,
     opts: &RenderOptions,
@@ -263,34 +282,96 @@ fn render_page_inner<B: RasterBackend>(
     visible: &Visibility,
     caches: &mut RenderCaches,
     stops: Stops<'_>,
+    region: Region,
     diags: &mut Diagnostics,
 ) -> Result<B::Device, Error> {
-    let (w, h) = target_size(page, opts)?;
+    // A region is a window onto the *same* page matrix a whole render uses,
+    // moved so the window's corner is the pixmap's origin. The matrix is
+    // never recomputed for the window, which is what keeps a tile's pixel
+    // equal to the whole render's: see `Region`.
+    let (w, h, origin) = match region {
+        Region::Whole => {
+            let (w, h) = target_size(page, opts)?;
+            (w, h, (0, 0))
+        }
+        Region::Rect(rect) => {
+            let (page_w, page_h) = device_size(page, opts)?;
+            let inside = rect
+                .x()
+                .checked_add(rect.width())
+                .is_some_and(|r| r <= page_w)
+                && rect
+                    .y()
+                    .checked_add(rect.height())
+                    .is_some_and(|b| b <= page_h);
+            if !inside {
+                return Err(Error::RegionOutOfBounds {
+                    x: rect.x(),
+                    y: rect.y(),
+                    width: rect.width(),
+                    height: rect.height(),
+                    page_width: page_w,
+                    page_height: page_h,
+                });
+            }
+            (rect.width(), rect.height(), (rect.x(), rect.y()))
+        }
+    };
     // Before the allocation, and again after the walk: a walk that stopped
     // on the deadline has left the device half-drawn, and the second read is
     // what turns that into an error rather than a returned pixmap.
     stops.check()?;
     let clear = opts.background_for(needs_alpha_background(page));
-    let mut device = backend.new_target(w, h, clear);
     let ctx = RenderCtx {
         deadline: stops.deadline,
         cancel: stops.cancel,
+        cull_margin: match region {
+            Region::Whole => 0.0,
+            Region::Rect(_) => TILE_CULL_MARGIN,
+        },
         ..RenderCtx::new(opts.clone(), page.transparency)
     };
     let to_device = page_matrix(page, opts);
-    let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
-
-    render_object_list(
-        &ctx,
-        &mut device,
-        backend,
-        caches,
-        &page.objects,
-        visible,
-        to_device,
-        device_box,
-        diags,
-    );
+    let device = match region {
+        Region::Whole => {
+            let mut device = backend.new_target(w, h, clear);
+            let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+            render_object_list(
+                &ctx,
+                &mut device,
+                backend,
+                caches,
+                &page.objects,
+                visible,
+                to_device,
+                device_box,
+                diags,
+            );
+            device
+        }
+        Region::Rect(_) => {
+            // The walk is the whole page's: the same matrix, and a clip box
+            // that is the window's place in the whole frame rather than a
+            // box at the origin. Only the target is the window's size, and
+            // the wrapper moves each call onto it.
+            let window = WindowBackend(backend);
+            let mut device = window.new_window(w, h, clear, origin);
+            let (x, y) = (f64::from(origin.0), f64::from(origin.1));
+            let device_box = Rect::new(x, y, x + f64::from(w), y + f64::from(h));
+            render_object_list(
+                &ctx,
+                &mut device,
+                &window,
+                caches,
+                &page.objects,
+                visible,
+                to_device,
+                device_box,
+                diags,
+            );
+            device.inner
+        }
+    };
     stops.check()?;
     Ok(device)
 }
@@ -356,16 +437,32 @@ pub fn needs_alpha_background(page: &Page) -> bool {
 /// [`Error::TargetEmpty`] when the page's box under `opts.transform` is not
 /// at least one pixel on both axes, and [`Error::TargetTooLarge`] when either
 /// axis exceeds [`MAX_TARGET_DIMENSION`].
+pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+    let (w, h) = device_size(page, opts)?;
+    if w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return Err(Error::TargetTooLarge {
+            width: w,
+            height: h,
+            limit: MAX_TARGET_DIMENSION,
+        });
+    }
+    Ok((w, h))
+}
+
+/// The page's device box under `opts.transform`, truncated as
+/// [`target_size`] truncates it, **without** the backend's size ceiling.
+///
+/// The full page is only ever a coordinate frame for a region render, so its
+/// size may exceed what a pixmap can be.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the `is_finite` and `>= 1.0` guards run before the successful \
-              cast, and the `MAX_TARGET_DIMENSION` check runs after it; in \
-              the error arm `max(0.0)` floors the value and Rust's saturating \
-              float-to-int cast turns a huge or NaN size into a reported \
-              number rather than wrapping"
+              cast; in the error arm `max(0.0)` floors the value and Rust's \
+              saturating float-to-int cast turns a huge or NaN size into a \
+              reported number rather than wrapping"
 )]
-pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+fn device_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
     let (pw, ph) = page.display_size();
     let corners = opts
         .transform
@@ -378,15 +475,7 @@ pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Erro
             height: h.max(0.0) as u32,
         });
     }
-    let (w, h) = (w as u32, h as u32);
-    if w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
-        return Err(Error::TargetTooLarge {
-            width: w,
-            height: h,
-            limit: MAX_TARGET_DIMENSION,
-        });
-    }
-    Ok((w, h))
+    Ok((w as u32, h as u32))
 }
 
 /// Page space to device space.
@@ -415,8 +504,10 @@ pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
     // `target_size` performs, since that is the bitmap that gets allocated.
     // A page that cannot be sized at all keeps the float box, which is what
     // the render is about to reject anyway.
+    // `device_size`, not `target_size`: a region render of a page too big to
+    // be one pixmap must use the same fit the whole render would.
     let device =
-        target_size(page, opts).map_or((page_w, page_h), |(w, h)| (f64::from(w), f64::from(h)));
+        device_size(page, opts).map_or((page_w, page_h), |(w, h)| (f64::from(w), f64::from(h)));
     let (dev_w, dev_h) = device;
     if page_w <= 0.0 || page_h <= 0.0 || !dev_w.is_finite() || !dev_h.is_finite() {
         return opts.transform * page.rotate.display_matrix(page.crop_box);
@@ -457,7 +548,12 @@ pub fn render_object_list<B: RasterBackend>(
     if !ctx.may_recurse() {
         return;
     }
-    let cull = cull_rect(to_device, device_box);
+    // A whole render's box is the page, past which nothing is visible, so the
+    // cull may use each object's bare geometry. A tile's box is the middle of
+    // the page, and what an object paints beyond its geometry — a stroke's
+    // width, an antialiased or resampled edge — can reach into it.
+    let margin = ctx.cull_margin;
+    let cull = cull_rect(to_device, device_box.inflate(margin, margin));
     for (index, object) in objects.iter().enumerate() {
         // The deadline is read per object — a draw call — and a list that is
         // out of time returns; the enclosing list reads it again at its next
@@ -472,7 +568,16 @@ pub fn render_object_list<B: RasterBackend>(
             continue;
         }
         if let Some(cull) = cull
-            && crate::walkprofile::phase(crate::walkprofile::Phase::Cull, || culled(object, cull))
+            && crate::walkprofile::phase(crate::walkprofile::Phase::Cull, || {
+                if margin > 0.0 {
+                    culled(
+                        object,
+                        cull.inflate(stroke_reach(object), stroke_reach(object)),
+                    )
+                } else {
+                    culled(object, cull)
+                }
+            })
         {
             continue;
         }
@@ -497,6 +602,35 @@ fn cull_rect(to_device: Affine, device_box: Rect) -> Option<Rect> {
     (det != 0.0 && det.is_finite())
         .then(|| to_device.inverse().transform_rect_bbox(device_box))
         .filter(|r| r.x0.is_finite() && r.y0.is_finite() && r.x1.is_finite() && r.y1.is_finite())
+}
+
+/// How far, in the units the cull test works in, what `object` paints can
+/// reach past its geometry's bounding box: half a stroke's width times the
+/// longest miter or square cap, under the object's matrix. Zero for a path
+/// that is not stroked and for every other kind.
+///
+/// An over-estimate — the matrix's Frobenius norm bounds its largest scale —
+/// because a cull that keeps too much costs a clip, and one that keeps too
+/// little drops pixels.
+fn stroke_reach(object: &PageObject) -> f64 {
+    let PageObject::Path(p) = object else {
+        return 0.0;
+    };
+    if !p.object.stroke {
+        return 0.0;
+    }
+    let scale = p
+        .object
+        .matrix
+        .as_coeffs()
+        .iter()
+        .take(4)
+        .map(|term| term * term)
+        .sum::<f64>()
+        .sqrt();
+    let params = &p.state.stroke_params;
+    let longest = f64::from(params.miter_limit).max(std::f64::consts::SQRT_2);
+    0.5 * f64::from(params.width).abs() * scale * longest
 }
 
 /// The cull test, with the **strict** inequalities `RenderObjectList` uses.
@@ -924,7 +1058,10 @@ fn render_grouped_as_layer<B: RasterBackend>(
         ) else {
             return Some(rendered);
         };
-        Some(rendered.placed_in(dw, dh, rect.left, rect.top))
+        // The mask lies on the device, whose corner is `device_box`'s: the
+        // box's own origin for a region render's window, zero otherwise.
+        let corner = outer_rect(device_box);
+        Some(rendered.placed_in(dw, dh, rect.left - corner.left, rect.top - corner.top))
     });
 
     device.push_clip_rect(rect.to_rect());

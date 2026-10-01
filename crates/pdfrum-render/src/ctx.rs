@@ -66,6 +66,10 @@ pub struct RenderCtx<'a> {
     /// [`RenderSession::cancel`](crate::RenderSession::cancel). Read beside
     /// `deadline`; either passing ends the walk.
     pub cancel: Option<&'a Deadline>,
+    /// Device pixels the cull test grows the device box by. Zero for a whole
+    /// page; a region render's tile is not bounded by the page's edge, so an
+    /// object just outside it can still paint into it.
+    pub cull_margin: f64,
 }
 
 impl RenderCtx<'_> {
@@ -83,6 +87,7 @@ impl RenderCtx<'_> {
             in_group: false,
             deadline: None,
             cancel: None,
+            cull_margin: 0.0,
         }
     }
 
