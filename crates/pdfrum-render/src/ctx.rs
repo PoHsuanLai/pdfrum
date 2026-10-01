@@ -62,6 +62,10 @@ pub struct RenderCtx<'a> {
     /// so that the record every nested context clones grows by a pointer and
     /// not by the deadline itself. `None` is no limit.
     pub deadline: Option<&'a Deadline>,
+    /// The caller's own stop for this one render, borrowed from
+    /// [`RenderSession::cancel`](crate::RenderSession::cancel). Read beside
+    /// `deadline`; either passing ends the walk.
+    pub cancel: Option<&'a Deadline>,
 }
 
 impl RenderCtx<'_> {
@@ -78,14 +82,15 @@ impl RenderCtx<'_> {
             transparency,
             in_group: false,
             deadline: None,
+            cancel: None,
         }
     }
 
-    /// Whether the run's deadline is set and has passed — the per-object
-    /// read, kept to a branch when unset.
+    /// Whether the run's deadline or cancel is set and has passed — the
+    /// per-object read, kept to a branch when both are unset.
     #[must_use]
     pub fn out_of_time(&self) -> bool {
-        self.deadline.is_some_and(Deadline::passed)
+        self.deadline.is_some_and(Deadline::passed) || self.cancel.is_some_and(Deadline::passed)
     }
 
     /// Whether another level of recursion is permitted.

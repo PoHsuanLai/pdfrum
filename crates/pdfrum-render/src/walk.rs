@@ -85,6 +85,15 @@ pub struct RenderSession<'a> {
     /// page missing. Costs one branch per object when unset. A borrow, like
     /// the other two: the caller's `Limits` owns it.
     pub deadline: Option<&'a Deadline>,
+    /// A stop for **this render alone**. `None` — the default — is none.
+    ///
+    /// Read exactly as [`deadline`](Self::deadline) is, and either passing
+    /// ends the render with [`Error::Limit`]. The difference is who owns it:
+    /// the document's deadline outlives every render and, once passed, stays
+    /// passed, while a `cancel` is made for one call and dropped with it, so
+    /// a viewer abandoning a stale tile raises it and the next render starts
+    /// clean.
+    pub cancel: Option<&'a Deadline>,
 }
 
 /// Render a page into a pixmap.
@@ -209,6 +218,7 @@ pub fn render_page_to_device_with<B: RasterBackend>(
         caches,
         visible,
         deadline,
+        cancel,
     } = session;
     // The two `None` arms need somewhere to live that outlasts the call, so
     // each default is bound here and borrowed rather than built inline.
@@ -216,14 +226,32 @@ pub fn render_page_to_device_with<B: RasterBackend>(
     let all_visible = Visibility::all_visible();
     let visible = visible.unwrap_or(&all_visible);
     let caches = caches.unwrap_or(&mut fresh_caches);
-    render_page_inner(page, opts, backend, visible, caches, deadline, diags)
+    render_page_inner(
+        page,
+        opts,
+        backend,
+        visible,
+        caches,
+        Stops { deadline, cancel },
+        diags,
+    )
 }
 
-/// `Ok` unless `deadline` is set and has passed.
-fn check_deadline(deadline: Option<&Deadline>) -> Result<(), Error> {
-    match deadline {
-        Some(deadline) => deadline.check(Operation::Render).map_err(Error::Limit),
-        None => Ok(()),
+/// The two stops a render honours: the caller's document-wide deadline and
+/// the one made for this render.
+#[derive(Clone, Copy)]
+struct Stops<'a> {
+    deadline: Option<&'a Deadline>,
+    cancel: Option<&'a Deadline>,
+}
+
+impl Stops<'_> {
+    /// `Ok` unless either stop is set and has passed.
+    fn check(self) -> Result<(), Error> {
+        for stop in [self.deadline, self.cancel].into_iter().flatten() {
+            stop.check(Operation::Render).map_err(Error::Limit)?;
+        }
+        Ok(())
     }
 }
 
@@ -234,18 +262,19 @@ fn render_page_inner<B: RasterBackend>(
     backend: &B,
     visible: &Visibility,
     caches: &mut RenderCaches,
-    deadline: Option<&Deadline>,
+    stops: Stops<'_>,
     diags: &mut Diagnostics,
 ) -> Result<B::Device, Error> {
     let (w, h) = target_size(page, opts)?;
     // Before the allocation, and again after the walk: a walk that stopped
     // on the deadline has left the device half-drawn, and the second read is
     // what turns that into an error rather than a returned pixmap.
-    check_deadline(deadline)?;
+    stops.check()?;
     let clear = opts.background_for(needs_alpha_background(page));
     let mut device = backend.new_target(w, h, clear);
     let ctx = RenderCtx {
-        deadline,
+        deadline: stops.deadline,
+        cancel: stops.cancel,
         ..RenderCtx::new(opts.clone(), page.transparency)
     };
     let to_device = page_matrix(page, opts);
@@ -262,7 +291,7 @@ fn render_page_inner<B: RasterBackend>(
         device_box,
         diags,
     );
-    check_deadline(deadline)?;
+    stops.check()?;
     Ok(device)
 }
 

@@ -41,6 +41,7 @@ fn session_for<'a>(
         caches: Some(caches),
         visible: Some(visible),
         deadline: None,
+        ..Default::default()
     }
 }
 
@@ -1578,4 +1579,42 @@ fn stroked_text_in_a_pattern_colour_paints_its_glyphs() {
             "a pattern-coloured stroked run must paint its glyph outlines"
         );
     }
+}
+
+/// A `cancel` stops the render it is given to and nothing else: the render
+/// after it, with none, draws.
+#[test]
+fn a_cancel_stops_one_render_and_leaves_the_next_alone() {
+    let objects = vec![filled(rect_path(0.0, 0.0, 10.0, 10.0), [1.0, 0.0, 0.0])];
+    let p = page(20.0, 20.0, objects);
+    let opts = RenderOptions::default();
+    let backend = VelloCpuBackend::new();
+    let cancel = pdfrum_common::Deadline::manual();
+    cancel.stop();
+    let err = render_page_with(
+        &p,
+        &opts,
+        &backend,
+        RenderSession {
+            cancel: Some(&cancel),
+            ..Default::default()
+        },
+        &mut Diagnostics::default(),
+    )
+    .expect_err("cancelled");
+    assert!(matches!(
+        err,
+        pdfrum_render::Error::Limit(pdfrum_common::LimitExceeded::Stopped {
+            during: pdfrum_common::Operation::Render,
+            ..
+        })
+    ));
+    render_page_with(
+        &p,
+        &opts,
+        &backend,
+        RenderSession::default(),
+        &mut Diagnostics::default(),
+    )
+    .expect("no cancel, no stop");
 }

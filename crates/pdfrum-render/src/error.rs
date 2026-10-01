@@ -34,7 +34,8 @@ pub enum Error {
         /// The requested height in pixels.
         height: u32,
     },
-    /// [`RenderSession::deadline`](crate::RenderSession::deadline) passed:
+    /// [`RenderSession::deadline`](crate::RenderSession::deadline) or
+    /// [`RenderSession::cancel`](crate::RenderSession::cancel) passed:
     /// before the target was allocated, or during the walk, which stops at
     /// the next object and reports here rather than handing back a page with
     /// the rest missing.
