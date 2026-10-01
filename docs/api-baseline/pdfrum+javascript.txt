@@ -38,6 +38,7 @@ pub use pdfrum::DEFAULT_FIELD_DA
 pub use pdfrum::Dash
 pub use pdfrum::Deadline
 pub use pdfrum::Dest
+pub use pdfrum::DeviceRect
 pub use pdfrum::DiagKind
 pub use pdfrum::Diagnostic
 pub use pdfrum::Diagnostics
@@ -130,6 +131,7 @@ pub use pdfrum::Quad
 pub use pdfrum::RasterBackend
 pub use pdfrum::ReadError
 pub use pdfrum::Rect
+pub use pdfrum::Region
 pub use pdfrum::Relationship
 pub use pdfrum::RenderCaches
 pub use pdfrum::RenderDevice
@@ -655,6 +657,7 @@ pub struct pdfrum::PreparedPage<'a>
 impl pdfrum::PreparedPage<'_>
 pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render_region_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession, pdfrum_render::region::Region) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub struct pdfrum::RawImage
 pub pdfrum::RawImage::data: alloc::vec::Vec<u8>
 pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding
@@ -663,6 +666,7 @@ pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
 pub pdfrum::RenderOptions::color_mode: pdfrum_render::options::ColorMode
 pub pdfrum::RenderOptions::interpolate_images: bool
+pub pdfrum::RenderOptions::region: pdfrum_render::region::Region
 pub pdfrum::RenderOptions::smooth_paths: bool
 pub pdfrum::RenderOptions::text_aa: pdfrum_render::options::TextAa
 pub pdfrum::RenderOptions::transform: kurbo::affine::Affine
@@ -682,6 +686,7 @@ pub fn pdfrum::RenderOptionsBuilder::build(self) -> pdfrum::RenderOptions
 pub fn pdfrum::RenderOptionsBuilder::color_mode(self, pdfrum_render::options::ColorMode) -> Self
 pub fn pdfrum::RenderOptionsBuilder::grayscale(self) -> Self
 pub fn pdfrum::RenderOptionsBuilder::interpolate_images(self, bool) -> Self
+pub fn pdfrum::RenderOptionsBuilder::region(self, pdfrum_render::region::Region) -> Self
 pub fn pdfrum::RenderOptionsBuilder::scale(self, f64) -> Self
 pub fn pdfrum::RenderOptionsBuilder::smooth_paths(self, bool) -> Self
 pub fn pdfrum::RenderOptionsBuilder::text_aa(self, pdfrum_render::options::TextAa) -> Self
@@ -690,7 +695,9 @@ pub struct pdfrum::RenderSession
 pub pdfrum::RenderSession::build: pdfrum_page::build::BuildContext
 pub pdfrum::RenderSession::caches: pdfrum_render::ctx::RenderCaches
 impl pdfrum::RenderSession
+pub fn pdfrum::RenderSession::deadline(&self) -> core::option::Option<&pdfrum_common::deadline::Deadline>
 pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
+pub fn pdfrum::RenderSession::set_deadline(&mut self, core::option::Option<pdfrum_common::deadline::Deadline>)
 pub struct pdfrum::Revision
 pub pdfrum::Revision::end: usize
 pub pdfrum::Revision::index: usize
