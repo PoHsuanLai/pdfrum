@@ -38,6 +38,13 @@ first crates.io release.
   the document's, and sticky. The engine's is
   `pdfrum_render::RenderSession::cancel`.
 
+### Fixed
+
+- A link annotation without an `/AP` no longer gets a 1 pt box when its border
+  width is zero. `/Border [0 0 0]` and `/BS << /W 0 >>` draw nothing, and a
+  `/Border` width is honoured when there is no `/BS`. A link with neither key
+  still draws the PDF 1.x default, a 1 pt border.
+
 ## [0.4.0] - 2026-09-26
 
 ### Breaking
