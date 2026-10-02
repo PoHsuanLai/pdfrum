@@ -77,13 +77,13 @@ pub fn pdfrum_font::Font::vert_width(&self, pdfrum_cmap::ids::CharCode) -> core:
 pub enum pdfrum_font::GlyphSource
 pub pdfrum_font::GlyphSource::Fontations(pdfrum_font::Face)
 pub pdfrum_font::GlyphSource::None
-pub pdfrum_font::GlyphSource::Type1(alloc::rcs::arc::Arc<pdfrum_type1::Type1Font>)
+pub pdfrum_font::GlyphSource::Type1(alloc::sync::Arc<pdfrum_type1::Type1Font>)
 impl pdfrum_font::GlyphSource
 pub fn pdfrum_font::GlyphSource::cap_height_unscaled(&self) -> core::option::Option<f32>
 pub fn pdfrum_font::GlyphSource::char_index(&self, pdfrum_font::Charmap, u32) -> u16
 pub fn pdfrum_font::GlyphSource::charmaps(&self) -> &[pdfrum_font::CharmapId]
 pub fn pdfrum_font::GlyphSource::default_advance(&self, pdfrum_font::Gid) -> i32
-pub fn pdfrum_font::GlyphSource::from_bytes(impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> core::option::Option<Self>
+pub fn pdfrum_font::GlyphSource::from_bytes(impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> core::option::Option<Self>
 pub fn pdfrum_font::GlyphSource::is_bold(&self) -> bool
 pub fn pdfrum_font::GlyphSource::is_fixed_pitch(&self) -> bool
 pub fn pdfrum_font::GlyphSource::is_italic(&self) -> bool
@@ -153,7 +153,7 @@ pub fn pdfrum_font::Face::is_fixed_pitch(&self) -> bool
 pub fn pdfrum_font::Face::is_italic(&self) -> bool
 pub fn pdfrum_font::Face::is_truetype(&self) -> bool
 pub fn pdfrum_font::Face::name_index(&self, &str) -> u16
-pub fn pdfrum_font::Face::new(alloc::rcs::arc::Arc<[u8]>, u32) -> core::option::Option<Self>
+pub fn pdfrum_font::Face::new(alloc::sync::Arc<[u8]>, u32) -> core::option::Option<Self>
 pub fn pdfrum_font::Face::num_glyphs(&self) -> u32
 pub fn pdfrum_font::Face::postscript_name(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_font::Face::unicode_mappings(&self, u32) -> alloc::vec::Vec<(u32, u16)>
@@ -162,7 +162,7 @@ impl core::fmt::Debug for pdfrum_font::Face
 pub fn pdfrum_font::Face::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_font::FontCache
 impl pdfrum_font::FontCache
-pub fn pdfrum_font::FontCache::get_or_load<F>(&self, pdfrum_object::object::ObjRef, F) -> core::option::Option<alloc::rcs::arc::Arc<pdfrum_font::Font>> where F: core::ops::function::FnOnce() -> core::option::Option<pdfrum_font::Font>
+pub fn pdfrum_font::FontCache::get_or_load<F>(&self, pdfrum_object::object::ObjRef, F) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>> where F: core::ops::function::FnOnce() -> core::option::Option<pdfrum_font::Font>
 pub fn pdfrum_font::FontCache::new() -> Self
 pub struct pdfrum_font::FontFlags(_)
 impl pdfrum_font::FontFlags
@@ -207,8 +207,8 @@ pub fn pdfrum_font::Gid::from(u16) -> Self
 pub struct pdfrum_font::GlyphCache
 impl pdfrum_font::GlyphCache
 pub fn pdfrum_font::GlyphCache::new() -> Self
-pub fn pdfrum_font::GlyphCache::shared(&mut self, &pdfrum_font::Font, pdfrum_font::GlyphKey) -> core::option::Option<alloc::rcs::arc::Arc<kurbo::bezpath::BezPath>>
-pub fn pdfrum_font::GlyphCache::shared_fallback(&mut self, &pdfrum_font::GlyphFallback, bool, pdfrum_font::GlyphKey) -> core::option::Option<alloc::rcs::arc::Arc<kurbo::bezpath::BezPath>>
+pub fn pdfrum_font::GlyphCache::shared(&mut self, &pdfrum_font::Font, pdfrum_font::GlyphKey) -> core::option::Option<alloc::sync::Arc<kurbo::bezpath::BezPath>>
+pub fn pdfrum_font::GlyphCache::shared_fallback(&mut self, &pdfrum_font::GlyphFallback, bool, pdfrum_font::GlyphKey) -> core::option::Option<alloc::sync::Arc<kurbo::bezpath::BezPath>>
 pub struct pdfrum_font::GlyphFallback
 impl pdfrum_font::GlyphFallback
 pub fn pdfrum_font::GlyphFallback::advance(&self, pdfrum_font::Gid) -> i32

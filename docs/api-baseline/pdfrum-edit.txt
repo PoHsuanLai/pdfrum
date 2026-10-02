@@ -519,7 +519,7 @@ impl<'a> pdfrum_edit::EditDoc<'a>
 pub fn pdfrum_edit::EditDoc<'a>::add(&mut self, pdfrum_object::object::Object) -> pdfrum_object::object::ObjRef
 pub fn pdfrum_edit::EditDoc<'a>::apply_page(&mut self, &pdfrum_page::page_edit::PageEdit, &pdfrum_edit::ShareCounts) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'a>::base(&self) -> &'a pdfrum_parser::doc::Document
-pub fn pdfrum_edit::EditDoc<'a>::edited(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &alloc::rcs::arc::Arc<pdfrum_object::object::Object>)>
+pub fn pdfrum_edit::EditDoc<'a>::edited(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &alloc::sync::Arc<pdfrum_object::object::Object>)>
 pub fn pdfrum_edit::EditDoc<'a>::is_edited(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::is_removed(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::last_object_number(&self) -> u32
@@ -528,7 +528,7 @@ pub fn pdfrum_edit::EditDoc<'a>::page_state(&self, impl core::convert::Into<pdfr
 pub fn pdfrum_edit::EditDoc<'a>::remove(&mut self, pdfrum_object::object::ObjRef)
 pub fn pdfrum_edit::EditDoc<'a>::replace(&mut self, pdfrum_object::object::ObjRef, pdfrum_object::object::Object)
 impl pdfrum_object::resolve::Resolve for pdfrum_edit::EditDoc<'_>
-pub fn pdfrum_edit::EditDoc<'_>::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub fn pdfrum_edit::EditDoc<'_>::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
 pub struct pdfrum_edit::EmbeddedFont
 impl pdfrum_edit::EmbeddedFont
 pub fn pdfrum_edit::EmbeddedFont::encode(&self, &str) -> alloc::vec::Vec<u8>

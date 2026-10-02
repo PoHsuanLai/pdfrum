@@ -74,14 +74,14 @@ pub fn pdfrum_parser::Document::page(&self, impl core::convert::Into<pdfrum_comm
 pub fn pdfrum_parser::Document::page_count(&self) -> u32
 pub fn pdfrum_parser::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum_parser::Document::security_handler(&self) -> &pdfrum_crypt::handler::SecurityHandler
-pub fn pdfrum_parser::Document::store(&self) -> &alloc::rcs::arc::Arc<pdfrum_parser::ObjectStore>
+pub fn pdfrum_parser::Document::store(&self) -> &alloc::sync::Arc<pdfrum_parser::ObjectStore>
 pub fn pdfrum_parser::Document::trailer(&self) -> &pdfrum_object::dict::Dict
 pub fn pdfrum_parser::Document::trailer_object_number(&self) -> u32
 pub fn pdfrum_parser::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
 pub fn pdfrum_parser::Document::xref(&self) -> &pdfrum_parser::Xref
 pub fn pdfrum_parser::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum_object::resolve::Resolve for pdfrum_parser::Document
-pub fn pdfrum_parser::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub fn pdfrum_parser::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
 pub struct pdfrum_parser::Indirect
 pub pdfrum_parser::Indirect::generation: u16
 pub pdfrum_parser::Indirect::num: u32
@@ -116,9 +116,9 @@ pub pdfrum_parser::ObjStmEntry::num: u32
 pub pdfrum_parser::ObjStmEntry::offset: u32
 pub struct pdfrum_parser::ObjectStore
 impl pdfrum_parser::ObjectStore
-pub fn pdfrum_parser::ObjectStore::get(&self, u32) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::object::Object>, pdfrum_parser::Error>
+pub fn pdfrum_parser::ObjectStore::get(&self, u32) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_parser::Error>
 impl pdfrum_object::resolve::Resolve for pdfrum_parser::ObjectStore
-pub fn pdfrum_parser::ObjectStore::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub fn pdfrum_parser::ObjectStore::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
 pub struct pdfrum_parser::PageDict
 pub pdfrum_parser::PageDict::dict: pdfrum_object::dict::Dict
 pub pdfrum_parser::PageDict::reference: core::option::Option<pdfrum_object::object::ObjRef>
