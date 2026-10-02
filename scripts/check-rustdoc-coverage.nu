@@ -32,12 +32,24 @@ def published []: nothing -> list<string> {
     | sort
 }
 
+def resolve-toolchain []: nothing -> string {
+    let toolchains = (^rustup toolchain list | lines)
+    if ($toolchains | any {|t| $t | str starts-with 'nightly-2026-09-28' }) {
+        'nightly-2026-09-28'
+    } else if ($toolchains | any {|t| $t | str starts-with 'nightly' }) {
+        'nightly'
+    } else {
+        'nightly-2026-09-28'
+    }
+}
+
 # rustdoc writes the machine table to `$CARGO_TARGET_DIR/doc/<crate>.json`.
 def coverage [crate: string]: nothing -> record {
     let target = ($env.CARGO_TARGET_DIR? | default 'target')
     let underscored = ($crate | str replace --all '-' '_')
     let report = ([$target doc $"($underscored).json"] | path join)
-    ^cargo +nightly rustdoc -p $crate -- -Z unstable-options --show-coverage --output-format json out> /dev/null
+    let toolchain = (resolve-toolchain)
+    ^cargo $"+($toolchain)" rustdoc -p $crate -- -Z unstable-options --show-coverage --output-format json out> /dev/null
     let files = (open $report | values)
     let total = ($files | get total | math sum)
     let with_docs = ($files | get with_docs | math sum)
@@ -52,10 +64,11 @@ def coverage [crate: string]: nothing -> record {
 def main [] {
     cd ($env.FILE_PWD | path dirname)
 
-    let has_nightly = (^rustup toolchain list | lines | any {|t| $t | str starts-with 'nightly' })
+    let toolchains = (^rustup toolchain list | lines)
+    let has_nightly = ($toolchains | any {|t| ($t | str starts-with 'nightly-2026-09-28') or ($t | str starts-with 'nightly') })
     if not $has_nightly {
         print --stderr "warning: no nightly toolchain; skipping the rustdoc coverage floor"
-        print --stderr "         install with: rustup toolchain install nightly"
+        print --stderr "         install with: rustup toolchain install nightly-2026-09-28"
         return
     }
 
