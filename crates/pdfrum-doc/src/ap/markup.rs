@@ -599,9 +599,10 @@ fn line_ending_fill<R: Resolve>(dict: &Dict, r: &R) -> String {
 /// A `Link`: border chrome over `/Rect`.
 ///
 /// Honours `/BS` (and `/Border`) via [`border::border_path`] — solid, dashed,
-/// underline, bevel, inset — with `/C` when present, otherwise a muted blue.
-/// A missing border still draws at least a 1 pt border so the hit target is
-/// visible.
+/// underline, bevel, inset — with `/C` when present, otherwise blue.
+/// With neither `/BS` nor `/Border` the width is the PDF 1.x default, 1 pt
+/// (`/Border [0 0 1]`). A width of zero, from `/BS /W` or `/Border[2]`, draws
+/// nothing (ISO 32000-2 §12.5.2, §12.5.4): an invisible link is the usual case.
 #[must_use]
 pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     let mut out = Content::new();
@@ -609,8 +610,13 @@ pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     let rect = geom::normalize(dict.rect(obj_names::RECT, r));
     let bs = dict.dict(names::BS, r);
     let mut info = border::border_style_info(bs.as_ref(), r);
-    if bs.is_none() && dict.array(obj_names::BORDER, r).is_none() {
-        info.width = info.width.max(1.0);
+    if bs.is_none() {
+        // `/Border` (or its default of one) carries the width when there is
+        // no `/BS`; a zero draws nothing.
+        info.width = border::border_width(dict, r);
+    }
+    if info.width <= 0.0 {
+        return Generated::plain(out);
     }
     // `/C` as RGB when present; else muted blue.
     let color = match dict.array(names::C, r) {
@@ -622,21 +628,7 @@ pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
         _ => Color::Rgb(0.0, 0.0, 1.0),
     };
     let path = border::border_path(rect, info, color);
-    if path.is_empty() {
-        let stroke = color_op(color, PaintOp::Stroke);
-        out.raw(&stroke);
-        let width = info.width.max(1.0);
-        out.num(width, Float::G6);
-        out.raw("w ");
-        let inset = geom::deflate(rect, width / 2.0, width / 2.0);
-        out.rect(inset, Float::G6);
-        out.raw(
-            "re s
-",
-        );
-    } else {
-        out.raw(&path);
-    }
+    out.raw(&path);
     Generated::plain(out)
 }
 
@@ -1039,6 +1031,42 @@ mod tests {
         assert!(s.contains("re f*"), "{s}");
         assert!(s.contains("0 0 50 12 re"), "{s}");
         assert!(s.contains("1 1 48 10 re"), "{s}");
+    }
+
+    fn link_stream(extra: &[(&str, Object)]) -> String {
+        let mut pairs = vec![("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))];
+        pairs.extend_from_slice(extra);
+        stream(&link(&dict(&pairs), &NoResolve))
+    }
+
+    fn drawn(s: &str) -> bool {
+        s.contains("re f*") || s.contains("RG")
+    }
+
+    #[test]
+    fn a_link_with_a_zero_border_draws_nothing() {
+        let zero = numbers(&[0.0, 0.0, 0.0]);
+        assert!(!drawn(&link_stream(&[("Border", zero)])));
+        let bs = |w: f32| Object::Dict(Dict::from_pairs([(Name::from("W"), Object::from(w))]));
+        assert!(!drawn(&link_stream(&[("BS", bs(0.0))])));
+        // `/BS` wins over `/Border`, so a zero `/BS` hides a wide `/Border`.
+        let wide = numbers(&[0.0, 0.0, 3.0]);
+        assert!(!drawn(&link_stream(&[("BS", bs(0.0)), ("Border", wide)])));
+    }
+
+    #[test]
+    fn a_link_without_border_keys_takes_the_default_width_of_one() {
+        let s = link_stream(&[]);
+        assert!(
+            s.contains("0 0 50 12 re") && s.contains("1 1 48 10 re"),
+            "{s}"
+        );
+    }
+
+    #[test]
+    fn a_link_border_array_sets_the_width() {
+        let s = link_stream(&[("Border", numbers(&[0.0, 0.0, 3.0]))]);
+        assert!(s.contains("3 3 44 6 re"), "{s}");
     }
 
     #[test]
