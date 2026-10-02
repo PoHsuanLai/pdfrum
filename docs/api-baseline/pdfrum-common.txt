@@ -142,6 +142,7 @@ pub fn pdfrum_common::Deadline::after(core::time::Duration) -> pdfrum_common::De
 pub fn pdfrum_common::Deadline::at(std::time::Instant) -> pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::budget(&self) -> core::option::Option<core::time::Duration>
 pub fn pdfrum_common::Deadline::check(&self, pdfrum_common::Operation) -> core::result::Result<(), pdfrum_common::LimitExceeded>
+pub fn pdfrum_common::Deadline::from_flag(alloc::sync::Arc<core::sync::atomic::AtomicBool>) -> pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::manual() -> pdfrum_common::Deadline
 pub fn pdfrum_common::Deadline::passed(&self) -> bool
 pub fn pdfrum_common::Deadline::stop(&self)

@@ -587,6 +587,7 @@ pub fn pdfrum::OwnedPage::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::OwnedPage::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::OwnedPage::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::OwnedPage::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
+pub fn pdfrum::OwnedPage::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::OwnedPreparedPage
 pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::OwnedPage::render_with<B: pdfrum_render::device::RasterBackend>(&self, B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
@@ -597,6 +598,12 @@ pub fn pdfrum::OwnedPage::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_t
 pub fn pdfrum::OwnedPage::trim_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::OwnedPage::width(&self) -> f64
 pub fn pdfrum::OwnedPage::words(&self) -> alloc::vec::Vec<pdfrum_text::word::Word>
+pub struct pdfrum::OwnedPreparedPage
+impl pdfrum::OwnedPreparedPage
+pub fn pdfrum::OwnedPreparedPage::document(&self) -> &alloc::sync::Arc<pdfrum::Document>
+pub fn pdfrum::OwnedPreparedPage::render<B: pdfrum_render::device::RasterBackend>(&self, B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPreparedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPreparedPage::render_region_on<B: pdfrum_render::device::RasterBackend>(&self, B, &mut pdfrum::RenderSession, pdfrum_render::region::Region) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub struct pdfrum::Page<'a>
 impl pdfrum::Page<'_>
 pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum_page::page_edit::PageEdit

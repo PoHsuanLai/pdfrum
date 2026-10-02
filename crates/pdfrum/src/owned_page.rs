@@ -4,10 +4,12 @@
 use std::sync::Arc;
 
 use pdfrum_common::PageIndex;
+use pdfrum_render::Region;
 
 use crate::{
     Annotation, Document, Page, PageImage, PageLink, Pixmap, RasterBackend, RenderOptions,
-    RenderSession, Result, Rotation, TextPage, Word, page::annotations_of,
+    RenderSession, Result, Rotation, TextPage, Word,
+    page::{annotations_of, draw_region},
 };
 
 /// One page of a [`Document`], holding the document rather than borrowing
@@ -315,6 +317,36 @@ impl OwnedPage {
         self.page().render_on(backend, options, session)
     }
 
+    /// Interprets the page once into a value that owns its document, for
+    /// drawing any number of times — as [`Page::prepare`].
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
+    ///
+    /// let doc = Arc::new(Document::open("tests/fixtures/hello_world.pdf")?);
+    /// let mut session = RenderSession::new();
+    /// let prepared = doc.page_owned(0)?.prepare(&RenderOptions::default(), &mut session);
+    /// // No lifetime: it can be moved to a worker and kept between jobs.
+    /// let pixmap = prepared.render_on(VelloCpuBackend, &mut session)?;
+    /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn prepare(
+        &self,
+        options: &RenderOptions,
+        session: &mut RenderSession,
+    ) -> OwnedPreparedPage {
+        let prepared = self.page().prepare(options, session);
+        OwnedPreparedPage {
+            doc: Arc::clone(&self.doc),
+            index: prepared.index,
+            graph: prepared.graph,
+            options: prepared.options,
+        }
+    }
+
     /// Extracts the page's text — as [`Page::text`].
     ///
     /// ```
@@ -548,5 +580,105 @@ impl Document {
     pub fn pages_owned(self: &Arc<Self>) -> impl Iterator<Item = Result<OwnedPage>> + 'static {
         let doc = Arc::clone(self);
         (0..self.page_count()).map(move |index| doc.page_owned(index))
+    }
+}
+
+/// A page whose content has been interpreted, holding its document rather
+/// than borrowing it: [`PreparedPage`](crate::PreparedPage) without the
+/// lifetime.
+///
+/// A worker thread that draws tiles of one page at one zoom prepares once,
+/// keeps this between jobs, and calls
+/// [`render_region_on`](OwnedPreparedPage::render_region_on) per tile; the
+/// content stream is not interpreted again. It is `Send + Sync`, and it keeps
+/// the document alive.
+///
+/// Like [`PreparedPage`](crate::PreparedPage) it is prepared **for** one
+/// [`RenderOptions`]: its images were decoded for that transform's device
+/// size, so a different zoom or annotations flag needs
+/// [`OwnedPage::prepare`] again. Draws take the caller's [`RenderSession`],
+/// so the session's [`set_deadline`](RenderSession::set_deadline) cancels one
+/// draw without touching the prepared page or the document.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum::{DeviceRect, Document, Region, RenderOptions, RenderSession, VelloCpuBackend};
+///
+/// let doc = Arc::new(Document::open("tests/fixtures/hello_world.pdf")?);
+/// let mut session = RenderSession::new();
+/// let prepared = doc.page_owned(0)?.prepare(&RenderOptions::scaled(4.0), &mut session);
+/// drop(doc);
+///
+/// let tile = DeviceRect::new(400, 400, 256, 256)?;
+/// let pixmap = std::thread::spawn(move || {
+///     prepared.render_region_on(VelloCpuBackend, &mut RenderSession::new(), Region::Rect(tile))
+/// })
+/// .join()
+/// .expect("worker")?;
+/// assert_eq!((pixmap.width(), pixmap.height()), (256, 256));
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct OwnedPreparedPage {
+    doc: Arc<Document>,
+    index: PageIndex,
+    graph: pdfrum_page::Page,
+    options: RenderOptions,
+}
+
+impl OwnedPreparedPage {
+    /// The document this page belongs to.
+    #[must_use]
+    pub fn document(&self) -> &Arc<Document> {
+        &self.doc
+    }
+
+    /// Draws the prepared page with glyph caches of its own — as
+    /// [`PreparedPage::render`](crate::PreparedPage::render).
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render<B: RasterBackend>(&self, backend: B) -> Result<Pixmap> {
+        self.render_on(backend, &mut RenderSession::default())
+    }
+
+    /// Draws the prepared page, reusing a caller-owned [`RenderSession`] — as
+    /// [`PreparedPage::render_on`](crate::PreparedPage::render_on).
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`], and [`Error::Limit`](crate::Error::Limit) when
+    /// the session's [`RenderSession::set_deadline`] has passed.
+    pub fn render_on<B: RasterBackend>(
+        &self,
+        backend: B,
+        session: &mut RenderSession,
+    ) -> Result<Pixmap> {
+        self.render_region_on(backend, session, self.options.region)
+    }
+
+    /// Draws `region` of the prepared page — as
+    /// [`PreparedPage::render_region_on`](crate::PreparedPage::render_region_on),
+    /// and the call a worker makes once per tile.
+    ///
+    /// # Errors
+    ///
+    /// As [`PreparedPage::render_region_on`](crate::PreparedPage::render_region_on).
+    pub fn render_region_on<B: RasterBackend>(
+        &self,
+        backend: B,
+        session: &mut RenderSession,
+        region: Region,
+    ) -> Result<Pixmap> {
+        draw_region(
+            &self.doc,
+            self.index,
+            &self.graph,
+            &self.options,
+            backend,
+            session,
+            region,
+        )
     }
 }
