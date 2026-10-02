@@ -50,7 +50,6 @@ jobs:
           # Pinned to 2026-09-28 so rustdoc JSON type-path changes do not drift the API baseline.
           rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
           rustup toolchain install nightly-2026-09-28 --profile minimal
-          rustup toolchain link nightly "$(rustup which rustc --toolchain nightly-2026-09-28 | sed 's|/bin/rustc||')"
           rustup target add wasm32-unknown-unknown
           rustup default 1.98.1
 
