@@ -80,6 +80,37 @@ impl Deadline {
         }
     }
 
+    /// A deadline that answers to a flag the caller already owns.
+    ///
+    /// Raising `flag` (`store(true, ..)`, from any thread) makes this
+    /// deadline, and every clone of it, pass, exactly as [`Deadline::stop`]
+    /// does; [`Deadline::stop`] on it raises `flag` too. A host with one
+    /// cancellation flag per job hands that flag here rather than keeping a
+    /// second one in step with it. Add a budget with
+    /// [`Deadline::with_budget`].
+    ///
+    /// The flag is only read, with a relaxed load. Nothing lowers it again,
+    /// so a flag that is reused must be replaced with a fresh one.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use std::sync::atomic::{AtomicBool, Ordering};
+    /// use pdfrum_common::Deadline;
+    ///
+    /// let flag = Arc::new(AtomicBool::new(false));
+    /// let deadline = Deadline::from_flag(Arc::clone(&flag));
+    /// assert!(!deadline.passed());
+    /// flag.store(true, Ordering::Relaxed);
+    /// assert!(deadline.passed());
+    /// ```
+    #[must_use]
+    pub fn from_flag(flag: Arc<AtomicBool>) -> Deadline {
+        Deadline {
+            stop: flag,
+            clock: None,
+        }
+    }
+
     /// A deadline `budget` from now. It can still be raised early with
     /// [`Deadline::stop`].
     ///
@@ -281,6 +312,24 @@ mod tests {
         // Idempotent.
         stop.stop();
         assert!(stop.passed());
+    }
+
+    #[test]
+    fn a_deadline_from_a_flag_passes_when_the_flag_is_raised_and_raises_it_when_stopped() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let flag = Arc::new(AtomicBool::new(false));
+        let deadline = Deadline::from_flag(Arc::clone(&flag));
+        assert!(!deadline.passed());
+        assert_eq!(deadline.budget(), None);
+        flag.store(true, Ordering::Relaxed);
+        assert!(matches!(
+            deadline.check(Operation::Render),
+            Err(LimitExceeded::Stopped { .. })
+        ));
+        let other = Arc::new(AtomicBool::new(false));
+        Deadline::from_flag(Arc::clone(&other)).stop();
+        assert!(other.load(Ordering::Relaxed));
     }
 
     #[test]

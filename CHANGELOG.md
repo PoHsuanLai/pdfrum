@@ -14,6 +14,16 @@ first crates.io release.
 
 ### Added
 
+- `Deadline::from_flag(Arc<AtomicBool>)`: a deadline that answers to a
+  cancellation flag the caller already owns, so one flag raised from any
+  thread ends a render between objects (set it with
+  `RenderSession::set_deadline`) without a second flag kept in step. Works on
+  every target, `wasm32` included; add a budget with `with_budget`.
+- `OwnedPreparedPage`, from `OwnedPage::prepare`: `PreparedPage` without the
+  lifetime. It holds an `Arc<Document>`, is `Send + Sync`, and draws with
+  `render`, `render_on` and `render_region_on`, so a worker keeps a page
+  interpreted at one zoom between jobs and draws every tile of it without
+  interpreting the content stream again.
 - `pdfrum-anyrender`: an `anyrender` recording `Scene` written as a vector PDF
   page through `pdfrum-edit`. Paths and gradients stay vectors, images keep
   their source encoding where PDF allows (a JPEG as-is, an opaque PNG's
