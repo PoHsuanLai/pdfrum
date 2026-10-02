@@ -5,8 +5,8 @@ use crate::device::MAX_TARGET_DIMENSION;
 use crate::error::Error;
 
 /// A rectangle of whole device pixels, measured from the top-left corner of
-/// the page's full device box (the box [`target_size`](crate::walk::target_size)
-/// sizes under the render transform).
+/// the page's full device box (the box the render transform maps the page
+/// to, whose size is the whole-page render's pixmap size).
 ///
 /// Validated at construction: neither side is zero, neither exceeds
 /// [`MAX_TARGET_DIMENSION`] — the largest pixmap a backend allocates — and
