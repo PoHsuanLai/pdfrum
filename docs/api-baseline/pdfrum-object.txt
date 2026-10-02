@@ -262,7 +262,7 @@ impl core::iter::traits::collect::FromIterator<pdfrum_object::Object> for pdfrum
 pub fn pdfrum_object::Array::from_iter<I: core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>>(I) -> Self
 pub enum pdfrum_object::Resolved<'a>
 pub pdfrum_object::Resolved::Direct(&'a pdfrum_object::Object)
-pub pdfrum_object::Resolved::Indirect(alloc::sync::Arc<pdfrum_object::Object>)
+pub pdfrum_object::Resolved::Indirect(alloc::rcs::arc::Arc<pdfrum_object::Object>)
 impl pdfrum_object::Resolved<'_>
 pub fn pdfrum_object::Resolved<'_>::as_direct(&self) -> core::option::Option<&pdfrum_object::Object>
 pub fn pdfrum_object::Resolved<'_>::get(&self) -> &pdfrum_object::Object
@@ -328,16 +328,16 @@ pub fn pdfrum_object::ByteSpan::empty() -> Self
 pub fn pdfrum_object::ByteSpan::from_owner(impl core::convert::AsRef<[u8]> + core::marker::Send + 'static) -> Self
 pub fn pdfrum_object::ByteSpan::is_empty(&self) -> bool
 pub fn pdfrum_object::ByteSpan::len(&self) -> usize
-pub fn pdfrum_object::ByteSpan::new(alloc::sync::Arc<[u8]>, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
+pub fn pdfrum_object::ByteSpan::new(alloc::rcs::arc::Arc<[u8]>, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
 pub fn pdfrum_object::ByteSpan::subspan(&self, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
-pub fn pdfrum_object::ByteSpan::whole(alloc::sync::Arc<[u8]>) -> Self
+pub fn pdfrum_object::ByteSpan::whole(alloc::rcs::arc::Arc<[u8]>) -> Self
 impl core::cmp::Eq for pdfrum_object::ByteSpan
 impl core::cmp::PartialEq for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::eq(&self, &Self) -> bool
 impl core::convert::AsRef<[u8]> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::as_ref(&self) -> &[u8]
-impl core::convert::From<alloc::sync::Arc<[u8]>> for pdfrum_object::ByteSpan
-pub fn pdfrum_object::ByteSpan::from(alloc::sync::Arc<[u8]>) -> Self
+impl core::convert::From<alloc::rcs::arc::Arc<[u8]>> for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::from(alloc::rcs::arc::Arc<[u8]>) -> Self
 impl core::convert::From<alloc::vec::Vec<u8>> for pdfrum_object::ByteSpan
 pub fn pdfrum_object::ByteSpan::from(alloc::vec::Vec<u8>) -> Self
 impl core::fmt::Debug for pdfrum_object::ByteSpan
@@ -411,7 +411,7 @@ impl core::fmt::Debug for pdfrum_object::Name
 pub fn pdfrum_object::Name::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_object::NoResolve
 impl pdfrum_object::Resolve for pdfrum_object::NoResolve
-pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::Object>, pdfrum_object::Error>
 pub struct pdfrum_object::ObjRef
 pub pdfrum_object::ObjRef::generation: u16
 pub pdfrum_object::ObjRef::num: u32
@@ -446,11 +446,11 @@ pub fn pdfrum_object::Object::from(pdfrum_object::Stream) -> Self
 pub const pdfrum_object::INT_RANGE: core::ops::range::RangeInclusive<i64>
 pub const pdfrum_object::PDF_DOC_ENCODING: [u16; 256]
 pub trait pdfrum_object::Resolve
-pub fn pdfrum_object::Resolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub fn pdfrum_object::Resolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::Object>, pdfrum_object::Error>
 impl pdfrum_object::Resolve for pdfrum_object::NoResolve
-pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::Object>, pdfrum_object::Error>
 impl<T: pdfrum_object::Resolve + ?core::marker::Sized> pdfrum_object::Resolve for &T
-pub fn &T::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub fn &T::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::Object>, pdfrum_object::Error>
 pub fn pdfrum_object::decode_text(&[u8]) -> alloc::borrow::Cow<'_, str>
 pub fn pdfrum_object::encode_string_hex(&[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_object::encode_string_literal(&[u8]) -> alloc::vec::Vec<u8>

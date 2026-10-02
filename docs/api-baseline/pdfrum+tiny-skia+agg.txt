@@ -406,12 +406,12 @@ pub fn pdfrum::Document::write_form_to(&self, &mut impl core::io::write::Write, 
 pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum_page::page_edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum::Document
-pub fn pdfrum::Document::page_owned(&alloc::sync::Arc<Self>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::OwnedPage>
-pub fn pdfrum::Document::pages_owned(&alloc::sync::Arc<Self>) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Result<pdfrum::OwnedPage>> + 'static
+pub fn pdfrum::Document::page_owned(&alloc::rcs::arc::Arc<Self>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::OwnedPage>
+pub fn pdfrum::Document::pages_owned(&alloc::rcs::arc::Arc<Self>) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Result<pdfrum::OwnedPage>> + 'static
 impl pdfrum::Document
 pub fn pdfrum::Document::signatures(&self) -> alloc::vec::Vec<pdfrum::Signature<'_>>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
-pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::rcs::arc::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
 pub struct pdfrum::EmbeddedFontFile
 pub pdfrum::EmbeddedFontFile::data: alloc::vec::Vec<u8>
 pub pdfrum::EmbeddedFontFile::kind: pdfrum::FontFileKind
@@ -444,8 +444,8 @@ pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::st
 pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool) -> core::result::Result<(), pdfrum::UnknownField>
 pub struct pdfrum::FormSession<'a>
 impl pdfrum::FormSession<'_>
-pub fn pdfrum::FormSession<'_>::owned(alloc::sync::Arc<pdfrum::Document>) -> pdfrum::OwnedFormSession
-pub fn pdfrum::FormSession<'_>::owned_with_config(alloc::sync::Arc<pdfrum::Document>, pdfrum_form::session::SessionConfig) -> pdfrum::OwnedFormSession
+pub fn pdfrum::FormSession<'_>::owned(alloc::rcs::arc::Arc<pdfrum::Document>) -> pdfrum::OwnedFormSession
+pub fn pdfrum::FormSession<'_>::owned_with_config(alloc::rcs::arc::Arc<pdfrum::Document>, pdfrum_form::session::SessionConfig) -> pdfrum::OwnedFormSession
 impl<'a> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::appearances_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
@@ -543,7 +543,7 @@ pub fn pdfrum::OwnedFormSession::character(&mut self, char, pdfrum_form::event::
 pub fn pdfrum::OwnedFormSession::choose(&mut self, pdfrum_form::session::AnnotId, usize) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::close_popup(&mut self, pdfrum_form::session::AnnotId) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::config(&self) -> &pdfrum_form::session::SessionConfig
-pub fn pdfrum::OwnedFormSession::document(&self) -> &alloc::sync::Arc<pdfrum::Document>
+pub fn pdfrum::OwnedFormSession::document(&self) -> &alloc::rcs::arc::Arc<pdfrum::Document>
 pub fn pdfrum::OwnedFormSession::double_click(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::focus_at(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::OwnedFormSession::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
@@ -571,7 +571,7 @@ pub fn pdfrum::OwnedPage::annotations(&self) -> impl core::iter::traits::exact_s
 pub fn pdfrum::OwnedPage::art_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::OwnedPage::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::OwnedPage::crop_box(&self) -> kurbo::rect::Rect
-pub fn pdfrum::OwnedPage::document(&self) -> &alloc::sync::Arc<pdfrum::Document>
+pub fn pdfrum::OwnedPage::document(&self) -> &alloc::rcs::arc::Arc<pdfrum::Document>
 pub fn pdfrum::OwnedPage::height(&self) -> f64
 pub fn pdfrum::OwnedPage::images(&self) -> alloc::vec::Vec<pdfrum::PageImage>
 pub fn pdfrum::OwnedPage::index(&self) -> pdfrum_common::page_index::PageIndex

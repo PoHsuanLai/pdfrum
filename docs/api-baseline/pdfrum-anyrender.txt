@@ -9,7 +9,7 @@ impl pdfrum_anyrender::ImageCodec
 pub fn pdfrum_anyrender::ImageCodec::sniff(&[u8]) -> core::option::Option<Self>
 pub struct pdfrum_anyrender::EncodedImage
 impl pdfrum_anyrender::EncodedImage
-pub fn pdfrum_anyrender::EncodedImage::bytes(&self) -> &alloc::sync::Arc<alloc::vec::Vec<u8>>
+pub fn pdfrum_anyrender::EncodedImage::bytes(&self) -> &alloc::rcs::arc::Arc<alloc::vec::Vec<u8>>
 pub fn pdfrum_anyrender::EncodedImage::codec(&self) -> pdfrum_anyrender::ImageCodec
 pub fn pdfrum_anyrender::EncodedImage::sniffed(alloc::vec::Vec<u8>) -> core::option::Option<Self>
 impl core::fmt::Debug for pdfrum_anyrender::EncodedImage
