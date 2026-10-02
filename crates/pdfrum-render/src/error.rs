@@ -34,7 +34,29 @@ pub enum Error {
         /// The requested height in pixels.
         height: u32,
     },
-    /// [`RenderSession::deadline`](crate::RenderSession::deadline) passed:
+    /// The requested region does not lie inside the page's device box.
+    #[error(
+        "render region {width}x{height} at ({x}, {y}) is outside the page's {page_width}x{page_height} device box"
+    )]
+    RegionOutOfBounds {
+        /// The region's left edge.
+        x: u32,
+        /// The region's top edge.
+        y: u32,
+        /// The region's width.
+        width: u32,
+        /// The region's height.
+        height: u32,
+        /// The page's full device width under the render transform.
+        page_width: u32,
+        /// The page's full device height under the render transform.
+        page_height: u32,
+    },
+    /// This renderer cannot draw a part of the page; ask for the whole of it.
+    #[error("this renderer cannot draw a region of the page, only the whole page")]
+    RegionUnsupported,
+    /// [`RenderSession::deadline`](crate::RenderSession::deadline) or
+    /// [`RenderSession::cancel`](crate::RenderSession::cancel) passed:
     /// before the target was allocated, or during the walk, which stops at
     /// the next object and reports here rather than handing back a page with
     /// the rest missing.

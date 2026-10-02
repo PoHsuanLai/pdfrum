@@ -5,6 +5,7 @@
 //! non-isolated group with `/Group` present but `/I` absent, `ca` at one and
 //! no soft mask draws **directly**, with no group semantics at all.
 
+use crate::ctx::GroupNesting;
 use pdfrum_page::{BlendMode, PageObject, Transparency};
 
 /// Everything the offscreen decision reads, gathered from one object.
@@ -114,12 +115,12 @@ impl GroupFinish {
         reason = "an exact `!= 1.0f` is the upstream guard; an epsilon would \
                   skip the alpha multiply for a near-opaque value PDFium applies"
     )]
-    pub fn of(inputs: GroupInputs, transparency: Transparency, in_group: bool) -> Self {
+    pub fn of(inputs: GroupInputs, transparency: Transparency, nesting: GroupNesting) -> Self {
         Self {
             group_alpha: transparency.group.then_some(inputs.group_alpha),
-            // The `!in_group` guard is what stops a nested group re-applying
+            // The `Outside` guard is what stops a nested group re-applying
             // the enclosing group's alpha.
-            initial_alpha: (inputs.initial_alpha != 1.0 && !in_group)
+            initial_alpha: (inputs.initial_alpha != 1.0 && nesting == GroupNesting::Outside)
                 .then_some(inputs.initial_alpha),
         }
     }
@@ -147,7 +148,7 @@ mod tests {
     /// The **enclosing** transparency, with `group` forced on for a form —
     /// *not* the form's own group flags. The walk never asks the question
     /// separately: it hands [`GroupFinish::of`] the object's own transparency
-    /// and its `in_group` flag, which is where the same distinction lands.
+    /// and its [`GroupNesting`], which is where the same distinction lands.
     fn composite_transparency(enclosing: Transparency, is_form: bool) -> Transparency {
         Transparency {
             group: enclosing.group || is_form,
@@ -245,12 +246,12 @@ mod tests {
             group: true,
             ..Transparency::default()
         };
-        let finish = GroupFinish::of(inputs, group, false);
+        let finish = GroupFinish::of(inputs, group, GroupNesting::Outside);
         assert_eq!(finish.group_alpha, Some(0.5));
         assert_eq!(finish.initial_alpha, Some(0.5));
 
         // Inside an enclosing group the inherited alpha is *not* re-applied.
-        let nested = GroupFinish::of(inputs, group, true);
+        let nested = GroupFinish::of(inputs, group, GroupNesting::Inside);
         assert_eq!(nested.group_alpha, Some(0.5));
         assert_eq!(nested.initial_alpha, None);
     }
@@ -261,7 +262,7 @@ mod tests {
             group_alpha: 0.5,
             ..plain()
         };
-        let finish = GroupFinish::of(inputs, Transparency::default(), false);
+        let finish = GroupFinish::of(inputs, Transparency::default(), GroupNesting::Outside);
         assert_eq!(finish.group_alpha, None);
     }
 

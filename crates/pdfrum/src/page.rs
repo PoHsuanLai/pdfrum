@@ -8,8 +8,8 @@ use pdfrum_page::{BuildContext, Rotation};
 use pdfrum_parser::PageDict;
 
 use crate::{
-    Annotation, Document, Error, Pixmap, RasterBackend, RenderOptions, RenderSession, Result,
-    TextPage, Word,
+    Annotation, Document, Error, Pixmap, RasterBackend, Region, RenderOptions, RenderSession,
+    Result, TextPage, Word,
 };
 
 /// One page of a [`Document`].
@@ -219,6 +219,12 @@ impl<'a> Page<'a> {
         // Before `prepare`: the build decodes every image at the device size,
         // which is the first allocation a too-large request would make.
         check_pixel_cap(&self.doc.limits, self.display_size(), options)?;
+        // A tile the viewer has already abandoned should not pay for the
+        // interpretation either.
+        if let Some(stop) = session.deadline() {
+            stop.check(Operation::Render)
+                .map_err(|limit| Error::Limit(limit.on_page(self.index)))?;
+        }
         self.prepare(options, session).render_on(backend, session)
     }
 
@@ -268,6 +274,7 @@ impl<'a> Page<'a> {
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<crate::svg::SvgPage> {
+        refuse_region(options.region)?;
         check_pixel_cap(&self.doc.limits, self.display_size(), options)?;
         self.prepare(options, session).to_svg_on(backend, session)
     }
@@ -715,22 +722,81 @@ impl PreparedPage<'_> {
     /// Draws the prepared page on a rasterizer you name, reusing a
     /// caller-owned [`RenderSession`]'s glyph caches.
     ///
+    /// Draws the [`RenderOptions::region`] the page was prepared with; to
+    /// draw other tiles of the same page, see
+    /// [`PreparedPage::render_region_on`].
+    ///
     /// # Errors
     ///
-    /// As [`Page::render`].
+    /// As [`Page::render`], and [`Error::Limit`] when the session's
+    /// [`RenderSession::set_deadline`] has passed.
     pub fn render_on<B: RasterBackend>(
         &self,
         backend: B,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
+        self.render_region_on(backend, session, self.options.region)
+    }
+
+    /// Draws `region` of the prepared page, reusing a caller-owned
+    /// [`RenderSession`] — the call a deep-zoom viewer makes once per tile.
+    ///
+    /// Prepare once at the zoom's transform, then draw as many tiles as the
+    /// screen needs. The pixmap is exactly the tile's size, and each pixel
+    /// equals the pixel [`Region::Whole`] has there. The region replaces the
+    /// prepared options' own for this draw only.
+    ///
+    /// ```
+    /// use pdfrum::{DeviceRect, Document, Region, RenderOptions, RenderSession, VelloCpuBackend};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut session = RenderSession::new();
+    /// // 200 points at 8x is a 1600 px box; draw it as 4 tiles of 800x800.
+    /// let options = RenderOptions::scaled(8.0);
+    /// let prepared = doc.page(0)?.prepare(&options, &mut session);
+    /// for (x, y) in [(0, 0), (800, 0), (0, 800), (800, 800)] {
+    ///     let tile = DeviceRect::new(x, y, 800, 800)?;
+    ///     let pixmap = prepared.render_region_on(
+    ///         VelloCpuBackend,
+    ///         &mut session,
+    ///         Region::Rect(tile),
+    ///     )?;
+    ///     assert_eq!((pixmap.width(), pixmap.height()), (800, 800));
+    /// }
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`], with [`Limits::max_render_pixels`] counted
+    /// against the tile rather than the page,
+    /// [`RenderError::RegionOutOfBounds`](crate::RenderError::RegionOutOfBounds)
+    /// for a tile not inside the page's device box, and [`Error::Limit`]
+    /// when the session's [`RenderSession::set_deadline`] has passed, which
+    /// leaves the document usable.
+    pub fn render_region_on<B: RasterBackend>(
+        &self,
+        backend: B,
+        session: &mut RenderSession,
+        region: Region,
+    ) -> Result<Pixmap> {
         // Checked here as well as in `Page::render_on`: `prepare` is
         // infallible, so a page prepared above the cap is refused at the draw.
-        check_pixel_cap(&self.doc.limits, self.graph.display_size(), &self.options)?;
+        check_pixel_cap(
+            &self.doc.limits,
+            self.graph.display_size(),
+            &RenderOptions {
+                region,
+                ..self.options.clone()
+            },
+        )?;
         let inner = self.options.to_inner();
         let mut diags = Diagnostics::default();
         let render_session = pdfrum_render::RenderSession {
             caches: Some(&mut session.caches),
             deadline: self.doc.limits.deadline.as_ref(),
+            cancel: session.deadline.as_ref(),
+            region,
             ..Default::default()
         };
         let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
@@ -780,12 +846,14 @@ impl PreparedPage<'_> {
         backend: B,
         session: &mut RenderSession,
     ) -> Result<crate::svg::SvgPage> {
+        refuse_region(self.options.region)?;
         check_pixel_cap(&self.doc.limits, self.graph.display_size(), &self.options)?;
         let inner = self.options.to_inner();
         let mut diags = Diagnostics::default();
         let render_session = pdfrum_render::RenderSession {
             caches: Some(&mut session.caches),
             deadline: self.doc.limits.deadline.as_ref(),
+            cancel: session.deadline.as_ref(),
             ..Default::default()
         };
         let converted =
@@ -807,6 +875,16 @@ fn device_box(display_size: (f64, f64), options: &RenderOptions) -> kurbo::Rect 
         .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph))
 }
 
+/// SVG export is the whole page, so a region is refused up front rather than
+/// after the page is interpreted.
+#[cfg(feature = "svg-export")]
+fn refuse_region(region: Region) -> Result<()> {
+    match region {
+        Region::Whole => Ok(()),
+        Region::Rect(_) => Err(Error::Render(pdfrum_render::Error::RegionUnsupported)),
+    }
+}
+
 /// Refuses a render whose target has more pixels than
 /// [`Limits::max_render_pixels`] allows, before anything is allocated.
 ///
@@ -822,6 +900,19 @@ fn check_pixel_cap(
     let Some(allowed) = limits.max_render_pixels else {
         return Ok(());
     };
+    // A tile costs its own pixels, not the page's.
+    if let Region::Rect(rect) = options.region {
+        let (width, height) = (rect.width(), rect.height());
+        if u64::from(width) * u64::from(height) > allowed {
+            return Err(LimitExceeded::RenderPixels {
+                width,
+                height,
+                allowed,
+            }
+            .into());
+        }
+        return Ok(());
+    }
     let corners = device_box(display_size, options);
     #[expect(
         clippy::cast_possible_truncation,

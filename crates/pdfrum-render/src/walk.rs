@@ -23,7 +23,10 @@ use pdfrum_page::{Page, PageObject, Visibility};
 
 use crate::clip;
 use crate::color::{Argb, ObjectKind, resolve_argb};
-use crate::ctx::{RenderCaches, RenderCtx};
+use crate::ctx::{
+    GroupNesting, Inherited, Nesting, RenderCaches, RenderCtx, Type3Ancestry, Type3Colour,
+    Type3Frame,
+};
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
@@ -36,9 +39,11 @@ use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
 use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
+use crate::region::Region;
 use crate::shading;
 use crate::text::{has_face, paint_kinds, stroke_text_matrices};
 use crate::transfer::TransferFunc;
+use crate::window::WindowBackend;
 
 /// What one render call may reuse or restrict, beyond the page and the
 /// options.
@@ -85,6 +90,21 @@ pub struct RenderSession<'a> {
     /// page missing. Costs one branch per object when unset. A borrow, like
     /// the other two: the caller's `Limits` owns it.
     pub deadline: Option<&'a Deadline>,
+    /// A stop for **this render alone**. `None` — the default — is none.
+    ///
+    /// Read exactly as [`deadline`](Self::deadline) is, and either passing
+    /// ends the render with [`Error::Limit`]. The difference is who owns it:
+    /// the document's deadline outlives every render and, once passed, stays
+    /// passed, while a `cancel` is made for one call and dropped with it, so
+    /// a viewer abandoning a stale tile raises it and the next render starts
+    /// clean.
+    pub cancel: Option<&'a Deadline>,
+    /// How much of the page to draw. [`Region::Whole`] by default.
+    ///
+    /// With [`Region::Rect`] the pixmap is exactly the rectangle's size and
+    /// each of its pixels is the pixel a whole-page render has there; the
+    /// whole page is never allocated. See [`Region`].
+    pub region: Region,
 }
 
 /// Render a page into a pixmap.
@@ -209,6 +229,8 @@ pub fn render_page_to_device_with<B: RasterBackend>(
         caches,
         visible,
         deadline,
+        cancel,
+        region,
     } = session;
     // The two `None` arms need somewhere to live that outlasts the call, so
     // each default is bound here and borrowed rather than built inline.
@@ -216,53 +238,146 @@ pub fn render_page_to_device_with<B: RasterBackend>(
     let all_visible = Visibility::all_visible();
     let visible = visible.unwrap_or(&all_visible);
     let caches = caches.unwrap_or(&mut fresh_caches);
-    render_page_inner(page, opts, backend, visible, caches, deadline, diags)
+    render_page_inner(
+        page,
+        opts,
+        backend,
+        visible,
+        caches,
+        Stops { deadline, cancel },
+        region,
+        diags,
+    )
 }
 
-/// `Ok` unless `deadline` is set and has passed.
-fn check_deadline(deadline: Option<&Deadline>) -> Result<(), Error> {
-    match deadline {
-        Some(deadline) => deadline.check(Operation::Render).map_err(Error::Limit),
-        None => Ok(()),
+/// Device pixels added around a tile before the cull test: the room an
+/// antialiased or resampled edge, and the one-pixel minimum stroke, need.
+const TILE_CULL_MARGIN: f64 = 2.0;
+
+/// The two stops a render honours: the caller's document-wide deadline and
+/// the one made for this render.
+#[derive(Clone, Copy)]
+struct Stops<'a> {
+    deadline: Option<&'a Deadline>,
+    cancel: Option<&'a Deadline>,
+}
+
+impl Stops<'_> {
+    /// `Ok` unless either stop is set and has passed.
+    fn check(self) -> Result<(), Error> {
+        for stop in [self.deadline, self.cancel].into_iter().flatten() {
+            stop.check(Operation::Render).map_err(Error::Limit)?;
+        }
+        Ok(())
     }
 }
 
 /// The body both entry points share.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the page, its options, the backend, what the session lends, and \
+              where to write diagnostics"
+)]
 fn render_page_inner<B: RasterBackend>(
     page: &Page,
     opts: &RenderOptions,
     backend: &B,
     visible: &Visibility,
     caches: &mut RenderCaches,
-    deadline: Option<&Deadline>,
+    stops: Stops<'_>,
+    region: Region,
     diags: &mut Diagnostics,
 ) -> Result<B::Device, Error> {
-    let (w, h) = target_size(page, opts)?;
+    // A region is a window onto the *same* page matrix a whole render uses,
+    // moved so the window's corner is the pixmap's origin. The matrix is
+    // never recomputed for the window, which is what keeps a tile's pixel
+    // equal to the whole render's: see `Region`.
+    let (w, h, origin) = match region {
+        Region::Whole => {
+            let (w, h) = target_size(page, opts)?;
+            (w, h, (0, 0))
+        }
+        Region::Rect(rect) => {
+            let (page_w, page_h) = device_size(page, opts)?;
+            let inside = rect
+                .x()
+                .checked_add(rect.width())
+                .is_some_and(|r| r <= page_w)
+                && rect
+                    .y()
+                    .checked_add(rect.height())
+                    .is_some_and(|b| b <= page_h);
+            if !inside {
+                return Err(Error::RegionOutOfBounds {
+                    x: rect.x(),
+                    y: rect.y(),
+                    width: rect.width(),
+                    height: rect.height(),
+                    page_width: page_w,
+                    page_height: page_h,
+                });
+            }
+            (rect.width(), rect.height(), (rect.x(), rect.y()))
+        }
+    };
     // Before the allocation, and again after the walk: a walk that stopped
     // on the deadline has left the device half-drawn, and the second read is
     // what turns that into an error rather than a returned pixmap.
-    check_deadline(deadline)?;
+    stops.check()?;
     let clear = opts.background_for(needs_alpha_background(page));
-    let mut device = backend.new_target(w, h, clear);
-    let ctx = RenderCtx {
-        deadline,
-        ..RenderCtx::new(opts.clone(), page.transparency)
+    let run = crate::ctx::RunCtx {
+        stop: crate::ctx::Stop {
+            deadline: stops.deadline,
+            cancel: stops.cancel,
+        },
+        cull_margin: match region {
+            Region::Whole => 0.0,
+            Region::Rect(_) => TILE_CULL_MARGIN,
+        },
     };
+    let ctx = RenderCtx::new(&run, opts.clone(), page.transparency);
     let to_device = page_matrix(page, opts);
-    let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
-
-    render_object_list(
-        &ctx,
-        &mut device,
-        backend,
-        caches,
-        &page.objects,
-        visible,
-        to_device,
-        device_box,
-        diags,
-    );
-    check_deadline(deadline)?;
+    let device = match region {
+        Region::Whole => {
+            let mut device = backend.new_target(w, h, clear);
+            let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+            render_object_list(
+                &ctx,
+                &mut device,
+                backend,
+                caches,
+                &page.objects,
+                visible,
+                to_device,
+                device_box,
+                diags,
+            );
+            device
+        }
+        Region::Rect(_) => {
+            // The walk is the whole page's: the same matrix, and a clip box
+            // that is the window's place in the whole frame rather than a
+            // box at the origin. Only the target is the window's size, and
+            // the wrapper moves each call onto it.
+            let window = WindowBackend(backend);
+            let mut device = window.new_window(w, h, clear, origin);
+            let (x, y) = (f64::from(origin.0), f64::from(origin.1));
+            let device_box = Rect::new(x, y, x + f64::from(w), y + f64::from(h));
+            render_object_list(
+                &ctx,
+                &mut device,
+                &window,
+                caches,
+                &page.objects,
+                visible,
+                to_device,
+                device_box,
+                diags,
+            );
+            device.inner
+        }
+    };
+    stops.check()?;
     Ok(device)
 }
 
@@ -327,16 +442,32 @@ pub fn needs_alpha_background(page: &Page) -> bool {
 /// [`Error::TargetEmpty`] when the page's box under `opts.transform` is not
 /// at least one pixel on both axes, and [`Error::TargetTooLarge`] when either
 /// axis exceeds [`MAX_TARGET_DIMENSION`].
+pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+    let (w, h) = device_size(page, opts)?;
+    if w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return Err(Error::TargetTooLarge {
+            width: w,
+            height: h,
+            limit: MAX_TARGET_DIMENSION,
+        });
+    }
+    Ok((w, h))
+}
+
+/// The page's device box under `opts.transform`, truncated as
+/// [`target_size`] truncates it, **without** the backend's size ceiling.
+///
+/// The full page is only ever a coordinate frame for a region render, so its
+/// size may exceed what a pixmap can be.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     reason = "the `is_finite` and `>= 1.0` guards run before the successful \
-              cast, and the `MAX_TARGET_DIMENSION` check runs after it; in \
-              the error arm `max(0.0)` floors the value and Rust's saturating \
-              float-to-int cast turns a huge or NaN size into a reported \
-              number rather than wrapping"
+              cast; in the error arm `max(0.0)` floors the value and Rust's \
+              saturating float-to-int cast turns a huge or NaN size into a \
+              reported number rather than wrapping"
 )]
-pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+fn device_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
     let (pw, ph) = page.display_size();
     let corners = opts
         .transform
@@ -349,15 +480,7 @@ pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Erro
             height: h.max(0.0) as u32,
         });
     }
-    let (w, h) = (w as u32, h as u32);
-    if w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
-        return Err(Error::TargetTooLarge {
-            width: w,
-            height: h,
-            limit: MAX_TARGET_DIMENSION,
-        });
-    }
-    Ok((w, h))
+    Ok((w as u32, h as u32))
 }
 
 /// Page space to device space.
@@ -386,8 +509,10 @@ pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
     // `target_size` performs, since that is the bitmap that gets allocated.
     // A page that cannot be sized at all keeps the float box, which is what
     // the render is about to reject anyway.
+    // `device_size`, not `target_size`: a region render of a page too big to
+    // be one pixmap must use the same fit the whole render would.
     let device =
-        target_size(page, opts).map_or((page_w, page_h), |(w, h)| (f64::from(w), f64::from(h)));
+        device_size(page, opts).map_or((page_w, page_h), |(w, h)| (f64::from(w), f64::from(h)));
     let (dev_w, dev_h) = device;
     if page_w <= 0.0 || page_h <= 0.0 || !dev_w.is_finite() || !dev_h.is_finite() {
         return opts.transform * page.rotate.display_matrix(page.crop_box);
@@ -425,15 +550,20 @@ pub fn render_object_list<B: RasterBackend>(
     device_box: Rect,
     diags: &mut Diagnostics,
 ) {
-    if !ctx.may_recurse() {
+    if !ctx.depth.may_recurse() {
         return;
     }
-    let cull = cull_rect(to_device, device_box);
+    // A whole render's box is the page, past which nothing is visible, so the
+    // cull may use each object's bare geometry. A tile's box is the middle of
+    // the page, and what an object paints beyond its geometry — a stroke's
+    // width, an antialiased or resampled edge — can reach into it.
+    let margin = ctx.run.cull_margin;
+    let cull = cull_rect(to_device, device_box.inflate(margin, margin));
     for (index, object) in objects.iter().enumerate() {
         // The deadline is read per object — a draw call — and a list that is
         // out of time returns; the enclosing list reads it again at its next
         // object, so the whole walk unwinds without a flag.
-        if ctx.out_of_time() {
+        if ctx.run.stop.passed() {
             return;
         }
         // The visibility gate runs first, exactly where `RenderSingleObject`
@@ -443,7 +573,16 @@ pub fn render_object_list<B: RasterBackend>(
             continue;
         }
         if let Some(cull) = cull
-            && crate::walkprofile::phase(crate::walkprofile::Phase::Cull, || culled(object, cull))
+            && crate::walkprofile::phase(crate::walkprofile::Phase::Cull, || {
+                if margin > 0.0 {
+                    culled(
+                        object,
+                        cull.inflate(stroke_reach(object), stroke_reach(object)),
+                    )
+                } else {
+                    culled(object, cull)
+                }
+            })
         {
             continue;
         }
@@ -468,6 +607,35 @@ fn cull_rect(to_device: Affine, device_box: Rect) -> Option<Rect> {
     (det != 0.0 && det.is_finite())
         .then(|| to_device.inverse().transform_rect_bbox(device_box))
         .filter(|r| r.x0.is_finite() && r.y0.is_finite() && r.x1.is_finite() && r.y1.is_finite())
+}
+
+/// How far, in the units the cull test works in, what `object` paints can
+/// reach past its geometry's bounding box: half a stroke's width times the
+/// longest miter or square cap, under the object's matrix. Zero for a path
+/// that is not stroked and for every other kind.
+///
+/// An over-estimate — the matrix's Frobenius norm bounds its largest scale —
+/// because a cull that keeps too much costs a clip, and one that keeps too
+/// little drops pixels.
+fn stroke_reach(object: &PageObject) -> f64 {
+    let PageObject::Path(p) = object else {
+        return 0.0;
+    };
+    if !p.object.stroke {
+        return 0.0;
+    }
+    let scale = p
+        .object
+        .matrix
+        .as_coeffs()
+        .iter()
+        .take(4)
+        .map(|term| term * term)
+        .sum::<f64>()
+        .sqrt();
+    let params = &p.state.stroke_params;
+    let longest = f64::from(params.miter_limit).max(std::f64::consts::SQRT_2);
+    0.5 * f64::from(params.width).abs() * scale * longest
 }
 
 /// The cull test, with the **strict** inequalities `RenderObjectList` uses.
@@ -691,9 +859,9 @@ pub fn render_object<B: RasterBackend>(
     });
     let pushed = clip::push(device, &clips);
 
-    let initial_alpha = ctx.initial_fill.map_or(1.0, |_| 1.0);
+    let initial_alpha = ctx.inherited.fill.map_or(1.0, |_| 1.0);
     let inputs = GroupInputs::of(object, initial_alpha);
-    if needs_offscreen(inputs) && ctx.may_recurse() {
+    if needs_offscreen(inputs) && ctx.depth.may_recurse() {
         render_grouped(
             ctx, device, backend, caches, object, children, inputs, to_device, device_box, diags,
         );
@@ -739,7 +907,7 @@ fn render_grouped<B: RasterBackend>(
 
     let transparency = match object {
         PageObject::Form(f) => f.object.transparency,
-        _ => ctx.transparency,
+        _ => ctx.nesting.transparency,
     };
     let knockout = match object {
         PageObject::Form(f) => f.object.transparency.knockout,
@@ -781,12 +949,10 @@ fn render_grouped<B: RasterBackend>(
 
     let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
     let inner_ctx = RenderCtx {
-        transparency,
-        in_group: true,
+        nesting: Nesting::in_group(transparency),
         // The group does *not* inherit the parent's colour: `Initialize(null,
         // null)` in the C++.
-        initial_fill: None,
-        initial_stroke: None,
+        inherited: Inherited::NONE,
         ..ctx.deeper()
     };
     let inner_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
@@ -827,7 +993,7 @@ fn render_grouped<B: RasterBackend>(
     // whose own `/Group` is absent — and applies it to a non-form under a
     // page that has one, where `inputs.group_alpha` is 1.0 and it is
     // harmless, which is why this only ever showed up as a missing multiply.
-    GroupFinish::of(inputs, transparency, ctx.in_group).apply(&mut pixels);
+    GroupFinish::of(inputs, transparency, ctx.nesting.group).apply(&mut pixels);
 
     // With a premultiplied RGBA target that is both readable and
     // alpha-capable, PDFium's five-armed compositor collapses to one arm: a
@@ -869,13 +1035,11 @@ fn render_grouped_as_layer<B: RasterBackend>(
 ) {
     let state = object.state();
     let inner_ctx = RenderCtx {
-        transparency,
-        in_group: true,
-        initial_fill: None,
-        initial_stroke: None,
+        nesting: Nesting::in_group(transparency),
+        inherited: Inherited::NONE,
         ..ctx.deeper()
     };
-    let finish = GroupFinish::of(inputs, transparency, ctx.in_group);
+    let finish = GroupFinish::of(inputs, transparency, ctx.nesting.group);
     let mut layer_alpha = 1.0_f32;
     if let Some(a) = finish.group_alpha {
         layer_alpha *= a;
@@ -895,7 +1059,10 @@ fn render_grouped_as_layer<B: RasterBackend>(
         ) else {
             return Some(rendered);
         };
-        Some(rendered.placed_in(dw, dh, rect.left, rect.top))
+        // The mask lies on the device, whose corner is `device_box`'s: the
+        // box's own origin for a region render's window, zero otherwise.
+        let corner = outer_rect(device_box);
+        Some(rendered.placed_in(dw, dh, rect.left - corner.left, rect.top - corner.top))
     });
 
     device.push_clip_rect(rect.to_rect());
@@ -945,7 +1112,7 @@ fn render_soft_mask<B: RasterBackend>(
     to_device: Affine,
     diags: &mut Diagnostics,
 ) -> Option<crate::pixmap::AlphaMask> {
-    if !ctx.may_recurse() {
+    if !ctx.depth.may_recurse() {
         return None;
     }
     let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
@@ -968,10 +1135,16 @@ fn render_soft_mask<B: RasterBackend>(
                 ..ctx.opts.clone()
             },
             // The group renders from a clean slate: `Initialize(null, null)`.
-            initial_fill: None,
-            initial_stroke: None,
-            type3: None,
-            in_group: true,
+            inherited: Inherited::NONE,
+            // Out of the glyph procedure, but its fonts stay on the ancestry.
+            type3: Type3Ancestry {
+                frame: None,
+                ..ctx.type3
+            },
+            nesting: Nesting {
+                group: GroupNesting::Inside,
+                ..ctx.nesting
+            },
             ..ctx.deeper()
         };
         // The mask's own matrix already places it; only the shift into the
@@ -1027,8 +1200,7 @@ fn render_direct<B: RasterBackend>(
         PageObject::Form(f) => {
             let inner = RenderCtx {
                 opts: form_options(&ctx.opts, f.object.live_edit),
-                initial_fill: ctx.initial_fill,
-                initial_stroke: ctx.initial_stroke,
+                inherited: ctx.inherited,
                 ..ctx.deeper()
             };
             // `[oracle-bug]`: a knockout group composites each of its own
@@ -1200,13 +1372,18 @@ fn colors_inner(
     // A type-3 char proc imposes its caller's colour on every uncoloured
     // operation, which is what makes a `d1` glyph take the text object's
     // colour rather than black.
-    let fill = match ctx.type3 {
-        Some(frame) if !frame.colored || state.fill.to_rgb().is_none() => frame.fill,
+    let fill = match ctx.type3.frame {
+        Some(frame)
+            if frame.colour == crate::ctx::Type3Colour::Imposed
+                || state.fill.to_rgb().is_none() =>
+        {
+            frame.fill
+        }
         _ => resolve_argb(
             &state.fill,
             state.general.fill_alpha,
             transfer.as_ref(),
-            ctx.initial_fill,
+            ctx.inherited.fill,
             &ctx.opts,
             kind,
             false,
@@ -1217,13 +1394,18 @@ fn colors_inner(
     // strokes too: `t3_fill_color_`, not the stroke the char proc left
     // unset. Filling from the frame and stroking from `resolve_argb` is
     // what left an uncoloured glyph's outlines black.
-    let stroke = match ctx.type3 {
-        Some(frame) if !frame.colored || state.stroke.to_rgb().is_none() => frame.fill,
+    let stroke = match ctx.type3.frame {
+        Some(frame)
+            if frame.colour == crate::ctx::Type3Colour::Imposed
+                || state.stroke.to_rgb().is_none() =>
+        {
+            frame.fill
+        }
         _ => resolve_argb(
             &state.stroke,
             state.general.stroke_alpha,
             transfer.as_ref(),
-            ctx.initial_stroke,
+            ctx.inherited.stroke,
             &ctx.opts,
             kind,
             true,
@@ -1906,12 +2088,14 @@ fn render_type3_sole_stencil<B: RasterBackend>(
             rect_aa: true,
             ..ctx.opts.clone()
         },
-        type3: Some(crate::ctx::Type3Frame {
-            fill,
-            colored: false,
-        }),
-        initial_fill: Some(fill),
-        initial_stroke: Some(fill),
+        type3: Type3Ancestry {
+            frame: Some(Type3Frame {
+                fill,
+                colour: Type3Colour::Imposed,
+            }),
+            ..ctx.type3
+        },
+        inherited: Inherited::both(fill),
         ..ctx.deeper()
     };
     render_image::<B>(
@@ -1959,7 +2143,7 @@ fn render_type3_text<B: RasterBackend>(
         return;
     };
     // The guard is by font identity and is checked before anything is drawn.
-    if ctx.type3_font_is_active(font.id()) || !ctx.may_recurse() {
+    if ctx.type3.is_active(font.id()) || !ctx.depth.may_recurse() {
         return;
     }
     // `GetFillArgbForType3` skips the type-3 branch, so this is the outer
@@ -1973,7 +2157,7 @@ fn render_type3_text<B: RasterBackend>(
             .as_ref()
             .map(|t| TransferFunc::new(t))
             .as_ref(),
-        ctx.initial_fill,
+        ctx.inherited.fill,
         &ctx.opts,
         ObjectKind::Text,
         false,
@@ -1985,7 +2169,7 @@ fn render_type3_text<B: RasterBackend>(
         // run stops: the glyphs paint nothing at all.
         return;
     }
-    let mut ancestry: Vec<pdfrum_font::FontId> = ctx.type3_fonts.to_vec();
+    let mut ancestry: Vec<pdfrum_font::FontId> = ctx.type3.fonts.to_vec();
     ancestry.push(font.id());
 
     // Sole-image stencils collect into one blit so overlapping glyphs share
@@ -2089,13 +2273,14 @@ fn draw_type3_glyph<B: RasterBackend>(
     blit_type3_batch(device, pending, fill);
     let inner = RenderCtx {
         opts: ctx.opts.for_type3_char_proc(),
-        type3: Some(crate::ctx::Type3Frame {
-            fill,
-            colored: metrics.colored,
-        }),
-        type3_fonts: ancestry,
-        initial_fill: Some(fill),
-        initial_stroke: Some(fill),
+        type3: Type3Ancestry {
+            frame: Some(Type3Frame {
+                fill,
+                colour: Type3Colour::from_declared(metrics.colored),
+            }),
+            fonts: ancestry,
+        },
+        inherited: Inherited::both(fill),
         ..ctx.deeper()
     };
     if fill.a == 255 {
@@ -2190,14 +2375,16 @@ fn render_translucent_char_proc<B: RasterBackend>(
     }
     let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
-    let translucent = crate::ctx::Type3Frame {
+    let translucent = Type3Frame {
         fill,
-        colored: metrics.colored,
+        colour: Type3Colour::from_declared(metrics.colored),
     };
     let inner = RenderCtx {
-        type3: Some(translucent),
-        initial_fill: Some(fill),
-        initial_stroke: Some(fill),
+        type3: Type3Ancestry {
+            frame: Some(translucent),
+            ..ctx.type3
+        },
+        inherited: Inherited::both(fill),
         ..ctx.clone()
     };
     render_object_list(
@@ -2280,7 +2467,7 @@ fn render_pattern_stencil<B: RasterBackend>(
     device_box: Rect,
     diags: &mut Diagnostics,
 ) {
-    if !ctx.may_recurse() {
+    if !ctx.depth.may_recurse() {
         return;
     }
     let matrix = to_device * object.matrix;
@@ -2513,7 +2700,7 @@ fn draw_snapped_image<B: RasterBackend>(
         image.height,
         corners.width(),
         corners.height(),
-        ctx.type3.is_none(),
+        ctx.type3.frame.is_none(),
     );
     let (out_w, out_h) = reduction.size(image.width, image.height);
     let placement = reduction.transform();
@@ -2547,7 +2734,7 @@ fn draw_snapped_image<B: RasterBackend>(
     // the backend has nothing to resample. `Placement` says which case this
     // is; `Exact` cannot reach the filtered path because it does not carry a
     // transform to filter through.
-    let placed = image_placement(placement, pixels, ctx.type3.is_some());
+    let placed = image_placement(placement, pixels, ctx.type3.frame.is_some());
     device.draw_image(
         pixels,
         placed.transform_for(pixels.width(), pixels.height()),

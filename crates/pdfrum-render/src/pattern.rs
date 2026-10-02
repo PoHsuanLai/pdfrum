@@ -35,7 +35,7 @@ use pdfrum_page::{Pattern, TilingPattern};
 
 use crate::clip;
 use crate::color::Argb;
-use crate::ctx::{RenderCaches, RenderCtx};
+use crate::ctx::{Inherited, RenderCaches, RenderCtx};
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding};
@@ -176,7 +176,7 @@ pub fn draw<B: RasterBackend>(
     uncolored: Argb,
     diags: &mut Diagnostics,
 ) {
-    if !ctx.may_recurse() {
+    if !ctx.depth.may_recurse() {
         return;
     }
     let clip_rect = geometry.device_bounds().intersect(device_box);
@@ -558,8 +558,11 @@ fn draw_tiling_per_tile<B: RasterBackend>(
     };
     let inner = RenderCtx {
         opts,
-        initial_fill: (!pattern.colored).then_some(uncolored),
-        initial_stroke: (!pattern.colored).then_some(uncolored),
+        inherited: if pattern.colored {
+            Inherited::NONE
+        } else {
+            Inherited::both(uncolored)
+        },
         ..ctx.deeper()
     };
     let target = clip.to_rect();
@@ -664,8 +667,11 @@ fn render_cell<B: RasterBackend>(
         opts,
         // An uncoloured cell paints in the `scn` colour, imposed the way a
         // type-3 char proc's is: every uncoloured operation inside takes it.
-        initial_fill: (!pattern.colored).then_some(uncolored),
-        initial_stroke: (!pattern.colored).then_some(uncolored),
+        inherited: if pattern.colored {
+            Inherited::NONE
+        } else {
+            Inherited::both(uncolored)
+        },
         ..ctx.deeper()
     };
     let mut cell_device = backend.new_target(render_w, render_h, peniko::Color::TRANSPARENT);

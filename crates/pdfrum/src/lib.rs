@@ -111,7 +111,9 @@ pub use pdfrum_form::script::{
 };
 #[cfg(feature = "javascript")]
 pub use pdfrum_form::{ScriptCascade, ScriptConfig, TranscriptLine};
-pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, RenderOptionsBuilder, TextAa};
+pub use render::{
+    ColorMode, ColorScheme, DeviceRect, Pixmap, Region, RenderOptions, RenderOptionsBuilder, TextAa,
+};
 
 pub use pdfrum_render::{RasterBackend, RenderDevice};
 

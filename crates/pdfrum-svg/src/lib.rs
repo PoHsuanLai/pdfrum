@@ -106,7 +106,9 @@ pub fn page_to_svg<B: RasterBackend>(
 ///
 /// # Errors
 ///
-/// As [`page_to_svg`].
+/// As [`page_to_svg`], and [`Error::RegionUnsupported`] when
+/// `session.region` is not [`Region::Whole`](pdfrum_render::Region::Whole):
+/// an SVG export is always the whole page.
 ///
 /// ```
 /// use pdfrum_common::Diagnostics;
@@ -134,6 +136,11 @@ pub fn page_to_svg_with<B: RasterBackend>(
     session: RenderSession<'_>,
     diags: &mut Diagnostics,
 ) -> Result<SvgPage, Error> {
+    // The document is the whole page; a window onto it would be a document
+    // whose coordinates do not match its `viewBox`.
+    if session.region != pdfrum_render::Region::Whole {
+        return Err(Error::RegionUnsupported);
+    }
     let recorder = SvgBackend::new(backend);
     // The pixmap is discarded: it is the *engine's* working surface, which is
     // what makes the compositing arithmetic — `remove_backdrop`,

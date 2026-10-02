@@ -131,6 +131,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
     ("pdfrum-parser.txt", "pdfrum_parser::LoadError", "OpenError"),
     ("pdfrum-render.txt", "pdfrum_render::ColorMode", "ColorMode"),
     ("pdfrum-render.txt", "pdfrum_render::Error", "RenderError"),
+    ("pdfrum-render.txt", "pdfrum_render::Region", "Region"),
     ("pdfrum-render.txt", "pdfrum_render::TextAa", "TextAa"),
     ("pdfrum-text.txt", "pdfrum_text::Error", "TextError"),
 ];
@@ -905,7 +906,20 @@ fn construct_render_and_text_variants() -> usize {
         height: 0,
         allowed: 0,
     });
-    n += 3;
+    let _ = RenderError::RegionOutOfBounds {
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        page_width: 0,
+        page_height: 0,
+    };
+    let _ = RenderError::RegionUnsupported;
+    n += 5;
+
+    let _ = Region::Whole;
+    let _ = DeviceRect::new(0, 0, 1, 1).map(Region::Rect);
+    n += 2;
 
     let _ = TextAa::Grayscale;
     let _ = TextAa::LcdSubpixel;
@@ -1034,7 +1048,7 @@ fn parser_enum_variants_are_constructible() {
 
 #[test]
 fn render_and_text_enum_variants_are_constructible() {
-    assert_eq!(construct_render_and_text_variants(), 4 + 3 + 3 + 1);
+    assert_eq!(construct_render_and_text_variants(), 4 + 5 + 2 + 3 + 1);
 }
 
 #[test]
@@ -1110,8 +1124,10 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
     // 405 -> 411 (`SaveError` gained `BadPageSize`, `BlankDocument`, `TooManyGlyphs`,
     // `VariableFontsDisabled`, `ForeignGlyphFont` and `PngNeedsDecoding` with glyph runs,
     // blank documents and PNG passthrough).
-    assert_eq!(constructed, 411, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 48, "default-feature enum count");
+    // 411 -> 415 (`RenderError::RegionOutOfBounds` and `RegionUnsupported`,
+    // and `Region`'s `Whole` and `Rect`).
+    assert_eq!(constructed, 415, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 49, "default-feature enum count");
 }
 
 #[test]
