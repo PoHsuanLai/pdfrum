@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use pdfrum::{
-    Deadline, DeviceRect, Document, Error, LimitExceeded, OwnedPreparedPage, PreparedPage, Region,
-    RenderOptions, RenderSession, VelloCpuBackend,
+    Deadline, DeviceRect, Document, Error, LimitExceeded, OwnedPreparedPage, Region, RenderOptions,
+    RenderSession, VelloCpuBackend,
 };
 
 const FIXTURE: &str = "../../benches/corpus/text_quick_start.pdf";
@@ -19,14 +19,9 @@ fn tile(x: u32, y: u32) -> Region {
 }
 
 #[test]
-fn the_prepared_pages_are_send_and_sync_as_the_owned_page_is() {
-    fn send_sync<T: Send + Sync>() {}
-    send_sync::<OwnedPreparedPage>();
-    // The borrowed form is `Send` only through the document it borrows; the
-    // owned form needs nothing but itself.
-    fn static_lifetime<T: 'static>() {}
-    static_lifetime::<OwnedPreparedPage>();
-    let _ = std::mem::size_of::<PreparedPage<'static>>();
+fn the_owned_prepared_page_is_send_sync_and_borrows_nothing() {
+    fn owned<T: Send + Sync + 'static>() {}
+    owned::<OwnedPreparedPage>();
 }
 
 #[test]
