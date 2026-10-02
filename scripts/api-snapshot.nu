@@ -13,9 +13,19 @@
 # C header is scripts/capi-header.nu.
 
 const BASELINE = 'docs/api-baseline'
-const TOOLCHAIN = 'nightly'
 # Omit blanket / auto-trait / derived impls.
 const SIMPLIFY = '-sss'
+
+def resolve-toolchain []: nothing -> string {
+    let toolchains = (^rustup toolchain list | lines)
+    if ($toolchains | any {|t| $t | str starts-with 'nightly-2026-09-28' }) {
+        'nightly-2026-09-28'
+    } else if ($toolchains | any {|t| $t | str starts-with 'nightly' }) {
+        'nightly'
+    } else {
+        'nightly-2026-09-28'
+    }
+}
 
 # Published library crates. Skips `publish = false` and crates with no lib.
 def published-libs []: nothing -> list<string> {
@@ -46,8 +56,9 @@ const FEATURED = [
 ]
 
 def surface [crate: string, features: string = '']: nothing -> string {
+    let toolchain = (resolve-toolchain)
     let flags = (if ($features | is-empty) { [] } else { [--features $features] })
-    let r = (^cargo $"+($TOOLCHAIN)" public-api $SIMPLIFY -p $crate ...$flags | complete)
+    let r = (^cargo $"+($toolchain)" public-api $SIMPLIFY -p $crate ...$flags | complete)
     if $r.exit_code != 0 {
         print --stderr $"error: `cargo public-api -p ($crate)` failed:"
         $r.stderr | lines | each {|l| print --stderr $"  ($l)" } | ignore
@@ -69,10 +80,11 @@ def require-tool []: nothing -> nothing {
         exit 1
     }
     let toolchains = (^rustup toolchain list | lines)
-    if ($toolchains | where {|t| $t | str starts-with $TOOLCHAIN } | is-empty) {
-        print --stderr $"error: the ($TOOLCHAIN) toolchain is not installed, and rustdoc"
-        print --stderr $"       JSON — which cargo-public-api reads — is nightly-only."
-        print --stderr $"       install with: rustup toolchain install ($TOOLCHAIN)"
+    let has_nightly = ($toolchains | any {|t| ($t | str starts-with 'nightly-2026-09-28') or ($t | str starts-with 'nightly') })
+    if not $has_nightly {
+        print --stderr "error: the nightly-2026-09-28 toolchain is not installed, and rustdoc"
+        print --stderr "       JSON — which cargo-public-api reads — is nightly-only."
+        print --stderr "       install with: rustup toolchain install nightly-2026-09-28"
         exit 1
     }
 }
