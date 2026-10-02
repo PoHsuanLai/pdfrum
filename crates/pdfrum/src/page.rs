@@ -702,10 +702,10 @@ impl<'a> Page<'a> {
 /// ```
 #[derive(Debug)]
 pub struct PreparedPage<'a> {
-    doc: &'a Document,
-    index: PageIndex,
-    graph: pdfrum_page::Page,
-    options: RenderOptions,
+    pub(crate) doc: &'a Document,
+    pub(crate) index: PageIndex,
+    pub(crate) graph: pdfrum_page::Page,
+    pub(crate) options: RenderOptions,
 }
 
 impl PreparedPage<'_> {
@@ -780,43 +780,15 @@ impl PreparedPage<'_> {
         session: &mut RenderSession,
         region: Region,
     ) -> Result<Pixmap> {
-        // Checked here as well as in `Page::render_on`: `prepare` is
-        // infallible, so a page prepared above the cap is refused at the draw.
-        check_pixel_cap(
-            &self.doc.limits,
-            self.graph.display_size(),
-            &RenderOptions {
-                region,
-                ..self.options.clone()
-            },
-        )?;
-        let inner = self.options.to_inner();
-        let mut diags = Diagnostics::default();
-        let render_session = pdfrum_render::RenderSession {
-            caches: Some(&mut session.caches),
-            deadline: self.doc.limits.deadline.as_ref(),
-            cancel: session.deadline.as_ref(),
+        draw_region(
+            self.doc,
+            self.index,
+            &self.graph,
+            &self.options,
+            backend,
+            session,
             region,
-            ..Default::default()
-        };
-        let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
-            pdfrum_render::render_page_with(
-                &self.graph,
-                &inner,
-                &backend,
-                render_session,
-                &mut diags,
-            )
-        });
-        // Recorded whether or not the render succeeded: a page too large to
-        // rasterize may still have reported damage on the way there.
-        self.doc.note(&diags);
-        pixmap.map_err(|error| match error {
-            // The engine does not know which page it drew; this is where the
-            // message learns it.
-            pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(self.index)),
-            other => Error::Render(other),
-        })
+        )
     }
 
     /// The prepared page as an SVG document — [`Page::to_svg`] on a page
@@ -864,6 +836,51 @@ impl PreparedPage<'_> {
             other => Error::Render(other),
         })
     }
+}
+
+/// Draws `region` of an interpreted page: the one body behind
+/// [`PreparedPage::render_region_on`] and
+/// [`OwnedPreparedPage::render_region_on`](crate::OwnedPreparedPage::render_region_on).
+pub(crate) fn draw_region<B: RasterBackend>(
+    doc: &Document,
+    index: PageIndex,
+    graph: &pdfrum_page::Page,
+    options: &RenderOptions,
+    backend: B,
+    session: &mut RenderSession,
+    region: Region,
+) -> Result<Pixmap> {
+    // Checked here as well as in `Page::render_on`: `prepare` is
+    // infallible, so a page prepared above the cap is refused at the draw.
+    check_pixel_cap(
+        &doc.limits,
+        graph.display_size(),
+        &RenderOptions {
+            region,
+            ..options.clone()
+        },
+    )?;
+    let inner = options.to_inner();
+    let mut diags = Diagnostics::default();
+    let render_session = pdfrum_render::RenderSession {
+        caches: Some(&mut session.caches),
+        deadline: doc.limits.deadline.as_ref(),
+        cancel: session.deadline.as_ref(),
+        region,
+        ..Default::default()
+    };
+    let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
+        pdfrum_render::render_page_with(graph, &inner, &backend, render_session, &mut diags)
+    });
+    // Recorded whether or not the render succeeded: a page too large to
+    // rasterize may still have reported damage on the way there.
+    doc.note(&diags);
+    pixmap.map_err(|error| match error {
+        // The engine does not know which page it drew; this is where the
+        // message learns it.
+        pdfrum_render::Error::Limit(limit) => Error::Limit(limit.on_page(index)),
+        other => Error::Render(other),
+    })
 }
 
 /// The device box a page of `display_size` points fills under the render

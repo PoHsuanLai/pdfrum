@@ -63,7 +63,7 @@ pub use pdfrum_page::PageEdit;
 pub use outline::{Bookmark, Outline, OutlineIter};
 #[cfg(feature = "forms")]
 pub use owned_form::OwnedFormSession;
-pub use owned_page::OwnedPage;
+pub use owned_page::{OwnedPage, OwnedPreparedPage};
 pub use page::{
     ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage,
     UnknownImageEncoding,
@@ -430,6 +430,7 @@ mod tests {
 
         send_sync::<Document>();
         send_sync::<OwnedPage>();
+        send_sync::<OwnedPreparedPage>();
         send_sync::<Pixmap>();
         send_sync::<TextPage>();
         send_sync::<Error>();
