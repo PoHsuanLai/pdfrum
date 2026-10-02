@@ -9,7 +9,8 @@ it was given the pages for.
 
 The canvas API (`pdfrum::Canvas`), SVG export and ingestion, PDF/A conversion
 and conformance reporting, the C ABI, the WebAssembly binding, and the
-`pdfrum` CLI.
+`pdfrum` CLI. Region (tile) rendering and a per-render stop, for an embedder's
+viewer.
 
 ## Open
 

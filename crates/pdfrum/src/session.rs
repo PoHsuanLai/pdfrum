@@ -1,5 +1,6 @@
 //! The caches one run of many pages reuses.
 
+use pdfrum_common::Deadline;
 use pdfrum_page::BuildContext;
 use pdfrum_render::RenderCaches;
 
@@ -44,6 +45,8 @@ pub struct RenderSession {
     pub build: BuildContext,
     /// Flattened glyph outlines — what the rasterizer draws.
     pub caches: RenderCaches,
+    /// The stop for the next renders through this session, if any.
+    pub(crate) deadline: Option<Deadline>,
 }
 
 impl RenderSession {
@@ -51,5 +54,56 @@ impl RenderSession {
     #[must_use]
     pub fn new() -> RenderSession {
         RenderSession::default()
+    }
+
+    /// Gives the renders that follow through this session a stop of their
+    /// own, or removes it with `None`.
+    ///
+    /// Unlike [`Limits::deadline`](crate::Limits::deadline), which belongs to
+    /// the document and stays passed once passed, this one belongs to the
+    /// session: a render that finds it passed (or raised with
+    /// [`Deadline::stop`]) fails with
+    /// [`Error::Limit`](crate::Error::Limit), and the document is untouched.
+    /// Set a fresh [`Deadline`] for the next render — the passed one stays
+    /// passed — or clear it. A viewer scrolling past a tile keeps a clone of
+    /// the tile's `Deadline`, calls `stop` on it, and renders the next tile
+    /// with a new one.
+    ///
+    /// It bounds the rasterizing, checked before the target is allocated and
+    /// per drawn object, and is also checked before a page is interpreted.
+    /// Interpreting a page for [`Page::render_on`](crate::Page::render_on) is
+    /// not interrupted partway; to stop mid-interpretation use the
+    /// document's deadline, or [`Page::prepare`](crate::Page::prepare) once
+    /// and cancel the draws. The document's own deadline still applies as
+    /// well; either one passing ends the render.
+    ///
+    /// ```
+    /// use pdfrum::{
+    ///     Deadline, Document, Error, LimitExceeded, RenderOptions, RenderSession, VelloCpuBackend,
+    /// };
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let page = doc.page(0)?;
+    /// let mut session = RenderSession::new();
+    ///
+    /// let stale = Deadline::manual();
+    /// session.set_deadline(Some(stale.clone()));
+    /// stale.stop();
+    /// let result = page.render_on(VelloCpuBackend, &RenderOptions::default(), &mut session);
+    /// assert!(matches!(result, Err(Error::Limit(LimitExceeded::Stopped { .. }))));
+    ///
+    /// // The document is fine; the next render is simply given no stop.
+    /// session.set_deadline(None);
+    /// assert!(page.render_on(VelloCpuBackend, &RenderOptions::default(), &mut session).is_ok());
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn set_deadline(&mut self, deadline: Option<Deadline>) {
+        self.deadline = deadline;
+    }
+
+    /// The stop set with [`RenderSession::set_deadline`], if any.
+    #[must_use]
+    pub fn deadline(&self) -> Option<&Deadline> {
+        self.deadline.as_ref()
     }
 }

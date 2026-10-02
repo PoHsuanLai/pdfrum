@@ -1,8 +1,10 @@
 //! The render session's context and caches.
 //!
-//! [`RenderCtx`] is a record every field of which some free function reads
-//! and none of which is read by all; [`RenderCaches`] is owned by the session
-//! rather than by a global.
+//! [`RenderCtx`] is the state a nested render inherits, split into parts by
+//! concern: the borrowed [`RunCtx`] (stop conditions, region geometry),
+//! recursion [`Depth`], [`Inherited`] colours, the [`Type3Ancestry`] and the
+//! [`Nesting`] of transparency groups. [`RenderCaches`] is owned by the
+//! session rather than by a global.
 
 use pdfrum_common::Deadline;
 use pdfrum_font::{FontId, GlyphCache};
@@ -20,78 +22,209 @@ use crate::options::RenderOptions;
 /// parse-time form guard.
 pub const MAX_RECURSION_DEPTH: u32 = 64;
 
+/// How a type-3 glyph procedure's colour is decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Type3Colour {
+    /// The procedure declared only a width (`d1`): every drawing operation
+    /// inside it takes the frame's colour.
+    Imposed,
+    /// The procedure declared its own colour (`d0`): an operation with a
+    /// colour of its own keeps it.
+    Declared,
+}
+
+impl Type3Colour {
+    /// The colour mode a glyph metrics record's `colored` flag names.
+    #[must_use]
+    pub fn from_declared(declared: bool) -> Self {
+        if declared {
+            Self::Declared
+        } else {
+            Self::Imposed
+        }
+    }
+}
+
 /// A type-3 char proc's imposed colour and the char it is drawing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Type3Frame {
     /// The colour every uncoloured drawing operation inside the proc takes.
     pub fill: Argb,
-    /// Whether the glyph procedure declared its own colour (`d0`) rather
-    /// than only a width (`d1`).
-    pub colored: bool,
+    /// Whether the glyph procedure declared its own colour.
+    pub colour: Type3Colour,
 }
 
-/// The mutable state a render carries down through nested forms, patterns,
-/// glyph procedures and soft masks.
-#[derive(Debug, Clone)]
-pub struct RenderCtx<'a> {
-    /// The caller's options, plus whatever a nested context forced on.
-    pub opts: RenderOptions,
-    /// How deep the render recursion is, capped at [`MAX_RECURSION_DEPTH`].
-    pub depth: u32,
-    /// The enclosing state's colours, which an object with none of its own
-    /// inherits (`initial_states_`).
-    pub initial_fill: Option<Argb>,
+/// The render's stop conditions: its deadline and the caller's cancel.
+///
+/// Both are borrowed from the [`RenderSession`](crate::RenderSession), so
+/// the record is two pointers and not two deadlines. `None` is no limit.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Stop<'a> {
+    /// The run's deadline.
+    pub deadline: Option<&'a Deadline>,
+    /// The caller's own stop for this one render, borrowed from
+    /// [`RenderSession::cancel`](crate::RenderSession::cancel). Read beside
+    /// `deadline`; either passing ends the walk.
+    pub cancel: Option<&'a Deadline>,
+}
+
+impl Stop<'_> {
+    /// Whether the deadline or cancel is set and has passed — the per-object
+    /// read, kept to a branch when both are unset.
+    #[must_use]
+    pub fn passed(&self) -> bool {
+        self.deadline.is_some_and(Deadline::passed) || self.cancel.is_some_and(Deadline::passed)
+    }
+}
+
+/// What is fixed for one whole render, whatever the nesting: the stop
+/// conditions and the region geometry. Borrowed by every [`RenderCtx`]
+/// rather than copied into each.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RunCtx<'a> {
+    /// When the render must give up.
+    pub stop: Stop<'a>,
+    /// Device pixels the cull test grows the device box by. Zero for a whole
+    /// page; a region render's tile is not bounded by the page's edge, so an
+    /// object just outside it can still paint into it.
+    pub cull_margin: f64,
+}
+
+/// How deep the render recursion is, capped at [`MAX_RECURSION_DEPTH`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Depth(pub u32);
+
+impl Depth {
+    /// Whether another level of recursion is permitted.
+    #[must_use]
+    pub fn may_recurse(self) -> bool {
+        self.0 < MAX_RECURSION_DEPTH
+    }
+
+    /// One level deeper.
+    #[must_use]
+    pub fn deeper(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+}
+
+/// The enclosing state's colours, which an object with none of its own
+/// inherits (`initial_states_`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Inherited {
+    /// The fill colour.
+    pub fill: Option<Argb>,
     /// The same for strokes.
-    pub initial_stroke: Option<Argb>,
+    pub stroke: Option<Argb>,
+}
+
+impl Inherited {
+    /// Nothing inherited: the clean slate a group starts from
+    /// (`Initialize(null, null)`).
+    pub const NONE: Self = Self {
+        fill: None,
+        stroke: None,
+    };
+
+    /// One colour imposed on both fills and strokes.
+    #[must_use]
+    pub fn both(colour: Argb) -> Self {
+        Self {
+            fill: Some(colour),
+            stroke: Some(colour),
+        }
+    }
+}
+
+/// The type-3 ancestry: the frame being drawn and the fonts above it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Type3Ancestry<'a> {
     /// The type-3 frame, when inside a glyph procedure.
-    pub type3: Option<Type3Frame>,
-    /// The fonts already on the type-3 ancestry.
+    pub frame: Option<Type3Frame>,
+    /// The fonts already on the ancestry.
     ///
     /// A **set**, not a depth counter: a font may not appear twice anywhere
     /// above the current procedure, which is what stops a glyph that draws
     /// itself.
-    pub type3_fonts: &'a [FontId],
+    pub fonts: &'a [FontId],
+}
+
+impl Type3Ancestry<'_> {
+    /// Whether a font is already on the ancestry, which is what stops a glyph
+    /// procedure recursing into its own font.
+    #[must_use]
+    pub fn is_active(&self, font: FontId) -> bool {
+        self.fonts.contains(&font)
+    }
+}
+
+/// Whether a context is already inside a transparency group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupNesting {
+    /// Not inside a group.
+    Outside,
+    /// Inside one, which stops a nested group re-applying the enclosing
+    /// group's alpha.
+    Inside,
+}
+
+/// The transparency state a nested context composites under.
+#[derive(Debug, Clone, Copy)]
+pub struct Nesting {
     /// The enclosing holder's group flags. Note that a group composites back
     /// under the *enclosing* transparency with `group` forced on, not under
     /// its own.
     pub transparency: Transparency,
-    /// Whether this context is already inside a transparency group, which
-    /// stops a nested group re-applying the enclosing group's alpha.
-    pub in_group: bool,
-    /// The run's deadline, borrowed from the [`RenderSession`](crate::RenderSession)
-    /// so that the record every nested context clones grows by a pointer and
-    /// not by the deadline itself. `None` is no limit.
-    pub deadline: Option<&'a Deadline>,
+    /// Whether this context is already inside a transparency group.
+    pub group: GroupNesting,
 }
 
-impl RenderCtx<'_> {
-    /// A fresh top-level context.
+impl Nesting {
+    /// The state inside a group whose own flags are `transparency`.
     #[must_use]
-    pub fn new(opts: RenderOptions, transparency: Transparency) -> Self {
+    pub fn in_group(transparency: Transparency) -> Self {
         Self {
-            opts,
-            depth: 0,
-            initial_fill: None,
-            initial_stroke: None,
-            type3: None,
-            type3_fonts: &[],
             transparency,
-            in_group: false,
-            deadline: None,
+            group: GroupNesting::Inside,
         }
     }
+}
 
-    /// Whether the run's deadline is set and has passed — the per-object
-    /// read, kept to a branch when unset.
-    #[must_use]
-    pub fn out_of_time(&self) -> bool {
-        self.deadline.is_some_and(Deadline::passed)
-    }
+/// The mutable state a render carries down through nested forms, patterns,
+/// glyph procedures and soft masks, split by concern. What is the same for
+/// the whole render lives in the borrowed [`RunCtx`], so a nested context
+/// clones a pointer to it rather than its fields.
+#[derive(Debug, Clone)]
+pub struct RenderCtx<'a> {
+    /// The render-wide stop and region geometry.
+    pub run: &'a RunCtx<'a>,
+    /// The caller's options, plus whatever a nested context forced on.
+    pub opts: RenderOptions,
+    /// How deep the render recursion is.
+    pub depth: Depth,
+    /// The colours an object with none of its own takes.
+    pub inherited: Inherited,
+    /// The type-3 frame and the fonts above it.
+    pub type3: Type3Ancestry<'a>,
+    /// The transparency this context composites under.
+    pub nesting: Nesting,
+}
 
-    /// Whether another level of recursion is permitted.
+impl<'a> RenderCtx<'a> {
+    /// A fresh top-level context.
     #[must_use]
-    pub fn may_recurse(&self) -> bool {
-        self.depth < MAX_RECURSION_DEPTH
+    pub fn new(run: &'a RunCtx<'a>, opts: RenderOptions, transparency: Transparency) -> Self {
+        Self {
+            run,
+            opts,
+            depth: Depth::default(),
+            inherited: Inherited::NONE,
+            type3: Type3Ancestry::default(),
+            nesting: Nesting {
+                transparency,
+                group: GroupNesting::Outside,
+            },
+        }
     }
 
     /// The same context one level deeper.
@@ -108,16 +241,9 @@ impl RenderCtx<'_> {
             core::mem::size_of::<Self>(),
         );
         Self {
-            depth: self.depth.saturating_add(1),
+            depth: self.depth.deeper(),
             ..self.clone()
         }
-    }
-
-    /// Whether a font is already on the type-3 ancestry, which is what stops
-    /// a glyph procedure recursing into its own font.
-    #[must_use]
-    pub fn type3_font_is_active(&self, font: FontId) -> bool {
-        self.type3_fonts.contains(&font)
     }
 }
 
@@ -238,36 +364,42 @@ mod tests {
 
     #[test]
     fn depth_cap_is_64() {
-        let mut ctx = RenderCtx::new(RenderOptions::default(), Transparency::default());
+        let run = RunCtx::default();
+        let mut ctx = RenderCtx::new(&run, RenderOptions::default(), Transparency::default());
         for _ in 0..MAX_RECURSION_DEPTH {
-            assert!(ctx.may_recurse());
+            assert!(ctx.depth.may_recurse());
             ctx = ctx.deeper();
         }
-        assert!(!ctx.may_recurse(), "the 65th level is refused");
+        assert!(!ctx.depth.may_recurse(), "the 65th level is refused");
     }
 
     #[test]
     fn deeper_keeps_everything_but_the_depth() {
+        let run = RunCtx::default();
         let ctx = RenderCtx {
-            initial_fill: Some(Argb::opaque(1, 2, 3)),
-            in_group: true,
-            ..RenderCtx::new(RenderOptions::default(), Transparency::default())
+            inherited: Inherited::both(Argb::opaque(1, 2, 3)),
+            nesting: Nesting::in_group(Transparency::default()),
+            ..RenderCtx::new(&run, RenderOptions::default(), Transparency::default())
         };
         let child = ctx.deeper();
-        assert_eq!(child.initial_fill, ctx.initial_fill);
-        assert!(child.in_group);
-        assert_eq!(child.depth, 1);
+        assert_eq!(child.inherited, ctx.inherited);
+        assert_eq!(child.nesting.group, GroupNesting::Inside);
+        assert_eq!(child.depth, Depth(1));
     }
 
     #[test]
     fn the_type3_guard_is_a_set_not_a_depth() {
+        let run = RunCtx::default();
         let fonts = [FontId(7), FontId(9)];
         let ctx = RenderCtx {
-            type3_fonts: &fonts,
-            ..RenderCtx::new(RenderOptions::default(), Transparency::default())
+            type3: Type3Ancestry {
+                fonts: &fonts,
+                ..Type3Ancestry::default()
+            },
+            ..RenderCtx::new(&run, RenderOptions::default(), Transparency::default())
         };
-        assert!(ctx.type3_font_is_active(FontId(7)));
-        assert!(ctx.type3_font_is_active(FontId(9)));
-        assert!(!ctx.type3_font_is_active(FontId(8)));
+        assert!(ctx.type3.is_active(FontId(7)));
+        assert!(ctx.type3.is_active(FontId(9)));
+        assert!(!ctx.type3.is_active(FontId(8)));
     }
 }

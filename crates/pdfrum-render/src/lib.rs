@@ -21,6 +21,7 @@ mod options;
 mod paint;
 mod path;
 mod pattern;
+mod region;
 mod shading;
 mod shear;
 mod softmask;
@@ -30,6 +31,7 @@ mod text;
 mod transfer;
 mod type3;
 mod walk;
+mod window;
 mod zero_area;
 
 // # The backend seam
@@ -72,6 +74,7 @@ pub use device::{
 pub use error::Error;
 pub use options::{ColorMode, ColorScheme, RenderOptions, TextAa};
 pub use pixmap::{AlphaMask, Pixmap};
+pub use region::{DeviceRect, Region};
 pub use walk::{
     RenderSession, needs_alpha_background, render_page, render_page_to_device,
     render_page_to_device_with, render_page_with,
