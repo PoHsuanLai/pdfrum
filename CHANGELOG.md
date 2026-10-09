@@ -5,6 +5,8 @@ first crates.io release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 ### Breaking
 
 - `pdfrum_render::RenderSession` has two more fields, `cancel` and `region`;
@@ -612,7 +614,8 @@ compile untouched.
 - Weakest rendering: vertical text, uncoloured tiling patterns, and image
   transformers.
 
-[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.1.1...v0.2.0
