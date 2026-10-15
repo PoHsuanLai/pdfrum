@@ -5,6 +5,13 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Fixed
+
+- A link annotation without an appearance stream and without a `/C` colour is
+  no longer drawn with an invented blue border. pdf.js leaves such a link's
+  border transparent and PDFium draws no link border at all; a link with a
+  `/C` still gets its border in that colour.
+
 ## [0.5.2] - 2026-10-16
 
 ### Added
