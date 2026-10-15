@@ -96,6 +96,22 @@ pub mod svg {
     pub use pdfrum_svg::{RasterCause, RasterRegion, RasterReport, SvgBackend, SvgDevice, SvgPage};
 }
 
+/// `anyrender` scenes written as vector PDF pages — behind the default-off
+/// `anyrender` feature.
+///
+/// [`anyrender::write`](crate::anyrender::write()) takes each page's recorded
+/// scene and the source data only the renderer knows (each run's text, each
+/// image's encoded bytes) and returns one PDF. Paths stay paths, text stays
+/// text in embedded, subsetted fonts, and a JPEG is embedded as it came. Its
+/// error is [`SaveError`], which `?` turns into this crate's [`Error`].
+#[cfg(feature = "anyrender")]
+pub mod anyrender {
+    pub use pdfrum_anyrender::{
+        EncodedImage, GlyphArea, GlyphSource, GlyphTally, ImageCodec, ImageSources, Page, RunKey,
+        RunText, RunTexts, Sources, Written, write,
+    };
+}
+
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
 /// — behind the default-off `javascript` feature.
 ///

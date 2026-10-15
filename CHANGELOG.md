@@ -5,6 +5,12 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Added
+
+- An `anyrender` feature on `pdfrum`: `pdfrum::anyrender` re-exports
+  `pdfrum-anyrender`, so a caller writing `anyrender` scenes as vector PDF
+  pages names one crate. It implies `edit` and is part of `full`.
+
 ## [0.5.0] - 2026-10-10
 
 ### Breaking
