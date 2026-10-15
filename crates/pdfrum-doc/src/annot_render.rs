@@ -175,6 +175,50 @@ pub fn overlay_with<R: Resolve>(
 /// An omitted annotation is skipped whole: no appearance, no generated
 /// appearance, and none of the widget highlight that would follow it. An
 /// empty `omit` is exactly [`overlay`], down to the operators emitted.
+///
+/// ```
+/// # use std::collections::HashMap;
+/// # use std::sync::Arc;
+/// # use pdfrum_object::{Error, ObjRef, Resolve};
+/// # struct Store(HashMap<u32, Arc<Object>>);
+/// # impl Resolve for Store {
+/// #     fn fetch(&self, r: ObjRef) -> Result<Arc<Object>, Error> {
+/// #         self.0.get(&r.num).cloned().ok_or(Error::UnresolvedRef(r))
+/// #     }
+/// # }
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_doc::annot_render::{overlay, overlay_except};
+/// use pdfrum_object::{Array, Dict, Name, Object};
+/// use pdfrum_page::{BuildContext, Page};
+///
+/// let nums = |v: &[i64]| Object::Array(Array::from_iter(v.iter().map(|&n| Object::Int(n))));
+/// let square = Dict::from_pairs([
+///     (Name::from("Subtype"), Object::Name(Name::from("Square"))),
+///     (Name::from("Rect"), nums(&[10, 10, 90, 60])),
+///     (Name::from("C"), nums(&[1, 0, 0])),
+/// ]);
+/// let store = Store(HashMap::from([(5, Arc::new(Object::Dict(square)))]));
+/// let annot = ObjRef::new(5, 0);
+/// let page_dict = Dict::from_pairs([(
+///     Name::from("Annots"),
+///     Object::Array(Array::from_iter([Object::Ref(annot)])),
+/// )]);
+/// let draw = |omit: &[ObjRef]| {
+///     let mut page = Page::empty();
+///     let (mut ctx, mut diags) = (BuildContext::new(), Diagnostics::default());
+///     let catalog = Dict::default();
+///     let limits = Limits::default();
+///     if omit.is_empty() {
+///         overlay(&mut page, &page_dict, &catalog, &store, &mut ctx, &limits, &mut diags);
+///     } else {
+///         overlay_except(&mut page, &page_dict, &catalog, &store, &mut ctx, &limits, &mut diags, omit);
+///     }
+///     page.objects.len()
+/// };
+/// // The square is drawn, and left out when it is named.
+/// assert!(draw(&[]) > 0);
+/// assert_eq!(draw(&[annot]), 0);
+/// ```
 #[expect(
     clippy::too_many_arguments,
     reason = "the same six inputs plus two sinks as `overlay_with`, plus the \
