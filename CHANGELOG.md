@@ -5,6 +5,19 @@ first crates.io release.
 
 ## [Unreleased]
 
+### Added
+
+- `move_annotation` (and `DocEdit::move_annotation`) drags an annotation by a
+  vector and changes nothing else: `/Rect`, `/QuadPoints`, `/InkList`, `/L`,
+  `/Vertices` and `/CL` are translated, a `/Popup`'s `/Rect` goes with it, and
+  `/AP`, reply threads, `/NM`, border styles and custom keys are kept, so an
+  annotation another tool wrote moves without losing what
+  `update_annotation` would rebuild away.
+- `modify_annotation` (and `DocEdit::modify_annotation`) is the lossless
+  counterpart to `update_annotation`: it hands the current dictionary to a
+  closure, keeps every key the closure leaves alone, and regenerates `/AP`
+  (keeping the old one when the subtype has no generator).
+
 ## [0.5.1] - 2026-10-16
 
 ### Added

@@ -903,6 +903,50 @@ impl<'a> DocEdit<'a> {
         )?)
     }
 
+    /// Move `annot` by `by` (default user space units, y up), changing nothing
+    /// else about it.
+    ///
+    /// The lossless way to drag an annotation another tool wrote: geometry
+    /// keys (`/Rect`, `/QuadPoints`, `/InkList`, `/L`, `/Vertices`, `/CL`) and
+    /// a `/Popup`'s `/Rect` are translated; `/AP` and every other key are kept.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`pdfrum_edit::Error`] (bad page, annot not on page).
+    pub fn move_annotation(
+        &mut self,
+        page: impl Into<PageIndex>,
+        annot: pdfrum_object::ObjRef,
+        by: kurbo::Vec2,
+    ) -> crate::Result<()> {
+        Ok(pdfrum_edit::move_annotation(
+            &mut self.inner,
+            page,
+            annot,
+            by,
+        )?)
+    }
+
+    /// Edit `annot`'s dictionary in place with `change`, keeping every other
+    /// key, and regenerate its `/AP`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`pdfrum_edit::Error`] (bad page, annot not on page).
+    pub fn modify_annotation(
+        &mut self,
+        page: impl Into<PageIndex>,
+        annot: pdfrum_object::ObjRef,
+        change: impl FnOnce(&mut pdfrum_object::Dict),
+    ) -> crate::Result<()> {
+        Ok(pdfrum_edit::modify_annotation(
+            &mut self.inner,
+            page,
+            annot,
+            change,
+        )?)
+    }
+
     /// Remove `annot` from `page`'s `/Annots` and drop the annotation object.
     ///
     /// Returns `Ok(true)` when it was present and removed.

@@ -47,8 +47,8 @@ pub use annot::{
     AnnotBorder, AnnotBorderStyle, AnnotGoToView, AnnotLinkAction, AnnotLinkHighlight, AnnotMeta,
     AnnotRemoteDest, AnnotSpec, AnnotWrite, BorderStyleName, DEFAULT_DA, LineEndingStyle, Quad,
     add_annotation, delete_annotation, delete_annotation_at, delete_named_destination,
-    ensure_named_destination, named_destinations, set_named_destination, update_annotation,
-    update_annotation_at,
+    ensure_named_destination, modify_annotation, move_annotation, named_destinations,
+    set_named_destination, update_annotation, update_annotation_at,
 };
 pub use annot_spec::{
     CaretSpec, CircleSpec, FreeTextSpec, InkSpec, LineSpec, LinkSpec, MarkupKind, MarkupSpec,
