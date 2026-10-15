@@ -22,10 +22,23 @@ use crate::Document;
 #[derive(Debug, Clone)]
 pub struct Annotation<'a> {
     pub(crate) inner: pdfrum_doc::Annotation,
+    pub(crate) reference: Option<pdfrum_object::ObjRef>,
     pub(crate) doc: &'a Document,
 }
 
 impl Annotation<'_> {
+    /// The annotation's object reference, when the page's `/Annots` lists it
+    /// indirectly.
+    ///
+    /// This is the name a caller hands back to leave the annotation out of a
+    /// render ([`RenderOptions::hidden_annotations`](crate::RenderOptions)) or
+    /// to edit it. An annotation written inline in the array is not an object
+    /// of its own and has none.
+    #[must_use]
+    pub fn obj_ref(&self) -> Option<pdfrum_object::ObjRef> {
+        self.reference
+    }
+
     /// What kind of annotation it is.
     #[must_use]
     pub fn subtype(&self) -> Subtype {

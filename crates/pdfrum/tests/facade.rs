@@ -1445,3 +1445,62 @@ fn a_path_fill_named_as_a_color_round_trips_through_a_save() {
         );
     }
 }
+
+/// Whether two renders of one size differ in any pixel.
+fn pixels_differ(a: &pdfrum::Pixmap, b: &pdfrum::Pixmap) -> bool {
+    assert_eq!((a.width(), a.height()), (b.width(), b.height()));
+    (0..a.height())
+        .flat_map(|y| (0..a.width()).map(move |x| (x, y)))
+        .any(|(x, y)| a.pixel(x, y) != b.pixel(x, y))
+}
+
+// A viewer that edits an annotation draws it itself, so it needs the page
+// without it: hiding the annotation's object must give back the page as it
+// was before the annotation existed, and not hiding it must not.
+#[test]
+fn a_hidden_annotation_is_left_out_of_the_render() {
+    let original = Document::open(HELLO).expect("open");
+    let plain = original
+        .page(0)
+        .expect("page")
+        .render(VelloCpuBackend)
+        .expect("renders");
+
+    let mut edit = original.edit();
+    edit.add_annotation(
+        0,
+        pdfrum::SquareSpec::new(
+            pdfrum::Rect::new(20.0, 20.0, 120.0, 120.0),
+            pdfrum::Color::from_rgb8(255, 0, 0),
+        ),
+    )
+    .expect("add");
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &SaveOptions::default())
+        .expect("save");
+    let saved = Document::from_bytes(Arc::from(bytes)).expect("reopen");
+    let page = saved.page(0).expect("page");
+
+    let square = page
+        .annotations()
+        .find(|a| a.subtype() == Subtype::Square)
+        .expect("the square is on the page");
+    let reference = square.obj_ref().expect("an indirect annotation has one");
+
+    let shown = page.render(VelloCpuBackend).expect("renders");
+    assert!(
+        pixels_differ(&plain, &shown),
+        "the square must be drawn when it is not hidden"
+    );
+
+    let options = RenderOptions::builder()
+        .hidden_annotations([reference])
+        .build();
+    let hidden = page
+        .render_with(VelloCpuBackend, &options)
+        .expect("renders");
+    assert!(
+        !pixels_differ(&plain, &hidden),
+        "hiding the square must leave the page as it was"
+    );
+}

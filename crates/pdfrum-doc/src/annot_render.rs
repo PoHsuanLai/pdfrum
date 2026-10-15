@@ -45,7 +45,7 @@
 //! exactly one.
 
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_object::{ByteSpan, Dict, Resolve, Stream};
+use pdfrum_object::{ByteSpan, Dict, ObjRef, Object, Resolve, Stream};
 use pdfrum_page::{BuildContext, Page, Resources, build_form_object};
 
 use crate::annot::appearance::{ApMode, annot_ap, annot_matrix};
@@ -151,6 +151,63 @@ pub fn overlay_with<R: Resolve>(
     diags: &mut Diagnostics,
     supplied: Option<&ap::AnnotOverlay>,
 ) {
+    overlay_inner(
+        page,
+        page_dict,
+        catalog,
+        r,
+        ctx,
+        limits,
+        diags,
+        supplied,
+        &[],
+    );
+}
+
+/// The same pass as [`overlay`], leaving the named annotation objects out.
+///
+/// A viewer that edits an existing annotation draws it itself while it is
+/// being edited, and needs the page without it underneath. `omit` lists the
+/// annotation objects not to draw; an entry of `/Annots` is matched when it
+/// is an indirect reference to one of them. An annotation written inline in
+/// the array has no reference to name and so cannot be left out.
+///
+/// An omitted annotation is skipped whole: no appearance, no generated
+/// appearance, and none of the widget highlight that would follow it. An
+/// empty `omit` is exactly [`overlay`], down to the operators emitted.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same six inputs plus two sinks as `overlay_with`, plus the \
+              annotations to leave out"
+)]
+pub fn overlay_except<R: Resolve>(
+    page: &mut Page,
+    page_dict: &Dict,
+    catalog: &Dict,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+    omit: &[ObjRef],
+) {
+    overlay_inner(page, page_dict, catalog, r, ctx, limits, diags, None, omit);
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass of `overlay_with` with the omission list added; see there"
+)]
+fn overlay_inner<R: Resolve>(
+    page: &mut Page,
+    page_dict: &Dict,
+    catalog: &Dict,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+    supplied: Option<&ap::AnnotOverlay>,
+    omit: &[ObjRef],
+) {
     #[expect(
         clippy::cast_possible_truncation,
         reason = "a page width beyond f32 has already lost meaning, and the \
@@ -200,6 +257,11 @@ pub fn overlay_with<R: Resolve>(
         crate::nav::hidden_by_open_action(catalog, r, limits, diags)
     });
     let focus = generated.focus();
+    // The raw `/Annots` array, read only when something is to be left out: the
+    // loaded list keeps the dictionaries but not the references they came by.
+    let raw_annots = (!omit.is_empty())
+        .then(|| page_dict.array(pdfrum_object::names::ANNOTS, r))
+        .flatten();
 
     // One span over the whole loop rather than one per annotation: a page with
     // three hundred widgets would otherwise pay three hundred `Instant` pairs
@@ -212,6 +274,11 @@ pub fn overlay_with<R: Resolve>(
                 continue;
             }
             let index = list.source_indices.get(slot).copied().unwrap_or(slot);
+            if let Some(Object::Ref(entry)) = raw_annots.as_ref().and_then(|a| a.raw_at(index))
+                && omit.contains(entry)
+            {
+                continue;
+            }
             // A suppressed appearance draws nothing at all — not the file's
             // `/AP`, not a generated one, not the invalid-state outline below.
             // Only the widget highlight survives, because it is painted after the
@@ -259,8 +326,15 @@ pub fn overlay_with<R: Resolve>(
             // Placed in *page* space: `render_page` composes its own page matrix
             // on top, which is the `mtUser2Device` the C++ concatenates last. So
             // an identity here is what keeps a rotated or cropped page placing
-            // annotations exactly as it places content.
-            let matrix = annot_matrix(&placed, &form.dict, 0, kurbo::Affine::IDENTITY, r);
+            // annotations exactly as it places content. The page's rotation
+            // still goes in, for `NoRotate`'s counter-rotation.
+            let matrix = annot_matrix(
+                &placed,
+                &form.dict,
+                page.rotate.quarters(),
+                kurbo::Affine::IDENTITY,
+                r,
+            );
             if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
                 continue;
             }
@@ -367,7 +441,13 @@ fn push_open_popup<R: Resolve>(
         ap::stream_dict(&generated),
         ByteSpan::from(generated.stream.clone()),
     );
-    let matrix = annot_matrix(popup, &form.dict, 0, kurbo::Affine::IDENTITY, r);
+    let matrix = annot_matrix(
+        popup,
+        &form.dict,
+        page.rotate.quarters(),
+        kurbo::Affine::IDENTITY,
+        r,
+    );
     if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
         return;
     }

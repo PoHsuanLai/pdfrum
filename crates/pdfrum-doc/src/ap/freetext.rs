@@ -4,10 +4,10 @@
 //! It is also the only one that writes through the **shortest** float writer
 //! rather than the six-digit one every other per-subtype generator uses, and
 //! the only one with preconditions that can decline outright: it needs a
-//! default-appearance string, a `/DR` on the form, and a `/DR /Font` that is
-//! a dictionary of font dictionaries. Any of those missing and no appearance
-//! is produced at all — which is visible in the dump, because the two colour
-//! lines then report a colour instead of failing.
+//! default-appearance string that names a font and a `/DR /Font` that, when
+//! present, is a dictionary of font dictionaries. A form with no `/DR`, no
+//! `/DR /Font` or no `/DA` is not one of those failures: it is completed from
+//! the synthesized form, as pdf.js does (see `free_text`).
 
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_object::{Dict, Object, PdfString, Resolve, names as obj_names};
@@ -28,6 +28,17 @@ use crate::vt;
 /// Returns nothing when a precondition fails, which is not the same as
 /// returning an empty appearance: nothing means the annotation keeps having
 /// none at all.
+///
+/// **Deliberate divergence from PDFium.** `GenerateFreeTextAP` returns false
+/// when the form has no `/DR` (`form_dict->GetMutableDictFor("DR")` is null),
+/// so a free-text annotation without an appearance draws nothing there.
+/// pdf.js's `FreeTextAnnotation` constructor builds its appearance from
+/// `/Contents` with the `/DA` colour and size (10 when absent) and a built-in
+/// font, independent of the AcroForm's `/DR` and `/DA`. Where the two
+/// disagree we follow pdf.js, so a form lacking `/DR`, a `/DR` lacking
+/// `/Font`, or a form lacking `/DA` takes the missing piece from
+/// [`synthesized_form`] — the same dictionary a document with no form at all
+/// already gets. A `/DR /Font` that is present but malformed still declines.
 #[must_use]
 pub(crate) fn free_text<R: Resolve>(
     dict: &Dict,
@@ -42,7 +53,7 @@ pub(crate) fn free_text<R: Resolve>(
     // file that has never heard of forms still gets an appearance. We build
     // the same dictionary as a value instead.
     let form = match catalog.dict(names::ACRO_FORM, r) {
-        Some(form) => form,
+        Some(form) => complete_form(form, r),
         None => synthesized_form(),
     };
     let appearance = default_appearance(dict, &form, r)?;
@@ -57,6 +68,7 @@ pub(crate) fn free_text<R: Resolve>(
             None,
         );
     }
+    // `complete_form` guarantees both are present.
     let resources = form.dict(names::DR, r)?;
     let fonts = resources.dict(names::FONT, r)?;
     if !valid_font_resources(&fonts, r) {
@@ -116,7 +128,11 @@ pub(crate) fn free_text<R: Resolve>(
     let text = dict.text(obj_names::CONTENTS, r).unwrap_or_default();
     let layout = vt::layout(&text, &config, metrics);
     let content = layout.content_rect_pdf(body);
-    let offset = (0.0, (geom::height(content) - geom::height(body)) / 2.0);
+    // The text starts at the top of the box, as pdf.js, poppler and Acrobat
+    // draw it. Upstream offsets the laid-out block by half the slack
+    // (`(content - body) / 2` in `GenerateFreeTextAP`), which centres a short
+    // note vertically in a box no other reader centres it in.
+    let offset = (0.0, 0.0);
 
     let written = vt::edit_ap::generate(
         &layout,
@@ -224,6 +240,43 @@ pub(crate) fn synthesized_form() -> Dict {
         ),
         (names::DA.clone(), Object::Str(PdfString::literal(da))),
     ])
+}
+
+/// A form with whatever it lacks taken from [`synthesized_form`].
+///
+/// A missing `/DR` is replaced wholesale, a `/DR` with no `/Font` dictionary
+/// gains the synthesized one (keeping the rest of the resources), and a form
+/// with no `/DA` gets the synthesized string. Anything the form does carry is
+/// left alone, so a present-but-malformed `/DR /Font` still reaches
+/// [`valid_font_resources`].
+fn complete_form<R: Resolve>(mut form: Dict, r: &R) -> Dict {
+    let synthesized = synthesized_form();
+    match form.dict(names::DR, r) {
+        None => {
+            if let Some(resources) = synthesized.raw(names::DR) {
+                form.insert(names::DR.clone(), resources.clone());
+            }
+        }
+        Some(mut resources) => {
+            if resources.dict(names::FONT, r).is_none()
+                && let Some(fonts) = synthesized
+                    .dict(names::DR, r)
+                    .and_then(|dr| dr.raw(names::FONT).cloned())
+            {
+                resources.insert(names::FONT.clone(), fonts);
+                form.insert(names::DR.clone(), Object::Dict(resources));
+            }
+        }
+    }
+    if form
+        .byte_string(names::DA, r)
+        .unwrap_or_default()
+        .is_empty()
+        && let Some(da) = synthesized.raw(names::DA)
+    {
+        form.insert(names::DA.clone(), da.clone());
+    }
+    form
 }
 
 /// The resource name a font is filed under.
@@ -375,19 +428,21 @@ mod tests {
         .map(|got| String::from_utf8_lossy(&got.stream).into_owned())
     }
 
+    /// PDFium declines when the form has no `/DR`; pdf.js draws regardless.
+    /// We follow pdf.js, so a form lacking `/DR`, or whose `/DR` lacks a
+    /// `/Font`, is completed from the synthesized form.
     #[test]
-    fn a_missing_precondition_declines_rather_than_producing_an_empty_stream() {
-        // A form that exists but carries no default resources, and one whose
-        // resources carry no fonts. Both decline: the synthesized form only
-        // stands in for a form that is *absent*, not for one that is there
-        // and unusable.
+    fn a_form_without_dr_or_dr_font_is_completed_from_the_synthesized_form() {
+        let text = || annot(&[("Contents", Object::Str(PdfString::literal(b"Hi")))]);
         let bare = dict(&[("AcroForm", Object::Dict(Dict::new()))]);
-        assert!(generate(&annot(&[]), &bare).is_none());
+        let got = generate(&text(), &bare).expect("an AcroForm without /DR still yields one");
+        assert!(got.contains("(Hi) Tj\n"), "{got}");
         let no_font = dict(&[(
             "AcroForm",
             Object::Dict(dict(&[("DR", Object::Dict(Dict::new()))])),
         )]);
-        assert!(generate(&annot(&[]), &no_font).is_none());
+        let got = generate(&text(), &no_font).expect("a /DR without /Font still yields one");
+        assert!(got.contains("(Hi) Tj\n"), "{got}");
     }
 
     #[test]
@@ -465,13 +520,17 @@ mod tests {
         assert_eq!(super::font_resource_alias(b"   "), b"ZiTi");
     }
 
+    /// With no `/DA` on the annotation or the form, the synthesized `/DA`
+    /// (Helvetica 12, black) stands in, as pdf.js draws with a default.
     #[test]
-    fn an_annotation_with_no_default_appearance_declines() {
+    fn an_annotation_with_no_default_appearance_takes_the_synthesized_one() {
         let no_da = dict(&[
             ("Subtype", Object::Name(Name::from("FreeText"))),
             ("Rect", numbers(&[100.0, 50.0, 150.0, 75.0])),
+            ("Contents", Object::Str(PdfString::literal(b"Hi"))),
         ]);
-        assert!(generate(&no_da, &catalog()).is_none());
+        let got = generate(&no_da, &catalog()).expect("falls back to the synthesized /DA");
+        assert!(got.contains("(Hi) Tj\n"), "{got}");
     }
 
     #[test]

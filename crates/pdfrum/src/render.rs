@@ -62,6 +62,16 @@ pub struct RenderOptions {
     /// filled-in values visible. Turning it off renders the page's own
     /// content stream alone.
     pub annotations: bool,
+    /// Annotation objects not to draw, empty by default.
+    ///
+    /// For a viewer that edits an existing annotation: it draws the one being
+    /// edited itself and needs the page rendered without it. Each entry is
+    /// the reference an annotation was listed by in the page's `/Annots`
+    /// ([`Annotation::obj_ref`](crate::Annotation::obj_ref)); an annotation
+    /// written inline in the array has no reference and so cannot be hidden.
+    /// A hidden annotation draws nothing at all, its widget highlight
+    /// included. Only meaningful with [`annotations`](Self::annotations) on.
+    pub hidden_annotations: Vec<pdfrum_object::ObjRef>,
     /// How much of the page to draw: [`Region::Whole`] by default, or one
     /// [`DeviceRect`] of its device box.
     ///
@@ -102,6 +112,7 @@ impl Default for RenderOptions {
             interpolate_images: true,
             background: None,
             annotations: true,
+            hidden_annotations: Vec::new(),
             region: Region::Whole,
         }
     }
@@ -241,6 +252,23 @@ impl RenderOptionsBuilder {
     /// ```
     pub fn annotations(mut self, annotations: bool) -> Self {
         self.0.annotations = annotations;
+        self
+    }
+
+    /// Leave annotation objects out of the render —
+    /// [`RenderOptions::hidden_annotations`].
+    ///
+    /// ```
+    /// let options = pdfrum::RenderOptions::builder()
+    ///     .hidden_annotations([pdfrum::ObjRef::new(12, 0)])
+    ///     .build();
+    /// assert_eq!(options.hidden_annotations, [pdfrum::ObjRef::new(12, 0)]);
+    /// ```
+    pub fn hidden_annotations(
+        mut self,
+        hidden: impl IntoIterator<Item = pdfrum_object::ObjRef>,
+    ) -> Self {
+        self.0.hidden_annotations = hidden.into_iter().collect();
         self
     }
 
