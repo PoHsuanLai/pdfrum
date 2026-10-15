@@ -32,5 +32,8 @@ pdfrum-common.workspace = true
 skrifa.workspace = true
 
 [dev-dependencies]
-# Reading the written pages back.
-pdfrum.workspace = true
+# Reading the written pages back. Path-only, so cargo drops it on publish: the
+# facade depends on this crate behind its `anyrender` feature, and a versioned
+# dev-dependency back on it would be a cycle the publish order cannot break
+# (`scripts/publish-order.nu`), as `pdfrum-markdown` notes for the same edge.
+pdfrum = { path = "../pdfrum" }

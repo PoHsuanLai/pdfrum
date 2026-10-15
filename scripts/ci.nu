@@ -76,6 +76,12 @@ def main [] {
 
     ^./scripts/api-snapshot.nu check
 
+    print "==> publish order (no dependency cycle among the published crates)"
+    # The publish workflow orders the crates with this script and refuses on a
+    # cycle, but only after the tag: a versioned dev-dependency back on a crate
+    # that depends on this one passes every build and fails the release.
+    ^./scripts/publish-order.nu | ignore
+
     print "==> cargo deny check"
     if (which cargo-deny | is-empty) {
         print --stderr "warning: cargo-deny not installed; skipping license/ban audit"
