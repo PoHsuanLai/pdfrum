@@ -5,6 +5,8 @@ first crates.io release.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-16
+
 ### Added
 
 - `move_annotation` (and `DocEdit::move_annotation`) drags an annotation by a
@@ -18,7 +20,18 @@ first crates.io release.
   closure, keeps every key the closure leaves alone, and regenerates `/AP`
   (keeping the old one when the subtype has no generator).
 
+### Fixed
+
+- The crates publish in an order again: `pdfrum-anyrender`'s dev-dependency
+  on the facade is path-only, so it no longer closes a cycle with the
+  facade's `anyrender` feature. CI now runs the publish order, which is why
+  0.5.1 was tagged and never published.
+
 ## [0.5.1] - 2026-10-16
+
+Tagged but never published: the publish order found a dependency cycle
+(`pdfrum` → `pdfrum-anyrender` → `pdfrum`, see 0.5.2). Everything below ships
+in 0.5.2.
 
 ### Added
 
@@ -662,7 +675,8 @@ compile untouched.
 - Weakest rendering: vertical text, uncoloured tiling patterns, and image
   transformers.
 
-[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.5.1...HEAD
+[unreleased]: https://github.com/PoHsuanLai/pdfrum/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/PoHsuanLai/pdfrum/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/PoHsuanLai/pdfrum/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/PoHsuanLai/pdfrum/compare/v0.3.0...v0.4.0
