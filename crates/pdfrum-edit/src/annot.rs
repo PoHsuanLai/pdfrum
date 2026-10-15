@@ -1234,7 +1234,13 @@ pub fn delete_annotation(
     if !detach_from_page(edit, page_ref, &mut page_dict, annot) {
         return Ok(false);
     }
-    edit.remove(annot);
+    // An annotation object may be listed by more than one page (a widget
+    // shown on two pages is written that way). Dropping the object while
+    // another page still names it would leave that page's `/Annots` entry
+    // dangling, so the object goes only with its last mention.
+    if !other_page_lists_annot(edit, page_ref, annot) {
+        edit.remove(annot);
+    }
     Ok(true)
 }
 
@@ -1404,7 +1410,7 @@ fn replace_annots_index(
             }
             array.remove(index);
             array.insert(index, value);
-            edit.replace(array_ref, Object::Array(array));
+            commit_annots_array(edit, page_ref, page_dict, array_ref, array);
             Ok(())
         }
         Some(Object::Array(mut array)) => {
@@ -1443,7 +1449,7 @@ fn remove_annots_index(
             if array.remove(index).is_none() {
                 return false;
             }
-            edit.replace(array_ref, Object::Array(array));
+            commit_annots_array(edit, page_ref, page_dict, array_ref, array);
             true
         }
         Some(Object::Array(mut array)) => {
@@ -1924,7 +1930,7 @@ fn detach_from_page(
             if filtered.len() == array.len() {
                 return false;
             }
-            edit.replace(array_ref, Object::Array(filtered));
+            commit_annots_array(edit, page_ref, page_dict, array_ref, filtered);
             true
         }
         Some(Object::Array(array)) => {
@@ -1940,6 +1946,74 @@ fn detach_from_page(
     }
 }
 
+/// The dictionaries of every page except `page_ref`, as the session's edits
+/// leave them.
+///
+/// Read through the overlay, not the base, so a page an earlier edit of the
+/// same session already gave its own `/Annots` is seen as it now is. A page
+/// written inline in its parent's `/Kids` has no object to have been edited
+/// and answers with its parsed dictionary.
+fn other_page_dicts(edit: &EditDoc<'_>, page_ref: ObjRef) -> Vec<Dict> {
+    let base = edit.base();
+    (0..base.page_count())
+        .filter_map(|index| {
+            let page = base.page(index).ok()?;
+            match page.reference {
+                Some(reference) if reference == page_ref => None,
+                Some(reference) => Some(
+                    edit.fetch(reference)
+                        .ok()
+                        .as_deref()
+                        .and_then(Object::as_dict)
+                        .cloned()
+                        .unwrap_or(page.dict),
+                ),
+                None => Some(page.dict),
+            }
+        })
+        .collect()
+}
+
+/// Whether a page other than `page_ref` has `array_ref` as its `/Annots`.
+///
+/// One indirect array can serve several pages. Writing through it then
+/// changes all of them, which is never what an edit of one page means.
+fn annots_array_is_shared(edit: &EditDoc<'_>, page_ref: ObjRef, array_ref: ObjRef) -> bool {
+    other_page_dicts(edit, page_ref)
+        .iter()
+        .any(|dict| matches!(dict.raw(names::ANNOTS), Some(Object::Ref(r)) if *r == array_ref))
+}
+
+/// Whether a page other than `page_ref` still lists `annot` in its `/Annots`.
+fn other_page_lists_annot(edit: &EditDoc<'_>, page_ref: ObjRef, annot: ObjRef) -> bool {
+    other_page_dicts(edit, page_ref)
+        .iter()
+        .any(|dict| page_lists_annot(edit, dict, annot))
+}
+
+/// Writes `array` as the page's new `/Annots`, where the page's `/Annots` is
+/// the indirect array `array_ref`.
+///
+/// An array only this page uses is replaced in place, so a file without
+/// sharing is written exactly as it always was. An array another page also
+/// uses is left alone and this page is given a direct copy in its own
+/// dictionary (copy on write): replacing the shared object would add the new
+/// annotation to, or take the removed one from, every page that names it.
+fn commit_annots_array(
+    edit: &mut EditDoc<'_>,
+    page_ref: ObjRef,
+    page_dict: &mut Dict,
+    array_ref: ObjRef,
+    array: Array,
+) {
+    if annots_array_is_shared(edit, page_ref, array_ref) {
+        page_dict.insert(names::ANNOTS.clone(), Object::Array(array));
+        edit.replace(page_ref, Object::Dict(page_dict.clone()));
+    } else {
+        edit.replace(array_ref, Object::Array(array));
+    }
+}
+
 fn filter_annot_ref(array: &Array, annot_ref: ObjRef) -> Array {
     Array::of(
         array
@@ -1951,7 +2025,8 @@ fn filter_annot_ref(array: &Array, annot_ref: ObjRef) -> Array {
 
 /// Appends `annot_ref` to the page's `/Annots`, creating or extending as
 /// needed. When `/Annots` is already an indirect array, that array is
-/// replaced and the page dictionary is left alone.
+/// replaced and the page dictionary is left alone — unless another page
+/// shares the array (see [`commit_annots_array`]).
 fn attach_to_page(
     edit: &mut EditDoc<'_>,
     page_ref: ObjRef,
@@ -1969,7 +2044,7 @@ fn attach_to_page(
                 .cloned()
                 .unwrap_or_default();
             array.push(Object::Ref(annot_ref));
-            edit.replace(array_ref, Object::Array(array));
+            commit_annots_array(edit, page_ref, page_dict, array_ref, array);
         }
         Some(Object::Array(mut array)) => {
             array.push(Object::Ref(annot_ref));

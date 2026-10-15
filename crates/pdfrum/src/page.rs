@@ -305,7 +305,7 @@ impl<'a> Page<'a> {
             // be stored beside the page. Only the render path wants it —
             // extraction reads the content stream's own text.
             let mut diags = Diagnostics::default();
-            pdfrum_doc::annot_render::overlay(
+            pdfrum_doc::annot_render::overlay_except(
                 &mut page,
                 &self.dict.dict,
                 &self.doc.catalog(),
@@ -313,6 +313,7 @@ impl<'a> Page<'a> {
                 ctx,
                 &self.doc.limits,
                 &mut diags,
+                &options.hidden_annotations,
             );
             self.doc.note(&diags);
         }
@@ -1099,10 +1100,28 @@ pub(crate) fn annotations_of<'a>(
                   f32 can express is not one this changes the behaviour of"
     )]
     let width = page_width as f32;
-    pdfrum_doc::annot::AnnotList::load(dict, width, &doc.inner)
-        .annots
+    let list = pdfrum_doc::annot::AnnotList::load(dict, width, &doc.inner);
+    // The loaded list keeps each dictionary but not the reference it came by,
+    // so the reference is read back from the raw `/Annots` entry the list
+    // recorded as the annotation's source. An inline dictionary has none.
+    let raw = dict.array(pdfrum_object::names::ANNOTS, &doc.inner);
+    let references: Vec<Option<pdfrum_object::ObjRef>> = (0..list.annots.len())
+        .map(|slot| {
+            let index = list.source_indices.get(slot).copied().unwrap_or(slot);
+            match raw.as_ref().and_then(|array| array.raw_at(index)) {
+                Some(pdfrum_object::Object::Ref(r)) => Some(*r),
+                _ => None,
+            }
+        })
+        .collect();
+    list.annots
         .into_iter()
-        .map(move |inner| Annotation { inner, doc })
+        .zip(references)
+        .map(move |(inner, reference)| Annotation {
+            inner,
+            reference,
+            doc,
+        })
 }
 
 /// A link annotation with its target resolved, from [`Page::page_links`].

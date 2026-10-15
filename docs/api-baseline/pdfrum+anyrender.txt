@@ -306,6 +306,7 @@ pub fn pdfrum::Annotation<'_>::has_appearance(&self) -> bool
 pub fn pdfrum::Annotation<'_>::is_hidden(&self) -> bool
 pub fn pdfrum::Annotation<'_>::modified(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Annotation<'_>::name(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::Annotation<'_>::obj_ref(&self) -> core::option::Option<pdfrum_object::object::ObjRef>
 pub fn pdfrum::Annotation<'_>::prints(&self) -> bool
 pub fn pdfrum::Annotation<'_>::quad_points(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = kurbo::rect::Rect> + '_
 pub fn pdfrum::Annotation<'_>::raw_rect(&self) -> kurbo::rect::Rect
@@ -660,6 +661,7 @@ pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
 pub pdfrum::RenderOptions::color_mode: pdfrum_render::options::ColorMode
+pub pdfrum::RenderOptions::hidden_annotations: alloc::vec::Vec<pdfrum_object::object::ObjRef>
 pub pdfrum::RenderOptions::interpolate_images: bool
 pub pdfrum::RenderOptions::region: pdfrum_render::region::Region
 pub pdfrum::RenderOptions::smooth_paths: bool
@@ -680,6 +682,7 @@ pub fn pdfrum::RenderOptionsBuilder::background(self, peniko::Color) -> Self
 pub fn pdfrum::RenderOptionsBuilder::build(self) -> pdfrum::RenderOptions
 pub fn pdfrum::RenderOptionsBuilder::color_mode(self, pdfrum_render::options::ColorMode) -> Self
 pub fn pdfrum::RenderOptionsBuilder::grayscale(self) -> Self
+pub fn pdfrum::RenderOptionsBuilder::hidden_annotations(self, impl core::iter::traits::collect::IntoIterator<Item = pdfrum_object::object::ObjRef>) -> Self
 pub fn pdfrum::RenderOptionsBuilder::interpolate_images(self, bool) -> Self
 pub fn pdfrum::RenderOptionsBuilder::region(self, pdfrum_render::region::Region) -> Self
 pub fn pdfrum::RenderOptionsBuilder::scale(self, f64) -> Self

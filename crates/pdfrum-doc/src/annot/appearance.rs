@@ -16,7 +16,7 @@
 use kurbo::Affine;
 use pdfrum_object::{Dict, Name, Object, Resolve, Stream};
 
-use crate::annot::Annotation;
+use crate::annot::{Annotation, Subtype};
 use crate::geom;
 use crate::names;
 
@@ -155,12 +155,36 @@ pub fn has_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
         .is_some()
 }
 
+/// Whether an annotation stays upright on a rotated page.
+///
+/// `NoRotate` says so, and a text note (`/Text`, the sticky-note icon) does
+/// whatever its flags say: pdf.js sets `noRotate` for every `TextAnnotation`,
+/// and poppler and Acrobat keep the icon upright too. Upstream rotates a note
+/// without the flag along with the page; three readers out of four do not,
+/// so the note follows them.
+fn keeps_upright(annot: &Annotation) -> bool {
+    annot.flags.no_rotate() || annot.subtype == Subtype::Text
+}
+
 /// The transform placing an annotation's appearance form on the page.
 ///
 /// The form's `/BBox`, mapped through its own `/Matrix`, is fitted into the
 /// annotation's **normalized** rectangle. A `NoRotate` annotation on a
 /// rotated page then counter-rotates about the rectangle's **top-left**
 /// corner, which is where the anchor comes from.
+///
+/// `page_quarter_turns` is the page's `/Rotate` in quarter turns clockwise
+/// (`Rotation::quarters`), which is `GetPageRotation` upstream
+/// (`cpdf_annot.cpp`, `AnnotGetMatrix`). The sign needs no flip: the matrix
+/// built here is in unrotated page space, where `Affine::rotate` with a
+/// positive angle turns **counter**-clockwise (y points up), and the page's
+/// display matrix then turns everything clockwise by `/Rotate`. The two
+/// cancel, so the annotation ends upright on screen, which is also what
+/// pdf.js's viewer does for `NoRotate`.
+///
+/// The composition order is the inverse of the C++'s row-vector `Concat`
+/// chain: `kurbo`'s `a * b` applies `b` first, so the fit comes last in the
+/// product and `user_to_device` first.
 #[must_use]
 pub(crate) fn annot_matrix(
     annot: &Annotation,
@@ -174,15 +198,15 @@ pub(crate) fn annot_matrix(
     let rect = geom::normalize(annot.rect);
     let mut matrix = geom::match_rect(rect, form_bbox);
 
-    if annot.flags.no_rotate() && page_quarter_turns != 0 {
+    if keeps_upright(annot) && page_quarter_turns != 0 {
         let (ox, oy) = (rect.x0, rect.y1);
         let angle = std::f64::consts::FRAC_PI_2 * f64::from(page_quarter_turns);
-        matrix = matrix
-            * Affine::translate((-ox, -oy))
+        matrix = Affine::translate((ox, oy))
             * Affine::rotate(angle)
-            * Affine::translate((ox, oy));
+            * Affine::translate((-ox, -oy))
+            * matrix;
     }
-    matrix * user_to_device
+    user_to_device * matrix
 }
 
 #[cfg(test)]
@@ -329,5 +353,57 @@ mod tests {
         let scalar = dict(&[("AP", Object::Dict(dict(&[("N", Object::Int(5))])))]);
         assert!(!has_appearance(&scalar, &NoResolve));
         assert!(!has_appearance(&Dict::new(), &NoResolve));
+    }
+
+    /// A `NoRotate` annotation on a rotated page counter-rotates about the
+    /// rectangle's top-left corner: that corner stays where it was and the
+    /// opposite one moves.
+    #[test]
+    fn no_rotate_counter_rotates_about_the_top_left_corner() {
+        use super::annot_matrix;
+        use crate::annot::Annotation;
+        use kurbo::{Affine, Point};
+
+        let ints = |values: &[i64]| {
+            Object::Array(pdfrum_object::Array::of(
+                values.iter().copied().map(Object::Int),
+            ))
+        };
+        let annot = Annotation::read(
+            &dict(&[
+                ("Subtype", Object::Name(Name::from("Stamp"))),
+                ("Rect", ints(&[100, 200, 140, 260])),
+                ("F", Object::Int(16)),
+            ]),
+            &NoResolve,
+        );
+        let form = dict(&[("BBox", ints(&[0, 0, 40, 60]))]);
+
+        let upright = annot_matrix(&annot, &form, 0, Affine::IDENTITY, &NoResolve);
+        let turned = annot_matrix(&annot, &form, 1, Affine::IDENTITY, &NoResolve);
+
+        // The form's top-left corner is the rectangle's top-left, in both.
+        let corner = Point::new(100.0, 260.0);
+        let top_left = Point::new(0.0, 60.0);
+        for matrix in [upright, turned] {
+            let got = matrix * top_left;
+            assert!(got.distance(corner) < 1e-9, "{got:?}");
+        }
+        // The opposite corner swings a quarter turn about it.
+        let far = turned * Point::new(40.0, 0.0);
+        assert!(
+            far.distance(Point::new(100.0 + 60.0, 260.0 + 40.0)) < 1e-9,
+            "{far:?}"
+        );
+
+        // Without the flag the page's rotation changes nothing.
+        let plain = Annotation::read(&dict(&[("Rect", ints(&[100, 200, 140, 260]))]), &NoResolve);
+        let plain = annot_matrix(&plain, &form, 1, Affine::IDENTITY, &NoResolve);
+        let unturned = upright * Point::new(40.0, 0.0);
+        assert!((plain * Point::new(40.0, 0.0)).distance(unturned) < 1e-9);
+        assert!(
+            far.distance(unturned) > 1.0,
+            "the turn moved the far corner"
+        );
     }
 }

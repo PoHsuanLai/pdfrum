@@ -10,6 +10,33 @@ first crates.io release.
 - An `anyrender` feature on `pdfrum`: `pdfrum::anyrender` re-exports
   `pdfrum-anyrender`, so a caller writing `anyrender` scenes as vector PDF
   pages names one crate. It implies `edit` and is part of `full`.
+- `RenderOptions::hidden_annotations` (and the builder method of the same
+  name) renders a page with the named annotation objects left out, for a
+  viewer that draws an annotation itself while it is being edited. Name one
+  with the new `Annotation::obj_ref`, the reference the page's `/Annots` lists
+  it by (`None` for an inline annotation, which cannot be hidden).
+  `pdfrum_doc::annot_render::overlay_except` is the engine-side entry point.
+
+### Fixed
+
+- Adding an annotation to, or deleting one from, a page whose `/Annots` is an
+  indirect array another page shares no longer changes the other page. The
+  page is given its own array and the shared one is left as it was; a file
+  without sharing is written exactly as before.
+- Deleting an annotation that a second page also lists no longer removes the
+  object, which left that page's `/Annots` entry dangling.
+- A free-text annotation without an appearance, in a document whose form has
+  no `/DR` (or a `/DR` with no `/Font`, or a form with no `/DA`), now draws
+  its text with the fallback font as pdf.js does, where PDFium generates
+  nothing. A free-text annotation added by the editor to such a document is
+  therefore written with an appearance.
+- A generated free-text appearance starts its text at the top of the box, as
+  pdf.js, poppler and Acrobat draw it, rather than centred vertically as
+  PDFium does (`docs/upstream/pdfium/freetext-generated-appearance.md`).
+- A `NoRotate` annotation on a rotated page stays upright, anchored at its
+  top-left corner. The counter-rotation existed but was handed no rotation
+  and composed in the wrong order. A text note (the sticky-note icon) stays
+  upright whatever its flags, as pdf.js, poppler and Acrobat keep it.
 
 ## [0.5.0] - 2026-10-10
 

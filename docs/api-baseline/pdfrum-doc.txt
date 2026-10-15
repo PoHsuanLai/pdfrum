@@ -92,6 +92,7 @@ pub fn pdfrum_doc::annot::quad_point_count(core::option::Option<&pdfrum_object::
 pub fn pdfrum_doc::annot::rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>, usize) -> kurbo::rect::Rect
 pub mod pdfrum_doc::annot_render
 pub fn pdfrum_doc::annot_render::overlay<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_doc::annot_render::overlay_except<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, &[pdfrum_object::object::ObjRef])
 pub fn pdfrum_doc::annot_render::overlay_with<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>)
 pub mod pdfrum_doc::ap
 pub mod pdfrum_doc::ap::field_body

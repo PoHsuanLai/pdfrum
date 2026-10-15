@@ -76,3 +76,8 @@
 # turns the already-logical string backwards: `םולשבן`.
 "resources/actual_text_rtl.in" = { why = "the oracle reverses an /ActualText string that is already in logical order because a literal right-to-left glyph opens its segment, writing `םולש` for `שלום`", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:851 (pdfium a043bed4); crates/pdfrum-text/src/bidi.rs `logical_order`" }
 "resources/actual_text_rtl.pdf" = { why = "the oracle reverses an /ActualText string that is already in logical order because a literal right-to-left glyph opens its segment, writing `םולש` for `שלום`", cite = "[oracle-bug] core/fpdftext/cpdf_textpage.cpp:851 (pdfium a043bed4); crates/pdfrum-text/src/bidi.rs `logical_order`" }
+
+# A generated free-text appearance starts at the top of its box, as pdf.js,
+# poppler and Acrobat draw it; upstream centres it vertically.
+"resources/freetext_annotation_without_da.pdf" = { why = "the annotation has no appearance, and the one generated for it starts its text at the top of the box as pdf.js, poppler and Acrobat do, where the oracle centres it vertically", cite = "cpdf_generateap.cpp GenerateFreeTextAP offset; pdf.js default_appearance.js getFirstPositionInfo; docs/upstream/pdfium/freetext-generated-appearance.md" }
+"resources/pixel/freetext_annotation_without_da.pdf" = { why = "the annotation has no appearance, and the one generated for it starts its text at the top of the box as pdf.js, poppler and Acrobat do, where the oracle centres it vertically", cite = "cpdf_generateap.cpp GenerateFreeTextAP offset; pdf.js default_appearance.js getFirstPositionInfo; docs/upstream/pdfium/freetext-generated-appearance.md" }
