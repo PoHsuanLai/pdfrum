@@ -599,10 +599,12 @@ fn line_ending_fill<R: Resolve>(dict: &Dict, r: &R) -> String {
 /// A `Link`: border chrome over `/Rect`.
 ///
 /// Honours `/BS` (and `/Border`) via [`border::border_path`] — solid, dashed,
-/// underline, bevel, inset — with `/C` when present, otherwise blue.
-/// With neither `/BS` nor `/Border` the width is the PDF 1.x default, 1 pt
-/// (`/Border [0 0 1]`). A width of zero, from `/BS /W` or `/Border[2]`, draws
-/// nothing (ISO 32000-2 §12.5.2, §12.5.4): an invisible link is the usual case.
+/// underline, bevel, inset — in `/C`. A link without a `/C` of three
+/// components draws nothing, as pdf.js leaves a colourless link's border
+/// transparent; PDFium draws no link border at all, so this follows it only
+/// where pdf.js agrees. With neither `/BS` nor `/Border` the width is the
+/// PDF 1.x default, 1 pt (`/Border [0 0 1]`). A width of zero, from `/BS /W`
+/// or `/Border[2]`, draws nothing (ISO 32000-2 §12.5.2, §12.5.4).
 #[must_use]
 pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
     let mut out = Content::new();
@@ -615,18 +617,17 @@ pub fn link<R: Resolve>(dict: &Dict, r: &R) -> Generated {
         // no `/BS`; a zero draws nothing.
         info.width = border::border_width(dict, r);
     }
-    if info.width <= 0.0 {
-        return Generated::plain(out);
-    }
-    // `/C` as RGB when present; else muted blue.
     let color = match dict.array(names::C, r) {
         Some(arr) if arr.len() >= 3 => Color::Rgb(
             arr.number_at_or_zero(0),
             arr.number_at_or_zero(1),
             arr.number_at_or_zero(2),
         ),
-        _ => Color::Rgb(0.0, 0.0, 1.0),
+        _ => return Generated::plain(out),
     };
+    if info.width <= 0.0 {
+        return Generated::plain(out);
+    }
     let path = border::border_path(rect, info, color);
     out.raw(&path);
     Generated::plain(out)
@@ -1025,7 +1026,10 @@ mod tests {
     fn a_link_draws_a_solid_border_donut() {
         // Default solid border paints an even-odd fill donut (outer − inset)
         // rather than a stroked rectangle, matching Square/Widget borders.
-        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
+        let annot = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 50.0, 12.0])),
+            ("C", numbers(&[0.0, 0.0, 1.0])),
+        ]);
         let s = stream(&link(&annot, &NoResolve));
         assert!(s.contains("0 0 1 rg"), "{s}");
         assert!(s.contains("re f*"), "{s}");
@@ -1034,7 +1038,10 @@ mod tests {
     }
 
     fn link_stream(extra: &[(&str, Object)]) -> String {
-        let mut pairs = vec![("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))];
+        let mut pairs = vec![
+            ("Rect", numbers(&[0.0, 0.0, 50.0, 12.0])),
+            ("C", numbers(&[0.0, 0.0, 1.0])),
+        ];
         pairs.extend_from_slice(extra);
         stream(&link(&dict(&pairs), &NoResolve))
     }
@@ -1052,6 +1059,17 @@ mod tests {
         // `/BS` wins over `/Border`, so a zero `/BS` hides a wide `/Border`.
         let wide = numbers(&[0.0, 0.0, 3.0]);
         assert!(!drawn(&link_stream(&[("BS", bs(0.0)), ("Border", wide)])));
+    }
+
+    #[test]
+    fn a_link_without_a_colour_draws_nothing() {
+        let annot = dict(&[("Rect", numbers(&[0.0, 0.0, 50.0, 12.0]))]);
+        assert!(!drawn(&stream(&link(&annot, &NoResolve))));
+        let empty = dict(&[
+            ("Rect", numbers(&[0.0, 0.0, 50.0, 12.0])),
+            ("C", numbers(&[])),
+        ]);
+        assert!(!drawn(&stream(&link(&empty, &NoResolve))));
     }
 
     #[test]
@@ -1080,6 +1098,7 @@ mod tests {
                     (Name::from("S"), Object::Name(Name::from("U"))),
                 ])),
             ),
+            ("C", numbers(&[0.0, 0.0, 1.0])),
         ]);
         let s = stream(&link(&annot, &NoResolve));
         assert!(
