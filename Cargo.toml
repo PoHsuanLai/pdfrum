@@ -115,19 +115,19 @@ kurbo = "0.13.1"
 peniko = "0.6.1"
 # Caret, like `peniko`: `anyrender::Scene` is in `pdfrum-anyrender`'s public
 # signature. Only the recording `Scene` is used; no renderer crate.
-anyrender = "0.13"
-vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
+anyrender = "0.14"
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
 # GPU vello, used only by `pdfrum-raster-vello`. Default features stay on
 # vello's `wgpu`/`wgpu_default` pair is what provides `Renderer`.
 #
 # Pin is 0.10.0 / wgpu 29. Device injection typechecks against the wgpu a
 # `Renderer` was built with, so the backend re-exports vello's own `wgpu`.
-vello = "=0.10.0"
+vello = "=0.11.0"
 
 # fonts
-skrifa = "=0.47.0"
-read-fonts = "=0.44.0"
+skrifa = "=0.48.0"
+read-fonts = "=0.45.0"
 fontdb = { version = "=0.24.0", default-features = false }
 # `variable-fonts` (on by default) pulls a second skrifa/write-fonts/kurbo and
 # buys only CFF2 + variation instancing. Off keeps the tree to one skrifa.
@@ -144,11 +144,11 @@ weezl = "=0.2.1"
 zune-jpeg = "=0.5.15"
 # `image` (on by default) is the `image` crate integration plus a second
 # moxcms 0.8. We decode with `Image::new` and convert colour ourselves.
-hayro-jpeg2000 = { version = "=0.4.0", default-features = false, features = ["std", "simd"] }
+hayro-jpeg2000 = { version = "=0.4.1", default-features = false, features = ["std", "simd"] }
 # `image` (on by default) is only the `image` crate encoder the crate's
 # example uses. We consume `Image::new_embedded`.
-hayro-jbig2 = { version = "=0.3.0", default-features = false, features = ["std", "simd"] }
-hayro-ccitt = "=0.3.0"
+hayro-jbig2 = { version = "=0.3.1", default-features = false, features = ["std", "simd"] }
+hayro-ccitt = "=0.4.0"
 moxcms = "=0.9.1"
 
 # crypto, text, numeric
@@ -161,13 +161,13 @@ cipher = "=0.5.2"
 getrandom = "=0.4.3"
 md-5 = "=0.11.0"
 sha1 = "=0.11.0"
-sha2 = "=0.11.0"
+sha2 = "=0.11.1"
 unicode-bidi = "=0.3.18"
 # RFC 4013 SASLprep needs NFKC for revision-6 password preparation
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
 unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
-smallvec = "=1.16.2"
+smallvec = "=1.16.3"
 # Shared byte buffers. Owner and data pointer are decoupled, so a `Vec` can be
 # adopted without copying it — see `pdfrum_object::ByteSpan`. Zero transitive
 # dependencies, MIT, pure Rust.
@@ -177,7 +177,7 @@ rayon = "=1.12.0"
 # Wipes file keys on drop. Exact pin like the rest of the closed set; the
 # crate is Apache-2.0/MIT and has no C. Used by `pdfrum-crypt` and
 # `pdfrum-edit` only.
-zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
+zeroize = { version = "=1.9.1", default-features = false, features = ["alloc"] }
 
 # JavaScript engine. Reachable only through `pdfrum-form`'s default-off
 # `javascript` feature.
@@ -189,7 +189,7 @@ boa_engine = { version = "=0.22.0", default-features = false }
 # tools & tests only: never in a library crate.
 anyhow = "=1.0.104"
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
 clap = { version = "=4.6.7", features = ["derive", "env"] }
 # `completions` and `manpage`: clap's own generators.
 clap_complete = "=4.6.11"
