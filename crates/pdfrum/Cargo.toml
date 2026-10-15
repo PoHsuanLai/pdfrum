@@ -71,6 +71,12 @@ markdown = ["dep:pdfrum-markdown"]
 # and because the backend is a wrapper the caller chooses to put in the way —
 # a build that never exports one should not carry it.
 svg-export = ["dep:pdfrum-svg"]
+# The other direction: `anyrender` scenes written as vector PDF pages, through
+# `pdfrum-anyrender`. Default-off because it brings `anyrender` and a
+# recording scene a reader of PDFs never needs. It implies `edit`, since the
+# pages are written by the editor and its error is this crate's
+# [`SaveError`].
+anyrender = ["edit", "dep:pdfrum-anyrender"]
 
 # An SVG drawn into a page as vectors, through `Canvas::draw_svg` inline or
 # `DocEdit::compile_svg` once into a Form XObject. Needs `edit`. Default-off
@@ -118,6 +124,7 @@ full = [
     "markdown",
     "svg-export",
     "svg-import",
+    "anyrender",
     "svg-text",
     "png",
     "codecs-all",
@@ -147,6 +154,7 @@ pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-markdown = { workspace = true, optional = true }
 pdfrum-svg = { workspace = true, optional = true }
+pdfrum-anyrender = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
 # SVG import, behind `svg-import`. Defaults off: `text`, `system-fonts`

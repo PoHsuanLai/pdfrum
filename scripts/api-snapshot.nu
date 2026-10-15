@@ -46,6 +46,7 @@ const FEATURED = [
     {file: 'pdfrum+png', crate: 'pdfrum', features: 'png'}
     {file: 'pdfrum+markdown', crate: 'pdfrum', features: 'markdown'}
     {file: 'pdfrum+svg-export', crate: 'pdfrum', features: 'svg-export'}
+    {file: 'pdfrum+anyrender', crate: 'pdfrum', features: 'anyrender'}
     {file: 'pdfrum+svg-import', crate: 'pdfrum', features: 'svg-import'}
     {file: 'pdfrum+svg-text', crate: 'pdfrum', features: 'svg-text'}
     {file: 'pdfrum+tiny-skia+agg', crate: 'pdfrum', features: 'tiny-skia,agg'}

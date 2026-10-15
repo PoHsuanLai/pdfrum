@@ -124,6 +124,7 @@ are on by default.
 | Host font fallback | yes | `system-fonts` ([`fontdb`](https://crates.io/crates/fontdb); not on wasm32) |
 | Markdown | yes | `markdown` |
 | SVG export | yes | `svg-export` |
+| [`anyrender`](https://crates.io/crates/anyrender) scenes as vector PDF pages | yes | `anyrender` |
 | Draw an SVG into a page | yes | `svg-import` ([`usvg`](https://crates.io/crates/usvg)) |
 | SVG `<text>` on import | yes | `svg-text` |
 | Extra CPU rasterizers | yes | `tiny-skia` ([`tiny-skia`](https://crates.io/crates/tiny-skia)), `agg` |
@@ -137,7 +138,7 @@ are on by default.
 its backend.
 
 ```toml
-pdfrum = { version = "0.3", default-features = false, features = ["tiny-skia", "codecs-all"] }
+pdfrum = { version = "0.5", default-features = false, features = ["tiny-skia", "codecs-all"] }
 ```
 
 ## Alternatives

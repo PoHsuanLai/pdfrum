@@ -1935,6 +1935,7 @@ name = "pdfrum"
 version = "0.5.0"
 dependencies = [
  "kurbo",
+ "pdfrum-anyrender",
  "pdfrum-common",
  "pdfrum-corpus",
  "pdfrum-crypt",
