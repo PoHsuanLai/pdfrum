@@ -149,7 +149,8 @@ pub use pdfrum_edit::{
     AnnotRemoteDest, AnnotSpec, AnnotWrite, CaretSpec, CircleSpec, DEFAULT_DA, FreeTextSpec,
     InkSpec, LineEndingStyle, LineSpec, LinkSpec, MarkupKind, MarkupSpec, Quad, SquareSpec,
     TextSpec, add_annotation, delete_annotation, delete_annotation_at, ensure_named_destination,
-    set_named_destination, update_annotation, update_annotation_at,
+    modify_annotation, move_annotation, set_named_destination, update_annotation,
+    update_annotation_at,
 };
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{

@@ -1193,6 +1193,221 @@ pub fn update_annotation(
     Ok(())
 }
 
+/// Fetches `annot`'s current dictionary through the edit overlay after the
+/// checks [`update_annotation`] makes: a real page object, and `annot` listed
+/// in that page's `/Annots`.
+///
+/// Reading through the overlay (not the base document) is what lets an edit
+/// stacked on an earlier one in the same session see that earlier edit.
+fn listed_annot_dict(edit: &EditDoc<'_>, page: PageIndex, annot: ObjRef) -> Result<Dict> {
+    let Some((_, page_dict, _)) = edit.page_state(page)? else {
+        return Err(Error::InlinePage(page));
+    };
+    if !page_lists_annot(edit, &page_dict, annot) {
+        return Err(Error::AnnotNotOnPage(annot, page));
+    }
+    edit.fetch(annot)
+        .ok()
+        .as_deref()
+        .and_then(Object::as_dict)
+        .cloned()
+        .ok_or(Error::AnnotNotOnPage(annot, page))
+}
+
+/// `array` with every `(x, y)` pair moved by `by`, written as reals.
+///
+/// `None` when the array is not purely direct numbers in an even count, so
+/// the caller leaves a malformed key as the file had it.
+fn translated_pairs(array: &Array, by: kurbo::Vec2) -> Option<Array> {
+    if !array.len().is_multiple_of(2) {
+        return None;
+    }
+    let mut out = Array::new();
+    for pair in 0..array.len() / 2 {
+        let x = array.number_at(pair * 2)?;
+        let y = array.number_at(pair * 2 + 1)?;
+        out.push(Object::Real(as_f32(f64::from(x) + by.x)));
+        out.push(Object::Real(as_f32(f64::from(y) + by.y)));
+    }
+    Some(out)
+}
+
+/// Moves one geometry key of `dict` by `by`, when it is well formed.
+fn translate_key(dict: &mut Dict, key: &Name, by: kurbo::Vec2, resolve: &EditDoc<'_>) {
+    let Some(array) = dict.array(key, resolve) else {
+        return;
+    };
+    if let Some(moved) = translated_pairs(&array, by) {
+        dict.insert(key.clone(), Object::Array(moved));
+    }
+}
+
+/// Moves `/InkList` (an array of coordinate arrays) by `by`; all or nothing.
+fn translate_ink_list(dict: &mut Dict, by: kurbo::Vec2, resolve: &EditDoc<'_>) {
+    let Some(strokes) = dict.array(names::INK_LIST, resolve) else {
+        return;
+    };
+    let mut out = Array::new();
+    for index in 0..strokes.len() {
+        let moved = strokes
+            .array_at(index, resolve)
+            .and_then(|stroke| translated_pairs(&stroke, by));
+        let Some(moved) = moved else {
+            return;
+        };
+        out.push(Object::Array(moved));
+    }
+    dict.insert(names::INK_LIST.clone(), Object::Array(out));
+}
+
+/// Moves every geometry key of an annotation dictionary by `by`.
+fn translate_geometry(dict: &mut Dict, by: kurbo::Vec2, resolve: &EditDoc<'_>) {
+    // `/RD` is an inset from `/Rect`, not a position, so it stays.
+    for key in ["Rect", "QuadPoints", "L", "Vertices", "CL"] {
+        translate_key(dict, &Name::from(key), by, resolve);
+    }
+    translate_ink_list(dict, by, resolve);
+}
+
+/// Moves an annotation by `by` (PDF default user space units, y up) and
+/// changes nothing else about it.
+///
+/// [`update_annotation`] rebuilds the dictionary from a spec, so everything
+/// the spec does not model is lost: `/Popup`, reply threads (`/IRT`, `/RT`),
+/// `/NM`, `/M`, `/RC`, border styles and effects, `/IT`, line-ending
+/// details, custom keys, and the appearance stream the producing tool wrote.
+/// This function is the lossless way to drag an annotation that came from
+/// another tool: it clones the current dictionary and translates only the
+/// geometry keys.
+///
+/// The keys moved are `/Rect`, `/QuadPoints`, `/InkList`, `/L` (line),
+/// `/Vertices` (polygon and polyline) and `/CL` (free-text callout line).
+/// `/RD` is an inset from `/Rect` and stays. Coordinates may be integers or
+/// reals and are written as reals. A geometry key that is not a well-formed
+/// array of numbers is left as the file had it rather than failing the move.
+///
+/// `/AP` is kept exactly as it is. A viewer places an appearance form by
+/// fitting its `/BBox` (through `/Matrix`) into `/Rect` (ISO 32000-1
+/// 12.5.5), so translating the rectangle moves the drawn appearance with it
+/// and the file's own look survives; nothing is regenerated. `/M` is also
+/// left alone: this crate has no clock, and a caller that wants a
+/// modification date sets one with [`modify_annotation`].
+///
+/// When the annotation has a `/Popup`, that popup annotation's `/Rect` moves
+/// by the same amount, as Acrobat and Preview move a note's window with it.
+/// A `/Popup` that does not resolve to a dictionary is skipped.
+///
+/// ```
+/// use pdfrum_edit::{EditDoc, SquareSpec, add_annotation, move_annotation};
+/// use kurbo::{Rect, Vec2};
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let r = add_annotation(
+///     &mut edit,
+///     0,
+///     SquareSpec::new(Rect::new(10.0, 10.0, 40.0, 40.0), Color::from_rgb8(255, 0, 0)),
+/// )?;
+/// move_annotation(&mut edit, 0, r, Vec2::new(30.0, -20.0))?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::PageIndexOutOfRange`] / [`Error::InlinePage`] for a bad page
+/// - [`Error::AnnotNotOnPage`] when `annot` is not listed on that page
+pub fn move_annotation(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    annot: ObjRef,
+    by: kurbo::Vec2,
+) -> Result<()> {
+    let mut dict = listed_annot_dict(edit, page.into(), annot)?;
+    translate_geometry(&mut dict, by, edit);
+    let popup = dict.reference(&Name::from("Popup"));
+    edit.replace(annot, Object::Dict(dict));
+    if let Some(popup_ref) = popup
+        && let Some(mut popup_dict) = edit
+            .fetch(popup_ref)
+            .ok()
+            .as_deref()
+            .and_then(Object::as_dict)
+            .cloned()
+    {
+        translate_key(&mut popup_dict, names::RECT, by, edit);
+        edit.replace(popup_ref, Object::Dict(popup_dict));
+    }
+    Ok(())
+}
+
+/// Edits an annotation's dictionary in place, keeping every key `change`
+/// does not touch, and regenerates its appearance.
+///
+/// This is the lossless counterpart to [`update_annotation`]: update rebuilds
+/// the dictionary from a spec and drops what the spec does not model, while
+/// modify clones the current dictionary, hands it to `change`, and writes it
+/// back with its `/Popup`, reply threads, custom keys and the rest intact.
+///
+/// After `change` runs, `/AP` is removed and generated again by the generator
+/// [`add_annotation`] uses, so a recolour (`/C`, `/IC`), reworded `/Contents`
+/// or a new `/DA` shows. When the subtype has no generator (an unknown
+/// subtype, say), the original `/AP` is kept rather than leaving the
+/// annotation invisible. To move an annotation without regenerating its look,
+/// use [`move_annotation`].
+///
+/// ```
+/// use pdfrum_edit::{EditDoc, SquareSpec, add_annotation, modify_annotation};
+/// use pdfrum_object::{Array, Name, Object};
+/// use kurbo::Rect;
+/// use peniko::Color;
+/// # use pdfrum_parser::{load, LoadOptions};
+/// # use std::sync::Arc;
+/// #
+/// # let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/hello_world.pdf")).unwrap();
+/// # let base = load(Arc::<[u8]>::from(bytes), &LoadOptions::default()).unwrap();
+/// # let mut edit = EditDoc::new(&base);
+/// let r = add_annotation(
+///     &mut edit,
+///     0,
+///     SquareSpec::new(Rect::new(10.0, 10.0, 40.0, 40.0), Color::from_rgb8(255, 0, 0)),
+/// )?;
+/// modify_annotation(&mut edit, 0, r, |dict| {
+///     dict.insert(
+///         Name::from("C"),
+///         Object::Array(Array::of([Object::Real(0.0), Object::Real(0.0), Object::Real(1.0)])),
+///     );
+/// })?;
+/// # Ok::<(), pdfrum_edit::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// - [`Error::PageIndexOutOfRange`] / [`Error::InlinePage`] for a bad page
+/// - [`Error::AnnotNotOnPage`] when `annot` is not listed on that page
+pub fn modify_annotation(
+    edit: &mut EditDoc<'_>,
+    page: impl Into<PageIndex>,
+    annot: ObjRef,
+    change: impl FnOnce(&mut Dict),
+) -> Result<()> {
+    let mut dict = listed_annot_dict(edit, page.into(), annot)?;
+    change(&mut dict);
+    let ap = Name::from("AP");
+    let old_ap = dict.remove(&ap);
+    attach_appearance(edit, &mut dict);
+    if !dict.contains_key(&ap)
+        && let Some(old_ap) = old_ap
+    {
+        dict.insert(ap, old_ap);
+    }
+    edit.replace(annot, Object::Dict(dict));
+    Ok(())
+}
+
 /// Removes `annot` from `page`'s `/Annots` and drops the annotation object.
 ///
 /// Returns `Ok(true)` when it was listed and removed, `Ok(false)` when it was
