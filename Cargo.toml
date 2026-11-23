@@ -144,15 +144,15 @@ weezl = "=0.2.1"
 zune-jpeg = "=0.5.15"
 # `image` (on by default) is the `image` crate integration plus a second
 # moxcms 0.8. We decode with `Image::new` and convert colour ourselves.
-hayro-jpeg2000 = { version = "=0.4.0", default-features = false, features = ["std", "simd"] }
+hayro-jpeg2000 = { version = "=0.5.0", default-features = false, features = ["std", "simd"] }
 # `image` (on by default) is only the `image` crate encoder the crate's
 # example uses. We consume `Image::new_embedded`.
-hayro-jbig2 = { version = "=0.3.0", default-features = false, features = ["std", "simd"] }
-hayro-ccitt = "=0.3.0"
-moxcms = "=0.9.1"
+hayro-jbig2 = { version = "=0.4.0", default-features = false, features = ["std", "simd"] }
+hayro-ccitt = "=0.5.0"
+moxcms = "=0.9.2"
 
 # crypto, text, numeric
-aes = "=0.9.3"
+aes = "=0.9.4"
 cbc = "=0.2.1"
 cipher = "=0.5.2"
 # OS entropy for file keys and AES vectors. Pure Rust: on each platform a
@@ -161,23 +161,23 @@ cipher = "=0.5.2"
 getrandom = "=0.4.3"
 md-5 = "=0.11.0"
 sha1 = "=0.11.0"
-sha2 = "=0.11.0"
+sha2 = "=0.11.1"
 unicode-bidi = "=0.3.18"
 # RFC 4013 SASLprep needs NFKC for revision-6 password preparation
 # (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
-unicode-normalization = "=0.1.25"
+unicode-normalization = "=0.1.26"
 ryu = "=1.0.23"
-smallvec = "=1.16.2"
+smallvec = "=1.16.6"
 # Shared byte buffers. Owner and data pointer are decoupled, so a `Vec` can be
 # adopted without copying it — see `pdfrum_object::ByteSpan`. Zero transitive
 # dependencies, MIT, pure Rust.
-bytes = "=1.12.1"
+bytes = "=1.12.2"
 thiserror = "=2.0.21"
 rayon = "=1.12.0"
 # Wipes file keys on drop. Exact pin like the rest of the closed set; the
 # crate is Apache-2.0/MIT and has no C. Used by `pdfrum-crypt` and
 # `pdfrum-edit` only.
-zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
+zeroize = { version = "=1.9.2", default-features = false, features = ["alloc"] }
 
 # JavaScript engine. Reachable only through `pdfrum-form`'s default-off
 # `javascript` feature.
