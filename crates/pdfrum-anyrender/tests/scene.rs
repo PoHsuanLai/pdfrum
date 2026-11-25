@@ -4,7 +4,7 @@
 // Helpers here are not `#[test]` fns, so clippy.toml's test allowance does not reach them.
 #![allow(clippy::expect_used)]
 
-use anyrender::{Glyph, PaintScene, Scene};
+use anyrender::{AntiAliasing, Glyph, PaintScene, Scene};
 use pdfrum_anyrender::{GlyphArea, GlyphSource, Page, RunKey, RunText, Sources, write};
 use peniko::kurbo::{Affine, Rect, Size, Vec2};
 use peniko::{Blob, Color, Fill, FontData};
@@ -48,6 +48,7 @@ fn written(run: &[Glyph], sources: &Sources, area: GlyphArea) -> pdfrum_anyrende
         Color::from_rgb8(200, 220, 255),
         None,
         &Rect::new(0.0, 0.0, 200.0, 100.0),
+        AntiAliasing::Enabled,
     );
     scene.draw_glyphs(
         &FONT,
@@ -61,6 +62,7 @@ fn written(run: &[Glyph], sources: &Sources, area: GlyphArea) -> pdfrum_anyrende
         Affine::IDENTITY,
         None,
         run.iter().copied(),
+        AntiAliasing::Enabled,
     );
     let page = Page {
         size: Size::new(200.0, 100.0),

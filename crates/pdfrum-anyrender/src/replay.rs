@@ -44,17 +44,33 @@ impl<'p> Replay<'p> {
                 RenderCommand::PushLayer(layer) => {
                     let clip = layer.transform * layer.clip.clone();
                     canvas.saved(|canvas| {
-                        Self::layer(canvas, &clip, layer.blend, layer.alpha);
+                        Self::layer(
+                            canvas,
+                            &clip,
+                            paint::fill(layer.fill),
+                            layer.blend,
+                            layer.alpha,
+                        );
                         self.run(canvas, commands);
                     });
                 }
                 RenderCommand::PushClipLayer(layer) => {
                     let clip = layer.transform * layer.clip.clone();
                     canvas.saved(|canvas| {
-                        Self::layer(canvas, &clip, BlendMode::default(), 1.0);
+                        Self::layer(
+                            canvas,
+                            &clip,
+                            paint::fill(layer.fill),
+                            BlendMode::default(),
+                            1.0,
+                        );
                         self.run(canvas, commands);
                     });
                 }
+                // A mask layer's content shapes what was drawn before it rather than showing
+                // itself; with no soft masks to express it, the page keeps that content unmasked
+                // and leaves the mask's own drawing out.
+                RenderCommand::PushMaskLayer(_) => skip_layer(commands),
                 RenderCommand::PopLayer => return,
                 RenderCommand::Fill(fill) => self.fill(canvas, fill),
                 RenderCommand::Stroke(stroke) => stroke_shape(canvas, stroke),
@@ -72,9 +88,15 @@ impl<'p> Replay<'p> {
     }
 
     /// A layer's clip, blend mode and opacity, inside its saved state.
-    fn layer(canvas: &mut Canvas<'_, '_>, clip: &BezPath, blend: BlendMode, alpha: f32) {
+    fn layer(
+        canvas: &mut Canvas<'_, '_>,
+        clip: &BezPath,
+        rule: Fill,
+        blend: BlendMode,
+        alpha: f32,
+    ) {
         if !clip.elements().is_empty() {
-            canvas.clip(clip.clone(), Fill::NonZero);
+            canvas.clip(clip.clone(), rule);
         }
         if let Some(mode) = paint::blend(blend) {
             canvas.blend(mode);
@@ -103,7 +125,7 @@ impl<'p> Replay<'p> {
                 }
             },
             Brush::Image(brush) => self.image(canvas, fill, brush, shape),
-            Brush::Resource(_) | Brush::Custom(_) => {}
+            Brush::Resource(_) | Brush::Custom(_) | Brush::Pattern(_) => {}
         }
     }
 
@@ -146,4 +168,20 @@ fn stroke_shape(canvas: &mut Canvas<'_, '_>, stroke: &StrokeCommand) {
         canvas.transform(stroke.transform);
         canvas.stroke(stroke.shape.clone(), pen);
     });
+}
+
+/// Pass over `commands` up to and including the pop that closes the current layer, drawing
+/// nothing.
+fn skip_layer(commands: &mut Iter<'_, RenderCommand>) {
+    let mut depth = 0usize;
+    for command in commands.by_ref() {
+        match command {
+            RenderCommand::PushLayer(_)
+            | RenderCommand::PushClipLayer(_)
+            | RenderCommand::PushMaskLayer(_) => depth += 1,
+            RenderCommand::PopLayer if depth == 0 => return,
+            RenderCommand::PopLayer => depth -= 1,
+            _ => {}
+        }
+    }
 }

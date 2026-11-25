@@ -9,12 +9,13 @@ use peniko::kurbo::{Cap, Join, Stroke};
 use peniko::{BlendMode, Color, Fill, Gradient, Mix};
 
 /// The one colour `brush` paints, or its stops' average for a gradient where only a colour
-/// fits (a stroke, text); `None` for a brush with no colour (an image, a renderer resource).
+/// fits (a stroke, text); `None` for a brush with no colour (an image, a pattern, a renderer
+/// resource).
 pub(crate) fn colour(brush: &Paint) -> Option<Color> {
     match brush {
         Paint::Solid(color) => Some(*color),
         Paint::Gradient(gradient) => Some(average(gradient)),
-        Paint::Image(_) | Paint::Resource(_) | Paint::Custom(_) => None,
+        Paint::Image(_) | Paint::Resource(_) | Paint::Custom(_) | Paint::Pattern(_) => None,
     }
 }
 

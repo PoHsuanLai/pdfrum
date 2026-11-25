@@ -115,7 +115,7 @@ kurbo = "0.13.1"
 peniko = "0.6.1"
 # Caret, like `peniko`: `anyrender::Scene` is in `pdfrum-anyrender`'s public
 # signature. Only the recording `Scene` is used; no renderer crate.
-anyrender = "0.13"
+anyrender = "0.15"
 vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
 # GPU vello, used only by `pdfrum-raster-vello`. Default features stay on
